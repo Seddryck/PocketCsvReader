@@ -52,7 +52,7 @@ namespace PocketCsvReader
             var encoding = GetFileEncoding(filename, out var encodingBytesCount);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
         }
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace PocketCsvReader
             var encoding = GetFileEncoding(filename, out var encodingBytesCount);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
         }
 
         protected virtual void CheckFileExists(string filename)
@@ -77,9 +77,9 @@ namespace PocketCsvReader
         }
 
         protected internal DataTable Read(Stream stream)
-            => this.Read(stream, Encoding.UTF8, 0, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EmptyCell, Profile.MissingCell);
+            => this.Read(stream, Encoding.UTF8, 0, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
 
-        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, string emptyCell, string missingCell)
+        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell, string missingCell)
         {
             RaiseProgressStatus("Starting to process the CSV file ...");
             int i = 0;
@@ -93,7 +93,7 @@ namespace PocketCsvReader
 
                 var count = CountRecords(reader, Profile.RecordSeparator, isFirstRowHeader, Profile.PerformanceOptmized);
                 Rewind(reader);
-                var table = DefineFields(reader, recordSeparator, fieldSeparator, textQualifier, isFirstRowHeader, encodingBytesCount);
+                var table = DefineFields(reader, recordSeparator, fieldSeparator, textQualifier, escapeTextQualifier, isFirstRowHeader, encodingBytesCount);
                 Rewind(reader);
 
                 bool isLastRecord = false;
@@ -121,7 +121,7 @@ namespace PocketCsvReader
                         {
                             isLastRecord = IsLastRecord(recordToParse);
                             var cleanRecord = CleanRecord(recordToParse, recordSeparator);
-                            var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, emptyCell).ToList();
+                            var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell).ToList();
                             var row = table.NewRow();
                             if (row.ItemArray.Length < cells.Count)
                                 throw new InvalidDataException
@@ -158,7 +158,7 @@ namespace PocketCsvReader
             reader.DiscardBufferedData();
         }
 
-        protected virtual DataTable DefineFields(StreamReader reader, string recordSeparator, char fieldSeparator, char textQualifier, bool isFirstRowHeader, int encodingBytesCount)
+        protected virtual DataTable DefineFields(StreamReader reader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, bool isFirstRowHeader, int encodingBytesCount)
         {
             //Get first record to know the count of fields
             RaiseProgressStatus("Defining fields");
@@ -171,7 +171,7 @@ namespace PocketCsvReader
                 firstLine = firstLine.Substring(0, firstLine.Length - recordSeparator.Length);
             columnCount = firstLine.Split(fieldSeparator).Length;
             if (isFirstRowHeader)
-                columnNames.AddRange(SplitLine(firstLine, fieldSeparator, textQualifier, string.Empty));
+                columnNames.AddRange(SplitLine(firstLine, fieldSeparator, textQualifier, escapeTextQualifier, string.Empty));
 
 
             //Correctly define the columns for the table
@@ -291,7 +291,7 @@ namespace PocketCsvReader
             return i;
         }
 
-        protected virtual IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, string emptyCell)
+        protected virtual IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
         {
             var tokens = new List<string>(row.Split(fieldSeparator));
 
@@ -312,12 +312,14 @@ namespace PocketCsvReader
                 {
                     startByTextQualifier |= token[0] == textQualifier;
                     endByTextQualifier = token[token.Length - 1] == textQualifier && token.Length != 1;
+                    if (endByTextQualifier)
+                        endByTextQualifier = new string(token.Reverse().Take(2).ToArray()) != new string(new[] { textQualifier, escapeTextQualifier });
                     compositeToken.Append(token);
 
                     if (startByTextQualifier && endByTextQualifier || (!startByTextQualifier && !endByTextQualifier))
                     {
                         startByTextQualifier = false;
-                        var value = RemoveTextQualifier(compositeToken.ToString(), textQualifier);
+                        var value = RemoveTextQualifier(compositeToken.ToString(), textQualifier, escapeTextQualifier);
                         compositeToken.Clear();
                         if (string.IsNullOrEmpty(value))
                             yield return value == null ? null : emptyCell;
@@ -330,8 +332,10 @@ namespace PocketCsvReader
             }
         }
 
-        protected virtual string RemoveTextQualifier(string item, char textQualifier)
+        protected virtual string RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
         {
+            var escapeToken = new string(new[] { escapeTextQualifier, textQualifier });
+
             if (string.IsNullOrEmpty(item))
                 return string.Empty;
 
@@ -341,10 +345,59 @@ namespace PocketCsvReader
             if (item.Length == 1)
                 return item;
 
+            if (item == escapeToken)
+                return string.Empty;
+
             if (item[0] == textQualifier && item[item.Length - 1] == textQualifier)
-                return item.Substring(1, item.Length - 2);
+            {
+                var candidate = item.Substring(1, item.Length - 2);
+                CheckTextQualifierEscapation(candidate, textQualifier, escapeTextQualifier);
+                return candidate.Replace(escapeToken, textQualifier.ToString());
+            }
 
             return item;
+        }
+
+        private void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
+        {
+            if (string.IsNullOrEmpty(value))
+                return;
+
+            if (!value.Contains(textQualifier))
+                return;
+
+            var indexes = new List<int>();
+            int j = -1;
+            do
+            {
+                j = value.IndexOf(textQualifier, j + 1);
+                if (j != -1)
+                    indexes.Add(j);
+
+            } while (j != -1 && j < value.Length - 1);
+
+            if (textQualifier == escapeTextQualifier)
+            {
+                if (indexes.Count() == 1)
+                    throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {indexes[0]}");
+
+                var i = 1;
+                while (i < indexes.Count())
+                {
+                    if ((i + 1) % 2 == 0)
+                    {
+                        if (indexes[i - 1] != indexes[i] - 1)
+                            throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
+                    }
+                    else if (i == indexes.Count - 1 || indexes[i + 1] != indexes[i] + 1)
+                        throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
+                    i += 1;
+                }
+            }
+            else
+                foreach (var index in indexes)
+                    if (index == 0 || value[index - 1] != escapeTextQualifier)
+                        throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {index}");
         }
 
         protected virtual string GetFirstRecord(StreamReader reader, string recordSeparator, int bufferSize)

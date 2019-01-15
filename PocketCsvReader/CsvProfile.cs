@@ -6,6 +6,7 @@ namespace PocketCsvReader
     {
         public virtual char FieldSeparator { get; private set; }
         public virtual char TextQualifier { get; private set; }
+        public virtual char EscapeTextQualifier { get; private set; }
         public virtual string RecordSeparator { get; private set; }
         public virtual bool FirstRowHeader { get; private set; }
         public virtual bool PerformanceOptmized { get; private set; }
@@ -33,17 +34,22 @@ namespace PocketCsvReader
         { }
 
         public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader)
-            : this(fieldSeparator, textQualifier, recordSeparator, firstRowHeader, false, string.Empty, string.Empty)
+            : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, false, string.Empty, string.Empty)
         { }
 
         public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized)
-            : this(fieldSeparator, textQualifier, recordSeparator, firstRowHeader, performanceOptimized, string.Empty, string.Empty)
+            : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, performanceOptimized, string.Empty, string.Empty)
         { }
 
         public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized, string emptyCell, string missingCell)
+            : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, performanceOptimized, emptyCell, missingCell)
+        { }
+
+        public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized, string emptyCell, string missingCell)
         {
             FieldSeparator = fieldSeparator;
             TextQualifier = textQualifier;
+            EscapeTextQualifier = escapeTextQualifier;
             RecordSeparator = recordSeparator;
             FirstRowHeader = firstRowHeader;
             PerformanceOptmized = performanceOptimized;

@@ -21,11 +21,11 @@ namespace PocketCsvReader.Testing
             public CsvReaderProxy(int bufferSize)
                 : base(bufferSize) { }
 
-            public new string RemoveTextQualifier(string item, char textQualifier)
-                => base.RemoveTextQualifier(item, textQualifier);
+            public new string RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
+                => base.RemoveTextQualifier(item, textQualifier, escapeTextQualifier);
 
-            public new IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, string emptyCell)
-                => base.SplitLine(row, fieldSeparator, textQualifier, emptyCell);
+            public new IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
+                => base.SplitLine(row, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell);
 
             public new int CountRecordSeparators(StreamReader reader, string recordSeparator, int bufferSize)
                 => base.CountRecordSeparators(reader, recordSeparator, bufferSize);
@@ -60,12 +60,21 @@ namespace PocketCsvReader.Testing
         [TestCase("\"ab\"", "ab")]
         [TestCase("abc", "abc")]
         [TestCase("\"abc\"", "abc")]
-        [TestCase("\"a\"b\"", "a\"b")]
-        [TestCase("\"\"a\"b\"\"", "\"a\"b\"")]
+        [TestCase("\"a\"\"b\"", "a\"b")]
+        [TestCase("\"\"\"a\"\"b\"\"\"", "\"a\"b\"")]
         public void RemoveTextQualifier_String_CorrectString(string item, string result)
         {
             var reader = new CsvReaderProxy();
-            var value = reader.RemoveTextQualifier(item, '\"');
+            var value = reader.RemoveTextQualifier(item, '\"', '\"');
+            Assert.That(value, Is.EqualTo(result));
+        }
+
+        [TestCase("'a`'b'", "a'b")]
+        [TestCase("'`'a`'b`''", "'a'b'")]
+        public void RemoveTextQualifierWithEscaped_String_CorrectString(string item, string result)
+        {
+            var reader = new CsvReaderProxy();
+            var value = reader.RemoveTextQualifier(item, '\'', '`');
             Assert.That(value, Is.EqualTo(result));
         }
 
@@ -80,12 +89,25 @@ namespace PocketCsvReader.Testing
         [TestCase("'a;b;;c';xyz", "a;b;;c")]
         [TestCase(";'xyz'", "")]
         [TestCase(";xyz", "")]
+        [TestCase("'ab'';''c';'xyz'", "ab';'c")]
+        [TestCase("'ab'';''''c';'xyz'", "ab';''c")]
+        [TestCase("'a''b'';c';'xyz'", "a'b';c")]
         public void SplitLine_RecordWithTwoFields_CorrectParsing(string record, string firstToken)
         {
             var reader = new CsvReaderProxy();
-            var values = reader.SplitLine(record, ';', '\'', string.Empty).ToList();
+            var values = reader.SplitLine(record, ';', '\'', '\'', string.Empty).ToList();
             Assert.That(values[0], Is.EqualTo(firstToken));
             Assert.That(values[1], Is.EqualTo("xyz"));
+        }
+
+        [Test]
+        [TestCase("'ab'';'c';'xyz'")]
+        [TestCase("'ab'';'c''';'xyz'")]
+        [TestCase("'ab'';'''c';'xyz'")]
+        public void SplitLine_RecordWithUnescapedTextQualifier_ThrowException(string record)
+        {
+            var reader = new CsvReaderProxy();
+            var ex = Assert.Throws<ArgumentException>(() => reader.SplitLine(record, ';', '\'', '\'', string.Empty).ToList());
         }
 
         [Test]
@@ -101,7 +123,7 @@ namespace PocketCsvReader.Testing
         public void SplitLine_RecordWithThreeFields_CorrectParsing(string record, string thirdToken)
         {
             var reader = new CsvReaderProxy();
-            var values = reader.SplitLine(record, ';', '\'', string.Empty).ToList();
+            var values = reader.SplitLine(record, ';', '\'', '\'', string.Empty).ToList();
             Assert.That(values[2], Is.EqualTo(thirdToken));
         }
 
@@ -109,7 +131,7 @@ namespace PocketCsvReader.Testing
         public void SplitLine_NullField_NullValue()
         {
             var reader = new CsvReaderProxy();
-            var values = reader.SplitLine("a;(null)", ';', char.MinValue, string.Empty);
+            var values = reader.SplitLine("a;(null)", ';', char.MinValue, char.MinValue, string.Empty);
             Assert.That(values.ElementAt(1), Is.Null);
         }
 
@@ -272,7 +294,7 @@ namespace PocketCsvReader.Testing
 
                 stream.Position = 0;
                 var reader = new CsvReader();
-                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', "_", missingCell);
+                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', "_", missingCell);
 
                 Assert.That(dataTable.Rows[0].ItemArray[0], Is.EqualTo("a"));
                 Assert.That(dataTable.Rows[0].ItemArray[1], Is.EqualTo("b"));
@@ -307,7 +329,7 @@ namespace PocketCsvReader.Testing
 
                 stream.Position = 0;
                 var reader = new CsvReader();
-                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', emptyCell, "_");
+                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', emptyCell, "_");
 
                 Assert.That(dataTable.Rows[0].ItemArray[0], Is.EqualTo("a"));
                 Assert.That(dataTable.Rows[0].ItemArray[1], Is.EqualTo("b"));
