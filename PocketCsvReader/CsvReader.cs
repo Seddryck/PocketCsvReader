@@ -185,7 +185,7 @@ namespace PocketCsvReader
             }
             RaiseProgressStatus($"{table.Columns.Count} field{(table.Columns.Count > 1 ? "s were" : " was")}  identified.");
 
-            
+
             return table;
         }
 
@@ -293,15 +293,40 @@ namespace PocketCsvReader
 
         protected virtual IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, string emptyCell)
         {
-            var list = new List<string>(row.Split(fieldSeparator));
+            var tokens = new List<string>(row.Split(fieldSeparator));
 
-            foreach (var item in list)
+            var startByTextQualifier = false;
+            var compositeToken = new StringBuilder();
+
+            foreach (var token in tokens)
             {
-                var value = RemoveTextQualifier(item, textQualifier);
-                if (string.IsNullOrEmpty(value) && value != null)
-                    yield return emptyCell;
+                var endByTextQualifier = false;
+                if (string.IsNullOrEmpty(token))
+                {
+                    if (!startByTextQualifier)
+                        yield return token == null ? null : emptyCell;
+                    else
+                        compositeToken.Append(fieldSeparator);
+                }
                 else
-                    yield return value;
+                {
+                    startByTextQualifier |= token[0] == textQualifier;
+                    endByTextQualifier = token[token.Length - 1] == textQualifier && token.Length != 1;
+                    compositeToken.Append(token);
+
+                    if (startByTextQualifier && endByTextQualifier || (!startByTextQualifier && !endByTextQualifier))
+                    {
+                        startByTextQualifier = false;
+                        var value = RemoveTextQualifier(compositeToken.ToString(), textQualifier);
+                        compositeToken.Clear();
+                        if (string.IsNullOrEmpty(value))
+                            yield return value == null ? null : emptyCell;
+                        else
+                            yield return value;
+                    }
+                    else
+                        compositeToken.Append(fieldSeparator);
+                }
             }
         }
 

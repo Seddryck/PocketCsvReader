@@ -69,7 +69,44 @@ namespace PocketCsvReader.Testing
             Assert.That(value, Is.EqualTo(result));
         }
 
-        public void SplitLine_Null_NotEmpty()
+        [Test]
+        [TestCase("abc;xyz", "abc")]
+        [TestCase("'abc';'xyz'", "abc")]
+        [TestCase("abc;'xyz'", "abc")]
+        [TestCase("'abc';xyz", "abc")]
+        [TestCase("'ab;c';xyz", "ab;c")]
+        [TestCase("'ab;;c';xyz", "ab;;c")]
+        [TestCase("'ab;;;c';xyz", "ab;;;c")]
+        [TestCase("'a;b;;c';xyz", "a;b;;c")]
+        [TestCase(";'xyz'", "")]
+        [TestCase(";xyz", "")]
+        public void SplitLine_RecordWithTwoFields_CorrectParsing(string record, string firstToken)
+        {
+            var reader = new CsvReaderProxy();
+            var values = reader.SplitLine(record, ';', '\'', string.Empty).ToList();
+            Assert.That(values[0], Is.EqualTo(firstToken));
+            Assert.That(values[1], Is.EqualTo("xyz"));
+        }
+
+        [Test]
+        [TestCase("abc;xyz;123", "123")]
+        [TestCase("'abc';'xyz';'123'", "123")]
+        [TestCase("abc;'xyz';123", "123")]
+        [TestCase("'abc';xyz;123", "123")]
+        [TestCase("'abc';xyz;'123'", "123")]
+        [TestCase("'ab;;;c';xyz;", "")]
+        [TestCase("'a;b;;c';'x;;;y;;z';123", "123")]
+        [TestCase(";'xyz';", "")]
+        [TestCase(";;;", "")]
+        public void SplitLine_RecordWithThreeFields_CorrectParsing(string record, string thirdToken)
+        {
+            var reader = new CsvReaderProxy();
+            var values = reader.SplitLine(record, ';', '\'', string.Empty).ToList();
+            Assert.That(values[2], Is.EqualTo(thirdToken));
+        }
+
+        [Test]
+        public void SplitLine_NullField_NullValue()
         {
             var reader = new CsvReaderProxy();
             var values = reader.SplitLine("a;(null)", ';', char.MinValue, string.Empty);
@@ -325,6 +362,9 @@ namespace PocketCsvReader.Testing
         [TestCase("abc\r\ndef\r\nghl\r\nijk", 512, 1)]
         [TestCase("abc;xyz\r\ndef;xyz\r\nghl\r\n;ijk", 1, 2)]
         [TestCase("abc;xyz\r\ndef;xyz\r\nghl\r\n;ijk", 512, 2)]
+        [TestCase("\"abc\";\"xyz\"\r\n\"def\";\"xyz\"\r\n\"ghl\"\r\n;\"ijk\"", 512, 2)]
+        [TestCase("abc;\"xyz\"\r\n\"def\";xyz\r\n\"ghl\"\r\n;\"ijk\"", 512, 2)]
+        [TestCase("abc;\"xyz\"\r\n\"def\";xyz\r\n\"ghl\"\r\n;\"ijk\"", 512, 2)]
         public void Read_Csv_CorrectResult(string text, int bufferSize, int columnCount)
         {
             using (var stream = new MemoryStream())
@@ -344,6 +384,9 @@ namespace PocketCsvReader.Testing
                     foreach (var cell in row.ItemArray)
                         Assert.That(cell.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
                 }
+                Assert.That(dataTable.Rows[0][0], Is.EqualTo("abc"));
+                if (dataTable.Columns.Count==2)
+                    Assert.That(dataTable.Rows[0][1], Is.EqualTo("xyz"));
                 writer.Dispose();
             }
         }
