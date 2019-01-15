@@ -215,7 +215,7 @@ namespace PocketCsvReader
 
             // Detect byte order mark if any - otherwise assume default
             var buffer = new byte[5];
-            var file = new FileStream(srcFile, FileMode.Open);
+            var file = new FileStream(srcFile, FileMode.Open, FileAccess.Read, FileShare.Read);
             file.Read(buffer, 0, 5);
             file.Close();
 
