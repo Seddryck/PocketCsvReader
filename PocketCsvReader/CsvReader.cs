@@ -221,8 +221,10 @@ namespace PocketCsvReader
 
             if (buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
                 encoding = Encoding.UTF8;
-            else if (buffer[0] == 0xfe && buffer[1] == 0xff)
+            else if (buffer[0] == 0xff && buffer[1] == 0xfe)
                 encoding = Encoding.Unicode;
+            else if (buffer[0] == 0xfe && buffer[1] == 0xff)
+                encoding = Encoding.BigEndianUnicode;
             else if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xfe && buffer[3] == 0xff)
                 encoding = Encoding.UTF32;
             else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
