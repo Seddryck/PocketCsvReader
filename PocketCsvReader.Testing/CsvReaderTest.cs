@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
 
 namespace PocketCsvReader.Testing
 {
@@ -22,9 +23,14 @@ namespace PocketCsvReader.Testing
         public void ToDataTable_Financial_CorrectRowsColumns(string filename)
         {
             var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
-            var dataTable = reader.ToDataTable($"Resources\\{filename}.csv");
-            Assert.That(dataTable.Columns.Count, Is.EqualTo(14));
-            Assert.That(dataTable.Rows.Count, Is.EqualTo(21));
+
+            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.Resources.{filename}.csv"))
+            {
+                var dataTable = reader.ToDataTable(stream);
+                Assert.That(dataTable.Columns.Count, Is.EqualTo(14));
+                Assert.That(dataTable.Rows.Count, Is.EqualTo(21));
+            }
+            
         }
     }
 }

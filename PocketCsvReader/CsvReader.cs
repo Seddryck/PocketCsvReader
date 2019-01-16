@@ -56,6 +56,18 @@ namespace PocketCsvReader
         }
 
         /// <summary>
+        /// Read the CSV file and returns the corresponding DataTable
+        /// </summary>
+        /// <param name="filename">Name of the CSV file</param>
+        /// <returns>A DataTable containing all the records (rows) and fields (columns) available in the CSV file</returns>
+        public DataTable ToDataTable(Stream stream)
+        {
+            var encoding = GetStreamEncoding(stream, out var encodingBytesCount);
+
+            return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
+        }
+
+        /// <summary>
         /// Read the CSV file, overriding the value of isFirstRowHeader defined in the profile.
         /// </summary>
         /// <param name="filename">Name of the CSV file</param>
@@ -203,21 +215,19 @@ namespace PocketCsvReader
         }
 
         /// <summary>
-        /// Detects the byte order mark of a file and returns
+        /// Detects the byte order mark of a streams and returns
         /// an appropriate encoding for the file.
         /// </summary>
-        /// <param name="srcFile"></param>
+        /// <param name="stream">The stream to analyze for the encoding</param>
         /// <returns></returns>
-        protected virtual Encoding GetFileEncoding(string srcFile, out int encodingBytesCount)
+        protected virtual Encoding GetStreamEncoding(Stream stream, out int encodingBytesCount)
         {
             // Default  = Ansi CodePage
             var encoding = Encoding.Default;
 
             // Detect byte order mark if any - otherwise assume default
             var buffer = new byte[5];
-            var file = new FileStream(srcFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-            file.Read(buffer, 0, 5);
-            file.Close();
+            stream.Read(buffer, 0, 5);
 
             if (buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
                 encoding = Encoding.UTF8;
@@ -234,6 +244,18 @@ namespace PocketCsvReader
             encoding = encoding == Encoding.Default ? Encoding.UTF8 : encoding;
 
             return encoding;
+        }
+
+        /// <summary>
+        /// Detects the byte order mark of a file and returns
+        /// an appropriate encoding for the file.
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        protected virtual Encoding GetFileEncoding(string filename, out int encodingBytesCount)
+        {
+            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+                return GetStreamEncoding(stream, out encodingBytesCount);
         }
 
         protected virtual int? CountRecords(StreamReader reader, string recordSeparator, bool isFirstRowHeader, bool isPerformanceOptimized)
