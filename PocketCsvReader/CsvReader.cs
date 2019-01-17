@@ -51,7 +51,7 @@ namespace PocketCsvReader
             CheckFileExists(filename);
             var encoding = GetFileEncoding(filename, out var encodingBytesCount);
 
-            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
                 return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
         }
 
@@ -201,19 +201,6 @@ namespace PocketCsvReader
             return table;
         }
 
-        protected virtual int CalculateEncodingBytes(StreamReader reader)
-        {
-            //Check if the first byte is BOM or not
-            var buffer = new char[4];
-            reader.Read(buffer, 0, 4);
-            var encodingBytesCount = (new string(buffer)[0] == 65279) ? 1 : 0;
-            RaiseProgressStatus($"Encoding bytes was set to {encodingBytesCount}.");
-
-            reader.BaseStream.Position = 0;
-            reader.DiscardBufferedData();
-            return encodingBytesCount;
-        }
-
         /// <summary>
         /// Detects the byte order mark of a streams and returns
         /// an appropriate encoding for the file.
@@ -242,7 +229,7 @@ namespace PocketCsvReader
 
             encodingBytesCount = Convert.ToInt32(encoding != Encoding.Default);
             encoding = encoding == Encoding.Default ? Encoding.UTF8 : encoding;
-
+            RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount>0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
             return encoding;
         }
 
@@ -254,7 +241,7 @@ namespace PocketCsvReader
         /// <returns></returns>
         protected virtual Encoding GetFileEncoding(string filename, out int encodingBytesCount)
         {
-            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 8, false))
                 return GetStreamEncoding(stream, out encodingBytesCount);
         }
 

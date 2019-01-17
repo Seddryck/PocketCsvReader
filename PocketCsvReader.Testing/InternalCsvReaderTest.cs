@@ -398,7 +398,7 @@ namespace PocketCsvReader.Testing
 
                 stream.Position = 0;
 
-                var reader = new CsvReader(new CsvProfile(';', '\"', "\r\n", false, false, "(empty)", "(null)"), bufferSize);
+                var reader = new CsvReader(new CsvProfile(';', '\"', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
                 var dataTable = reader.Read(stream);
                 Assert.That(dataTable.Rows, Has.Count.EqualTo(4));
                 Assert.That(dataTable.Columns, Has.Count.EqualTo(columnCount));
