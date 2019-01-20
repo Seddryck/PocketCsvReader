@@ -31,7 +31,7 @@ namespace PocketCsvReader
         { }
 
         public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator)
-            : this(fieldSeparator, textQualifier, recordSeparator, true)
+            : this(fieldSeparator, textQualifier, recordSeparator, false)
         { }
 
         public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader)
