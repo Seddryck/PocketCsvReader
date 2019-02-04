@@ -323,7 +323,7 @@ namespace PocketCsvReader
                 {
                     startByTextQualifier |= token[0] == textQualifier;
                     endByTextQualifier = token[token.Length - 1] == textQualifier && token.Length != 1;
-                    if (endByTextQualifier)
+                    if (endByTextQualifier && token != new string(new[] { textQualifier, textQualifier }))
                         endByTextQualifier = new string(token.Reverse().Take(2).ToArray()) != new string(new[] { textQualifier, escapeTextQualifier });
                     compositeToken.Append(token);
 

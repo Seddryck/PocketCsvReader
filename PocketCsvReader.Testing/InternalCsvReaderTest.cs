@@ -18,6 +18,9 @@ namespace PocketCsvReader.Testing
             public CsvReaderProxy()
                 : base(new CsvProfile(false)) { }
 
+            public CsvReaderProxy(CsvProfile profile)
+                : base(profile) { }
+
             public CsvReaderProxy(int bufferSize)
                 : base(bufferSize) { }
 
@@ -408,8 +411,31 @@ namespace PocketCsvReader.Testing
                         Assert.That(cell.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
                 }
                 Assert.That(dataTable.Rows[0][0], Is.EqualTo("abc"));
-                if (dataTable.Columns.Count==2)
+                if (dataTable.Columns.Count == 2)
                     Assert.That(dataTable.Rows[0][1], Is.EqualTo("xyz"));
+                writer.Dispose();
+            }
+        }
+
+        [Test]
+        [TestCase("'azerty';'';'alpha'", 3)]
+        [TestCase("'azerty';;'alpha'", 3)]
+        public void Read_CsvWithTextQualifier_CorrectResult(string text, int columnCount)
+        {
+            using (var stream = new MemoryStream())
+            {
+                var writer = new StreamWriter(stream);
+                writer.Write(text);
+                writer.Flush();
+
+                stream.Position = 0;
+
+                var reader = new CsvReader(new CsvProfile(';', '\'', "\r\n", false, false, 4096, "foo", "(null)"));
+                var dataTable = reader.Read(stream);
+                Assert.That(dataTable.Columns, Has.Count.EqualTo(columnCount));
+                Assert.That(dataTable.Rows[0][0], Is.EqualTo("azerty"));
+                Assert.That(dataTable.Rows[0][1], Is.EqualTo("foo"));
+                Assert.That(dataTable.Rows[0][2], Is.EqualTo("alpha"));
                 writer.Dispose();
             }
         }
@@ -450,6 +476,46 @@ namespace PocketCsvReader.Testing
                     var ex = Assert.Throws<InvalidDataException>(delegate { reader.Read(stream); });
                     Assert.That(ex.Message, Does.Contain(string.Format("record {0} ", rowNumber + 1)));
                     Assert.That(ex.Message, Does.Contain(string.Format("{0} more", moreField)));
+                }
+            }
+        }
+
+        [Test]
+        public void Read_EmptyValue_MatchWithEmpty()
+        {
+            using (var stream = new MemoryStream())
+            {
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write("a;;c");
+                    writer.Flush();
+
+                    stream.Position = 0;
+
+                    var profile = CsvProfile.SemiColumnDoubleQuote;
+                    var reader = new CsvReaderProxy(profile);
+                    var dataTable = reader.Read(stream);
+                    Assert.That(dataTable.Rows[0][1], Is.EqualTo(string.Empty));
+                }
+            }
+        }
+
+        [Test]
+        public void Read_MissingValue_MatchWithNullValue()
+        {
+            using (var stream = new MemoryStream())
+            {
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write("a;b;c\r\na;b\r\na;b;c");
+                    writer.Flush();
+
+                    stream.Position = 0;
+
+                    var profile = new CsvProfile(';', '"', "\r\n", false, true, 512, string.Empty, "(null)");
+                    var reader = new CsvReaderProxy(profile);
+                    var dataTable = reader.Read(stream);
+                    Assert.That(dataTable.Rows[1][2], Is.EqualTo("(null)"));
                 }
             }
         }
