@@ -1,0 +1,42 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader", "PocketCsvReader\PocketCsvReader.csproj", "{622D8798-D870-4A3B-BBB8-87297B7085BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Testing", "PocketCsvReader.Testing\PocketCsvReader.Testing.csproj", "{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{0A83AC1A-ADD3-41FC-B6C7-856ABAB65872}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		appveyor.yml = appveyor.yml
+		AssemblyInfoPatcher.ps1 = AssemblyInfoPatcher.ps1
+		contributing.md = contributing.md
+		GitVersion.yml = GitVersion.yml
+		LICENSE = LICENSE
+		Readme.md = Readme.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {092EB1E5-4CC0-40DB-B08A-E088AD04C989}
+	EndGlobalSection
+EndGlobal

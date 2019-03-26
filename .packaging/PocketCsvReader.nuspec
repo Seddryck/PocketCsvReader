@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>PocketCsvReader</id>
+    <version>$version$</version>
+    <authors>Cédric L. Charlier</authors>
+    <owners>Cédric L. Charlier</owners>
+    <licenseUrl>https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/Seddryck/PocketCsvReader</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/Seddryck/PocketCsvReader/master/pocket-csv-reader.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <summary>PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.</summary>
+    <description>PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.</description>
+	<releaseNotes>Check the release notes at https://github.com/Seddryck/PocketCsvReader/releases/v$version$</releaseNotes>
+    <copyright>Copyright 2018-$thisYear$</copyright>
+    <tags>CSV TSV DataTable Parser</tags>
+	<dependencies>
+		$depList$
+	</dependencies>
+  </metadata>
+</package>
