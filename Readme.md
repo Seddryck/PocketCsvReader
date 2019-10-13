@@ -8,6 +8,7 @@ PocketCsvReader is a lightweight library dedicated to the parsing of delimited f
 ![Still maintained](https://img.shields.io/maintenance/yes/2019.svg)
 [![nuget](https://img.shields.io/nuget/v/PocketCsvReader.svg)](https://www.nuget.org/packages/PocketCsvReader/)
 [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/ce42a0e43d8b44be8f53c741c5d223aa)](https://www.codacy.com/manual/Seddryck/PocketCsvReader?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Seddryck/PocketCsvReader&amp;utm_campaign=Badge_Grade)
 [![stars badge](https://img.shields.io/github/stars/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/stargazers)
 
 ## Releases
