@@ -36,8 +36,8 @@ namespace PocketCsvReader.Testing
             public new string GetFirstRecord(StreamReader reader, string recordSeparator, int bufferSize)
                 => base.GetFirstRecord(reader, recordSeparator, bufferSize);
 
-            public new IEnumerable<string> GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead, out string extraRead)
-                => base.GetNextRecords(reader, recordSeparator, bufferSize, alreadyRead, out extraRead);
+            public new (IEnumerable<string>, string) GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead)
+                => base.GetNextRecords(reader, recordSeparator, bufferSize, alreadyRead);
 
             public new bool IsLastRecord(string record)
                 => base.IsLastRecord(record);
@@ -111,7 +111,7 @@ namespace PocketCsvReader.Testing
         public void SplitLine_RecordWithUnescapedTextQualifier_ThrowException(string record)
         {
             var reader = new CsvReaderProxy();
-            var ex = Assert.Throws<ArgumentException>(() => reader.SplitLine(record, ';', '\'', '\'', string.Empty).ToList());
+            Assert.Throws<ArgumentException>(() => reader.SplitLine(record, ';', '\'', '\'', string.Empty).ToList());
         }
 
         [Test]
@@ -274,8 +274,7 @@ namespace PocketCsvReader.Testing
                 var reader = new CsvReaderProxy();
                 using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
                 {
-                    var extraRead = string.Empty;
-                    var values = reader.GetNextRecords(streamReader, recordSeparator, bufferSize, string.Empty, out extraRead);
+                    var (values, extraRead) = reader.GetNextRecords(streamReader, recordSeparator, bufferSize, string.Empty);
                     foreach (var value in values)
                     {
                         Assert.That(value, Does.StartWith("abc"));

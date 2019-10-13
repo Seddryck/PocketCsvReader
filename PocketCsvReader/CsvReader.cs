@@ -49,7 +49,7 @@ namespace PocketCsvReader
         public DataTable ToDataTable(string filename)
         {
             CheckFileExists(filename);
-            var encoding = GetFileEncoding(filename, out var encodingBytesCount);
+            var (encoding, encodingBytesCount) = GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
                 return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
@@ -62,7 +62,7 @@ namespace PocketCsvReader
         /// <returns>A DataTable containing all the records (rows) and fields (columns) available in the CSV file</returns>
         public DataTable ToDataTable(Stream stream)
         {
-            var encoding = GetStreamEncoding(stream, out var encodingBytesCount);
+            var (encoding, encodingBytesCount) = GetStreamEncoding(stream);
 
             return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
         }
@@ -76,7 +76,7 @@ namespace PocketCsvReader
         public DataTable ToDataTable(string filename, bool isFirstRowHeader)
         {
             CheckFileExists(filename);
-            var encoding = GetFileEncoding(filename, out var encodingBytesCount);
+            var (encoding, encodingBytesCount) = GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
                 return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
@@ -94,7 +94,7 @@ namespace PocketCsvReader
         protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell, string missingCell)
         {
             RaiseProgressStatus("Starting to process the CSV file ...");
-            int i = 0;
+            int i;
 
             using (var reader = new StreamReader(stream, encoding, false))
             {
@@ -111,7 +111,6 @@ namespace PocketCsvReader
                 bool isLastRecord = false;
                 i = 0;
                 var alreadyRead = string.Empty;
-                var extraRead = string.Empty;
 
                 while (!isLastRecord)
                 {
@@ -120,7 +119,7 @@ namespace PocketCsvReader
                     else
                         RaiseProgressStatus($"Loading row {i}{(count.HasValue ? $" of {count}" : string.Empty)} ...");
 
-                    var records = GetNextRecords(reader, recordSeparator, BufferSize, alreadyRead, out extraRead);
+                    var (records, extraRead) = GetNextRecords(reader, recordSeparator, BufferSize, alreadyRead);
                     foreach (var record in records)
                     {
                         var recordToParse = record;
@@ -207,14 +206,17 @@ namespace PocketCsvReader
         /// </summary>
         /// <param name="stream">The stream to analyze for the encoding</param>
         /// <returns></returns>
-        protected virtual Encoding GetStreamEncoding(Stream stream, out int encodingBytesCount)
+        protected virtual (Encoding, int) GetStreamEncoding(Stream stream)
         {
             // Default  = Ansi CodePage
             var encoding = Encoding.Default;
 
             // Detect byte order mark if any - otherwise assume default
             var buffer = new byte[5];
-            stream.Read(buffer, 0, 5);
+            var n = stream.Read(buffer, 0, 5);
+
+            if (n < 2)
+                return (Encoding.ASCII, 0);
 
             if (buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
                 encoding = Encoding.UTF8;
@@ -227,10 +229,10 @@ namespace PocketCsvReader
             else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
                 encoding = Encoding.UTF7;
 
-            encodingBytesCount = Convert.ToInt32(encoding != Encoding.Default);
-            encoding = encoding == Encoding.Default ? Encoding.UTF8 : encoding;
-            RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount>0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
-            return encoding;
+            var encodingBytesCount = Convert.ToInt32(!encoding.Equals(Encoding.Default));
+            encoding = encoding.Equals(Encoding.Default) ? Encoding.UTF8 : encoding;
+            RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount > 0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
+            return (encoding, encodingBytesCount);
         }
 
         /// <summary>
@@ -239,10 +241,10 @@ namespace PocketCsvReader
         /// </summary>
         /// <param name="filename"></param>
         /// <returns></returns>
-        protected virtual Encoding GetFileEncoding(string filename, out int encodingBytesCount)
+        protected virtual (Encoding, int) GetFileEncoding(string filename)
         {
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 8, false))
-                return GetStreamEncoding(stream, out encodingBytesCount);
+                return GetStreamEncoding(stream);
         }
 
         protected virtual int? CountRecords(StreamReader reader, string recordSeparator, bool isFirstRowHeader, bool isPerformanceOptimized)
@@ -369,7 +371,7 @@ namespace PocketCsvReader
             return item;
         }
 
-        private void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
+        private static void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
         {
             if (string.IsNullOrEmpty(value))
                 return;
@@ -414,13 +416,12 @@ namespace PocketCsvReader
         protected virtual string GetFirstRecord(StreamReader reader, string recordSeparator, int bufferSize)
         {
             var stringBuilder = new StringBuilder();
-            int n = 0;
             int j = 0;
 
             while (true)
             {
                 char[] buffer = new char[bufferSize];
-                n = reader.Read(buffer, 0, bufferSize);
+                reader.Read(buffer, 0, bufferSize);
 
                 foreach (var c in buffer)
                 {
@@ -443,7 +444,7 @@ namespace PocketCsvReader
             }
         }
 
-        protected virtual IEnumerable<string> GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead, out string extraRead)
+        protected virtual (IEnumerable<string>, string) GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead)
         {
             int n = 0;
             int j = 0;
@@ -451,7 +452,7 @@ namespace PocketCsvReader
             var records = new List<string>();
             var eof = false;
 
-            extraRead = string.Empty;
+            var extraRead = string.Empty;
             stringBuilder.Append(alreadyRead);
             j = IdentifyPartialRecordSeparator(alreadyRead, recordSeparator);
 
@@ -504,7 +505,7 @@ namespace PocketCsvReader
             if (stringBuilder.Length > 0)
                 extraRead = stringBuilder.ToString();
 
-            return records;
+            return (records, extraRead);
         }
 
         protected virtual int IdentifyPartialRecordSeparator(string text, string recordSeparator)
