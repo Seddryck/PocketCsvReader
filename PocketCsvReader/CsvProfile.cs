@@ -4,11 +4,7 @@ namespace PocketCsvReader
 {
     public class CsvProfile
     {
-        public virtual char FieldSeparator { get; private set; }
-        public virtual char TextQualifier { get; private set; }
-        public virtual char EscapeTextQualifier { get; private set; }
-        public virtual string RecordSeparator { get; private set; }
-        public virtual bool FirstRowHeader { get; private set; }
+        public CsvDialectDescriptor Descriptor { get; private set; }
         public virtual bool PerformanceOptmized { get; private set; }
         public virtual int BufferSize { get; private set; }
         public virtual string EmptyCell { get; private set; }
@@ -48,15 +44,37 @@ namespace PocketCsvReader
 
         public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized, int bufferSize, string emptyCell, string missingCell)
         {
-            FieldSeparator = fieldSeparator;
-            TextQualifier = textQualifier;
-            EscapeTextQualifier = escapeTextQualifier;
-            RecordSeparator = recordSeparator;
-            FirstRowHeader = firstRowHeader;
+            Descriptor = new CsvDialectDescriptor
+            {
+                Delimiter = fieldSeparator,
+                QuoteChar = textQualifier,
+                EscapeChar = escapeTextQualifier,
+                LineTerminator = recordSeparator,
+                Header = firstRowHeader
+            };
+
             PerformanceOptmized = performanceOptimized;
             EmptyCell = emptyCell;
             MissingCell = missingCell;
             BufferSize = bufferSize;
+        }
+
+        public CsvProfile(CsvDialectDescriptor descriptor)
+        {
+            if (descriptor.DoubleQuote)
+                throw new ArgumentException("PocketCsvReader doesn't support doubleQuote set to true in the CSV dialect descriptor.");
+            if (descriptor.NullSequence?.Length > 0)
+                throw new ArgumentException("PocketCsvReader doesn't support nullSequence set to any value in the CSV dialect descriptor.");
+            if (descriptor.SkipInitialSpace)
+                throw new ArgumentException("PocketCsvReader doesn't support skipInitialSpace set to true in the CSV dialect descriptor.");
+            if (descriptor.CaseSensitiveHeader)
+                throw new ArgumentException("PocketCsvReader doesn't support caseSensitiveHeader set to true in the CSV dialect descriptor.");
+
+            Descriptor = descriptor;
+            PerformanceOptmized = false;
+            EmptyCell = string.Empty;
+            MissingCell = string.Empty;
+            BufferSize = 4096;
         }
 
         public static CsvProfile CommaDoubleQuote { get; } = new CsvProfile(',', '\"');

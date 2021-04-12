@@ -52,7 +52,7 @@ namespace PocketCsvReader
             var (encoding, encodingBytesCount) = GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
-                return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
         }
 
         /// <summary>
@@ -64,7 +64,7 @@ namespace PocketCsvReader
         {
             var (encoding, encodingBytesCount) = GetStreamEncoding(stream);
 
-            return Read(stream, encoding, encodingBytesCount, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
+            return Read(stream, encoding, encodingBytesCount, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
         }
 
         /// <summary>
@@ -79,7 +79,7 @@ namespace PocketCsvReader
             var (encoding, encodingBytesCount) = GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
         }
 
         protected virtual void CheckFileExists(string filename)
@@ -89,9 +89,9 @@ namespace PocketCsvReader
         }
 
         protected internal DataTable Read(Stream stream)
-            => this.Read(stream, Encoding.UTF8, 0, Profile.FirstRowHeader, Profile.RecordSeparator, Profile.FieldSeparator, Profile.TextQualifier, Profile.EscapeTextQualifier, Profile.EmptyCell, Profile.MissingCell);
+            => this.Read(stream, Encoding.UTF8, 0, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
 
-        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell, string missingCell)
+        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, char commentChar, string emptyCell, string missingCell)
         {
             RaiseProgressStatus("Starting to process the CSV file ...");
             int i;
@@ -103,23 +103,23 @@ namespace PocketCsvReader
                 reader.Read(buffer, 0, buffer.Length);
                 Rewind(reader);
 
-                var count = CountRecords(reader, Profile.RecordSeparator, isFirstRowHeader, Profile.PerformanceOptmized);
+                var count = CountRecords(reader, recordSeparator, isFirstRowHeader, commentChar, Profile.PerformanceOptmized);
                 Rewind(reader);
                 var table = DefineFields(reader, recordSeparator, fieldSeparator, textQualifier, escapeTextQualifier, isFirstRowHeader, encodingBytesCount);
                 Rewind(reader);
 
-                bool isLastRecord = false;
+                bool isEof = false;
                 i = 0;
                 var alreadyRead = string.Empty;
 
-                while (!isLastRecord)
+                while (!isEof)
                 {
                     if (count.HasValue)
                         RaiseProgressStatus($"Loading row {i} of {count} ...", i, count.Value);
                     else
                         RaiseProgressStatus($"Loading row {i}{(count.HasValue ? $" of {count}" : string.Empty)} ...");
 
-                    var (records, extraRead) = GetNextRecords(reader, recordSeparator, BufferSize, alreadyRead);
+                    var (records, extraRead, eof) = GetNextRecords(reader, recordSeparator, commentChar, BufferSize, alreadyRead);
                     foreach (var record in records)
                     {
                         var recordToParse = record;
@@ -127,35 +127,39 @@ namespace PocketCsvReader
                         if (i == 0 && encodingBytesCount > 0)
                             recordToParse = recordToParse.Substring(encodingBytesCount, recordToParse.Length - encodingBytesCount);
 
-                        i++;
-                        if (i != 1 || !isFirstRowHeader)
+                        if (recordToParse.Length > 0 && recordToParse[0] != commentChar)
                         {
-                            isLastRecord = IsLastRecord(recordToParse);
-                            var cleanRecord = CleanRecord(recordToParse, recordSeparator);
-                            var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell).ToList();
-                            var row = table.NewRow();
-                            if (row.ItemArray.Length < cells.Count)
-                                throw new InvalidDataException
-                                (
-                                    string.Format
+
+                            i++;
+                            if (i != 1 || !isFirstRowHeader)
+                            {
+                                isEof = eof || IsLastRecord(recordToParse);
+                                var cleanRecord = CleanRecord(recordToParse, recordSeparator);
+                                var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell).ToList();
+                                var row = table.NewRow();
+                                if (row.ItemArray.Length < cells.Count)
+                                    throw new InvalidDataException
                                     (
-                                        "The record {0} contains {1} more field{2} than expected."
-                                        , table.Rows.Count + 1 + Convert.ToInt32(isFirstRowHeader)
-                                        , cells.Count - row.ItemArray.Length
-                                        , cells.Count - row.ItemArray.Length > 1 ? "s" : string.Empty
-                                    )
-                                );
+                                        string.Format
+                                        (
+                                            "The record {0} contains {1} more field{2} than expected."
+                                            , table.Rows.Count + 1 + Convert.ToInt32(isFirstRowHeader)
+                                            , cells.Count - row.ItemArray.Length
+                                            , cells.Count - row.ItemArray.Length > 1 ? "s" : string.Empty
+                                        )
+                                    );
 
-                            //fill the missing cells
-                            while (row.ItemArray.Length > cells.Count)
-                                cells.Add(missingCell);
+                                //fill the missing cells
+                                while (row.ItemArray.Length > cells.Count)
+                                    cells.Add(missingCell);
 
-                            row.ItemArray = cells.ToArray();
-                            table.Rows.Add(row);
+                                row.ItemArray = cells.ToArray();
+                                table.Rows.Add(row);
+                            }
                         }
                     }
                     alreadyRead = extraRead;
-                    isLastRecord |= records.Count() == 0;
+                    isEof |= records.Count() == 0;
                 }
                 RaiseProgressStatus("CSV file fully processed.");
 
@@ -247,13 +251,13 @@ namespace PocketCsvReader
                 return GetStreamEncoding(stream);
         }
 
-        protected virtual int? CountRecords(StreamReader reader, string recordSeparator, bool isFirstRowHeader, bool isPerformanceOptimized)
+        protected virtual int? CountRecords(StreamReader reader, string recordSeparator, bool isFirstRowHeader, char commentChar, bool isPerformanceOptimized)
         {
             if (isPerformanceOptimized)
                 return null;
 
             RaiseProgressStatus("Counting records ...");
-            var count = CountRecordSeparators(reader, recordSeparator, BufferSize);
+            var count = CountRecordSeparators(reader, recordSeparator, commentChar, BufferSize);
             count -= Convert.ToInt16(isFirstRowHeader);
             RaiseProgressStatus($"{count} record{(count > 1 ? "s were" : " was")} identified.");
 
@@ -262,12 +266,14 @@ namespace PocketCsvReader
             return count;
         }
 
-        protected virtual int CountRecordSeparators(StreamReader reader, string recordSeparator, int bufferSize)
+        protected virtual int CountRecordSeparators(StreamReader reader, string recordSeparator, char commentChar, int bufferSize)
         {
             int i = 0;
             int n = 0;
             int j = 0;
             bool separatorAtEnd = false;
+            bool isCommentLine = false;
+            bool isFirstCharOfLine = true;
 
             do
             {
@@ -281,15 +287,22 @@ namespace PocketCsvReader
                 {
                     if (c != '\0')
                     {
+                        if (c == commentChar && isFirstCharOfLine)
+                            isCommentLine = true;
+                        isFirstCharOfLine = false;
+
                         separatorAtEnd = false;
                         if (c == recordSeparator[j])
                         {
                             j++;
                             if (j == recordSeparator.Length)
                             {
-                                i++;
+                                if (!isCommentLine)
+                                    i++;
                                 j = 0;
                                 separatorAtEnd = true;
+                                isCommentLine = false;
+                                isFirstCharOfLine = true;
                             }
                         }
                         else
@@ -299,6 +312,9 @@ namespace PocketCsvReader
             } while (n > 0);
 
             if (separatorAtEnd)
+                i -= 1;
+
+            if (isCommentLine)
                 i -= 1;
 
             return i;
@@ -444,13 +460,14 @@ namespace PocketCsvReader
             }
         }
 
-        protected virtual (IEnumerable<string>, string) GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead)
+        protected virtual (IEnumerable<string>, string, bool) GetNextRecords(StreamReader reader, string recordSeparator, char commentChar, int bufferSize, string alreadyRead)
         {
             int n = 0;
             int j = 0;
             var stringBuilder = new StringBuilder();
             var records = new List<string>();
             var eof = false;
+            var commentLine = false;
 
             var extraRead = string.Empty;
             stringBuilder.Append(alreadyRead);
@@ -466,7 +483,11 @@ namespace PocketCsvReader
                 {
                     foreach (var c in buffer)
                     {
-                        stringBuilder.Append(c);
+                        if (c == commentChar && stringBuilder.Length == 0)
+                            commentLine = true;
+
+                        if (!commentLine)
+                            stringBuilder.Append(c);
 
                         if (c == '\0')
                         {
@@ -480,7 +501,10 @@ namespace PocketCsvReader
                             j++;
                             if (j == recordSeparator.Length)
                             {
+                                if (!commentLine)
                                 records.Add(stringBuilder.ToString());
+
+                                commentLine = false;
                                 stringBuilder.Clear();
                                 j = 0;
                             }
@@ -503,9 +527,12 @@ namespace PocketCsvReader
                 records.Add(stringBuilder.ToString());
 
             if (stringBuilder.Length > 0)
-                extraRead = stringBuilder.ToString();
+                if (commentLine)
+                    extraRead = commentLine + recordSeparator.Substring(0, j - 1);
+                else
+                    extraRead = stringBuilder.ToString();
 
-            return (records, extraRead);
+            return (records, extraRead, eof);
         }
 
         protected virtual int IdentifyPartialRecordSeparator(string text, string recordSeparator)

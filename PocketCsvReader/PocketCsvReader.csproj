@@ -41,6 +41,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CsvDialectDescriptor.cs" />
     <Compile Include="CsvProfile.cs" />
     <Compile Include="CsvReader.cs" />
     <Compile Include="ProgressStatusEventArgs.cs" />
