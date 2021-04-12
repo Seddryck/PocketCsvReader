@@ -24,12 +24,12 @@ artifacts:
 deploy:
 - provider: NuGet
   api_key:
-    secure: 7LDAnpfRuEmLf/4hhERYnfy3tHLBqC7wqScUEviYVYkNvrM7C3NN0h73se3QuoNh
+    secure: WFF9dTQz6X6KCEaTxeLnHjZlt7YHSnRrEhc/RmnEpJSXAbeWrZXqVZFTph5Bk8yg
   on:
     branch: develop
 - provider: NuGet
   api_key:
-    secure: 7LDAnpfRuEmLf/4hhERYnfy3tHLBqC7wqScUEviYVYkNvrM7C3NN0h73se3QuoNh
+    secure: WFF9dTQz6X6KCEaTxeLnHjZlt7YHSnRrEhc/RmnEpJSXAbeWrZXqVZFTph5Bk8yg
   on:
     APPVEYOR_REPO_TAG: true
 - provider: NuGet
