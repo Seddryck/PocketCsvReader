@@ -30,14 +30,14 @@ namespace PocketCsvReader.Testing
             public new IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
                 => base.SplitLine(row, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell);
 
-            public new int CountRecordSeparators(StreamReader reader, string recordSeparator, int bufferSize)
-                => base.CountRecordSeparators(reader, recordSeparator, bufferSize);
+            public new int CountRecordSeparators(StreamReader reader, string recordSeparator, char commentChar, int bufferSize)
+                => base.CountRecordSeparators(reader, recordSeparator, commentChar, bufferSize);
 
             public new string GetFirstRecord(StreamReader reader, string recordSeparator, int bufferSize)
                 => base.GetFirstRecord(reader, recordSeparator, bufferSize);
 
-            public new (IEnumerable<string>, string) GetNextRecords(StreamReader reader, string recordSeparator, int bufferSize, string alreadyRead)
-                => base.GetNextRecords(reader, recordSeparator, bufferSize, alreadyRead);
+            public new (IEnumerable<string>, string, bool) GetNextRecords(StreamReader reader, string recordSeparator, char commentChar, int bufferSize, string alreadyRead)
+                => base.GetNextRecords(reader, recordSeparator, commentChar, bufferSize, alreadyRead);
 
             public new bool IsLastRecord(string record)
                 => base.IsLastRecord(record);
@@ -172,7 +172,7 @@ namespace PocketCsvReader.Testing
                 var reader = new CsvReaderProxy();
                 using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8, true))
                 {
-                    var value = reader.CountRecordSeparators(streamReader, recordSeparator, bufferSize);
+                    var value = reader.CountRecordSeparators(streamReader, recordSeparator, '#',  bufferSize);
                     Assert.That(value, Is.EqualTo(result));
                 }
                 writer.Dispose();
@@ -274,7 +274,7 @@ namespace PocketCsvReader.Testing
                 var reader = new CsvReaderProxy();
                 using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
                 {
-                    var (values, extraRead) = reader.GetNextRecords(streamReader, recordSeparator, bufferSize, string.Empty);
+                    var (values, extraRead, eof) = reader.GetNextRecords(streamReader, recordSeparator, '#', bufferSize, string.Empty);
                     foreach (var value in values)
                     {
                         Assert.That(value, Does.StartWith("abc"));
@@ -297,7 +297,7 @@ namespace PocketCsvReader.Testing
 
                 stream.Position = 0;
                 var reader = new CsvReader();
-                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', "_", missingCell);
+                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', '#', "_", missingCell);
 
                 Assert.That(dataTable.Rows[0].ItemArray[0], Is.EqualTo("a"));
                 Assert.That(dataTable.Rows[0].ItemArray[1], Is.EqualTo("b"));
@@ -332,7 +332,7 @@ namespace PocketCsvReader.Testing
 
                 stream.Position = 0;
                 var reader = new CsvReader();
-                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', emptyCell, "_");
+                var dataTable = reader.Read(stream, Encoding.UTF8, 0, false, recordSeparator, fieldSeparator, '\"', '\"', '#', emptyCell, "_");
 
                 Assert.That(dataTable.Rows[0].ItemArray[0], Is.EqualTo("a"));
                 Assert.That(dataTable.Rows[0].ItemArray[1], Is.EqualTo("b"));
@@ -515,6 +515,35 @@ namespace PocketCsvReader.Testing
                     var reader = new CsvReaderProxy(profile);
                     var dataTable = reader.Read(stream);
                     Assert.That(dataTable.Rows[1][2], Is.EqualTo("(null)"));
+                }
+            }
+        }
+
+        [Test]
+        [TestCase("a;b;c\r\n1;2;3")]
+        [TestCase("a;b;c\r\n1;2;3\r\n")]
+        [TestCase("a;b;c\r\n#\r\n1;2;3")]
+        [TestCase("a;b;c\r\n#x;y;z\r\n1;2;3")]
+        [TestCase("a;b;c\r\n1;2;3\r\n#x;y;z")]
+        [TestCase("#x;y;z\r\na;b;c\r\n1;2;3")]
+        [TestCase("#x;y;z\r\n#x;y;z\r\na;b;c\r\n1;2;3")]
+        [TestCase("#x;y;z\r\n#x;y;z\r\na;b;c\r\n1;2;3\r\n#1;2;3")]
+        public void Read_Comment_CommentedLinesSkipped(string content)
+        {
+            using (var stream = new MemoryStream())
+            {
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write(content);
+                    writer.Flush();
+
+                    stream.Position = 0;
+
+                    var profile = new CsvProfile(new CsvDialectDescriptor { Header = false, Delimiter = ';', CommentChar='#', DoubleQuote=false });
+                    var reader = new CsvReaderProxy(profile);
+                    var dataTable = reader.Read(stream);
+                    Assert.That(dataTable.Rows.Count, Is.EqualTo(2));
+                    Assert.That(dataTable.Columns.Count, Is.EqualTo(3));
                 }
             }
         }
