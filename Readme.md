@@ -5,7 +5,7 @@
 PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/t5m0hr57vnsdv0v7?svg=true)](https://ci.appveyor.com/project/Seddryck/pocketcsvreader)
-![Still maintained](https://img.shields.io/maintenance/yes/2021.svg)
+![Still maintained](https://img.shields.io/maintenance/yes/2022.svg)
 [![nuget](https://img.shields.io/nuget/v/PocketCsvReader.svg)](https://www.nuget.org/packages/PocketCsvReader/)
 [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/ce42a0e43d8b44be8f53c741c5d223aa)](https://www.codacy.com/manual/Seddryck/PocketCsvReader?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Seddryck/PocketCsvReader&amp;utm_campaign=Badge_Grade)
