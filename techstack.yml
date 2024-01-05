@@ -1,7 +1,8 @@
 repo_name: Seddryck/PocketCsvReader
 report_id: b2fa9171e37e2fc17e9246385773fbfe
+version: 0.1
 repo_type: Public
-timestamp: '2023-11-12T20:22:29+00:00'
+timestamp: '2024-01-05T08:47:57+00:00'
 requested_by: Seddryck
 provider: github
 branch: master
@@ -17,8 +18,8 @@ tools:
   category: Languages & Frameworks
   sub_category: Languages
   image_url: https://img.stackshare.io/service/6755/2c45151a4a11d3a3c8e71bb34dd069d6_400x400.png
-  detection_source_url: PocketCsvReader.Testing/PocketCsvReader.Testing.csproj
-  detection_source: PocketCsvReader/PocketCsvReader.csproj
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.Testing/PocketCsvReader.Testing.csproj
+  detection_source: PocketCsvReader.Testing/PocketCsvReader.Testing.csproj
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-01-07 23:56:04.000000000 Z
 - name: C#
@@ -30,6 +31,7 @@ tools:
   category: Languages & Frameworks
   sub_category: Languages
   image_url: https://img.stackshare.io/service/1015/1200px-C_Sharp_wordmark.svg.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader
   detection_source: Repo Metadata
 - name: ".NET"
   description: A free, cross-platform, open source developer platform for building
@@ -41,6 +43,7 @@ tools:
   category: Languages & Frameworks
   sub_category: Frameworks (Full Stack)
   image_url: https://img.stackshare.io/service/1014/IoPy1dce_400x400.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.Testing/packages.config
   detection_source: PocketCsvReader.Testing/packages.config
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-01-07 23:56:04.000000000 Z
@@ -52,6 +55,7 @@ tools:
   category: Build, Test, Deploy
   sub_category: Version Control System
   image_url: https://img.stackshare.io/service/1046/git.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader
   detection_source: Repo Metadata
 - name: NUnit
   description: An open-source unit testing framework
@@ -61,6 +65,7 @@ tools:
   category: Build, Test, Deploy
   sub_category: Testing Frameworks
   image_url: https://img.stackshare.io/service/2371/jZ6MYx5Y_400x400.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.Testing/packages.config
   detection_source: PocketCsvReader.Testing/packages.config
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-10-13 16:50:13.000000000 Z
@@ -72,6 +77,7 @@ tools:
   category: Build, Test, Deploy
   sub_category: Package Managers
   image_url: https://img.stackshare.io/service/2637/6I3oEOP4_400x400.jpg
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.Testing/packages.config
   detection_source: PocketCsvReader.Testing/packages.config
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-01-07 23:56:04.000000000 Z
@@ -84,6 +90,7 @@ tools:
   category: Build, Test, Deploy
   sub_category: Integrated Development Environment
   image_url: https://img.stackshare.io/service/1451/SR2hUhQN.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.sln
   detection_source: PocketCsvReader.sln
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-10-13 16:50:13.000000000 Z
@@ -95,6 +102,7 @@ tools:
   category: Languages & Frameworks
   sub_category: Languages
   image_url: https://img.stackshare.io/service/3681/powershell-logo.png
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader
   detection_source: Repo Metadata
 - name: NUnit3TestAdapter
   description: A package including the NUnit 3 TestAdapter for Visual Studio 2012
@@ -107,7 +115,7 @@ tools:
   category: Libraries
   sub_category: NuGet Packages
   image_url: https://img.stackshare.io/package/13216/default_e23dabba1be2c69fbf5fc50bdc46cbffbe6ca2cb.png
-  detection_source_url: PocketCsvReader.Testing/packages.config
+  detection_source_url: https://github.com/Seddryck/PocketCsvReader/blob/master/PocketCsvReader.Testing/packages.config
   detection_source: PocketCsvReader.Testing/packages.config
   last_updated_by: Cédric L. Charlier
   last_updated_on: 2019-10-13 16:50:13.000000000 Z
