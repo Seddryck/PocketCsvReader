@@ -68,7 +68,7 @@ deploy:
   on:
     branch: main
 
-    on_success:
+on_success:
 - pwsh: |
     . "$env:APPVEYOR_BUILD_FOLDER\github.ps1"
     if (($env:APPVEYOR_REPO_BRANCH -eq "main") -and ($null -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)) {
