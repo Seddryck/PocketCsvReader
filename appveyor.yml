@@ -51,39 +51,43 @@ test_script:
     $globalTestResult = $LastExitCode
     if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
 
-after_build:
-- ps: >-
-    $nuget_version = "$env:GitVersion_NuGetVersionV2"
-
-    .\.packages\package-PocketCsvReader.ps1 $nuget_version
+after_test:
+- dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
 
 artifacts:
-- path: PocketCsvReader\bin\Debug
-  name: PocketCsvReader
-- path: .nupkg\PocketCsvReader.*.nupkg
-  name: Nuget packages
+- path: '**\*.nupkg'
+- path: '**\*.snupkg'
+
+
 deploy:
 - provider: NuGet
   api_key:
-    secure: WFF9dTQz6X6KCEaTxeLnHjZlt7YHSnRrEhc/RmnEpJSXAbeWrZXqVZFTph5Bk8yg
+    secure: T/TZN97lox3cwPWwUHTY9CGoA3ewEWM2OE0I3OkSrHrctnNl0c+rQqVkHmp5W0vf
+  skip_symbols: false
+  artifact: /.*(\.|\.s)nupkg/
   on:
-    branch: develop
-- provider: NuGet
-  api_key:
-    secure: WFF9dTQz6X6KCEaTxeLnHjZlt7YHSnRrEhc/RmnEpJSXAbeWrZXqVZFTph5Bk8yg
-  on:
-    APPVEYOR_REPO_TAG: true
-- provider: NuGet
-  server: https://nuget.pkg.github.com/Seddryck/index.json
-  username: Seddryck
-  api_key:
-    secure: vmXLz/XAhXz3eNJPtg5mP78yhliNVtPy4ieiwuGD9Ym47b5CvdXLT0B4tr/VHDoX
-  on:
-    branch: develop
-- provider: NuGet
-  server: https://nuget.pkg.github.com/Seddryck/index.json
-  username: Seddryck
-  api_key:
-    secure: vmXLz/XAhXz3eNJPtg5mP78yhliNVtPy4ieiwuGD9Ym47b5CvdXLT0B4tr/VHDoX
-  on:
-    APPVEYOR_REPO_TAG: true
+    branch: main
+
+    on_success:
+- pwsh: |
+    . "$env:APPVEYOR_BUILD_FOLDER\github.ps1"
+    if (($env:APPVEYOR_REPO_BRANCH -eq "main") -and ($null -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)) {
+        if ($env:GitVersion_Patch -eq '0' -or $env:GitVersion_Patch -eq 0) {
+            $context = [PSCustomObject] @{
+                Owner = ($env:APPVEYOR_REPO_NAME -Split '/')[0]
+                Repository = ($env:APPVEYOR_REPO_NAME -Split '/')[1]
+                SecretToken = $env:github_access_token
+            }
+            if (-not ($context | Check-Release-Published -Tag "v$($env:GitVersion_SemVer)")) {
+                $context | Publish-Release `
+                    -Tag "v$($env:GitVersion_SemVer)" `
+                    -Name "$(($env:APPVEYOR_REPO_NAME -Split '/')[1]) $($env:GitVersion_SemVer)" `
+                    -ReleaseNotes `
+                    -DiscussionCategory 'Announcements'
+            }
+        } else {
+            Write-Host "No release published on GitHub when patch is not set to zero."
+        }
+    } else {
+        Write-Host "No release published on GitHub when not on branch main."
+    }
