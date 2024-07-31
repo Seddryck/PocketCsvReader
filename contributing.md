@@ -20,8 +20,8 @@ We love pull requests from everyone. By participating in this project, you agree
     * This is usually the master branch.
     * Only target release branches if you are certain your fix must be on that branch.
     * To quickly create a topic branch based on develop; `git checkout -b
-      fix/develop/my_contribution develop`. Please avoid working directly on the
-      `master` or `develop` branch.
+      feature/my_contribution main`. Please avoid working directly on the
+      `main` or another branch.
     * The name of your branch should contain the issue number at the end between brackets and preceded by a cross (#).
 * Make commits of logical units.
 * Check for unnecessary whitespace with `git diff --check` before committing.

@@ -1,22 +1,43 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29403.142
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34714.143
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader", "PocketCsvReader\PocketCsvReader.csproj", "{622D8798-D870-4A3B-BBB8-87297B7085BF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Testing", "PocketCsvReader.Testing\PocketCsvReader.Testing.csproj", "{1A7DBE2E-DF19-4539-8DA8-C8E14E71CFEB}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{0A83AC1A-ADD3-41FC-B6C7-856ABAB65872}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{0A83AC1A-ADD3-41FC-B6C7-856ABAB65872}"
 	ProjectSection(SolutionItems) = preProject
-		.gitignore = .gitignore
 		appveyor.yml = appveyor.yml
 		AssemblyInfoPatcher.ps1 = AssemblyInfoPatcher.ps1
-		contributing.md = contributing.md
+		Directory.Build.props = Directory.Build.props
+		Directory.Build.targets = Directory.Build.targets
+		github.ps1 = github.ps1
 		GitVersion.yml = GitVersion.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{467AF34F-9111-4D0C-8957-8CEA46E7883E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Edition", "Edition", "{0254E259-19F0-4DCF-B0FC-1836ED1D706E}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Project", "Project", "{7C7086BE-5CB8-4867-9FD8-1C83C5BDA560}"
+	ProjectSection(SolutionItems) = preProject
+		CODE_OF_CONDUCT.md = CODE_OF_CONDUCT.md
+		contributing.md = contributing.md
 		LICENSE = LICENSE
-		.packaging\package-PocketCsvReader.ps1 = .packaging\package-PocketCsvReader.ps1
 		Readme.md = Readme.md
+		SECURITY.md = SECURITY.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Packaging", "Packaging", "{00561DD7-9664-4BB2-87A6-11FE992F61C5}"
+	ProjectSection(SolutionItems) = preProject
+		.packaging\package-PocketCsvReader.ps1 = .packaging\package-PocketCsvReader.ps1
 	EndProjectSection
 EndProject
 Global
@@ -36,6 +57,12 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0A83AC1A-ADD3-41FC-B6C7-856ABAB65872} = {467AF34F-9111-4D0C-8957-8CEA46E7883E}
+		{0254E259-19F0-4DCF-B0FC-1836ED1D706E} = {467AF34F-9111-4D0C-8957-8CEA46E7883E}
+		{7C7086BE-5CB8-4867-9FD8-1C83C5BDA560} = {467AF34F-9111-4D0C-8957-8CEA46E7883E}
+		{00561DD7-9664-4BB2-87A6-11FE992F61C5} = {467AF34F-9111-4D0C-8957-8CEA46E7883E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {092EB1E5-4CC0-40DB-B08A-E088AD04C989}

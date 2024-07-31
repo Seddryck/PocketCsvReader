@@ -1,21 +1,62 @@
 version: build.{build}
-image: Visual Studio 2017
+image: Visual Studio 2022
+
+branches:
+  except:
+    - /v\d+\.\d+\.\d+/
+skip_commits:
+  files:
+    - docs/
+    - misc/
+    - README.md
+    - LICENSE
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - SECURITY.md
+
 init:
 - cmd: git config --global core.autocrlf true
+- cmd: setx IGNORE_NORMALISATION_GIT_HEAD_MOVE "1"
+- cmd: RefreshEnv.cmd
+- pwsh: Write-Host "Target branch is '$($env:APPVEYOR_REPO_BRANCH)'"
+
 before_build:
-- cmd: >-
-    gitversion /l console /output buildserver /updateAssemblyInfo
-    
-    nuget restore
-build:
-  verbosity: minimal
+- cmd: gitversion /output buildserver /verbosity Minimal
+- pwsh: Write-Host "Building PocketCsvReader version $($env:GitVersion_SemVer)"
+- pwsh: |
+    . "$env:APPVEYOR_BUILD_FOLDER\github.ps1"
+    if (($env:APPVEYOR_REPO_BRANCH -eq "main") -and ($null -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)) {
+      $context = [PSCustomObject] @{
+        Id = $env:APPVEYOR_REPO_COMMIT
+        Owner = ($env:APPVEYOR_REPO_NAME -Split '/')[0]
+        Repository = ($env:APPVEYOR_REPO_NAME -Split '/')[1]
+        SecretToken = $env:github_access_token
+      }
+      foreach($id in ($context | Get-Commit-Associated-Pull-Requests)) {
+        $context.Id = $id
+        $context | Set-Pull-Request-Expected-Labels -Config '.github\conventional_commits_labels.json'
+      }
+    } else {
+        Write-Host 'Not a merge on main built on appveyor. Skipping mapping conventional commits and labels.'
+    }
+
+build_script:
+  #- dotnet --info
+  - dotnet build PocketCsvReader.sln -p:version="%GitVersion_SemVer%" -c Release /p:ContinuousIntegrationBuild=true --nologo
+
+test_script:
+- pwsh: |
+    $ErrorActionPreference = "Stop"
+    dotnet test PocketCsvReader.Testing -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.DubUrl.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
+    $globalTestResult = $LastExitCode
+    if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
+
 after_build:
 - ps: >-
-    $nuget_version = "$env:GitVersion_SemVer"
-    
-    .\.packaging\package-PocketCsvReader.ps1 $nuget_version
-test_script:
-- cmd: nunit3-console PocketCsvReader.Testing\bin\debug\PocketCsvReader.Testing.dll --result=myresults.xml;format=AppVeyor
+    $nuget_version = "$env:GitVersion_NuGetVersionV2"
+
+    .\.packages\package-PocketCsvReader.ps1 $nuget_version
+
 artifacts:
 - path: PocketCsvReader\bin\Debug
   name: PocketCsvReader
