@@ -24,10 +24,10 @@ namespace PocketCsvReader.Testing
             public CsvReaderProxy(int bufferSize)
                 : base(bufferSize) { }
 
-            public new string RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
+            public new string? RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
                 => base.RemoveTextQualifier(item, textQualifier, escapeTextQualifier);
 
-            public new IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
+            public new IEnumerable<string?> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
                 => base.SplitLine(row, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell);
 
             public new int CountRecordSeparators(StreamReader reader, string recordSeparator, char commentChar, int bufferSize)
@@ -407,7 +407,7 @@ namespace PocketCsvReader.Testing
                 foreach (DataRow row in dataTable.Rows)
                 {
                     foreach (var cell in row.ItemArray)
-                        Assert.That(cell.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
+                        Assert.That(cell!.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
                 }
                 Assert.That(dataTable.Rows[0][0], Is.EqualTo("abc"));
                 if (dataTable.Columns.Count == 2)
@@ -473,7 +473,7 @@ namespace PocketCsvReader.Testing
                     var reader = new CsvReader(profile, 1024);
 
                     var ex = Assert.Throws<InvalidDataException>(delegate { reader.Read(stream); });
-                    Assert.That(ex.Message, Does.Contain(string.Format("record {0} ", rowNumber + 1)));
+                    Assert.That(ex!.Message, Does.Contain(string.Format("record {0} ", rowNumber + 1)));
                     Assert.That(ex.Message, Does.Contain(string.Format("{0} more", moreField)));
                 }
             }

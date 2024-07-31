@@ -9,7 +9,7 @@ namespace PocketCsvReader
 {
     public class CsvReader
     {
-        public event ProgressStatusHandler ProgressStatusChanged;
+        public event ProgressStatusHandler? ProgressStatusChanged;
 
         protected CsvProfile Profile { get; private set; }
         protected int BufferSize { get; private set; }
@@ -89,7 +89,7 @@ namespace PocketCsvReader
         }
 
         protected internal DataTable Read(Stream stream)
-            => this.Read(stream, Encoding.UTF8, 0, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
+            => Read(stream, Encoding.UTF8, 0, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
 
         protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, char commentChar, string emptyCell, string missingCell)
         {
@@ -186,8 +186,7 @@ namespace PocketCsvReader
                 firstLine = firstLine.Substring(0, firstLine.Length - recordSeparator.Length);
             columnCount = firstLine.Split(fieldSeparator).Length;
             if (isFirstRowHeader)
-                columnNames.AddRange(SplitLine(firstLine, fieldSeparator, textQualifier, escapeTextQualifier, string.Empty));
-
+                columnNames.AddRange(SplitLine(firstLine, fieldSeparator, textQualifier, escapeTextQualifier, string.Empty)!);
 
             //Correctly define the columns for the table
             var table = new DataTable();
@@ -230,8 +229,8 @@ namespace PocketCsvReader
                 encoding = Encoding.BigEndianUnicode;
             else if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xfe && buffer[3] == 0xff)
                 encoding = Encoding.UTF32;
-            else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
-                encoding = Encoding.UTF7;
+            //else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
+            //    encoding = Encoding.UTF7;
 
             var encodingBytesCount = Convert.ToInt32(!encoding.Equals(Encoding.Default));
             encoding = encoding.Equals(Encoding.Default) ? Encoding.UTF8 : encoding;
@@ -320,7 +319,7 @@ namespace PocketCsvReader
             return i;
         }
 
-        protected virtual IEnumerable<string> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
+        protected virtual IEnumerable<string?> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
         {
             var tokens = new List<string>(row.Split(fieldSeparator));
 
@@ -361,7 +360,7 @@ namespace PocketCsvReader
             }
         }
 
-        protected virtual string RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
+        protected virtual string? RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
         {
             var escapeToken = new string(new[] { escapeTextQualifier, textQualifier });
 
