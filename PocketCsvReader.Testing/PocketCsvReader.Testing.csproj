@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <None Remove="Resources\Ansi.csv" />
+    <None Remove="Resources\Utf16-BE.csv" />
+    <None Remove="Resources\Utf16-LE.csv" />
+    <None Remove="Resources\Utf8-BOM.csv" />
+    <None Remove="Resources\Utf8.csv" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Ansi.csv" />
+    <EmbeddedResource Include="Resources\Utf16-BE.csv" />
+    <EmbeddedResource Include="Resources\Utf16-LE.csv" />
+    <EmbeddedResource Include="Resources\Utf8-BOM.csv" />
+    <EmbeddedResource Include="Resources\Utf8.csv" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="NUnit" Version="4.0.1" />
     <!--<PackageReference Include="NUnit.Analyzers" Version="3.10.0" />-->

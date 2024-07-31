@@ -38,6 +38,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Packaging", "Packaging", "{00561DD7-9664-4BB2-87A6-11FE992F61C5}"
 	ProjectSection(SolutionItems) = preProject
 		.packaging\package-PocketCsvReader.ps1 = .packaging\package-PocketCsvReader.ps1
+		pocket-csv-reader.png = pocket-csv-reader.png
 	EndProjectSection
 EndProject
 Global

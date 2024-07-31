@@ -133,7 +133,7 @@ namespace PocketCsvReader
                             i++;
                             if (i != 1 || !isFirstRowHeader)
                             {
-                                isEof = eof || IsLastRecord(recordToParse);
+                                isEof = eof;
                                 var cleanRecord = CleanRecord(recordToParse, recordSeparator);
                                 var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell).ToList();
                                 var row = table.NewRow();
@@ -560,7 +560,5 @@ namespace PocketCsvReader
 
             return record;
         }
-
-        protected virtual bool IsLastRecord(string record) => string.IsNullOrEmpty(record) || record.EndsWith("\0");
     }
 }

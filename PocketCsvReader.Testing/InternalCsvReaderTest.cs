@@ -39,9 +39,6 @@ namespace PocketCsvReader.Testing
             public new (IEnumerable<string>, string, bool) GetNextRecords(StreamReader reader, string recordSeparator, char commentChar, int bufferSize, string alreadyRead)
                 => base.GetNextRecords(reader, recordSeparator, commentChar, bufferSize, alreadyRead);
 
-            public new bool IsLastRecord(string record)
-                => base.IsLastRecord(record);
-
             public new int IdentifyPartialRecordSeparator(string text, string recordSeparator)
                 => base.IdentifyPartialRecordSeparator(text, recordSeparator);
 
@@ -363,19 +360,6 @@ namespace PocketCsvReader.Testing
         {
             var reader = new CsvReaderProxy();
             var value = reader.CleanRecord(text, recordSeparator);
-            Assert.That(value, Is.EqualTo(result));
-        }
-
-        [Test]
-        [TestCase("abc", false)]
-        [TestCase("abc+@", false)]
-        [TestCase("abc\0\0\0", true)]
-        [TestCase("", true)]
-        [TestCase("\0\0\0", true)]
-        public void IsLastRecord_Record_CorrectResult(string record, bool result)
-        {
-            var reader = new CsvReaderProxy();
-            var value = reader.IsLastRecord(record);
             Assert.That(value, Is.EqualTo(result));
         }
 
