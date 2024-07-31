@@ -14,6 +14,10 @@ skip_commits:
     - CONTRIBUTING.md
     - SECURITY.md
 
+environment:
+  github_access_token:
+    secure: gtEHCUmmDjYfrp/NEe2qUFa/xhr+1Qet7lyN4fj/Ned2oBc+bGJbdz3GqG+tC/rkm8E+/YmV6bUearNlu1+cBGm51XmbzIJexf7IK93i3H8fnC5QFodO9sVvXpzZX9gO
+
 init:
 - cmd: git config --global core.autocrlf true
 - cmd: setx IGNORE_NORMALISATION_GIT_HEAD_MOVE "1"
