@@ -24,7 +24,11 @@ namespace PocketCsvReader.Testing
         {
             var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
 
-            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.Resources.{filename}.csv"))
+            using (var stream =
+                    Assembly.GetExecutingAssembly()
+                        .GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.Resources.{filename}.csv")
+                        ?? throw new FileNotFoundException()
+            )
             {
                 var dataTable = reader.ToDataTable(stream);
                 Assert.That(dataTable.Columns.Count, Is.EqualTo(14));
