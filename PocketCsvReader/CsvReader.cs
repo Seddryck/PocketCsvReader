@@ -463,37 +463,38 @@ namespace PocketCsvReader
         {
             int n = 0;
             int j = 0;
-            var stringBuilder = new StringBuilder();
             var records = new List<string>();
             var eof = false;
             var commentLine = false;
 
             var extraRead = string.Empty;
-            stringBuilder.Append(alreadyRead);
             j = IdentifyPartialRecordSeparator(alreadyRead, recordSeparator);
+
+            Span<char> buffer = stackalloc char[bufferSize];
+            int recordStart = 0;
+            int recordPos = 0;
 
             do
             {
-                var buffer = new char[bufferSize];
-                n = reader.Read(buffer, 0, bufferSize);
+                recordStart = 0;
+                recordPos = 0;
 
+                n = reader.Read(buffer);
 
                 if (n > 0)
                 {
                     foreach (var c in buffer)
                     {
-                        if (c == commentChar && stringBuilder.Length == 0)
-                            commentLine = true;
-
-                        if (!commentLine)
-                            stringBuilder.Append(c);
-
                         if (c == '\0')
                         {
                             eof = true;
                             break;
                         }
 
+                        recordPos++;
+
+                        if (c == commentChar && recordStart == recordPos)
+                            commentLine = true;
 
                         if (c == recordSeparator[j])
                         {
@@ -501,10 +502,16 @@ namespace PocketCsvReader
                             if (j == recordSeparator.Length)
                             {
                                 if (!commentLine)
-                                records.Add(stringBuilder.ToString());
+                                {
+                                    var record = string.IsNullOrEmpty(alreadyRead)
+                                        ? new string(buffer.Slice(recordStart, recordPos - recordStart))
+                                        : alreadyRead + new string(buffer.Slice(recordStart, recordPos - recordStart));
+                                    records.Add(record);
+                                }
 
+                                alreadyRead = string.Empty;
                                 commentLine = false;
-                                stringBuilder.Clear();
+                                recordStart = recordPos;
                                 j = 0;
                             }
 
@@ -516,20 +523,27 @@ namespace PocketCsvReader
                 else
                 {
                     eof = true;
-                    stringBuilder.Append('\0');
                 }
+
+                if (records.Count == 0 && !eof)
+                    alreadyRead += new string(buffer.Slice(recordStart, recordPos - recordStart));
 
 
             } while (records.Count == 0 && !eof);
 
-            if (eof && stringBuilder.Length > 0 && stringBuilder[0] != '\0')
-                records.Add(stringBuilder.ToString());
+            if (eof && (!string.IsNullOrEmpty(alreadyRead) || (recordStart != recordPos && buffer.Slice(recordStart, 1)[0] != '\0')))
+            {
+                var record = string.IsNullOrEmpty(alreadyRead)
+                    ? new string(buffer.Slice(recordStart, recordPos - recordStart))
+                    : alreadyRead + new string(buffer.Slice(recordStart, recordPos - recordStart));
+                records.Add(record);
+            };
 
-            if (stringBuilder.Length > 0)
+            if (recordStart != recordPos)
                 if (commentLine)
                     extraRead = commentLine + recordSeparator.Substring(0, j - 1);
                 else
-                    extraRead = stringBuilder.ToString();
+                    extraRead = new string(buffer.Slice(recordStart, recordPos - recordStart));
 
             return (records, extraRead, eof);
         }
