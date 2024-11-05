@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace PocketCsvReader
@@ -15,19 +18,16 @@ namespace PocketCsvReader
         protected int BufferSize { get; private set; }
 
         public CsvReader()
-            : this(CsvProfile.CommaDoubleQuote, 512)
-        {
-        }
+            : this(CsvProfile.CommaDoubleQuote, 4 * 1024)
+        { }
 
         public CsvReader(CsvProfile profile)
-            : this(profile, 512)
-        {
-        }
+            : this(profile, 4 * 1024)
+        { }
 
         public CsvReader(int bufferSize)
             : this(CsvProfile.SemiColumnDoubleQuote, bufferSize)
-        {
-        }
+        { }
 
         public CsvReader(CsvProfile profile, int bufferSize)
         {
@@ -52,7 +52,7 @@ namespace PocketCsvReader
             var (encoding, encodingBytesCount) = GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
-                return Read(stream, encoding, encodingBytesCount, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount);
         }
 
         /// <summary>
@@ -64,7 +64,7 @@ namespace PocketCsvReader
         {
             var (encoding, encodingBytesCount) = GetStreamEncoding(stream);
 
-            return Read(stream, encoding, encodingBytesCount, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
+            return Read(stream, encoding, encodingBytesCount);
         }
 
         /// <summary>
@@ -77,9 +77,10 @@ namespace PocketCsvReader
         {
             CheckFileExists(filename);
             var (encoding, encodingBytesCount) = GetFileEncoding(filename);
+            Profile.Descriptor.Header = isFirstRowHeader;
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return Read(stream, encoding, encodingBytesCount, isFirstRowHeader, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
+                return Read(stream, encoding, encodingBytesCount);
         }
 
         protected virtual void CheckFileExists(string filename)
@@ -89,9 +90,9 @@ namespace PocketCsvReader
         }
 
         protected internal DataTable Read(Stream stream)
-            => Read(stream, Encoding.UTF8, 0, Profile.Descriptor.Header, Profile.Descriptor.LineTerminator, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, Profile.Descriptor.CommentChar, Profile.EmptyCell, Profile.MissingCell);
+            => Read(stream, Encoding.UTF8, 0);
 
-        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount, bool isFirstRowHeader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, char commentChar, string emptyCell, string missingCell)
+        protected internal DataTable Read(Stream stream, Encoding encoding, int encodingBytesCount)
         {
             RaiseProgressStatus("Starting to process the CSV file ...");
             int i;
@@ -99,18 +100,22 @@ namespace PocketCsvReader
             using (var reader = new StreamReader(stream, encoding, false))
             {
                 //Move and rewind to be sure that the BOM is not skipped by internal implementation of StreamReader
-                var buffer = new char[1];
-                reader.Read(buffer, 0, buffer.Length);
+                var bufferBOM = new char[1];
+                reader.Read(bufferBOM, 0, bufferBOM.Length);
                 Rewind(reader);
 
-                var count = CountRecords(reader, recordSeparator, isFirstRowHeader, commentChar, Profile.PerformanceOptmized);
+                var count = CountRecords(reader);
                 Rewind(reader);
-                var table = DefineFields(reader, recordSeparator, fieldSeparator, textQualifier, escapeTextQualifier, isFirstRowHeader, encodingBytesCount);
+                var table = DefineFields(reader, encodingBytesCount);
                 Rewind(reader);
+
+                if (encodingBytesCount > 0)
+                    reader.BaseStream.Position = encodingBytesCount;
 
                 bool isEof = false;
                 i = 0;
-                var alreadyRead = string.Empty;
+                Span<char> buffer = stackalloc char[BufferSize];
+                Span<char> extra = stackalloc char[0];
 
                 while (!isEof)
                 {
@@ -119,47 +124,39 @@ namespace PocketCsvReader
                     else
                         RaiseProgressStatus($"Loading row {i}{(count.HasValue ? $" of {count}" : string.Empty)} ...");
 
-                    var (records, extraRead, eof) = GetNextRecords(reader, recordSeparator, commentChar, BufferSize, alreadyRead);
-                    foreach (var record in records)
+                    i++;
+                    buffer.Clear();
+                    var (fields, eof) = ReadNextRecord(reader, buffer, ref extra);
+                    isEof = eof;
+
+                    if ((i != 1 || !Profile.Descriptor.Header) && !(isEof && fields.Length == 0))
                     {
-                        var recordToParse = record;
+                        var row = table.NewRow();
+                        if (row.ItemArray.Length < fields.Length)
+                            throw new InvalidDataException
+                            (
+                                string.Format
+                                (
+                                    "The record {0} contains {1} more field{2} than expected."
+                                    , table.Rows.Count + 1 + Convert.ToInt32(Profile.Descriptor.Header)
+                                    , fields.Length - row.ItemArray.Length
+                                    , fields.Length - row.ItemArray.Length > 1 ? "s" : string.Empty
+                                )
+                            );
 
-                        if (i == 0 && encodingBytesCount > 0)
-                            recordToParse = recordToParse.Substring(encodingBytesCount, recordToParse.Length - encodingBytesCount);
-
-                        if (recordToParse.Length > 0 && recordToParse[0] != commentChar)
+                        //fill the missing cells
+                        if (row.ItemArray.Length > fields.Length)
                         {
-
-                            i++;
-                            if (i != 1 || !isFirstRowHeader)
-                            {
-                                isEof = eof;
-                                var cleanRecord = CleanRecord(recordToParse, recordSeparator);
-                                var cells = SplitLine(cleanRecord, fieldSeparator, textQualifier, escapeTextQualifier, emptyCell).ToList();
-                                var row = table.NewRow();
-                                if (row.ItemArray.Length < cells.Count)
-                                    throw new InvalidDataException
-                                    (
-                                        string.Format
-                                        (
-                                            "The record {0} contains {1} more field{2} than expected."
-                                            , table.Rows.Count + 1 + Convert.ToInt32(isFirstRowHeader)
-                                            , cells.Count - row.ItemArray.Length
-                                            , cells.Count - row.ItemArray.Length > 1 ? "s" : string.Empty
-                                        )
-                                    );
-
-                                //fill the missing cells
-                                while (row.ItemArray.Length > cells.Count)
-                                    cells.Add(missingCell);
-
-                                row.ItemArray = cells.ToArray();
-                                table.Rows.Add(row);
-                            }
+                            var list = new List<string?>(fields);
+                            while (row.ItemArray.Length > list.Count)
+                                list.Add(Profile.MissingCell);
+                            fields = [.. list];
                         }
+
+                        row.ItemArray = fields.ToArray();
+                        table.Rows.Add(row);
                     }
-                    alreadyRead = extraRead;
-                    isEof |= records.Count() == 0;
+
                 }
                 RaiseProgressStatus("CSV file fully processed.");
 
@@ -173,20 +170,20 @@ namespace PocketCsvReader
             reader.DiscardBufferedData();
         }
 
-        protected virtual DataTable DefineFields(StreamReader reader, string recordSeparator, char fieldSeparator, char textQualifier, char escapeTextQualifier, bool isFirstRowHeader, int encodingBytesCount)
+        protected virtual DataTable DefineFields(StreamReader reader, int encodingBytesCount)
         {
             //Get first record to know the count of fields
             RaiseProgressStatus("Defining fields");
             var columnCount = 0;
             var columnNames = new List<string>();
-            var firstLine = GetFirstRecord(reader, recordSeparator, BufferSize);
+            var firstLine = GetFirstRecord(reader, Profile.Descriptor.LineTerminator, BufferSize);
             if (encodingBytesCount > 0)
                 firstLine = firstLine.Substring(encodingBytesCount, firstLine.Length - encodingBytesCount);
-            if (firstLine.EndsWith(recordSeparator))
-                firstLine = firstLine.Substring(0, firstLine.Length - recordSeparator.Length);
-            columnCount = firstLine.Split(fieldSeparator).Length;
-            if (isFirstRowHeader)
-                columnNames.AddRange(SplitLine(firstLine, fieldSeparator, textQualifier, escapeTextQualifier, string.Empty)!);
+            if (firstLine.EndsWith(Profile.Descriptor.LineTerminator))
+                firstLine = firstLine.Substring(0, firstLine.Length - Profile.Descriptor.LineTerminator.Length);
+            columnCount = firstLine.Split(Profile.Descriptor.Delimiter).Length;
+            if (Profile.Descriptor.Header)
+                columnNames.AddRange(GetFields(firstLine, Profile.Descriptor.Delimiter, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar, string.Empty)!);
 
             //Correctly define the columns for the table
             var table = new DataTable();
@@ -233,6 +230,8 @@ namespace PocketCsvReader
             //    encoding = Encoding.UTF7;
 
             var encodingBytesCount = Convert.ToInt32(!encoding.Equals(Encoding.Default));
+            if (encoding==Encoding.Unicode || encoding == Encoding.BigEndianUnicode)
+                encodingBytesCount = 2;
             encoding = encoding.Equals(Encoding.Default) ? Encoding.UTF8 : encoding;
             RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount > 0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
             return (encoding, encodingBytesCount);
@@ -250,14 +249,14 @@ namespace PocketCsvReader
                 return GetStreamEncoding(stream);
         }
 
-        protected virtual int? CountRecords(StreamReader reader, string recordSeparator, bool isFirstRowHeader, char commentChar, bool isPerformanceOptimized)
+        protected virtual int? CountRecords(StreamReader reader)
         {
-            if (isPerformanceOptimized)
+            if (Profile.PerformanceOptmized)
                 return null;
 
             RaiseProgressStatus("Counting records ...");
-            var count = CountRecordSeparators(reader, recordSeparator, commentChar, BufferSize);
-            count -= Convert.ToInt16(isFirstRowHeader);
+            var count = CountRecordSeparators(reader);
+            count -= Convert.ToInt16(Profile.Descriptor.Header);
             RaiseProgressStatus($"{count} record{(count > 1 ? "s were" : " was")} identified.");
 
             reader.BaseStream.Position = 0;
@@ -265,7 +264,7 @@ namespace PocketCsvReader
             return count;
         }
 
-        protected virtual int CountRecordSeparators(StreamReader reader, string recordSeparator, char commentChar, int bufferSize)
+        protected virtual int CountRecordSeparators(StreamReader reader)
         {
             int i = 0;
             int n = 0;
@@ -276,8 +275,8 @@ namespace PocketCsvReader
 
             do
             {
-                char[] buffer = new char[bufferSize];
-                n = reader.Read(buffer, 0, bufferSize);
+                char[] buffer = new char[BufferSize];
+                n = reader.Read(buffer, 0, BufferSize);
                 if (n > 0 && i == 0)
                     i = 1;
 
@@ -286,15 +285,15 @@ namespace PocketCsvReader
                 {
                     if (c != '\0')
                     {
-                        if (c == commentChar && isFirstCharOfLine)
+                        if (c == Profile.Descriptor.CommentChar && isFirstCharOfLine)
                             isCommentLine = true;
                         isFirstCharOfLine = false;
 
                         separatorAtEnd = false;
-                        if (c == recordSeparator[j])
+                        if (c == Profile.Descriptor.LineTerminator[j])
                         {
                             j++;
-                            if (j == recordSeparator.Length)
+                            if (j == Profile.Descriptor.LineTerminator.Length)
                             {
                                 if (!isCommentLine)
                                     i++;
@@ -319,72 +318,61 @@ namespace PocketCsvReader
             return i;
         }
 
-        protected virtual IEnumerable<string?> SplitLine(string row, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
+        protected virtual string?[] GetFields(ReadOnlySpan<char> record, char fieldSeparator, char textQualifier, char escapeTextQualifier, string emptyCell)
         {
-            var tokens = new List<string>(row.Split(fieldSeparator));
+            var fields = new List<string?>();
+            var fieldStart = 0;
+            var startsByTextQualifier = false;
+            var endsByTextQualifier = false;
+            var isEscaped = false;
 
-            var startByTextQualifier = false;
-            var compositeToken = new StringBuilder();
-
-            foreach (var token in tokens)
+            for (var fieldPos = 0; fieldPos < record.Length; fieldPos++)
             {
-                var endByTextQualifier = false;
-                if (string.IsNullOrEmpty(token))
-                {
-                    if (!startByTextQualifier)
-                        yield return token == null ? null : emptyCell;
-                    else
-                        compositeToken.Append(fieldSeparator);
-                }
-                else
-                {
-                    startByTextQualifier |= token[0] == textQualifier;
-                    endByTextQualifier = token[token.Length - 1] == textQualifier && token.Length != 1;
-                    if (endByTextQualifier && token != new string(new[] { textQualifier, textQualifier }))
-                        endByTextQualifier = new string(token.Reverse().Take(2).ToArray()) != new string(new[] { textQualifier, escapeTextQualifier });
-                    compositeToken.Append(token);
+                if (fieldPos == fieldStart && record[fieldPos] == textQualifier)
+                    startsByTextQualifier = true;
+                else if (record[fieldPos] == textQualifier && !isEscaped)
+                    endsByTextQualifier = true;
+                else if (record[fieldPos] != fieldSeparator)
+                    endsByTextQualifier = false;
 
-                    if (startByTextQualifier && endByTextQualifier || (!startByTextQualifier && !endByTextQualifier))
+                if (fieldPos == record.Length - 1
+                        || (record[fieldPos] == fieldSeparator
+                                && startsByTextQualifier == endsByTextQualifier)
+                        )
+                {
+
+                    if (fieldPos == record.Length - 1 && record[fieldPos] != fieldSeparator)
+                        fieldPos += 1;
+
+                    var field = startsByTextQualifier
+                                    ? record.Slice(fieldStart + 1, fieldPos - fieldStart - 2)
+                                    : record.Slice(fieldStart, fieldPos - fieldStart);
+
+                    if (field.Length == 0)
+                        fields.Add(emptyCell);
+                    else if (field.ToString() == "(null)")
+                        fields.Add(null);
+                    else if (field.Contains(escapeTextQualifier))
                     {
-                        startByTextQualifier = false;
-                        var value = RemoveTextQualifier(compositeToken.ToString(), textQualifier, escapeTextQualifier);
-                        compositeToken.Clear();
-                        if (string.IsNullOrEmpty(value))
-                            yield return value == null ? null : emptyCell;
-                        else
-                            yield return value;
+                        var candidate = field.ToString();
+                        CheckTextQualifierEscapation(candidate, textQualifier, escapeTextQualifier);
+                        fields.Add(candidate.Replace(new string(new[] { escapeTextQualifier, textQualifier }), textQualifier.ToString()));
                     }
                     else
-                        compositeToken.Append(fieldSeparator);
+                        fields.Add(field.ToString());
+                    fieldStart = fieldPos + 1;
+                    startsByTextQualifier = false;
+                    endsByTextQualifier = false;
                 }
+
+                if (fieldPos < record.Length && record[fieldPos] == escapeTextQualifier && fieldPos != fieldStart)
+                    isEscaped = true;
+                else
+                    isEscaped = false;
             }
+            return [.. fields];
         }
 
-        protected virtual string? RemoveTextQualifier(string item, char textQualifier, char escapeTextQualifier)
-        {
-            var escapeToken = new string(new[] { escapeTextQualifier, textQualifier });
-
-            if (string.IsNullOrEmpty(item))
-                return string.Empty;
-
-            if (item == "(null)")
-                return null;
-
-            if (item.Length == 1)
-                return item;
-
-            if (item == escapeToken)
-                return string.Empty;
-
-            if (item[0] == textQualifier && item[item.Length - 1] == textQualifier)
-            {
-                var candidate = item.Substring(1, item.Length - 2);
-                CheckTextQualifierEscapation(candidate, textQualifier, escapeTextQualifier);
-                return candidate.Replace(escapeToken, textQualifier.ToString());
-            }
-
-            return item;
-        }
 
         private static void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
         {
@@ -407,7 +395,7 @@ namespace PocketCsvReader
             if (textQualifier == escapeTextQualifier)
             {
                 if (indexes.Count() == 1)
-                    throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {indexes[0]}");
+                    throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {indexes[0]}");
 
                 var i = 1;
                 while (i < indexes.Count())
@@ -415,10 +403,10 @@ namespace PocketCsvReader
                     if ((i + 1) % 2 == 0)
                     {
                         if (indexes[i - 1] != indexes[i] - 1)
-                            throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
+                            throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
                     }
                     else if (i == indexes.Count - 1 || indexes[i + 1] != indexes[i] + 1)
-                        throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
+                        throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
                     i += 1;
                 }
             }
@@ -459,120 +447,211 @@ namespace PocketCsvReader
             }
         }
 
-        protected virtual (IEnumerable<string>, string, bool) GetNextRecords(StreamReader reader, string recordSeparator, char commentChar, int bufferSize, string alreadyRead)
+        private static ReadOnlySpan<char> Prepend(string prefix, ReadOnlySpan<char> value)
         {
-            int n = 0;
-            int j = 0;
-            var records = new List<string>();
+            Span<char> buffer = new char[prefix.Length + value.Length];
+            prefix.AsSpan().CopyTo(buffer);
+            value.CopyTo(buffer.Slice(prefix.Length));
+            return buffer;
+        }
+        protected virtual (string?[], bool) ReadNextRecord(Span<char> buffer)
+        {
+            Span<char> extra = buffer;
+            return ReadNextRecord(null, buffer, ref extra);
+        }
+
+        protected virtual (string?[], bool) ReadNextRecord(StreamReader? reader, Span<char> buffer, ref Span<char> extra)
+        {
+            var bufferSize = 0;
+            var index = 0;
             var eof = false;
-            var commentLine = false;
+            var isFirstCharOfRecord = true;
+            var indexRecordSeparator = 0;
+            var isFirstCharOfField = true;
+            var fields = new List<string?>();
+            var indexFieldStart = 0;
+            var isCommentLine = false;
+            var isFieldWithTextQualifier = false;
+            var isEndingByTextQualifier = false;
+            var isTextQualifierEscaped = false;
+            Span<char> longField = stackalloc char[0];
+            var longFieldIndex = 0;
+            var isLastCharDelimiter = false;
 
-            var extraRead = string.Empty;
-            j = IdentifyPartialRecordSeparator(alreadyRead, recordSeparator);
-
-            Span<char> buffer = stackalloc char[bufferSize];
-            int recordStart = 0;
-            int recordPos = 0;
-
-            do
+            if (extra.Length > 0)
             {
-                recordStart = 0;
-                recordPos = 0;
+                extra.CopyTo(buffer);
+                bufferSize = extra.Length;
+            }
+            else
+            {
+                bufferSize = reader?.ReadBlock(buffer) ?? throw new ArgumentNullException(nameof(reader));
+                eof = bufferSize == 0;
+            }
 
-                n = reader.Read(buffer);
-
-                if (n > 0)
+            while (!eof && index < bufferSize)
+            {
+                char c = buffer[index];
+                if (c == '\0')
                 {
-                    foreach (var c in buffer)
+                    eof = true;
+                    break;
+                }
+
+                if (isFirstCharOfRecord)
+                {
+                    isCommentLine = c == Profile.Descriptor.CommentChar;
+                    isFirstCharOfRecord = false;
+                }
+
+                if (isFirstCharOfField)
+                {
+                    isFieldWithTextQualifier = c == Profile.Descriptor.QuoteChar;
+                    isFirstCharOfField = false;
+                    isEndingByTextQualifier = false;
+                    isTextQualifierEscaped = false;
+                }
+                else if (c != Profile.Descriptor.Delimiter && c != Profile.Descriptor.LineTerminator[indexRecordSeparator] && !isFirstCharOfField)
+                {
+                    isEndingByTextQualifier = c == Profile.Descriptor.QuoteChar && !isTextQualifierEscaped;
+                    isTextQualifierEscaped = c == Profile.Descriptor.EscapeChar && !isTextQualifierEscaped;
+                }
+
+                if (c == Profile.Descriptor.Delimiter && !isCommentLine && (isFieldWithTextQualifier == isEndingByTextQualifier))
+                {
+                    if (longFieldIndex == 0)
+                        fields.Add(ReadField(buffer, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    else
                     {
-                        if (c == '\0')
+                        fields.Add(ReadField(longField, longFieldIndex, buffer, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                        longField = ArrayPool<char>.Shared.Rent(0);
+                        longFieldIndex = 0;
+                    }
+                    isFirstCharOfField = true;
+                    indexFieldStart = index + 1;
+                }
+
+                if (c == Profile.Descriptor.LineTerminator[indexRecordSeparator])
+                {
+                    indexRecordSeparator++;
+                    if (indexRecordSeparator == Profile.Descriptor.LineTerminator.Length)
+                    {
+                        if (!isCommentLine)
                         {
-                            eof = true;
-                            break;
-                        }
-
-                        recordPos++;
-
-                        if (c == commentChar && recordStart == recordPos)
-                            commentLine = true;
-
-                        if (c == recordSeparator[j])
-                        {
-                            j++;
-                            if (j == recordSeparator.Length)
+                            if (indexFieldStart <= index + longFieldIndex - Profile.Descriptor.LineTerminator.Length)
                             {
-                                if (!commentLine)
+                                if (longFieldIndex == 0)
+                                    fields.Add(ReadField(buffer, indexFieldStart, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                else
                                 {
-                                    var record = string.IsNullOrEmpty(alreadyRead)
-                                        ? new string(buffer.Slice(recordStart, recordPos - recordStart))
-                                        : alreadyRead + new string(buffer.Slice(recordStart, recordPos - recordStart));
-                                    records.Add(record);
+                                    fields.Add(ReadField(longField, longFieldIndex, buffer, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                    longField = ArrayPool<char>.Shared.Rent(0);
+                                    longFieldIndex = 0;
                                 }
-
-                                alreadyRead = string.Empty;
-                                commentLine = false;
-                                recordStart = recordPos;
-                                j = 0;
                             }
 
+                            extra = ArrayPool<char>.Shared.Rent(bufferSize - index - 1);
+                            extra = extra.Slice(0, bufferSize - index - 1);
+                            buffer.Slice(index + 1, bufferSize - index - 1).CopyTo(extra);
+                            buffer.Clear();
+                            return (fields.ToArray(), false);
                         }
                         else
-                            j = 0;
+                        {
+                            bufferSize = bufferSize - index;
+                            buffer = buffer.Slice(index + 1);
+                            isCommentLine = false;
+                            index = -1;
+                            indexFieldStart = 0;
+                        }
+                        isFirstCharOfRecord = true;
+                        isFirstCharOfField = true;
+                        indexRecordSeparator = 0;
+                        isFieldWithTextQualifier = false;
+                        isEndingByTextQualifier = false;
                     }
                 }
                 else
+                    indexRecordSeparator = 0;
+
+
+
+                if (++index == bufferSize)
                 {
-                    eof = true;
+                    if (longField.Length >= longFieldIndex + index - indexFieldStart)
+                    {
+                        buffer.Slice(indexFieldStart, index - indexFieldStart).CopyTo(longField.Slice(longFieldIndex));
+                    }
+                    else
+                    {
+                        var newArray = ArrayPool<char>.Shared.Rent(longFieldIndex + index - indexFieldStart);
+                        longField.CopyTo(newArray);
+                        buffer.Slice(indexFieldStart, index - indexFieldStart).ToArray().CopyTo(newArray, longFieldIndex);
+                        longField = newArray;
+                    }
+
+                    longFieldIndex += index - indexFieldStart;
+                    indexFieldStart = 0;
+                    bufferSize = reader?.ReadBlock(buffer) ?? throw new ArgumentNullException(nameof(reader));
+                    eof = bufferSize == 0;
+                    index = 0;
+                    if (eof)
+                        isLastCharDelimiter = true;
                 }
-
-                if (records.Count == 0 && !eof)
-                    alreadyRead += new string(buffer.Slice(recordStart, recordPos - recordStart));
-
-
-            } while (records.Count == 0 && !eof);
-
-            if (eof && (!string.IsNullOrEmpty(alreadyRead) || (recordStart != recordPos && buffer.Slice(recordStart, 1)[0] != '\0')))
-            {
-                var record = string.IsNullOrEmpty(alreadyRead)
-                    ? new string(buffer.Slice(recordStart, recordPos - recordStart))
-                    : alreadyRead + new string(buffer.Slice(recordStart, recordPos - recordStart));
-                records.Add(record);
-            };
-
-            if (recordStart != recordPos)
-                if (commentLine)
-                    extraRead = commentLine + recordSeparator.Substring(0, j - 1);
-                else
-                    extraRead = new string(buffer.Slice(recordStart, recordPos - recordStart));
-
-            return (records, extraRead, eof);
-        }
-
-        protected virtual int IdentifyPartialRecordSeparator(string text, string recordSeparator)
-        {
-            int i = Math.Min(recordSeparator.Length - 1, text.Length);
-            while (i > 0)
-            {
-                if (text.EndsWith(recordSeparator.Substring(0, i)))
-                    return i;
-                i--;
             }
-            return 0;
+
+            if (eof && (index != indexFieldStart || longFieldIndex > 0 || isLastCharDelimiter) && !isCommentLine)
+                if (longFieldIndex == 0)
+                    if (isLastCharDelimiter)
+                        fields.Add(Profile.EmptyCell);
+                    else
+                        fields.Add(ReadField(buffer, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                else
+                    fields.Add(ReadField(longField, longFieldIndex, buffer, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+
+            return (fields.ToArray(), eof);
         }
 
-        protected virtual string CleanRecord(string record, string recordSeparator)
+        protected internal string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
         {
-            int i = 0;
-            while (record.Length > i && record[record.Length - 1 - i] == '\0')
-                i++;
+            if (longField.Length >= longFieldIndex + currentIndex)
+            {
+                buffer.Slice(0, currentIndex + 1).CopyTo(longField.Slice(longFieldIndex));
+            }
+            else
+            {
+                var newArray = ArrayPool<char>.Shared.Rent(longFieldIndex + currentIndex);
+                longField.CopyTo(newArray);
+                buffer.Slice(0, currentIndex).ToArray().CopyTo(newArray, longFieldIndex);
+                longField = newArray;
+            }
+            return ReadField(longField, 0, longFieldIndex + currentIndex, isFieldWithTextQualifier, isFieldEndingByTextQualifier);
+        }
 
-            if (i > 0)
-                record = record.Remove(record.Length - i, i);
+        protected internal string? ReadField(ReadOnlySpan<char> buffer, int indexFieldStart, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
+        {
+            if (isFieldWithTextQualifier != isFieldEndingByTextQualifier)
+                if (isFieldWithTextQualifier)
+                    throw new InvalidDataException($"the token {buffer.Slice(indexFieldStart, currentIndex - indexFieldStart)} is starting by a text-qualifier but not ending by a text-qualifier.");
+                else
+                    throw new InvalidDataException($"the token {buffer.Slice(indexFieldStart, currentIndex - indexFieldStart)} is ending by a text-qualifier but not starting by a text-qualifier.");
 
-            if (record.EndsWith(recordSeparator))
-                return record.Remove(record.Length - recordSeparator.Length, recordSeparator.Length);
+            var field = isFieldWithTextQualifier
+                            ? buffer.Slice(indexFieldStart + 1, currentIndex - indexFieldStart - 2)
+                            : buffer.Slice(indexFieldStart, currentIndex - indexFieldStart);
 
-            return record;
+            if (field.Length == 0)
+                return Profile.EmptyCell;
+            else if (field.ToString() == "(null)" && !isFieldWithTextQualifier)
+                return null;
+            else if (field.Contains(Profile.Descriptor.EscapeChar))
+            {
+                var candidate = field.ToString();
+                CheckTextQualifierEscapation(candidate, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
+                return candidate.Replace(new string(new[] { Profile.Descriptor.EscapeChar, Profile.Descriptor.QuoteChar }), Profile.Descriptor.QuoteChar.ToString());
+            }
+            else
+                return field.ToString();
         }
     }
 }
