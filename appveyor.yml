@@ -6,6 +6,7 @@ branches:
     - /v\d+\.\d+\.\d+/
 skip_commits:
   files:
+    - .github/
     - docs/
     - misc/
     - README.md
@@ -21,6 +22,7 @@ environment:
 init:
 - cmd: git config --global core.autocrlf true
 - cmd: setx IGNORE_NORMALISATION_GIT_HEAD_MOVE "1"
+- cmd: setx DOTNET_NO_WORKLOAD_UPDATE_NOTIFICATION "true"
 - cmd: RefreshEnv.cmd
 - pwsh: Write-Host "Target branch is '$($env:APPVEYOR_REPO_BRANCH)'"
 
@@ -51,9 +53,14 @@ build_script:
 test_script:
 - pwsh: |
     $ErrorActionPreference = "Stop"
-    dotnet test PocketCsvReader.Testing -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.DubUrl.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
+    dotnet test PocketCsvReader.Testing -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult = $LastExitCode
     if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
+
+- pwsh: |
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri https://uploader.codecov.io/latest/windows/codecov.exe -Outfile codecov.exe
+    .\codecov.exe --dir "./.coverage/"
 
 after_test:
 - dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
@@ -61,7 +68,6 @@ after_test:
 artifacts:
 - path: '**\*.nupkg'
 - path: '**\*.snupkg'
-
 
 deploy:
 - provider: NuGet
