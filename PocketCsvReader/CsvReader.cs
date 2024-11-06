@@ -14,7 +14,7 @@ namespace PocketCsvReader
     {
         public event ProgressStatusHandler? ProgressStatusChanged;
 
-        protected CsvProfile Profile { get; private set; }
+        protected internal CsvProfile Profile { get; private set; }
         protected int BufferSize { get; private set; }
 
         public CsvReader()
@@ -56,15 +56,51 @@ namespace PocketCsvReader
         }
 
         /// <summary>
-        /// Read the CSV file and returns the corresponding DataTable
+        /// Reads a CSV file from the specified stream and converts its contents into a <see cref="DataTable"/>.
         /// </summary>
-        /// <param name="filename">Name of the CSV file</param>
-        /// <returns>A DataTable containing all the records (rows) and fields (columns) available in the CSV file</returns>
+        /// <param name="stream">The <see cref="Stream"/> containing the CSV data. The stream must be readable and positioned at the beginning of the CSV content.</param>
+        /// <returns>A <see cref="DataTable"/> populated with rows and columns representing all records and fields in the CSV file.</returns>
+        /// <remarks>
+        /// This method reads the entire CSV content, assuming that each line represents a new row and each comma-separated value represents a field within that row.
+        /// </remarks>
         public DataTable ToDataTable(Stream stream)
         {
             var (encoding, encodingBytesCount) = GetStreamEncoding(stream);
 
             return Read(stream, encoding, encodingBytesCount);
+        }
+
+        /// <summary>
+        /// Reads the specified CSV file and returns an <see cref="IDataReader"/> for iterating over its records and fields.
+        /// </summary>
+        /// <param name="filename">The name or full path of the CSV file to read.</param>
+        /// <returns>An <see cref="IDataReader"/> instance for sequentially reading each record and field in the CSV file.</returns>
+        /// <remarks>
+        /// This method provides an <see cref="IDataReader"/> for efficient, read-only, forward-only access to CSV data,
+        /// suitable for large files or cases where full file loading into memory is unnecessary.
+        /// </remarks>
+        //public IDataReader ToDataReader(string filename)
+        //{
+        //    CheckFileExists(filename);
+        //    var (encoding, encodingBytesCount) = GetFileEncoding(filename);
+
+        //    using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
+        //        return Read(stream, encoding, encodingBytesCount);
+        //}
+
+        /// <summary>
+        /// Reads the CSV data from the provided stream and returns an <see cref="IDataReader"/> for efficient record-by-record access.
+        /// </summary>
+        /// <param name="stream">The <see cref="Stream"/> containing CSV data, positioned at the beginning of the content.</param>
+        /// <returns>An <see cref="IDataReader"/> that allows sequential access to each record and field in the CSV file.</returns>
+        /// <remarks>
+        /// This method processes the CSV data from the stream and provides an <see cref="IDataReader"/> for forward-only, read-only access,
+        /// ideal for handling large datasets without loading the entire file into memory at once.
+        /// </remarks>
+        public IDataReader ToDataReader(Stream stream)
+        {
+            var dataReader = new CsvDataReader(this, stream);
+            return dataReader;
         }
 
         /// <summary>
@@ -164,13 +200,13 @@ namespace PocketCsvReader
             }
         }
 
-        private static void Rewind(StreamReader reader)
+        protected internal static void Rewind(StreamReader reader)
         {
             reader.BaseStream.Position = 0;
             reader.DiscardBufferedData();
         }
 
-        protected virtual DataTable DefineFields(StreamReader reader, int encodingBytesCount)
+        protected internal virtual DataTable DefineFields(StreamReader reader, int encodingBytesCount)
         {
             //Get first record to know the count of fields
             RaiseProgressStatus("Defining fields");
@@ -206,7 +242,7 @@ namespace PocketCsvReader
         /// </summary>
         /// <param name="stream">The stream to analyze for the encoding</param>
         /// <returns></returns>
-        protected virtual (Encoding, int) GetStreamEncoding(Stream stream)
+        protected internal virtual (Encoding, int) GetStreamEncoding(Stream stream)
         {
             // Default  = Ansi CodePage
             var encoding = Encoding.Default;
@@ -218,20 +254,19 @@ namespace PocketCsvReader
             if (n < 2)
                 return (Encoding.ASCII, 0);
 
+            var encodingBytesCount = 0;
+
             if (buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
-                encoding = Encoding.UTF8;
+                (encoding, encodingBytesCount) = (Encoding.UTF8, 3);
             else if (buffer[0] == 0xff && buffer[1] == 0xfe)
-                encoding = Encoding.Unicode;
+                (encoding, encodingBytesCount) = (Encoding.Unicode, 2);
             else if (buffer[0] == 0xfe && buffer[1] == 0xff)
-                encoding = Encoding.BigEndianUnicode;
+                (encoding, encodingBytesCount) = (Encoding.BigEndianUnicode, 2);
             else if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xfe && buffer[3] == 0xff)
-                encoding = Encoding.UTF32;
+                (encoding, encodingBytesCount) = (Encoding.UTF32, 4);
             //else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
             //    encoding = Encoding.UTF7;
 
-            var encodingBytesCount = Convert.ToInt32(!encoding.Equals(Encoding.Default));
-            if (encoding==Encoding.Unicode || encoding == Encoding.BigEndianUnicode)
-                encodingBytesCount = 2;
             encoding = encoding.Equals(Encoding.Default) ? Encoding.UTF8 : encoding;
             RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount > 0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
             return (encoding, encodingBytesCount);
@@ -460,7 +495,7 @@ namespace PocketCsvReader
             return ReadNextRecord(null, buffer, ref extra);
         }
 
-        protected virtual (string?[], bool) ReadNextRecord(StreamReader? reader, Span<char> buffer, ref Span<char> extra)
+        protected internal virtual (string?[], bool) ReadNextRecord(StreamReader? reader, Span<char> buffer, ref Span<char> extra)
         {
             var bufferSize = 0;
             var index = 0;
