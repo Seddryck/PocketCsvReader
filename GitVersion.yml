@@ -5,7 +5,7 @@ patch-version-bump-message: "^(chore|fix|perf|refactor|revert)(\\([\\w\\s-]*\\))
 no-bump-message: "^(.*)(\\([\\w\\s-]*\\))?:"
 commit-message-incrementing: MergeMessageOnly
 branches:
-  feature:
+  feat:
     tag: beta.{BranchName}
     regex: feat?[/-]
     source-branches:
