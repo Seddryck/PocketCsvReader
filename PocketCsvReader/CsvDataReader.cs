@@ -16,7 +16,7 @@ public class CsvDataReader : IDataReader
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
 
-    protected FileEncoding? FileEncoding { get; private set; }
+    protected EncodingInfo? FileEncoding { get; private set; }
 
     protected bool IsEof { get; private set; } = false;
     public int RowCount { get; private set; } = 0;
@@ -31,19 +31,13 @@ public class CsvDataReader : IDataReader
         Stream = stream;
     }
 
-    protected void DetectEncoding()
-    {
-        var (encoding, encodingBytesCount) = CsvReader.GetStreamEncoding(Stream);
-        FileEncoding = new FileEncoding(encoding, encodingBytesCount);
-    }
-
     public void Initialize()
     {
-        DetectEncoding();
+        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream);
         StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
         var bufferBOM = new char[1];
         StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-        CsvReader.Rewind(StreamReader);
+        StreamReader.Rewind();
 
         if (FileEncoding!.BomBytesCount > 0)
             StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;

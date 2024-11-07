@@ -1,11 +1,5 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
+﻿using System.Buffers;
 using System.Data;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text;
 
 namespace PocketCsvReader
@@ -13,6 +7,7 @@ namespace PocketCsvReader
     public class CsvReader
     {
         public event ProgressStatusHandler? ProgressStatusChanged;
+        protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
 
         protected internal CsvProfile Profile { get; private set; }
         protected int BufferSize { get; private set; }
@@ -49,10 +44,10 @@ namespace PocketCsvReader
         public DataTable ToDataTable(string filename)
         {
             CheckFileExists(filename);
-            var (encoding, encodingBytesCount) = GetFileEncoding(filename);
+            var encodingInfo = EncodingDetector.GetFileEncoding(filename);
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize))
-                return Read(stream, encoding, encodingBytesCount);
+                return Read(stream, encodingInfo.Encoding, encodingInfo.BomBytesCount);
         }
 
         /// <summary>
@@ -65,9 +60,9 @@ namespace PocketCsvReader
         /// </remarks>
         public DataTable ToDataTable(Stream stream)
         {
-            var (encoding, encodingBytesCount) = GetStreamEncoding(stream);
+            var encodingInfo = EncodingDetector.GetStreamEncoding(stream);
 
-            return Read(stream, encoding, encodingBytesCount);
+            return Read(stream, encodingInfo.Encoding, encodingInfo.BomBytesCount);
         }
 
         /// <summary>
@@ -112,11 +107,11 @@ namespace PocketCsvReader
         public DataTable ToDataTable(string filename, bool isFirstRowHeader)
         {
             CheckFileExists(filename);
-            var (encoding, encodingBytesCount) = GetFileEncoding(filename);
+            var encodingInfo = EncodingDetector.GetFileEncoding(filename);
             Profile.Descriptor.Header = isFirstRowHeader;
 
             using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return Read(stream, encoding, encodingBytesCount);
+                return Read(stream, encodingInfo.Encoding, encodingInfo.BomBytesCount);
         }
 
         protected virtual void CheckFileExists(string filename)
@@ -138,12 +133,12 @@ namespace PocketCsvReader
                 //Move and rewind to be sure that the BOM is not skipped by internal implementation of StreamReader
                 var bufferBOM = new char[1];
                 reader.Read(bufferBOM, 0, bufferBOM.Length);
-                Rewind(reader);
+                reader.Rewind();
 
                 var count = CountRecords(reader);
-                Rewind(reader);
+                reader.Rewind();
                 var table = DefineFields(reader, encodingBytesCount);
-                Rewind(reader);
+                reader.Rewind();
 
                 if (encodingBytesCount > 0)
                     reader.BaseStream.Position = encodingBytesCount;
@@ -200,12 +195,6 @@ namespace PocketCsvReader
             }
         }
 
-        protected internal static void Rewind(StreamReader reader)
-        {
-            reader.BaseStream.Position = 0;
-            reader.DiscardBufferedData();
-        }
-
         protected internal virtual DataTable DefineFields(StreamReader reader, int encodingBytesCount)
         {
             //Get first record to know the count of fields
@@ -234,54 +223,6 @@ namespace PocketCsvReader
 
 
             return table;
-        }
-
-        /// <summary>
-        /// Detects the byte order mark of a streams and returns
-        /// an appropriate encoding for the file.
-        /// </summary>
-        /// <param name="stream">The stream to analyze for the encoding</param>
-        /// <returns></returns>
-        protected internal virtual (Encoding, int) GetStreamEncoding(Stream stream)
-        {
-            // Default  = Ansi CodePage
-            var encoding = Encoding.Default;
-
-            // Detect byte order mark if any - otherwise assume default
-            var buffer = new byte[5];
-            var n = stream.Read(buffer, 0, 5);
-
-            if (n < 2)
-                return (Encoding.ASCII, 0);
-
-            var encodingBytesCount = 0;
-
-            if (buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
-                (encoding, encodingBytesCount) = (Encoding.UTF8, 3);
-            else if (buffer[0] == 0xff && buffer[1] == 0xfe)
-                (encoding, encodingBytesCount) = (Encoding.Unicode, 2);
-            else if (buffer[0] == 0xfe && buffer[1] == 0xff)
-                (encoding, encodingBytesCount) = (Encoding.BigEndianUnicode, 2);
-            else if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xfe && buffer[3] == 0xff)
-                (encoding, encodingBytesCount) = (Encoding.UTF32, 4);
-            //else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
-            //    encoding = Encoding.UTF7;
-
-            encoding = encoding.Equals(Encoding.Default) ? Encoding.UTF8 : encoding;
-            RaiseProgressStatus($"Encoding bytes was set to {encoding}{(encodingBytesCount > 0 ? $"and {encodingBytesCount} byte is used by the BOM" : string.Empty)}.");
-            return (encoding, encodingBytesCount);
-        }
-
-        /// <summary>
-        /// Detects the byte order mark of a file and returns
-        /// an appropriate encoding for the file.
-        /// </summary>
-        /// <param name="filename"></param>
-        /// <returns></returns>
-        protected virtual (Encoding, int) GetFileEncoding(string filename)
-        {
-            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 8, false))
-                return GetStreamEncoding(stream);
         }
 
         protected virtual int? CountRecords(StreamReader reader)
@@ -482,13 +423,6 @@ namespace PocketCsvReader
             }
         }
 
-        private static ReadOnlySpan<char> Prepend(string prefix, ReadOnlySpan<char> value)
-        {
-            Span<char> buffer = new char[prefix.Length + value.Length];
-            prefix.AsSpan().CopyTo(buffer);
-            value.CopyTo(buffer.Slice(prefix.Length));
-            return buffer;
-        }
         protected virtual (string?[], bool) ReadNextRecord(Span<char> buffer)
         {
             Span<char> extra = buffer;
