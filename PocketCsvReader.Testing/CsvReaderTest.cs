@@ -1,4 +1,4 @@
-﻿using PocketCsvReader;
+using PocketCsvReader;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -14,6 +14,5 @@ namespace PocketCsvReader.Testing
     [TestFixture]
     public class CsvReaderTest
     {
-        
     }
 }

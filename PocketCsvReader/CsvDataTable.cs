@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -89,7 +89,6 @@ public class CsvDataTable
                     row.ItemArray = fields.ToArray();
                     table.Rows.Add(row);
                 }
-
             }
 
             return table;

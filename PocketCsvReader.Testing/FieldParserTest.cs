@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -107,5 +107,4 @@ public class FieldParserTest
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));
     }
-
 }

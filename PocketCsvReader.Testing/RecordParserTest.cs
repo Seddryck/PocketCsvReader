@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,7 +8,6 @@ using NUnit.Framework;
 namespace PocketCsvReader.Testing;
 public class RecordParserTest
 {
-
     [Test]
     [TestCase("foo")]
     [TestCase("'foo'")]

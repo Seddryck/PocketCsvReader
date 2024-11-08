@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
@@ -70,7 +70,6 @@ public class FieldParser
             j = value.IndexOf(textQualifier, j + 1);
             if (j != -1)
                 indexes.Add(j);
-
         } while (j != -1 && j < value.Length - 1);
 
         if (textQualifier == escapeTextQualifier)
@@ -96,7 +95,4 @@ public class FieldParser
                 if (index == 0 || value[index - 1] != escapeTextQualifier)
                     throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {index}");
     }
-
-    
-
 }

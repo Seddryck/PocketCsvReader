@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
@@ -255,7 +255,6 @@ public class RecordParser
 
             foreach (var c in buffer)
             {
-
                 if (c != '\0')
                 {
                     stringBuilder.Append(c);
@@ -282,5 +281,4 @@ public class RecordParser
                                     ? $"field_{unnamedFieldIndex++}"
                                     : value).ToArray();
     }
-        
 }
