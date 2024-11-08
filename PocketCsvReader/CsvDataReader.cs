@@ -3,20 +3,18 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
 {
     private bool _isClosed = false;
-    protected CsvReader CsvReader { get; }
+    protected RecordParser RecordParser { get; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
 
-    protected FileEncoding? FileEncoding { get; private set; }
+    protected EncodingInfo? FileEncoding { get; private set; }
 
     protected bool IsEof { get; private set; } = false;
     public int RowCount { get; private set; } = 0;
@@ -25,25 +23,19 @@ public class CsvDataReader : IDataReader
     public string[]? Fields { get; private set; } = null;
     public string?[]? Values { get; private set; } = null;
 
-    public CsvDataReader(CsvReader csvReader, Stream stream)
+    public CsvDataReader(RecordParser recordParser, Stream stream)
     {
-        CsvReader = csvReader;
+        RecordParser = recordParser;
         Stream = stream;
-    }
-
-    protected void DetectEncoding()
-    {
-        var (encoding, encodingBytesCount) = CsvReader.GetStreamEncoding(Stream);
-        FileEncoding = new FileEncoding(encoding, encodingBytesCount);
     }
 
     public void Initialize()
     {
-        DetectEncoding();
+        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream);
         StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
         var bufferBOM = new char[1];
         StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-        CsvReader.Rewind(StreamReader);
+        StreamReader.Rewind();
 
         if (FileEncoding!.BomBytesCount > 0)
             StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
@@ -65,7 +57,7 @@ public class CsvDataReader : IDataReader
         if (IsEof)
             return false;
 
-        (Values, IsEof) = CsvReader.ReadNextRecord(StreamReader, buffer, ref extra);
+        (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, buffer, ref extra);
         if (IsEof && Values!.Length == 0)
         {
             Values = null;
@@ -80,7 +72,7 @@ public class CsvDataReader : IDataReader
         if (RowCount == 0 && Fields is null)
         {
             int unnamedFieldIndex = 0;
-            if (CsvReader.Profile.Descriptor.Header)
+            if (RecordParser.Profile.Descriptor.Header)
             {
                 Fields = Values.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
                 return Read();
@@ -99,7 +91,7 @@ public class CsvDataReader : IDataReader
                     string.Format
                     (
                         "The record {0} contains {1} more field{2} than expected."
-                        , RowCount + Convert.ToInt32(CsvReader.Profile.Descriptor.Header)
+                        , RowCount + Convert.ToInt32(RecordParser.Profile.Descriptor.Header)
                         , Values.Length - Fields!.Length
                         , Values.Length - Fields.Length > 1 ? "s" : string.Empty
                     )
@@ -110,7 +102,7 @@ public class CsvDataReader : IDataReader
             {
                 var list = new List<string?>(Values);
                 while (Fields!.Length > list.Count)
-                    list.Add(CsvReader.Profile.MissingCell);
+                    list.Add(RecordParser.Profile.MissingCell);
                 Values = [.. list];
             }
         }
