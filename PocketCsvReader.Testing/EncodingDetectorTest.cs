@@ -54,7 +54,8 @@ namespace PocketCsvReader.Testing
             Encoding.Unicode,
             Encoding.BigEndianUnicode,
             Encoding.UTF8,
-            Encoding.UTF32
+            Encoding.UTF32,
+            new UTF32Encoding(true, true),
         };
 
         [TestCaseSource(nameof(Encodings))]

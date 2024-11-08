@@ -12,4 +12,10 @@ public static class StreamExtensions
         reader.BaseStream.Position = 0;
         reader.DiscardBufferedData();
     }
+
+    public static void Rewind(this StreamReader reader, int count)
+    {
+        reader.BaseStream.Position = count;
+        reader.DiscardBufferedData();
+    }
 }

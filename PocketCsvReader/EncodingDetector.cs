@@ -46,7 +46,7 @@ public class EncodingDetector : IEncodingDetector
         else if (buffer[0] == 0xfe && buffer[1] == 0xff)
             (encoding, encodingBytesCount) = (Encoding.BigEndianUnicode, 2);
         else if (buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0xfe && buffer[3] == 0xff)
-            (encoding, encodingBytesCount) = (Encoding.UTF32, 4);
+            (encoding, encodingBytesCount) = (new UTF32Encoding(true, true), 4);
         //else if (buffer[0] == 0x2b && buffer[1] == 0x2f && buffer[2] == 0x76)
         //    encoding = Encoding.UTF7;
 
