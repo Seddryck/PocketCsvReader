@@ -16,7 +16,7 @@ PocketCsvReader is an efficient, lightweight library designed for parsing delimi
 [![twitter badge](https://img.shields.io/badge/twitter%20PocketCsvReader-@Seddryck-blue.svg?style=flat&logo=twitter)](https://twitter.com/Seddryck)
 
 **Releases:** [![GitHub releases](https://img.shields.io/github/v/release/seddryck/PocketCsvReader?label=GitHub%20releases)](https://github.com/seddryck/PocketCsvReader/releases/latest) 
-[![nuget](https://img.shields.io/nuget/v/Didot-cli.svg)](https://www.nuget.org/packages/PocketCsvReader/) [![GitHub Release Date](https://img.shields.io/github/release-date/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/releases/latest) [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE) 
+[![nuget](https://img.shields.io/nuget/v/PocketCsvReader.svg)](https://www.nuget.org/packages/PocketCsvReader/) [![GitHub Release Date](https://img.shields.io/github/release-date/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/releases/latest) [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE) 
 
 **Dev. activity:** [![GitHub last commit](https://img.shields.io/github/last-commit/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/commits)
 ![Still maintained](https://img.shields.io/maintenance/yes/2024.svg)
@@ -25,7 +25,7 @@ PocketCsvReader is an efficient, lightweight library designed for parsing delimi
 **Continuous integration builds:** [![Build status](https://ci.appveyor.com/api/projects/status/t3d6qtln4hcjyrkl?svg=true)](https://ci.appveyor.com/project/Seddryck/PocketCsvReader/)
 [![Tests](https://img.shields.io/appveyor/tests/seddryck/PocketCsvReader.svg)](https://ci.appveyor.com/project/Seddryck/PocketCsvReader/build/tests)
 [![CodeFactor](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader/badge)](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader)
-[![codecov](https://codecov.io/github/Seddryck/Didot/branch/main/graph/badge.svg?token=PCRL1Y6JVR)](https://codecov.io/github/Seddryck/PocketCsvReader)
+[![codecov](https://codecov.io/github/Seddryck/PocketCsvReader/branch/main/graph/badge.svg?token=PCRL1Y6JVR)](https://codecov.io/github/Seddryck/PocketCsvReader)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader?ref=badge_shield)
 
 **Status:** [![stars badge](https://img.shields.io/github/stars/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/stargazers)
