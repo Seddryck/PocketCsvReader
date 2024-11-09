@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Data;
 using System.IO;
 using System.Text;
@@ -139,7 +139,5 @@ namespace PocketCsvReader
             if (!File.Exists(filename))
                 throw new FileNotFoundException($"The file {filename} was not found.", filename);
         }
-
-
     }
 }
