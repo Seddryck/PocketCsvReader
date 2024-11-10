@@ -133,7 +133,6 @@ namespace PocketCsvReader
         public IEnumerable<string?[]> ToArrayString(Stream stream)
             => new CsvArrayString(RecordParser, stream).Read();
 
-
         protected virtual void CheckFileExists(string filename)
         {
             if (!File.Exists(filename))

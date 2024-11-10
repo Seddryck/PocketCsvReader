@@ -35,4 +35,9 @@
   <ItemGroup>
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Resources\PackageAssets.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
