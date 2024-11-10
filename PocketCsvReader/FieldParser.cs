@@ -14,7 +14,7 @@ public class FieldParser
 
     public string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
     {
-        if (longField.Length >= longFieldIndex + currentIndex)
+        if (longField.Length > longFieldIndex + currentIndex)
         {
             buffer.Slice(0, currentIndex + 1).CopyTo(longField.Slice(longFieldIndex));
         }
