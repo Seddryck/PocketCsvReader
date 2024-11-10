@@ -63,6 +63,20 @@ public class FieldParserTest
         Assert.That(value, Is.EqualTo(result));
     }
 
+    [TestCase("`foo`", "foo")]
+    [TestCase("``", "")]
+    public void ReadFieldWithoutHandleSpecialValues_Qualified_CorrectString(string item, string result)
+    {
+        Span<char> buffer = stackalloc char[64];
+        item.AsSpan().CopyTo(buffer);
+
+        var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)");
+        profile.ParserOptimizations = new OptimizationOptions { HandleSpecialValues = false };
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, item.Length, true, true);
+        Assert.That(value, Is.EqualTo(result));
+    }
+
     [Test]
     [TestCase("'a`'b'", "a'b")]
     [TestCase("'`'a`'b`''", "'a'b'")]
@@ -72,6 +86,21 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, item.Length, true, true);
+        Assert.That(value, Is.EqualTo(result));
+    }
+
+    [Test]
+    [TestCase("'a`'b'", "a`'b")]
+    [TestCase("'`'a`'b`''", "`'a`'b`'")]
+    public void ReadFieldWithoutUnescapeChars_EscapedWithOtherChar_CorrectString(string item, string result)
+    {
+        Span<char> buffer = stackalloc char[64];
+        item.AsSpan().CopyTo(buffer);
+
+        var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
+        profile.ParserOptimizations = new OptimizationOptions { UnescapeChars = false };
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));

@@ -66,12 +66,15 @@ public class RecordParser
 
             if (isFirstCharOfField)
             {
-                isFieldWithTextQualifier = c == Profile.Descriptor.QuoteChar;
                 isFirstCharOfField = false;
-                isEndingByTextQualifier = false;
-                isTextQualifierEscaped = false;
+                if (!Profile.ParserOptimizations.NoTextQualifier)
+                {
+                    isFieldWithTextQualifier = c == Profile.Descriptor.QuoteChar;
+                    isEndingByTextQualifier = false;
+                    isTextQualifierEscaped = false;
+                }
             }
-            else if (c != Profile.Descriptor.Delimiter && c != Profile.Descriptor.LineTerminator[indexRecordSeparator] && !isFirstCharOfField)
+            else if (!Profile.ParserOptimizations.NoTextQualifier && c != Profile.Descriptor.Delimiter && c != Profile.Descriptor.LineTerminator[indexRecordSeparator] && !isFirstCharOfField)
             {
                 isEndingByTextQualifier = c == Profile.Descriptor.QuoteChar && !isTextQualifierEscaped;
                 isTextQualifierEscaped = c == Profile.Descriptor.EscapeChar && !isTextQualifierEscaped;
@@ -172,13 +175,11 @@ public class RecordParser
         return (fields.ToArray(), eof);
     }
 
-
     public int? CountRecords(StreamReader reader)
     {
-        if (Profile.PerformanceOptmized)
+        if (!Profile.ParserOptimizations.RowCountAtStart)
             return null;
 
-        //RaiseProgressStatus("Counting records ...");
         var count = CountRecordSeparators(reader);
         count -= Convert.ToInt16(Profile.Descriptor.Header);
         //RaiseProgressStatus($"{count} record{(count > 1 ? "s were" : " was")} identified.");

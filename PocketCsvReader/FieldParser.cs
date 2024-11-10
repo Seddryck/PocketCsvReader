@@ -40,11 +40,11 @@ public class FieldParser
                         ? buffer.Slice(indexFieldStart + 1, currentIndex - indexFieldStart - 2)
                         : buffer.Slice(indexFieldStart, currentIndex - indexFieldStart);
 
-        if (field.Length == 0)
+        if (Profile.ParserOptimizations.HandleSpecialValues && field.Length == 0)
             return Profile.EmptyCell;
-        else if (field.ToString() == "(null)" && !isFieldWithTextQualifier)
+        else if (Profile.ParserOptimizations.HandleSpecialValues && field.ToString() == "(null)" && !isFieldWithTextQualifier)
             return null;
-        else if (field.Contains(Profile.Descriptor.EscapeChar))
+        else if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
         {
             var candidate = field.ToString();
             CheckTextQualifierEscapation(candidate, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
