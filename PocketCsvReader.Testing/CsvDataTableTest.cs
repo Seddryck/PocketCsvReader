@@ -163,9 +163,9 @@ namespace PocketCsvReader.Testing
         }
 
         [Test]
-        [TestCase("a;b;c\r\nd;e;f;g\r\n", 1, 1)]
-        [TestCase("a;b;c\r\nd;e;f\r\ng;h;i;j\r\n", 2, 1)]
-        [TestCase("a;b;c\r\nd;e;f\r\ng;h;i;j;k\r\n", 2, 2)]
+        [TestCase("a;b;c\r\nd;e;f;g\r\n", 2, 1)]
+        [TestCase("a;b;c\r\nd;e;f\r\ng;h;i;j\r\n", 3, 1)]
+        [TestCase("a;b;c\r\nd;e;f\r\ng;h;i;j;k\r\n", 3, 2)]
         public void Read_MoreFieldThanExpected_ExceptionMessage(string text, int rowNumber, int moreField)
         {
             using (var stream = new MemoryStream())

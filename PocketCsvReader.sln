@@ -41,7 +41,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Packaging", "Packaging", "{
 		pocket-csv-reader.png = pocket-csv-reader.png
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Benchmark", "PocketCsvReader.Benchmark\PocketCsvReader.Benchmark.csproj", "{0E69FA85-7E85-41F8-BF17-AE27E8472B04}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PocketCsvReader.Benchmark", "PocketCsvReader.Benchmark\PocketCsvReader.Benchmark.csproj", "{0E69FA85-7E85-41F8-BF17-AE27E8472B04}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

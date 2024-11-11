@@ -25,13 +25,18 @@ public class ToDataTable
             Directory.CreateDirectory("data");
 
         var faker = new Faker<CustomerRecord>()
-            .RuleFor(p => p.Firstname, f => f.Name.FirstName())
-            .RuleFor(p => p.Lastname, f => f.Name.LastName())
-            .RuleFor(p => p.Gender, f => f.PickRandom(new[] { "Male", "Female" }))
-            .RuleFor(p => p.DateOfBirth, f => f.Date.Past(50, DateTime.Now.AddYears(-18)))
-            .RuleFor(p => p.Year, f => f.Date.Recent(365).Year) 
-            .RuleFor(p => p.Month, f => f.Date.Month().ToString(CultureInfo.CurrentCulture))
-            .RuleFor(p => p.TotalOrder, f => f.Finance.Amount(50, 500)); 
+            .CustomInstantiator(static f => new CustomerRecord(
+                f.Name.FirstName(),
+                f.Name.LastName(),
+                f.PickRandom(new[] { "Male", "Female" }),
+                f.Date.Past(50, DateTime.Now.AddYears(-18)),
+                f.Date.Recent(365).Year,
+                f.Date.Month().ToString(CultureInfo.CurrentCulture),
+                f.Finance.Amount(50, 500)
+            ))
+            .RuleFor(p => p.Year, (f, p) => p.DateOfBirth.Year)
+            .RuleFor(p => p.Month, (f, p) => p.DateOfBirth.ToString("MMMM", CultureInfo.CurrentCulture));
+
 
         // Generate the list of records
         var records = faker.Generate(recordCount);
@@ -59,7 +64,11 @@ public class ToDataTable
         {
             // Assume PocketCsvReader takes a StreamReader or stream as input
             var csvReader = new CsvReader(new CsvProfile(',', '\"', "\r\n", false));
-            csvReader.ToDataTable(stream);
+            var reader = csvReader.ToDataReader(stream);
+            while (reader.Read())
+            {
+                // Do nothing
+            }
         }
     }
 

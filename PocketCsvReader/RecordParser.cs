@@ -14,13 +14,12 @@ public class RecordParser
     public RecordParser(CsvProfile profile)
         => (Profile, FieldParser) = (profile, new(profile));
 
-    public virtual (string?[] fields, bool eof) ReadNextRecord(Span<char> buffer)
+    public virtual (string?[] fields, bool eof) ReadNextRecord(ref Memory<char> buffer)
     {
-        Span<char> extra = buffer;
-        return ReadNextRecord(null, buffer, ref extra);
+        return ReadNextRecord(null, ref buffer);
     }
 
-    public virtual (string?[] fields, bool eof) ReadNextRecord(StreamReader? reader, Span<char> buffer, ref Span<char> extra)
+    public virtual (string?[] fields, bool eof) ReadNextRecord(StreamReader? reader, ref Memory<char> buffer)
     {
         var bufferSize = 0;
         var index = 0;
@@ -38,20 +37,20 @@ public class RecordParser
         var longFieldIndex = 0;
         var isLastCharDelimiter = false;
 
-        if (extra.Length > 0)
+        if (buffer.Length > 0 && buffer.Span[0] != '\0')
         {
-            extra.CopyTo(buffer);
-            bufferSize = extra.Length;
+            bufferSize = buffer.Length;
         }
         else
         {
-            bufferSize = reader?.ReadBlock(buffer) ?? throw new ArgumentNullException(nameof(reader));
+            buffer = new Memory<char>(new char[Profile.BufferSize]);
+            bufferSize = reader?.ReadBlock(buffer.Span) ?? throw new ArgumentNullException(nameof(reader));
             eof = bufferSize == 0;
         }
 
         while (!eof && index < bufferSize)
         {
-            char c = buffer[index];
+            char c = buffer.Span[index];
             if (c == '\0')
             {
                 eof = true;
@@ -64,7 +63,7 @@ public class RecordParser
                 isFirstCharOfRecord = false;
             }
 
-            if (isFirstCharOfField)
+            if (isFirstCharOfField && !isCommentLine)
             {
                 isFirstCharOfField = false;
                 if (!Profile.ParserOptimizations.NoTextQualifier)
@@ -83,11 +82,11 @@ public class RecordParser
             if (c == Profile.Descriptor.Delimiter && !isCommentLine && (isFieldWithTextQualifier == isEndingByTextQualifier))
             {
                 if (longFieldIndex == 0)
-                    fields.Add(FieldParser.ReadField(buffer, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    fields.Add(FieldParser.ReadField(buffer.Span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
                 else
                 {
-                    fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer, index, isFieldWithTextQualifier, isEndingByTextQualifier));
-                    longField = ArrayPool<char>.Shared.Rent(0);
+                    fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer.Span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    longField = Span<char>.Empty;
                     longFieldIndex = 0;
                 }
                 isFirstCharOfField = true;
@@ -104,24 +103,20 @@ public class RecordParser
                         if (indexFieldStart <= index + longFieldIndex - Profile.Descriptor.LineTerminator.Length)
                         {
                             if (longFieldIndex == 0)
-                                fields.Add(FieldParser.ReadField(buffer, indexFieldStart, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                fields.Add(FieldParser.ReadField(buffer.Span, indexFieldStart, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
                             else
                             {
-                                fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
-                                longField = ArrayPool<char>.Shared.Rent(0);
+                                fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer.Span, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                longField = Span<char>.Empty;
                                 longFieldIndex = 0;
                             }
                         }
-
-                        extra = ArrayPool<char>.Shared.Rent(bufferSize - index - 1);
-                        extra = extra.Slice(0, bufferSize - index - 1);
-                        buffer.Slice(index + 1, bufferSize - index - 1).CopyTo(extra);
-                        buffer.Clear();
+                        buffer = buffer.Slice(index + 1, bufferSize - index - 1);
                         return (fields.ToArray(), false);
                     }
                     else
                     {
-                        bufferSize = bufferSize - index;
+                        bufferSize = bufferSize - index - 1;
                         buffer = buffer.Slice(index + 1);
                         isCommentLine = false;
                         index = -1;
@@ -143,19 +138,21 @@ public class RecordParser
             {
                 if (longField.Length >= longFieldIndex + index - indexFieldStart)
                 {
-                    buffer.Slice(indexFieldStart, index - indexFieldStart).CopyTo(longField.Slice(longFieldIndex));
+                    buffer.Span.Slice(indexFieldStart, index - indexFieldStart).CopyTo(longField.Slice(longFieldIndex));
                 }
                 else
                 {
-                    var newArray = ArrayPool<char>.Shared.Rent(longFieldIndex + index - indexFieldStart);
+                    var newArray = new Span<char>(new char[longFieldIndex + index - indexFieldStart]);
                     longField.CopyTo(newArray);
-                    buffer.Slice(indexFieldStart, index - indexFieldStart).ToArray().CopyTo(newArray, longFieldIndex);
+                    var remaining = buffer.Slice(indexFieldStart, index - indexFieldStart);
+                    remaining.Span.CopyTo(newArray.Slice(longFieldIndex));
                     longField = newArray;
                 }
 
                 longFieldIndex += index - indexFieldStart;
                 indexFieldStart = 0;
-                bufferSize = reader?.ReadBlock(buffer) ?? throw new ArgumentNullException(nameof(reader));
+                buffer = new Memory<char>(new char[Profile.BufferSize]);
+                bufferSize = reader?.ReadBlock(buffer.Span) ?? throw new ArgumentNullException(nameof(reader));
                 eof = bufferSize == 0;
                 index = 0;
                 if (eof)
@@ -168,9 +165,9 @@ public class RecordParser
                 if (isLastCharDelimiter)
                     fields.Add(Profile.EmptyCell);
                 else
-                    fields.Add(FieldParser.ReadField(buffer, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    fields.Add(FieldParser.ReadField(buffer.Span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
             else
-                fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                fields.Add(FieldParser.ReadField(longField, longFieldIndex, buffer.Span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
 
         return (fields.ToArray(), eof);
     }
@@ -274,10 +271,10 @@ public class RecordParser
         }
     }
 
-    public virtual string[] ReadHeader(StreamReader? reader, Span<char> buffer, ref Span<char> extra)
+    public virtual string[] ReadHeader(StreamReader? reader, ref Memory<char> buffer)
     {
         var unnamedFieldIndex = 0;
-        return ReadNextRecord(reader, buffer, ref extra).fields
+        return ReadNextRecord(reader, ref buffer).fields
                 .Select(value => value is null || !Profile.Descriptor.Header
                                     ? $"field_{unnamedFieldIndex++}"
                                     : value).ToArray();
