@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Reflection;
 using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
+using System.Collections.Concurrent;
+using System.Reflection.PortableExecutable;
 
 namespace PocketCsvReader.Testing;
 
@@ -175,5 +177,25 @@ public class CsvDataReaderTest
                 reader.GetString(i);
         }
         Assert.That(rowCount, Is.EqualTo(1695));
+    }
+
+    [TestCase(40_000)]
+    public void ToDataReader_TestData_Successful(int lineCount)
+    {
+        var bytes = TestData.PackageAssets.GetBytes(lineCount);
+        using (var memoryStream = new MemoryStream(bytes, writable: false))
+        {
+            var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
+            var reader = new CsvReader(profile).ToDataReader(memoryStream);
+
+            var rowCount = 0;
+            while (reader.Read())
+            {
+                rowCount++;
+                for (var i = 0; i < reader.FieldCount; i++)
+                    reader.GetString(i);
+            }
+            Assert.That(rowCount, Is.EqualTo(lineCount));
+        }
     }
 }

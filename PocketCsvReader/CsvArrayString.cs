@@ -12,6 +12,7 @@ public class CsvArrayString : IDisposable
     protected RecordParser RecordParser { get; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
+    protected Memory<char> buffer;
 
     protected EncodingInfo? EncodingInfo { get; private set; }
 
@@ -67,15 +68,11 @@ public class CsvArrayString : IDisposable
 
     private string?[]? ReadNextRecord()
     {
-        Span<char> buffer = stackalloc char[BufferSize];
-        Span<char> extra = stackalloc char[Extra.Length];
-        Extra.Span.CopyTo(extra);
-
         if (IsEof)
             return null;
 
         string?[]? values;
-        (values, IsEof) = RecordParser.ReadNextRecord(StreamReader, buffer, ref extra);
+        (values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
 
         if (IsEof && values!.Length == 0)
         {
@@ -83,10 +80,6 @@ public class CsvArrayString : IDisposable
             Extra = null;
             return null;
         }
-
-        if (Extra.Length != extra.Length)
-            Extra = new char[extra.Length];
-        extra.CopyTo(Extra.Span);
 
         if (RowCount == 0 && Fields is null)
         {

@@ -63,20 +63,6 @@ namespace PocketCsvReader
             => new CsvDataTable(new RecordParser(Profile), stream).Read();
 
         /// <summary>
-        /// Read the CSV file, overriding the value of isFirstRowHeader defined in the profile.
-        /// </summary>
-        /// <param name="filename">Name of the CSV file</param>
-        /// <param name="isFirstRowHeader">Overrides the value of isFirstRowHeader defined in the profile</param>
-        /// <returns>A DataTable containing all the records (rows) and fields (columns) available in the CSV file</returns>
-        public DataTable ToDataTable(string filename, bool isFirstRowHeader)
-        {
-            Profile.Descriptor.Header = isFirstRowHeader;
-
-            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return ToDataTable(stream);
-        }
-
-        /// <summary>
         /// Reads the specified CSV file and returns an <see cref="IDataReader"/> for iterating over its records and fields.
         /// </summary>
         /// <param name="filename">The name or full path of the CSV file to read.</param>

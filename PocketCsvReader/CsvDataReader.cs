@@ -13,12 +13,13 @@ public class CsvDataReader : IDataReader
     protected RecordParser RecordParser { get; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
+    protected Memory<char> buffer;
 
     protected EncodingInfo? FileEncoding { get; private set; }
 
     protected bool IsEof { get; private set; } = false;
     public int RowCount { get; private set; } = 0;
-    protected int BufferSize { get; private set; } = 4 * 1024;
+    protected int BufferSize { get; private set; } = 64 * 1024;
 
     public string[]? Fields { get; private set; } = null;
     public string?[]? Values { get; private set; } = null;
@@ -27,6 +28,7 @@ public class CsvDataReader : IDataReader
     {
         RecordParser = recordParser;
         Stream = stream;
+        buffer = new Memory<char>(new char[BufferSize]);
     }
 
     public void Initialize()
@@ -44,68 +46,63 @@ public class CsvDataReader : IDataReader
         RowCount = 0;
     }
 
-    Memory<char> Extra = Memory<char>.Empty;
+
     public bool Read()
     {
         if (FileEncoding is null)
             Initialize();
-
-        Span<char> buffer = stackalloc char[BufferSize];
-        Span<char> extra = stackalloc char[Extra.Length];
-        Extra.Span.CopyTo(extra);
-
         if (IsEof)
             return false;
 
-        (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, buffer, ref extra);
+        (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
         if (IsEof && Values!.Length == 0)
         {
             Values = null;
-            Extra = null;
             return false;
         }
-
-        if (Extra.Length != extra.Length)
-            Extra = new char[extra.Length];
-        extra.CopyTo(Extra.Span);
 
         if (RowCount == 0 && Fields is null)
         {
             int unnamedFieldIndex = 0;
             if (RecordParser.Profile.Descriptor.Header)
-            {
                 Fields = Values.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
-                return Read();
-            }
             else
                 Fields = Values.Select(_ => $"field_{unnamedFieldIndex++}").ToArray();
         }
-        else
-        {
-            RowCount++;
 
-            //handle case with unexpected fields
-            if ((Fields?.Length ?? int.MaxValue) < Values!.Length)
-                throw new InvalidDataException
-                (
-                    string.Format
-                    (
-                        "The record {0} contains {1} more field{2} than expected."
-                        , RowCount + Convert.ToInt32(RecordParser.Profile.Descriptor.Header)
-                        , Values.Length - Fields!.Length
-                        , Values.Length - Fields.Length > 1 ? "s" : string.Empty
-                    )
-                );
-
-            //Fill the missing cells
-            if ((Fields?.Length ?? 0) > Values.Length)
+        if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
+        { 
+            (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
+            if (IsEof && Values!.Length == 0)
             {
-                var list = new List<string?>(Values);
-                while (Fields!.Length > list.Count)
-                    list.Add(RecordParser.Profile.MissingCell);
-                Values = [.. list];
+                Values = null;
+                return false;
             }
         }
+        RowCount++;
+
+        //handle case with unexpected fields
+        if ((Fields?.Length ?? int.MaxValue) < Values!.Length)
+            throw new InvalidDataException
+            (
+                string.Format
+                (
+                    "The record {0} contains {1} more field{2} than expected."
+                    , RowCount + 1 + Convert.ToInt32(RecordParser.Profile.Descriptor.Header)
+                    , Values.Length - Fields!.Length
+                    , Values.Length - Fields.Length > 1 ? "s" : string.Empty
+                )
+            );
+
+        //Fill the missing cells
+        if (RecordParser.Profile.ParserOptimizations.HandleSpecialValues && (Fields?.Length ?? 0) > Values.Length)
+        {
+            var list = new List<string?>(Values);
+            while (Fields!.Length > list.Count)
+                list.Add(RecordParser.Profile.MissingCell);
+            Values = [.. list];
+        }
+
         return true;
     }
 
@@ -170,7 +167,7 @@ public class CsvDataReader : IDataReader
             throw new IndexOutOfRangeException($"Field '{name}' not found.");
         return index;
     }
-        
+
     public DataTable? GetSchemaTable() => throw new NotImplementedException();
     public string GetString(int i) => Values![i] ?? throw new InvalidDataException();
     public object GetValue(int i) => GetString(i);
