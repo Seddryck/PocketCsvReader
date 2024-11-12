@@ -71,7 +71,7 @@ public class CsvDataReader : IDataReader
         }
 
         if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
-        { 
+        {
             (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
             if (IsEof && Values!.Length == 0)
             {
@@ -95,11 +95,13 @@ public class CsvDataReader : IDataReader
             );
 
         //Fill the missing cells
-        if (RecordParser.Profile.ParserOptimizations.HandleSpecialValues && (Fields?.Length ?? 0) > Values.Length)
+        if (RecordParser.Profile.ParserOptimizations.ExtendIncompleteRecords && (Fields?.Length ?? 0) > Values.Length)
         {
             var list = new List<string?>(Values);
             while (Fields!.Length > list.Count)
-                list.Add(RecordParser.Profile.MissingCell);
+                list.Add(RecordParser.Profile.ParserOptimizations.HandleSpecialValues
+                            ? RecordParser.Profile.MissingCell
+                            : string.Empty);
             Values = [.. list];
         }
 
@@ -169,11 +171,23 @@ public class CsvDataReader : IDataReader
     }
 
     public DataTable? GetSchemaTable() => throw new NotImplementedException();
-    public string GetString(int i) => Values![i] ?? throw new InvalidDataException();
-    public object GetValue(int i) => GetString(i);
+
+    public string GetString(int i)
+        => GetValueOrThrow(i);
+
+    public object GetValue(int i)
+        => GetValueOrThrow(i);
     public int GetValues(object[] values) => throw new NotImplementedException();
-    public bool IsDBNull(int i) => Values![i] is null;
+    public bool IsDBNull(int i)
+        => Values![i] is null;
     public bool NextResult() => throw new NotImplementedException();
+
+    private string GetValueOrThrow(int i)
+    {
+        if (i < (Values?.Length ?? throw new InvalidDataException()))
+            return Values[i]!;
+        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Values.Length} defined fields.");
+    }
 
     public void Close()
     {

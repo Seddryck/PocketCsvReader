@@ -5,7 +5,7 @@ namespace PocketCsvReader;
 public class CsvProfile
 {
     public CsvDialectDescriptor Descriptor { get; private set; }
-    public OptimizationOptions ParserOptimizations { get; set; }
+    public ParserOptimizationOptions ParserOptimizations { get; set; }
     public virtual int BufferSize { get; private set; }
     public virtual string EmptyCell { get; private set; }
     public virtual string MissingCell { get; private set; }
@@ -53,7 +53,7 @@ public class CsvProfile
             Header = firstRowHeader
         };
 
-        ParserOptimizations = new OptimizationOptions() { RowCountAtStart = rowCountAtStart };
+        ParserOptimizations = new ParserOptimizationOptions() { RowCountAtStart = rowCountAtStart };
 
         EmptyCell = emptyCell;
         MissingCell = missingCell;
@@ -72,7 +72,7 @@ public class CsvProfile
             throw new ArgumentException("PocketCsvReader doesn't support caseSensitiveHeader set to true in the CSV dialect descriptor.");
 
         Descriptor = descriptor;
-        ParserOptimizations = new OptimizationOptions();
+        ParserOptimizations = new ParserOptimizationOptions();
         EmptyCell = string.Empty;
         MissingCell = string.Empty;
         BufferSize = 4096;

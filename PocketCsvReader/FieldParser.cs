@@ -9,6 +9,7 @@ namespace PocketCsvReader;
 public class FieldParser
 {
     protected internal CsvProfile Profile { get; private set; }
+
     public FieldParser(CsvProfile profile)
         => Profile = profile;
 
@@ -53,7 +54,6 @@ public class FieldParser
         else
             return field.ToString();
     }
-
 
     private static void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
     {

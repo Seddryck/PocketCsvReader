@@ -6,11 +6,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Reflection;
-using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
-using System.Collections.Concurrent;
-using System.Reflection.PortableExecutable;
 
 namespace PocketCsvReader.Testing;
 
@@ -23,6 +19,34 @@ public class CsvDataReaderTest
         MemoryStream stream = new MemoryStream(byteArray);
         stream.Position = 0;
         return stream;
+    }
+
+    [Test]
+    public void GetString_SingleFieldAttemptForSecond_Throws()
+    {
+        var profile = new CsvProfile(',', '\"', "\r\n", false);
+        profile.ParserOptimizations = new ParserOptimizationOptions()
+        {
+            ExtendIncompleteRecords = false,
+        };
+        var reader = new CsvReader(profile);
+
+        var stream = CreateStream("foo,bar\r\nfoo\r\nfoo,bar");
+        var dataReader = reader.ToDataReader(stream);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
+
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        var ex = Assert.Throws<IndexOutOfRangeException>(() => dataReader.GetString(1));
+        Assert.That(ex!.Message, Does.Contain("record '2'"));
+        Assert.That(ex.Message, Does.Contain("index '1'"));
+        Assert.That(ex.Message, Does.Contain("contains 1 defined fields"));
+
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
     }
 
     [Test]
@@ -179,19 +203,27 @@ public class CsvDataReaderTest
         Assert.That(rowCount, Is.EqualTo(1695));
     }
 
-    [TestCase(40_000)]
-    public void ToDataReader_TestData_Successful(int lineCount)
+    [TestCase(40_000, true)]
+    [TestCase(40_000, false)]
+    public void ToDataReader_TestData_Successful(int lineCount, bool handleSpecialValues)
     {
         var bytes = TestData.PackageAssets.GetBytes(lineCount);
         using (var memoryStream = new MemoryStream(bytes, writable: false))
         {
             var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
+            profile.ParserOptimizations = new ParserOptimizationOptions()
+            {
+                NoTextQualifier = true,
+                UnescapeChars = false,
+                HandleSpecialValues = handleSpecialValues,
+            };
             var reader = new CsvReader(profile).ToDataReader(memoryStream);
 
             var rowCount = 0;
             while (reader.Read())
             {
                 rowCount++;
+                Assert.That(reader.FieldCount, Is.EqualTo(25));
                 for (var i = 0; i < reader.FieldCount; i++)
                     reader.GetString(i);
             }
