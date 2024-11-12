@@ -46,13 +46,8 @@
 		<None Include="..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
-  <!--<ItemGroup>
-    <Compile Include="..\AssemblyInfo.cs">
-      <Link>Properties\GlobalAssemblyInfo.cs</Link>
-    </Compile>
-  </ItemGroup>-->
   <PropertyGroup>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
   
 	<PropertyGroup>
