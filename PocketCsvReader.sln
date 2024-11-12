@@ -10,7 +10,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{0A83AC1A-ADD3-41FC-B6C7-856ABAB65872}"
 	ProjectSection(SolutionItems) = preProject
 		appveyor.yml = appveyor.yml
-		AssemblyInfoPatcher.ps1 = AssemblyInfoPatcher.ps1
 		Directory.Build.props = Directory.Build.props
 		Directory.Build.targets = Directory.Build.targets
 		github.ps1 = github.ps1
