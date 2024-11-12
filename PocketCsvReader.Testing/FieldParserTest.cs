@@ -71,7 +71,7 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)");
-        profile.ParserOptimizations = new OptimizationOptions { HandleSpecialValues = false };
+        profile.ParserOptimizations = new ParserOptimizationOptions { HandleSpecialValues = false };
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));
@@ -100,7 +100,7 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
-        profile.ParserOptimizations = new OptimizationOptions { UnescapeChars = false };
+        profile.ParserOptimizations = new ParserOptimizationOptions { UnescapeChars = false };
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));

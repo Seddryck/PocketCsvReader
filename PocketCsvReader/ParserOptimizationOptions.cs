@@ -5,10 +5,11 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader;
-public record OptimizationOptions
+public record ParserOptimizationOptions
 (
     bool NoTextQualifier = false,
     bool UnescapeChars = true,
     bool HandleSpecialValues = true,
-    bool RowCountAtStart = false
+    bool RowCountAtStart = false,
+    bool ExtendIncompleteRecords = true
 ) { }
