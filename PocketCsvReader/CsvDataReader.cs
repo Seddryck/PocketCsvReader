@@ -206,6 +206,7 @@ public class CsvDataReader : IDataReader
             _isClosed = true;
             StreamReader?.Dispose();
             Stream?.Dispose();
+            RecordParser?.Dispose();
         }
     }
 
