@@ -9,9 +9,17 @@ namespace PocketCsvReader;
 public class FieldParser
 {
     protected internal CsvProfile Profile { get; private set; }
+    protected Func<int, char[]> RentCharArray { get; private set; }
+    protected Action<char[]> ReturnCharArray { get; private set; }
 
     public FieldParser(CsvProfile profile)
-        => Profile = profile;
+        : this(profile, ArrayPool<char>.Shared) { }
+
+    public FieldParser(CsvProfile profile, ArrayPool<char> CharArrayPool)
+        : this(profile, CharArrayPool.Rent, (char[] c) => CharArrayPool.Return(c)) { }
+
+    public FieldParser(CsvProfile profile, Func<int, char[]> poolCharArray, Action<char[]> returnCharArray)
+        => (Profile, RentCharArray, ReturnCharArray) = (profile, poolCharArray, returnCharArray);
 
     public string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
     {
@@ -21,10 +29,11 @@ public class FieldParser
         }
         else
         {
-            var newArray = ArrayPool<char>.Shared.Rent(longFieldIndex + currentIndex);
+            var newArray = RentCharArray(longFieldIndex + currentIndex);
             longField.CopyTo(newArray);
             buffer.Slice(0, currentIndex).ToArray().CopyTo(newArray, longFieldIndex);
             longField = newArray;
+            ReturnCharArray(newArray);
         }
         return ReadField(longField, 0, longFieldIndex + currentIndex, isFieldWithTextQualifier, isFieldEndingByTextQualifier);
     }
@@ -47,52 +56,41 @@ public class FieldParser
             return null;
         else if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
         {
-            var candidate = field.ToString();
-            CheckTextQualifierEscapation(candidate, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
-            return candidate.Replace(new string(new[] { Profile.Descriptor.EscapeChar, Profile.Descriptor.QuoteChar }), Profile.Descriptor.QuoteChar.ToString());
+            var span = UnescapeTextQualifier(field, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
+            return span.ToString();
         }
         else
             return field.ToString();
     }
 
-    private static void CheckTextQualifierEscapation(string value, char textQualifier, char escapeTextQualifier)
+    private ReadOnlySpan<char> UnescapeTextQualifier(ReadOnlySpan<char> value, char textQualifier, char escapeTextQualifier)
     {
-        if (string.IsNullOrEmpty(value))
-            return;
+        if (value.Length==0)
+            return Span<char>.Empty;
 
-        if (!value.Contains(textQualifier))
-            return;
-
-        var indexes = new List<int>();
-        int j = -1;
-        do
+        var array = RentCharArray(value.Length);
+        var result = new Span<char>(array);
+        int i =0, j = 0;
+        while (i < value.Length)
         {
-            j = value.IndexOf(textQualifier, j + 1);
-            if (j != -1)
-                indexes.Add(j);
-        } while (j != -1 && j < value.Length - 1);
-
-        if (textQualifier == escapeTextQualifier)
-        {
-            if (indexes.Count() == 1)
-                throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {indexes[0]}");
-
-            var i = 1;
-            while (i < indexes.Count())
+            var c = value[i];
+            if (c == escapeTextQualifier)
             {
-                if ((i + 1) % 2 == 0)
-                {
-                    if (indexes[i - 1] != indexes[i] - 1)
-                        throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
-                }
-                else if (i == indexes.Count - 1 || indexes[i + 1] != indexes[i] + 1)
-                    throw new InvalidDataException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {i}");
+                if (i+1 == value.Length)
+                    throw new InvalidDataException($"the token {value.ToString()} contains an escape-text-qualifier at the last position '{i + 1}'");
+                else if (value[i+1] != textQualifier)
+                    throw new InvalidDataException($"the token {value.ToString()} contains a text-qualifier not preceded by a an escape-text-qualifier at the position '{j}'");
+                result[j++] = textQualifier;
+                i+=2;
+            }
+            else
+            {
+                result[j++] = c;
                 i += 1;
             }
-        }
-        else
-            foreach (var index in indexes)
-                if (index == 0 || value[index - 1] != escapeTextQualifier)
-                    throw new ArgumentException($"the token {value} contains a text-qualifier not preceded by a an escape-text-qualifier at the position {index}");
+        } ;
+
+        ReturnCharArray(array);
+        return result.Slice(0, j);
     }
 }

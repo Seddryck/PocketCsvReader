@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -18,7 +19,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (values, eof) = reader.ReadNextRecord(ref buffer);
         Assert.That(eof, Is.True);
         Assert.That(values, Has.Length.EqualTo(1));
@@ -33,7 +34,7 @@ public class RecordParserTest
         var buffer = new Memory<char>(record.ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         (var values, var _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
@@ -48,7 +49,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         (var values, var _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
@@ -62,7 +63,7 @@ public class RecordParserTest
     public void ReadNextRecord_RecordWithUnescapedTextQualifier_ThrowException(string record)
     {
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         Assert.Throws<InvalidDataException>(() =>
         {
             var buffer = new Memory<char>(record.ToCharArray());
@@ -89,7 +90,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "", "(null)");
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         (var values, var _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values[0], Is.EqualTo(firstToken));
         Assert.That(values[1], Is.EqualTo("xyz"));
@@ -105,7 +106,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (values, _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo(expected));
@@ -120,7 +121,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', escapeTextQualifier, "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (values, _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo("fo'o"));
@@ -141,7 +142,7 @@ public class RecordParserTest
         var buffer = new Memory<char>((record + '\0').ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (values, _) = reader.ReadNextRecord(ref buffer);
         Assert.That(values, Has.Length.EqualTo(3));
         Assert.That(values[2], Is.EqualTo(thirdToken));
@@ -153,7 +154,7 @@ public class RecordParserTest
         var buffer = new Memory<char>("a;(null)\0".ToCharArray());
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (values, eof) = reader.ReadNextRecord(ref buffer);
         Assert.That(eof, Is.True);
         Assert.That(values, Has.Length.EqualTo(2));
@@ -188,7 +189,7 @@ public class RecordParserTest
             stream.Position = 0;
 
             var profile = new CsvProfile(';', recordSeparator);
-            var reader = new RecordParser(profile);
+            using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var (values, _) = reader.ReadNextRecord(streamReader, ref buffer);
@@ -208,7 +209,7 @@ public class RecordParserTest
         var buffer = new Memory<char>(text.ToCharArray());
 
         var profile = new CsvProfile(';', recordSeparator);
-        var reader = new RecordParser(profile);
+        using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
         var (value, _) = reader.ReadNextRecord(ref buffer);
         Assert.That(value[0], Is.EqualTo(result));
     }
@@ -244,7 +245,7 @@ public class RecordParserTest
             stream.Position = 0;
 
             var profile = new CsvProfile(';', recordSeparator);
-            var reader = new RecordParser(profile);
+            using var reader = new RecordParser(profile, ArrayPool<char>.Create(256, 5));
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var value = reader.CountRecordSeparators(streamReader);
@@ -284,7 +285,7 @@ public class RecordParserTest
 
             stream.Position = 0;
 
-            var reader = new RecordParser(CsvProfile.SemiColumnDoubleQuote);
+            var reader = new RecordParser(CsvProfile.SemiColumnDoubleQuote, ArrayPool<char>.Create(256, 5));
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var value = reader.GetFirstRecord(streamReader, recordSeparator, bufferSize);

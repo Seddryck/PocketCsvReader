@@ -62,13 +62,7 @@ public class CsvDataReader : IDataReader
         }
 
         if (RowCount == 0 && Fields is null)
-        {
-            int unnamedFieldIndex = 0;
-            if (RecordParser.Profile.Descriptor.Header)
-                Fields = Values.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
-            else
-                Fields = Values.Select(_ => $"field_{unnamedFieldIndex++}").ToArray();
-        }
+            RegisterHeader(Values!, "field_");
 
         if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
         {
@@ -81,31 +75,47 @@ public class CsvDataReader : IDataReader
         }
         RowCount++;
 
-        //handle case with unexpected fields
-        if ((Fields?.Length ?? int.MaxValue) < Values!.Length)
+        HandleUnexpectedFields(Fields!.Length, Values!);
+        HandleMissingFields(Fields!.Length);
+
+        return true;
+    }
+
+    protected virtual void RegisterHeader(string?[] names, string prefix)
+    {
+        int unnamedFieldIndex = 0;
+        Fields = (RecordParser.Profile.Descriptor.Header
+                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{prefix}{unnamedFieldIndex}" : value; })
+                : names.Select(_ => $"{prefix}{unnamedFieldIndex++}")).ToArray();
+    }
+
+    protected virtual void HandleUnexpectedFields(int expectedLength, string?[] values)
+    {
+        if (expectedLength < values.Length)
             throw new InvalidDataException
             (
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
                     , RowCount + 1 + Convert.ToInt32(RecordParser.Profile.Descriptor.Header)
-                    , Values.Length - Fields!.Length
-                    , Values.Length - Fields.Length > 1 ? "s" : string.Empty
+                    , values.Length - expectedLength
+                    , values.Length - expectedLength > 1 ? "s" : string.Empty
                 )
             );
+    }
 
-        //Fill the missing cells
-        if (RecordParser.Profile.ParserOptimizations.ExtendIncompleteRecords && (Fields?.Length ?? 0) > Values.Length)
+    protected virtual void HandleMissingFields(int expectedLength)
+    {
+        if (RecordParser.Profile.ParserOptimizations.ExtendIncompleteRecords && expectedLength > Values!.Length)
         {
-            var list = new List<string?>(Values);
-            while (Fields!.Length > list.Count)
-                list.Add(RecordParser.Profile.ParserOptimizations.HandleSpecialValues
-                            ? RecordParser.Profile.MissingCell
-                            : string.Empty);
-            Values = [.. list];
+            var missingFields = expectedLength - Values.Length;
+            var missingFieldsArray = new string[missingFields];
+            Array.Fill(missingFieldsArray,
+                RecordParser.Profile.ParserOptimizations.HandleSpecialValues
+                    ? RecordParser.Profile.MissingCell
+                    : string.Empty);
+            Values = Values.Concat(missingFieldsArray).ToArray();
         }
-
-        return true;
     }
 
     public object this[int i]
@@ -196,6 +206,7 @@ public class CsvDataReader : IDataReader
             _isClosed = true;
             StreamReader?.Dispose();
             Stream?.Dispose();
+            RecordParser?.Dispose();
         }
     }
 

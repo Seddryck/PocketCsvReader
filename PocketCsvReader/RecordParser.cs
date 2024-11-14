@@ -6,17 +6,39 @@ using System.Linq;
 using System.Text;
 
 namespace PocketCsvReader;
-public class RecordParser
+public class RecordParser : IDisposable
 {
     protected internal CsvProfile Profile { get; private set; }
     protected FieldParser FieldParser { get; private set; }
+    protected Func<int, char[]> RentCharArray { get; private set; }
+    protected Action<char[]> ReturnCharArray { get; private set; }
+    protected char[]? BufferArray { get; private set; }
 
     public RecordParser(CsvProfile profile)
-        => (Profile, FieldParser) = (profile, new(profile));
+        : this(profile, ArrayPool<char>.Shared) { }
+
+    public RecordParser(CsvProfile profile, ArrayPool<char> charArrayPool)
+        : this(profile, charArrayPool.Rent, (char[] c) => charArrayPool.Return(c)) { }
+
+    public RecordParser(CsvProfile profile, Func<int, char[]> rentCharArray, Action<char[]> returnCharArray)
+        : this(profile, rentCharArray, returnCharArray, new(profile, rentCharArray, returnCharArray)) { }
+
+    public RecordParser(CsvProfile profile, Func<int, char[]> rentCharArray, Action<char[]> returnCharArray, FieldParser fieldParser)
+        => (Profile, RentCharArray, ReturnCharArray, FieldParser) = (profile, rentCharArray, returnCharArray, fieldParser);
 
     public virtual (string?[] fields, bool eof) ReadNextRecord(ref Memory<char> buffer)
+        => ReadNextRecord(null, ref buffer);
+
+    protected char[] RecycleCharArray()
     {
-        return ReadNextRecord(null, ref buffer);
+        if (BufferArray is null)
+            BufferArray = RentCharArray(Profile.BufferSize);
+        else if (BufferArray.Length != Profile.BufferSize)
+        {
+            ReturnCharArray(BufferArray);
+            BufferArray = RentCharArray(Profile.BufferSize);
+        }
+        return BufferArray;
     }
 
     public virtual (string?[] fields, bool eof) ReadNextRecord(StreamReader? reader, ref Memory<char> buffer)
@@ -43,8 +65,9 @@ public class RecordParser
         }
         else
         {
-            buffer = new Memory<char>(new char[Profile.BufferSize]);
+            buffer = new Memory<char>(RecycleCharArray());
             bufferSize = reader?.ReadBlock(buffer.Span) ?? throw new ArgumentNullException(nameof(reader));
+            buffer = buffer.Slice(0, bufferSize);
             eof = bufferSize == 0;
         }
 
@@ -142,17 +165,20 @@ public class RecordParser
                 }
                 else
                 {
-                    var newArray = new Span<char>(new char[longFieldIndex + index - indexFieldStart]);
-                    longField.CopyTo(newArray);
+                    var newArray = RentCharArray(longFieldIndex + index - indexFieldStart);
+                    var newSpan = newArray.AsSpan().Slice(0, longFieldIndex + index - indexFieldStart);
+                    longField.CopyTo(newSpan);
                     var remaining = buffer.Slice(indexFieldStart, index - indexFieldStart);
-                    remaining.Span.CopyTo(newArray.Slice(longFieldIndex));
-                    longField = newArray;
+                    remaining.Span.CopyTo(newSpan.Slice(longFieldIndex));
+                    longField = newSpan;
+                    ReturnCharArray(newArray);
                 }
 
                 longFieldIndex += index - indexFieldStart;
                 indexFieldStart = 0;
-                buffer = new Memory<char>(new char[Profile.BufferSize]);
+                buffer = new Memory<char>(RecycleCharArray());
                 bufferSize = reader?.ReadBlock(buffer.Span) ?? throw new ArgumentNullException(nameof(reader));
+                buffer = buffer.Slice(0, bufferSize);
                 eof = bufferSize == 0;
                 index = 0;
                 if (eof)
@@ -186,7 +212,6 @@ public class RecordParser
         return count;
     }
 
-    private int BufferSize = 4096;
     public virtual int CountRecordSeparators(StreamReader reader)
     {
         int i = 0;
@@ -198,11 +223,11 @@ public class RecordParser
 
         do
         {
-            char[] buffer = new char[BufferSize];
-            n = reader.Read(buffer, 0, BufferSize);
+            var buffer = new Span<char>(RecycleCharArray());
+            n = reader.ReadBlock(buffer);
+            buffer = buffer.Slice(0, n);
             if (n > 0 && i == 0)
                 i = 1;
-
 
             foreach (var c in buffer)
             {
@@ -238,37 +263,61 @@ public class RecordParser
         if (isCommentLine)
             i -= 1;
 
+        if (BufferArray is not null)
+            ReturnCharArray(BufferArray);
         return i;
     }
 
     public string GetFirstRecord(StreamReader reader, string recordSeparator, int bufferSize)
     {
-        var stringBuilder = new StringBuilder();
+        int i = 0;
         int j = 0;
+        Span<char> longRecord = stackalloc char[0];
 
-        while (true)
+        var found = false;
+        while (!found)
         {
-            char[] buffer = new char[bufferSize];
-            reader.Read(buffer, 0, bufferSize);
+            var buffer = new Span<char>(RecycleCharArray());
+            var n = reader.ReadBlock(buffer);
+            buffer = buffer.Slice(0, n);
+            if (n == 0)
+                found = true;
 
             foreach (var c in buffer)
             {
-                if (c != '\0')
+                i++;
+                if (c == '\0')
+                    found = true;
+                else if (c == recordSeparator[j])
                 {
-                    stringBuilder.Append(c);
-                    if (c == recordSeparator[j])
-                    {
-                        j++;
-                        if (j == recordSeparator.Length)
-                            return stringBuilder.ToString();
-                    }
-                    else
-                        j = 0;
+                    j++;
+                    if (j == recordSeparator.Length)
+                        found = true;
                 }
                 else
-                    return stringBuilder.ToString();
+                    j = 0;
+
+                if (found)
+                    break;
             }
+
+            if (longRecord.Length == 0)
+                longRecord = buffer.Slice(0, i);
+            else
+            {
+                var newArray = RentCharArray(longRecord.Length + i);
+                var newSpan = newArray.AsSpan().Slice(0, longRecord.Length + i);
+                longRecord.CopyTo(newSpan);
+                buffer.CopyTo(newSpan.Slice(longRecord.Length));
+                longRecord = newSpan;
+                ReturnCharArray(newArray);
+            }
+            i = 0;
         }
+
+        if (BufferArray is not null)
+            ReturnCharArray(BufferArray);
+        return longRecord.ToString();
     }
 
     public virtual string[] ReadHeader(StreamReader? reader, ref Memory<char> buffer)
@@ -278,5 +327,14 @@ public class RecordParser
                 .Select(value => value is null || !Profile.Descriptor.Header
                                     ? $"field_{unnamedFieldIndex++}"
                                     : value).ToArray();
+    }
+
+    public void Dispose()
+    {
+        if (BufferArray is not null)
+        {
+            ReturnCharArray(BufferArray);
+            BufferArray = null;
+        }
     }
 }
