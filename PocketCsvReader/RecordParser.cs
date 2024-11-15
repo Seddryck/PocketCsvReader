@@ -379,9 +379,13 @@ public class RecordParser : IDisposable
         {
             ReturnCharArray(BufferArray);
             BufferArray = null;
-            if (BufferAheadArray is not null)
-                ReturnCharArray(BufferAheadArray);
+        }
+
+        if (BufferAheadArray is not null)
+        {
+            ReturnCharArray(BufferAheadArray);
             BufferAheadArray = null;
         }
+        BufferAhead = null;
     }
 }
