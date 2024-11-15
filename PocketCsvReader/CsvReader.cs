@@ -74,7 +74,7 @@ namespace PocketCsvReader
         public IDataReader ToDataReader(string filename)
         {
             CheckFileExists(filename);
-            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize);
+            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
             return new CsvDataReader(new RecordParser(Profile), stream);
         }
 
@@ -103,7 +103,7 @@ namespace PocketCsvReader
         public IEnumerable<string?[]> ToArrayString(string filename)
         {
             CheckFileExists(filename);
-            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.BufferSize);
+            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
             return new CsvArrayString(new RecordParser(Profile), stream).Read();
         }
 
