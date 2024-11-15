@@ -6,7 +6,7 @@ public class CsvProfile
 {
     public CsvDialectDescriptor Descriptor { get; private set; }
     public ParserOptimizationOptions ParserOptimizations { get; set; }
-    public virtual int BufferSize { get; private set; }
+    
     public virtual string EmptyCell { get; private set; }
     public virtual string MissingCell { get; private set; }
 
@@ -53,11 +53,10 @@ public class CsvProfile
             Header = firstRowHeader
         };
 
-        ParserOptimizations = new ParserOptimizationOptions() { RowCountAtStart = rowCountAtStart };
+        ParserOptimizations = new ParserOptimizationOptions() { RowCountAtStart = rowCountAtStart, BufferSize = bufferSize };
 
         EmptyCell = emptyCell;
         MissingCell = missingCell;
-        BufferSize = bufferSize;
     }
 
     public CsvProfile(CsvDialectDescriptor descriptor)
@@ -75,7 +74,6 @@ public class CsvProfile
         ParserOptimizations = new ParserOptimizationOptions();
         EmptyCell = string.Empty;
         MissingCell = string.Empty;
-        BufferSize = 4096;
     }
 
     public static CsvProfile CommaDoubleQuote { get; } = new CsvProfile(',', '\"');

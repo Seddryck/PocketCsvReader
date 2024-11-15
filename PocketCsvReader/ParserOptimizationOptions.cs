@@ -11,5 +11,7 @@ public record ParserOptimizationOptions
     bool UnescapeChars = true,
     bool HandleSpecialValues = true,
     bool RowCountAtStart = false,
-    bool ExtendIncompleteRecords = true
+    bool ExtendIncompleteRecords = true,
+    bool ReadAhead = true,
+    int BufferSize = 4096
 ) { }

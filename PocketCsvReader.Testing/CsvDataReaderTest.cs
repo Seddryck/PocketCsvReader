@@ -223,9 +223,52 @@ public class CsvDataReaderTest
             while (reader.Read())
             {
                 rowCount++;
+                if (rowCount == 3827)
+                    Console.WriteLine(reader.GetString(0));
                 Assert.That(reader.FieldCount, Is.EqualTo(25));
                 for (var i = 0; i < reader.FieldCount; i++)
                     reader.GetString(i);
+            }
+            Assert.That(rowCount, Is.EqualTo(lineCount));
+        }
+    }
+
+    [TestCase(40_000, true)]
+    [TestCase(40_000, false)]
+    public void ToDataReader_TestData_CompareBasicParser(int lineCount, bool readAhead)
+    {
+        var reference = new List<string[]>();
+        var bytes = TestData.PackageAssets.GetBytes(lineCount);
+        using (var memoryStream = new MemoryStream(bytes, writable: false))
+        {
+            var reader = new StreamReader(memoryStream);
+            var data = reader.ReadLine();
+            while (data != null)
+            {
+                reference.Add(data.Split(','));
+                data = reader.ReadLine();
+            }
+        }
+
+        using (var memoryStream = new MemoryStream(bytes, writable: false))
+        {
+            var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
+            profile.ParserOptimizations = new ParserOptimizationOptions()
+            {
+                NoTextQualifier = true,
+                UnescapeChars = false,
+                HandleSpecialValues = false,
+                ReadAhead = readAhead
+            };
+            var reader = new CsvReader(profile).ToDataReader(memoryStream);
+
+            var rowCount = 0;
+            while (reader.Read())
+            {
+                rowCount++;
+                Assert.That(reader.FieldCount, Is.EqualTo(25));
+                for (var i = 0; i < reader.FieldCount; i++)
+                    Assert.That(reader.GetString(i), Is.EqualTo(reference[rowCount - 1][i]), $"Row {rowCount}, record {i}: {reader.GetString(i)}");
             }
             Assert.That(rowCount, Is.EqualTo(lineCount));
         }
