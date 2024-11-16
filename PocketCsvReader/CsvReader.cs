@@ -9,8 +9,7 @@ namespace PocketCsvReader
     {
         public event ProgressStatusHandler? ProgressStatusChanged;
         protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
-        protected RecordParser RecordParser { get; set; }
-
+        
         protected internal CsvProfile Profile { get; private set; }
         protected int BufferSize { get; private set; }
 
@@ -29,7 +28,6 @@ namespace PocketCsvReader
         public CsvReader(CsvProfile profile, int bufferSize)
         {
             Profile = profile;
-            RecordParser = new RecordParser(profile);
             BufferSize = bufferSize;
         }
 
@@ -47,8 +45,8 @@ namespace PocketCsvReader
         public DataTable ToDataTable(string filename)
         {
             CheckFileExists(filename);
-            using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read))
-                return ToDataTable(stream);
+            using var stream = new FileStream(filename, FileMode.Open, FileAccess.Read);
+            return new CsvDataTable(stream, Profile).Read();
         }
 
         /// <summary>
@@ -60,7 +58,9 @@ namespace PocketCsvReader
         /// This method reads the entire CSV content, assuming that each line represents a new row and each comma-separated value represents a field within that row.
         /// </remarks>
         public DataTable ToDataTable(Stream stream)
-            => new CsvDataTable(new RecordParser(Profile), stream).Read();
+        {
+            return new CsvDataTable(stream, Profile).Read();
+        }
 
         /// <summary>
         /// Reads the specified CSV file and returns an <see cref="IDataReader"/> for iterating over its records and fields.
@@ -75,7 +75,7 @@ namespace PocketCsvReader
         {
             CheckFileExists(filename);
             var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-            return new CsvDataReader(new RecordParser(Profile), stream);
+            return new CsvDataReader(stream, Profile);
         }
 
         /// <summary>
@@ -88,8 +88,9 @@ namespace PocketCsvReader
         /// ideal for handling large datasets without loading the entire file into memory at once.
         /// </remarks>
         public IDataReader ToDataReader(Stream stream)
-            => new CsvDataReader(RecordParser, stream);
-
+        {
+            return new CsvDataReader(stream, Profile);
+        }
 
         /// <summary>
         /// Reads the specified CSV file and returns an <see cref="IDataReader"/> for iterating over its records and fields.
@@ -104,7 +105,7 @@ namespace PocketCsvReader
         {
             CheckFileExists(filename);
             var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-            return new CsvArrayString(new RecordParser(Profile), stream).Read();
+            return new CsvArrayString(stream, Profile).Read();
         }
 
         /// <summary>
@@ -117,7 +118,9 @@ namespace PocketCsvReader
         /// ideal for handling large datasets without loading the entire file into memory at once.
         /// </remarks>
         public IEnumerable<string?[]> ToArrayString(Stream stream)
-            => new CsvArrayString(RecordParser, stream).Read();
+        {
+            return new CsvArrayString(stream, Profile).Read();
+        }
 
         protected virtual void CheckFileExists(string filename)
         {

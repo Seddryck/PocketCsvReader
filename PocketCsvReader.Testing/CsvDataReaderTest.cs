@@ -29,10 +29,9 @@ public class CsvDataReaderTest
         {
             ExtendIncompleteRecords = false,
         };
-        var reader = new CsvReader(profile);
+        using var stream = CreateStream("foo,bar\r\nfoo\r\nfoo,bar");
+        using var dataReader = new CsvDataReader(stream, profile);
 
-        var stream = CreateStream("foo,bar\r\nfoo\r\nfoo,bar");
-        var dataReader = reader.ToDataReader(stream);
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
@@ -55,9 +54,9 @@ public class CsvDataReaderTest
     [TestCase("Utf16-LE")]
     [TestCase("Utf8-BOM")]
     [TestCase("Utf8")]
-    public void ToDataReader_Financial_CorrectRowsColumns(string filename)
+    public void Read_Financial_CorrectRowsColumns(string filename)
     {
-        var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
+        var profile = new CsvProfile('\t', '\"', "\r\n", true);
 
         using (var stream =
                 Assembly.GetExecutingAssembly()
@@ -66,7 +65,7 @@ public class CsvDataReaderTest
         )
         {
             var rowCount = 0;
-            var dataReader = reader.ToDataReader(stream);
+            using var dataReader = new CsvDataReader(stream, profile);
             while (dataReader.Read()) { rowCount++; }
             Assert.That(dataReader.FieldCount, Is.EqualTo(14));
             Assert.That(rowCount, Is.EqualTo(21));
@@ -79,9 +78,9 @@ public class CsvDataReaderTest
     [TestCase("Utf16-LE")]
     [TestCase("Utf8-BOM")]
     [TestCase("Utf8")]
-    public void ToDataReader_Financial_CorrectColumnByIndexer(string filename)
+    public void Read_Financial_CorrectColumnByIndexer(string filename)
     {
-        var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
+        var profile = new CsvProfile('\t', '\"', "\r\n", true);
 
         using (var stream =
                 Assembly.GetExecutingAssembly()
@@ -89,7 +88,7 @@ public class CsvDataReaderTest
                     ?? throw new FileNotFoundException()
         )
         {
-            var dataReader = reader.ToDataReader(stream);
+            using var dataReader = new CsvDataReader(stream, profile);
             while (dataReader.Read())
                 Assert.Multiple(() =>
                 {
@@ -107,9 +106,9 @@ public class CsvDataReaderTest
     [TestCase("Utf16-LE")]
     [TestCase("Utf8-BOM")]
     [TestCase("Utf8")]
-    public void ToDataReader_Financial_CorrectColumnWithGetStringIndex(string filename)
+    public void GetString_Financial_CorrectColumnWithGetStringIndex(string filename)
     {
-        var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
+        var profile = new CsvProfile('\t', '\"', "\r\n", true);
 
         using (var stream =
                 Assembly.GetExecutingAssembly()
@@ -117,7 +116,7 @@ public class CsvDataReaderTest
                     ?? throw new FileNotFoundException()
         )
         {
-            var dataReader = reader.ToDataReader(stream);
+            using var dataReader = new CsvDataReader(stream, profile);
             while (dataReader.Read())
                 Assert.Multiple(() =>
                 {
@@ -135,9 +134,9 @@ public class CsvDataReaderTest
     [TestCase("Utf16-LE")]
     [TestCase("Utf8-BOM")]
     [TestCase("Utf8")]
-    public void ToDataReader_Financial_CorrectIndexWithGetOrdinal(string filename)
+    public void GetOrdinal_Financial_CorrectIndexWithGetOrdinal(string filename)
     {
-        var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
+        var profile = new CsvProfile('\t', '\"', "\r\n", true);
 
         using (var stream =
                 Assembly.GetExecutingAssembly()
@@ -145,7 +144,7 @@ public class CsvDataReaderTest
                     ?? throw new FileNotFoundException()
         )
         {
-            var dataReader = reader.ToDataReader(stream);
+            using var dataReader = new CsvDataReader(stream, profile);
             Assert.That(dataReader.Read(), Is.True);
             Assert.Multiple(() =>
             {
@@ -164,9 +163,9 @@ public class CsvDataReaderTest
     [TestCase("Utf16-LE")]
     [TestCase("Utf8-BOM")]
     [TestCase("Utf8")]
-    public void ToDataReader_Financial_CorrectNameWithGetName(string filename)
+    public void Read_Financial_CorrectNameWithGetName(string filename)
     {
-        var reader = new CsvReader(new CsvProfile('\t', '\"', "\r\n", true));
+        var profile = new CsvProfile('\t', '\"', "\r\n", true);
 
         using (var stream =
                 Assembly.GetExecutingAssembly()
@@ -174,7 +173,7 @@ public class CsvDataReaderTest
                     ?? throw new FileNotFoundException()
         )
         {
-            var dataReader = reader.ToDataReader(stream);
+            using var dataReader = new CsvDataReader(stream, profile);
             Assert.That(dataReader.Read(), Is.True);
             Assert.Multiple(() =>
             {
@@ -187,47 +186,31 @@ public class CsvDataReaderTest
         }
     }
 
-    [Test]
-    [TestCase(@"Resources\PackageAssets.csv")]
-    public void ToDataReader_PackageAsset_Successful(string filename)
-    {
-        var rowCount = 0;
-        var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
-        var reader = new CsvReader(profile).ToDataReader(filename);
-        while (reader.Read())
-        {
-            rowCount++;
-            for (var i = 0; i < reader.FieldCount; i++)
-                reader.GetString(i);
-        }
-        Assert.That(rowCount, Is.EqualTo(1695));
-    }
-
     [TestCase(40_000, true)]
     [TestCase(40_000, false)]
-    public void ToDataReader_TestData_Successful(int lineCount, bool handleSpecialValues)
+    public void Read_TestData_Successful(int lineCount, bool handleSpecialValues)
     {
         var bytes = TestData.PackageAssets.GetBytes(lineCount);
         using (var memoryStream = new MemoryStream(bytes, writable: false))
         {
-            var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
-            profile.ParserOptimizations = new ParserOptimizationOptions()
+            var profile = new CsvProfile(',', '\"', Environment.NewLine, false)
             {
-                NoTextQualifier = true,
-                UnescapeChars = false,
-                HandleSpecialValues = handleSpecialValues,
+                ParserOptimizations = new ParserOptimizationOptions()
+                {
+                    NoTextQualifier = true,
+                    UnescapeChars = false,
+                    HandleSpecialValues = handleSpecialValues,
+                }
             };
-            var reader = new CsvReader(profile).ToDataReader(memoryStream);
+            var dataReader = new CsvDataReader(memoryStream, profile);
 
             var rowCount = 0;
-            while (reader.Read())
+            while (dataReader.Read())
             {
                 rowCount++;
-                if (rowCount == 3827)
-                    Console.WriteLine(reader.GetString(0));
-                Assert.That(reader.FieldCount, Is.EqualTo(25));
-                for (var i = 0; i < reader.FieldCount; i++)
-                    reader.GetString(i);
+                Assert.That(dataReader.FieldCount, Is.EqualTo(25));
+                for (var i = 0; i < dataReader.FieldCount; i++)
+                    dataReader.GetString(i);
             }
             Assert.That(rowCount, Is.EqualTo(lineCount));
         }
@@ -252,23 +235,25 @@ public class CsvDataReaderTest
 
         using (var memoryStream = new MemoryStream(bytes, writable: false))
         {
-            var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
-            profile.ParserOptimizations = new ParserOptimizationOptions()
+            var profile = new CsvProfile(',', '\"', Environment.NewLine, false)
             {
-                NoTextQualifier = true,
-                UnescapeChars = false,
-                HandleSpecialValues = false,
-                ReadAhead = readAhead
+                ParserOptimizations = new ParserOptimizationOptions()
+                {
+                    NoTextQualifier = true,
+                    UnescapeChars = false,
+                    HandleSpecialValues = false,
+                    ReadAhead = readAhead
+                }
             };
-            var reader = new CsvReader(profile).ToDataReader(memoryStream);
+            var dataReader = new CsvDataReader(memoryStream, profile);
 
             var rowCount = 0;
-            while (reader.Read())
+            while (dataReader.Read())
             {
                 rowCount++;
-                Assert.That(reader.FieldCount, Is.EqualTo(25));
-                for (var i = 0; i < reader.FieldCount; i++)
-                    Assert.That(reader.GetString(i), Is.EqualTo(reference[rowCount - 1][i]), $"Row {rowCount}, record {i}: {reader.GetString(i)}");
+                Assert.That(dataReader.FieldCount, Is.EqualTo(25));
+                for (var i = 0; i < dataReader.FieldCount; i++)
+                    Assert.That(dataReader.GetString(i), Is.EqualTo(reference[rowCount - 1][i]), $"Row {rowCount}, record {i}: {dataReader.GetString(i)}");
             }
             Assert.That(rowCount, Is.EqualTo(lineCount));
         }

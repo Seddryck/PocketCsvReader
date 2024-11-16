@@ -6,4 +6,7 @@
     <PackageTags>CSV TSV DataTable Parser</PackageTags>
     <Description>PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.</Description>
   </PropertyGroup>
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
 </Project>

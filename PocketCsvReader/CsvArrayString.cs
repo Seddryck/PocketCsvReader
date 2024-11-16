@@ -9,7 +9,8 @@ using System.Threading.Tasks;
 namespace PocketCsvReader;
 public class CsvArrayString : IDisposable
 {
-    protected RecordParser RecordParser { get; }
+    protected CsvProfile Profile { get; }
+    protected RecordParser? RecordParser { get; set; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
     protected Memory<char> buffer;
@@ -22,17 +23,10 @@ public class CsvArrayString : IDisposable
 
     public string[]? Fields { get; private set; } = null;
 
-    public CsvArrayString(RecordParser recordParser, Stream stream)
+    public CsvArrayString(Stream stream, CsvProfile profile)
     {
-        RecordParser = recordParser;
+        Profile = profile;
         Stream = stream;
-    }
-
-    public CsvArrayString(RecordParser recordParser, Stream stream, Encoding encoding, int bomByteCount)
-    {
-        RecordParser = recordParser;
-        Stream = stream;
-        EncodingInfo = new EncodingInfo(encoding, bomByteCount);
     }
 
     public void Initialize()
@@ -48,6 +42,7 @@ public class CsvArrayString : IDisposable
 
         IsEof = false;
         RowCount = 0;
+        RecordParser = new RecordParser(StreamReader, Profile);
     }
 
     Memory<char> Extra = Memory<char>.Empty;
@@ -72,7 +67,7 @@ public class CsvArrayString : IDisposable
             return null;
 
         string?[]? values;
-        (values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
+        (values, IsEof) = RecordParser!.ReadNextRecord();
 
         if (IsEof && values!.Length == 0)
         {

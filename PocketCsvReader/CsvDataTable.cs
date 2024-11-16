@@ -8,13 +8,13 @@ using System.Text;
 namespace PocketCsvReader;
 public class CsvDataTable
 {
-    protected RecordParser RecordParser { get; }
+    protected CsvProfile Profile { get; }
     protected Stream Stream { get; }
     protected Memory<char> buffer;
 
-    public CsvDataTable(RecordParser recordParser, Stream stream)
+    public CsvDataTable(Stream stream, CsvProfile profile)
     {
-        RecordParser = recordParser;
+        Profile = profile;
         Stream = stream;
     }
 
@@ -31,7 +31,7 @@ public class CsvDataTable
         int i = 0;
         var table = new DataTable();
 
-        using (var dataReader = new CsvDataReader(RecordParser, Stream))
+        using (var dataReader = new CsvDataReader(Stream, Profile))
         {
             while (dataReader.Read())
             {
