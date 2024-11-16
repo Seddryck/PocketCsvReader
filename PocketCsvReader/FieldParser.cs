@@ -9,17 +9,13 @@ namespace PocketCsvReader;
 public class FieldParser
 {
     protected internal CsvProfile Profile { get; private set; }
-    protected Func<int, char[]> RentCharArray { get; private set; }
-    protected Action<char[]> ReturnCharArray { get; private set; }
+    protected ArrayPool<char>? Pool { get; }
 
     public FieldParser(CsvProfile profile)
         : this(profile, ArrayPool<char>.Shared) { }
 
-    public FieldParser(CsvProfile profile, ArrayPool<char> CharArrayPool)
-        : this(profile, CharArrayPool.Rent, (char[] c) => CharArrayPool.Return(c)) { }
-
-    public FieldParser(CsvProfile profile, Func<int, char[]> poolCharArray, Action<char[]> returnCharArray)
-        => (Profile, RentCharArray, ReturnCharArray) = (profile, poolCharArray, returnCharArray);
+    public FieldParser(CsvProfile profile, ArrayPool<char>? pool)
+        => (Profile, Pool) = (profile, pool);
 
     public string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
     {
@@ -29,11 +25,11 @@ public class FieldParser
         }
         else
         {
-            var newArray = RentCharArray(longFieldIndex + currentIndex);
+            var newArray = Pool?.Rent(longFieldIndex + currentIndex) ?? new char[longFieldIndex + currentIndex];
             longField.CopyTo(newArray);
             buffer.Slice(0, currentIndex).ToArray().CopyTo(newArray, longFieldIndex);
             longField = newArray;
-            ReturnCharArray(newArray);
+            Pool?.Return(newArray);
         }
         return ReadField(longField, 0, longFieldIndex + currentIndex, isFieldWithTextQualifier, isFieldEndingByTextQualifier);
     }
@@ -68,7 +64,7 @@ public class FieldParser
         if (value.Length==0)
             return Span<char>.Empty;
 
-        var array = RentCharArray(value.Length);
+        var array = Pool?.Rent(value.Length) ?? new char[value.Length];
         var result = new Span<char>(array);
         int i =0, j = 0;
         while (i < value.Length)
@@ -90,7 +86,7 @@ public class FieldParser
             }
         } ;
 
-        ReturnCharArray(array);
+        Pool?.Return(array);
         return result.Slice(0, j);
     }
 }

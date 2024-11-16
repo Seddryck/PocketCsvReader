@@ -10,7 +10,8 @@ namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
 {
     private bool _isClosed = false;
-    protected RecordParser RecordParser { get; }
+    protected RecordParser? RecordParser { get; set; }
+    protected CsvProfile Profile { get; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
     protected Memory<char> buffer;
@@ -24,11 +25,11 @@ public class CsvDataReader : IDataReader
     public string[]? Fields { get; private set; } = null;
     public string?[]? Values { get; private set; } = null;
 
-    public CsvDataReader(RecordParser recordParser, Stream stream)
+    public CsvDataReader(Stream stream, CsvProfile profile)
     {
-        RecordParser = recordParser;
         Stream = stream;
         buffer = new Memory<char>(new char[BufferSize]);
+        Profile = profile;
     }
 
     public void Initialize()
@@ -44,8 +45,8 @@ public class CsvDataReader : IDataReader
 
         IsEof = false;
         RowCount = 0;
+        RecordParser = new RecordParser(StreamReader, Profile);
     }
-
 
     public bool Read()
     {
@@ -54,7 +55,7 @@ public class CsvDataReader : IDataReader
         if (IsEof)
             return false;
 
-        (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
+        (Values, IsEof) = RecordParser!.ReadNextRecord();
         if (IsEof && Values!.Length == 0)
         {
             Values = null;
@@ -66,7 +67,7 @@ public class CsvDataReader : IDataReader
 
         if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
         {
-            (Values, IsEof) = RecordParser.ReadNextRecord(StreamReader, ref buffer);
+            (Values, IsEof) = RecordParser.ReadNextRecord();
             if (IsEof && Values!.Length == 0)
             {
                 Values = null;
@@ -84,7 +85,7 @@ public class CsvDataReader : IDataReader
     protected virtual void RegisterHeader(string?[] names, string prefix)
     {
         int unnamedFieldIndex = 0;
-        Fields = (RecordParser.Profile.Descriptor.Header
+        Fields = (RecordParser!.Profile.Descriptor.Header
                 ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{prefix}{unnamedFieldIndex}" : value; })
                 : names.Select(_ => $"{prefix}{unnamedFieldIndex++}")).ToArray();
     }
@@ -97,7 +98,7 @@ public class CsvDataReader : IDataReader
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
-                    , RowCount + 1 + Convert.ToInt32(RecordParser.Profile.Descriptor.Header)
+                    , RowCount + 1 + Convert.ToInt32(RecordParser!.Profile.Descriptor.Header)
                     , values.Length - expectedLength
                     , values.Length - expectedLength > 1 ? "s" : string.Empty
                 )
@@ -106,7 +107,7 @@ public class CsvDataReader : IDataReader
 
     protected virtual void HandleMissingFields(int expectedLength)
     {
-        if (RecordParser.Profile.ParserOptimizations.ExtendIncompleteRecords && expectedLength > Values!.Length)
+        if (RecordParser!.Profile.ParserOptimizations.ExtendIncompleteRecords && expectedLength > Values!.Length)
         {
             var missingFields = expectedLength - Values.Length;
             var missingFieldsArray = new string[missingFields];
