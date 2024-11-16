@@ -45,6 +45,14 @@ internal class StreamBuffer : IDisposable
         Memory = _arrayChar.AsMemory(0, _length.Value);
     }
 
+    public void Reset()
+    {
+        Reader.BaseStream.Position = 0;
+        Reader.DiscardBufferedData();
+        IsEof = false;
+        _length = null;
+    }
+
     public void Dispose()
     {
         Pool?.Return(_arrayChar);

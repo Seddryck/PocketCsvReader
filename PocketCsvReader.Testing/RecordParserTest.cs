@@ -234,6 +234,22 @@ public class RecordParserTest
     }
 
     [Test]
+    [TestCase("foo;bar\r\n1;2\r\n3;4", true, "foo", "bar")]
+    [TestCase("foo;;\r\n1;2\r\n3;4", true, "foo", "field_1")]
+    [TestCase("1;2\r\n3;4", false, "field_0", "field_1")]
+    public void ReadHeaders_Record_CorrectResult(string text, bool hasHeader, params string[] headers)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(text));
+
+        var profile = new CsvProfile(';', '`', "\r\n", hasHeader);
+        using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
+        var values = reader.ReadHeaders();
+        Assert.That(values, Has.Length.EqualTo(2));
+        Assert.That(values[0], Is.EqualTo(headers[0]));
+        Assert.That(values[1], Is.EqualTo(headers[1]));
+    }
+
+    [Test]
     [TestCase("abc+abc+abc+abc", "+", 1, 4)]
     [TestCase("abc+abc+abc+abc", "+", 2, 4)]
     [TestCase("abc+abc+abc+abc", "+", 200, 4)]
@@ -253,25 +269,46 @@ public class RecordParserTest
     [TestCase("abc+@abc+abc+@abc+@", "+@", 5, 3)]
     [TestCase("abc+@abc+abc+@abc+@", "+@", 200, 3)]
     [TestCase("abc", "+@", 200, 1)]
-    public void CountRecordSeparator_Csv_CorrectCount(string text, string recordSeparator, int bufferSize, int result)
+    public void CountRecords_Csv_CorrectCount(string text, string recordSeparator, int bufferSize, int result)
     {
-        using (var stream = new MemoryStream())
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
+        var profile = new CsvProfile(';', recordSeparator)
         {
-            var writer = new StreamWriter(stream);
-            writer.Write(text);
-            writer.Flush();
+            ParserOptimizations = new ParserOptimizationOptions { RowCountAtStart = true }
+        };
 
-            stream.Position = 0;
+        using var streamReader = new StreamReader(stream, Encoding.UTF8, true);
+        using var reader = new RecordParser(streamReader, profile, ArrayPool<char>.Create(256, 5));
+        var value = reader.CountRecords();
+        Assert.That(value, Is.EqualTo(result));
+    }
 
-            var profile = new CsvProfile(';', recordSeparator);
+    [TestCase("foo;bar\r\nfoo;bar\r\n", "\r\n", 4, 2)]
+    [TestCase("foo;bar\r\nfoo;bar", "\r\n", 4, 2)]
+    public void CountRecords_Rewind_CorrectCount(string text, string recordSeparator, int bufferSize, int result)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
+        var profile = new CsvProfile(';', recordSeparator)
+        {
+            ParserOptimizations = new ParserOptimizationOptions { RowCountAtStart = true }
+        };
 
-            using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
+        using var streamReader = new StreamReader(stream);
+        using var reader = new RecordParser(streamReader, profile, ArrayPool<char>.Create(256, 5));
+        var value = reader.CountRecords();
+        Assert.That(value, Is.EqualTo(result));
+        for (int i = 0; i < result; i++)
+        {
+            if (i<result-1)
+                Assert.That(reader.ReadNextRecord().eof, Is.False);
+            else
             {
-                using var reader = new RecordParser(streamReader, profile, ArrayPool<char>.Create(256, 5));
-                var value = reader.CountRecordSeparators(streamReader);
-                Assert.That(value, Is.EqualTo(result));
+                var (values, eof) = reader.ReadNextRecord();
+                if (values is not null)
+                    Assert.Pass();
+                if (!eof)
+                    Assert.That(reader.ReadNextRecord().eof, Is.True);
             }
-            writer.Dispose();
         }
     }
 

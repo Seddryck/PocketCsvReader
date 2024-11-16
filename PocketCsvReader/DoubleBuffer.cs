@@ -48,6 +48,15 @@ internal class DoubleBuffer : IBufferReader
 
     public bool IsEof => CurrentBuffer.IsEof;
 
+    public void Reset()
+    {
+        _first.Reset();
+        _second.Reset();
+        CurrentBuffer = _first;
+        ReadAheadBuffer = _second;
+        ReadAhead = null;
+    }
+
     public void Dispose()
     {
         _first.Dispose();
