@@ -10,4 +10,5 @@ public interface IBufferReader : IDisposable
 {
     ReadOnlyMemory<char> Read();
     bool IsEof { get; }
+    void Reset();
 }

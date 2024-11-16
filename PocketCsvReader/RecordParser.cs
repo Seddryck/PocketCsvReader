@@ -68,9 +68,6 @@ public class RecordParser : IDisposable
 
         while (!eof && index < bufferSize)
         {
-            if (index >= span.Length)
-                Console.WriteLine(span.ToString());
-
             char c = span[index];
             if (c == '\0')
             {
@@ -166,11 +163,6 @@ public class RecordParser : IDisposable
                 {
                     longField = longField.Slice(0, longFieldIndex);
                 }
-                else if (longField.Length >= longFieldIndex + index - indexFieldStart)
-                {
-                    span.Slice(indexFieldStart, index - indexFieldStart)
-                        .CopyTo(longField.Slice(longFieldIndex));
-                }
                 else
                 {
                     var newArray = Pool?.Rent(longFieldIndex + index - indexFieldStart) ?? new char[longFieldIndex + index - indexFieldStart];
@@ -214,21 +206,19 @@ public class RecordParser : IDisposable
         return (fields.ToArray(), eof);
     }
 
-    public int? CountRecords(StreamReader reader)
+    public int? CountRecords()
     {
         if (!Profile.ParserOptimizations.RowCountAtStart)
             return null;
 
-        var count = CountRecordSeparators(reader);
+        var count = CountRecordSeparators();
         count -= Convert.ToInt16(Profile.Descriptor.Header);
-        //RaiseProgressStatus($"{count} record{(count > 1 ? "s were" : " was")} identified.");
 
-        reader.BaseStream.Position = 0;
-        reader.DiscardBufferedData();
+        Reader.Reset();
         return count;
     }
 
-    public virtual int CountRecordSeparators(StreamReader reader)
+    protected virtual int CountRecordSeparators()
     {
         int i = 0;
         int n = 0;
@@ -237,16 +227,14 @@ public class RecordParser : IDisposable
         bool isCommentLine = false;
         bool isFirstCharOfLine = true;
 
-        var array = Pool?.Rent(Profile.ParserOptimizations.BufferSize) ?? new char[Profile.ParserOptimizations.BufferSize];
         do
         {
-            var buffer = new Span<char>(array);
-            n = reader.ReadBlock(buffer);
-            buffer = buffer.Slice(0, n);
+            var span = Reader.Read().Span;
+            n = span.Length;
             if (n > 0 && i == 0)
                 i = 1;
 
-            foreach (var c in buffer)
+            foreach (var c in span)
             {
                 if (c != '\0')
                 {
@@ -272,16 +260,14 @@ public class RecordParser : IDisposable
                         j = 0;
                 }
             }
-        } while (n > 0);
+        } while (!Reader.IsEof);
 
         if (separatorAtEnd)
             i -= 1;
 
         if (isCommentLine)
             i -= 1;
-
-        if (array is not null)
-            Pool?.Return(array);
+        
         return i;
     }
 
@@ -338,13 +324,16 @@ public class RecordParser : IDisposable
         return longRecord.ToString();
     }
 
-    public virtual string[] ReadHeader()
+    public virtual string[] ReadHeaders()
     {
-        var unnamedFieldIndex = 0;
+        var unnamedFieldIndex = -1;
         return ReadNextRecord().fields
-                .Select(value => value is null || !Profile.Descriptor.Header
-                                    ? $"field_{unnamedFieldIndex++}"
-                                    : value).ToArray();
+                .Select(value => {
+                    unnamedFieldIndex++; 
+                    return string.IsNullOrWhiteSpace(value) || !Profile.Descriptor.Header
+                        ? $"field_{unnamedFieldIndex}" 
+                        : value!;
+                }).ToArray();
     }
 
     public void Dispose()

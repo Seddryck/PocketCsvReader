@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -20,6 +21,9 @@ internal class SingleBuffer : IBufferReader
     }
 
     public bool IsEof => _streamBuffer.IsEof;
+
+    public void Reset()
+        => _streamBuffer.Reset();
 
     public void Dispose()
     {
