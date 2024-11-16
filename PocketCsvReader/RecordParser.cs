@@ -63,9 +63,15 @@ public class RecordParser : IDisposable
         else
             bufferSize = Buffer.Length;
 
+        var span = Buffer.Span;
+        span = span.Slice(0, bufferSize);
+
         while (!eof && index < bufferSize)
         {
-            char c = Buffer.Span[index];
+            if (index >= span.Length)
+                Console.WriteLine(span.ToString());
+
+            char c = span[index];
             if (c == '\0')
             {
                 eof = true;
@@ -102,10 +108,10 @@ public class RecordParser : IDisposable
             if (c == Profile.Descriptor.Delimiter && !isCommentLine && (isFieldWithTextQualifier == isEndingByTextQualifier))
             {
                 if (longFieldIndex == 0)
-                    fields.Add(FieldParser.ReadField(Buffer.Span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    fields.Add(FieldParser.ReadField(span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
                 else
                 {
-                    fields.Add(FieldParser.ReadField(longField, longFieldIndex, Buffer.Span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    fields.Add(FieldParser.ReadField(longField, longFieldIndex, span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
                     longField = Span<char>.Empty;
                     longFieldIndex = 0;
                 }
@@ -123,21 +129,23 @@ public class RecordParser : IDisposable
                         if (indexFieldStart <= index + longFieldIndex - Profile.Descriptor.LineTerminator.Length)
                         {
                             if (longFieldIndex == 0)
-                                fields.Add(FieldParser.ReadField(Buffer.Span, indexFieldStart, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                fields.Add(FieldParser.ReadField(span, indexFieldStart, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
                             else
                             {
-                                fields.Add(FieldParser.ReadField(longField, longFieldIndex, Buffer.Span, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
+                                fields.Add(FieldParser.ReadField(longField, longFieldIndex, span, index - Profile.Descriptor.LineTerminator.Length + 1, isFieldWithTextQualifier, isEndingByTextQualifier));
                                 longField = Span<char>.Empty;
                                 longFieldIndex = 0;
                             }
                         }
                         Buffer = Buffer.Slice(index + 1, bufferSize - index - 1);
+                        span = Buffer.Span;
                         return (fields.ToArray(), false);
                     }
                     else
                     {
                         bufferSize = bufferSize - index - 1;
                         Buffer = Buffer.Slice(index + 1);
+                        span = Buffer.Span;
                         isCommentLine = false;
                         index = -1;
                         indexFieldStart = 0;
@@ -160,16 +168,16 @@ public class RecordParser : IDisposable
                 }
                 else if (longField.Length >= longFieldIndex + index - indexFieldStart)
                 {
-                    var span = Buffer.Span.Slice(indexFieldStart, index - indexFieldStart);
-                    span.CopyTo(longField.Slice(longFieldIndex));
+                    span.Slice(indexFieldStart, index - indexFieldStart)
+                        .CopyTo(longField.Slice(longFieldIndex));
                 }
                 else
                 {
                     var newArray = Pool?.Rent(longFieldIndex + index - indexFieldStart) ?? new char[longFieldIndex + index - indexFieldStart];
                     var newSpan = newArray.AsSpan().Slice(0, longFieldIndex + index - indexFieldStart);
                     longField.CopyTo(newSpan);
-                    var remaining = Buffer.Slice(indexFieldStart, index - indexFieldStart);
-                    remaining.Span.CopyTo(newSpan.Slice(longFieldIndex));
+                    var remaining = span.Slice(indexFieldStart, index - indexFieldStart);
+                    remaining.CopyTo(newSpan.Slice(longFieldIndex));
                     longField = newSpan;
                     Pool?.Return(newArray);
                 }
@@ -180,6 +188,7 @@ public class RecordParser : IDisposable
                 {
                     Buffer = Reader.Read();
                     bufferSize = Buffer.Length;
+                    span = Buffer.Span;
                     eof = bufferSize == 0;
                 }
                 else
@@ -198,9 +207,9 @@ public class RecordParser : IDisposable
                 if (isLastCharDelimiter)
                     fields.Add(Profile.EmptyCell);
                 else
-                    fields.Add(FieldParser.ReadField(Buffer.Span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                    fields.Add(FieldParser.ReadField(span, indexFieldStart, index, isFieldWithTextQualifier, isEndingByTextQualifier));
             else
-                fields.Add(FieldParser.ReadField(longField, longFieldIndex, Buffer.Span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
+                fields.Add(FieldParser.ReadField(longField, longFieldIndex, span, index, isFieldWithTextQualifier, isEndingByTextQualifier));
 
         return (fields.ToArray(), eof);
     }
