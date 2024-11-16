@@ -198,6 +198,27 @@ public class RecordParserTest
             writer.Dispose();
         }
     }
+
+    [TestCase("foo;bar")]
+    [TestCase(" foo;bar")]
+    [TestCase("         foo;bar")]
+    [TestCase(" foo; bar")]
+    [TestCase("foo;      bar")]
+    [TestCase("`foo`;     `bar`")]
+    public void ReadNextRecord_SkipInitialWhitespace_CorrectResults(string record)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+
+        var profile = new CsvProfile(';', '`');
+        profile.Descriptor.SkipInitialSpace = true;
+        using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
+        using var streamReader = new StreamReader(stream);
+        var (values, _) = reader.ReadNextRecord();
+        Assert.That(values, Has.Length.EqualTo(2));
+        Assert.That(values[0], Is.EqualTo("foo"));
+        Assert.That(values[1], Is.EqualTo("bar"));
+    }
+
     [Test]
     [TestCase("abc\0", "+@", "abc")]
     [TestCase("abc+@\0", "+@", "abc")]
@@ -243,7 +264,7 @@ public class RecordParserTest
             stream.Position = 0;
 
             var profile = new CsvProfile(';', recordSeparator);
-            
+
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 using var reader = new RecordParser(streamReader, profile, ArrayPool<char>.Create(256, 5));
@@ -284,7 +305,7 @@ public class RecordParserTest
 
             stream.Position = 0;
 
-            
+
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var reader = new RecordParser(streamReader, CsvProfile.SemiColumnDoubleQuote, ArrayPool<char>.Create(256, 5));
@@ -307,7 +328,7 @@ public class RecordParserTest
 
             stream.Position = 0;
 
-            
+
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var reader = new RecordParser(streamReader, CsvProfile.SemiColumnDoubleQuote);

@@ -80,13 +80,18 @@ public class RecordParser : IDisposable
 
             if (isFirstCharOfField && !isCommentLine)
             {
-                isFirstCharOfField = false;
-                if (!Profile.ParserOptimizations.NoTextQualifier)
+                if (!Profile.Descriptor.SkipInitialSpace || c != ' ')
                 {
-                    isFieldWithTextQualifier = c == Profile.Descriptor.QuoteChar;
-                    isEndingByTextQualifier = false;
-                    isTextQualifierEscaped = false;
+                    isFirstCharOfField = false;
+                    if (!Profile.ParserOptimizations.NoTextQualifier)
+                    {
+                        isFieldWithTextQualifier = c == Profile.Descriptor.QuoteChar;
+                        isEndingByTextQualifier = false;
+                        isTextQualifierEscaped = false;
+                    }
                 }
+                else
+                    indexFieldStart++;
             }
             else if (!Profile.ParserOptimizations.NoTextQualifier && c != Profile.Descriptor.Delimiter && c != Profile.Descriptor.LineTerminator[indexRecordSeparator] && !isFirstCharOfField)
             {
