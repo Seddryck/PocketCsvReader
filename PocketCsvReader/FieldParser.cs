@@ -6,16 +6,23 @@ using System.Linq;
 using System.Text;
 
 namespace PocketCsvReader;
+
+public delegate string PoolString(ReadOnlySpan<char> memory);
+
 public class FieldParser
 {
     protected internal CsvProfile Profile { get; private set; }
     protected ArrayPool<char>? Pool { get; }
 
+    protected PoolString FetchString { get; }
+
+    private static readonly PoolString defaultPoolString = (ReadOnlySpan<char> span) => span.ToString();
+
     public FieldParser(CsvProfile profile)
         : this(profile, ArrayPool<char>.Shared) { }
 
-    public FieldParser(CsvProfile profile, ArrayPool<char>? pool)
-        => (Profile, Pool) = (profile, pool);
+    public FieldParser(CsvProfile profile, ArrayPool<char>? pool, PoolString? fetchString = null)
+        => (Profile, Pool, FetchString) = (profile, pool, profile.ParserOptimizations.PoolString ?? defaultPoolString);
 
     public string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
     {
@@ -53,10 +60,10 @@ public class FieldParser
         else if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
         {
             var span = UnescapeTextQualifier(field, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
-            return span.ToString();
+            return FetchString(span);
         }
         else
-            return field.ToString();
+            return FetchString(field);
     }
 
     private ReadOnlySpan<char> UnescapeTextQualifier(ReadOnlySpan<char> value, char textQualifier, char escapeTextQualifier)

@@ -13,5 +13,6 @@ public record ParserOptimizationOptions
     bool RowCountAtStart = false,
     bool ExtendIncompleteRecords = true,
     bool ReadAhead = true,
-    int BufferSize = 4096
+    int BufferSize = 4096,
+    PoolString? PoolString = null
 ) { }

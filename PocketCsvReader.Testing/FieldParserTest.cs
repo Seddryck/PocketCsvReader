@@ -70,8 +70,10 @@ public class FieldParserTest
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
 
-        var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)");
-        profile.ParserOptimizations = new ParserOptimizationOptions { HandleSpecialValues = false };
+        var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)")
+        {
+            ParserOptimizations = new ParserOptimizationOptions { HandleSpecialValues = false }
+        };
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));
@@ -135,5 +137,46 @@ public class FieldParserTest
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, true, true);
         Assert.That(value, Is.EqualTo(result));
+    }
+
+    [Test]
+    public void ReadField_StringPool_CorrectString()
+    {
+        Span<char> buffer = stackalloc char[64];
+        "foo".AsSpan().CopyTo(buffer);
+
+        var stringPool = new CommunityToolkit.HighPerformance.Buffers.StringPool();
+
+        var profile = new CsvProfile(';', '\"', '\"', "\r\n", false, false, 4096, "(empty)", "(null)")
+        {
+            ParserOptimizations = new ParserOptimizationOptions { PoolString = stringPool.GetOrAdd }
+        };
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, "foo".Length, false, false);
+        Assert.That(value, Is.EqualTo("foo"));
+    }
+
+
+    [Test]
+    public void ReadField_StringPool_Called()
+    {
+        Span<char> buffer = stackalloc char[64];
+        "foo".AsSpan().CopyTo(buffer);
+        int count = 0;
+
+        PoolString poolString = (span) =>
+        {
+            count++;
+            return span.ToString();
+        };
+
+        var profile = new CsvProfile(';', '\"', '\"', "\r\n", false, false, 4096, "(empty)", "(null)")
+        {
+            ParserOptimizations = new ParserOptimizationOptions { PoolString = poolString }
+        }; 
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, "foo".Length, false, false);
+        Assert.That(value, Is.EqualTo("foo"));
+        Assert.That(count, Is.EqualTo(1));
     }
 }
