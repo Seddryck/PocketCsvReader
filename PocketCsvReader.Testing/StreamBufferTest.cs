@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -85,5 +85,4 @@ public class StreamBufferTest
         Assert.That(buffer.IsEof, Is.True);
         Assert.That(buffer.Memory.ToArray(), Is.EqualTo("d!"));
     }
-
 }
