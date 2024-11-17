@@ -42,7 +42,7 @@ public class FieldParserTest
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
 
-        var profile = new CsvProfile(';', '\"', '`', "\r\n", false, false, 4096, "?", "(null)");
+        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
         var reader = new FieldParser(profile);
         var value = reader.ReadField(buffer, 0, item.Length, item.StartsWith("\""), item.StartsWith("\""));
         Assert.That(value, Is.EqualTo(result));
@@ -178,5 +178,52 @@ public class FieldParserTest
         var value = reader.ReadField(buffer, 0, "foo".Length, false, false);
         Assert.That(value, Is.EqualTo("foo"));
         Assert.That(count, Is.EqualTo(1));
+    }
+
+    [TestCase(@"\N", @"\N")]
+    [TestCase("(null)", "(null)")]
+    [TestCase("null", "null")]
+    public void ReadField_NullSequence_NullValue(string field, string NullSequence)
+    {
+        Span<char> buffer = stackalloc char[64];
+        field.AsSpan().CopyTo(buffer);
+
+        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
+        
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        Assert.That(value, Is.Null);
+    }
+
+    [TestCase("(null)", @"\N")]
+    [TestCase(@"\N", "(null)")]
+    [TestCase("null", "(null)")]
+    public void ReadField_WrongNullSequence_NotNullValue(string field, string NullSequence)
+    {
+        Span<char> buffer = stackalloc char[64];
+        field.AsSpan().CopyTo(buffer);
+
+        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
+
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        Assert.That(value, Is.Not.Null);
+        Assert.That(value, Is.EqualTo(field));
+    }
+
+    [TestCase("(empty)", "(empty)", "")]
+    [TestCase("(ae)", "(ae)", "Albert Einstein")]
+    public void ReadField_AnySequence_MappedValue(string field, string sequence, string map)
+    {
+        Span<char> buffer = stackalloc char[64];
+        field.AsSpan().CopyTo(buffer);
+
+        var profile = CsvProfile.CommaDoubleQuote;
+        profile.Sequences.Add(sequence, map);
+
+        var reader = new FieldParser(profile);
+        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        Assert.That(value, Is.Not.Null);
+        Assert.That(value, Is.EqualTo(map));
     }
 }

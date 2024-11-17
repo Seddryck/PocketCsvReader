@@ -153,7 +153,7 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("a;(null)\0"));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var profile = new CsvProfile(new CsvDialectDescriptor() {Delimiter=';', NullSequence="(null)" });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         var (values, eof) = reader.ReadNextRecord();
         Assert.That(eof, Is.True);
