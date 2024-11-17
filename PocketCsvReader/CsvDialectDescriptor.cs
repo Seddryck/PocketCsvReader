@@ -11,9 +11,9 @@ namespace PocketCsvReader
         public char Delimiter { get; set; } = ',';
         public string LineTerminator { get; set; } = "\r\n";
         public char QuoteChar { get; set; } = '"';
-        public bool DoubleQuote { get; set; } = true;
+        public bool DoubleQuote { get; set; } = false; //should be true?
         public char EscapeChar { get; set; }
-        public string NullSequence { get; set; } = string.Empty;
+        public string? NullSequence { get; set; } = null;
         public bool SkipInitialSpace { get; set; } = false;
         public bool Header { get; set; } = true;
         public char CommentChar { get; set; }

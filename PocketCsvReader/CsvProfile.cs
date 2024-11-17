@@ -6,7 +6,8 @@ public class CsvProfile
 {
     public CsvDialectDescriptor Descriptor { get; private set; }
     public ParserOptimizationOptions ParserOptimizations { get; set; }
-    
+    public Dictionary<string, string?> Sequences { get; } = new();
+
     public virtual string EmptyCell { get; private set; }
     public virtual string MissingCell { get; private set; }
 
@@ -63,12 +64,11 @@ public class CsvProfile
     {
         if (descriptor.DoubleQuote)
             throw new ArgumentException("PocketCsvReader doesn't support doubleQuote set to true in the CSV dialect descriptor.");
-        if (descriptor.NullSequence?.Length > 0)
-            throw new ArgumentException("PocketCsvReader doesn't support nullSequence set to any value in the CSV dialect descriptor.");
-        if (descriptor.SkipInitialSpace)
-            throw new ArgumentException("PocketCsvReader doesn't support skipInitialSpace set to true in the CSV dialect descriptor.");
         if (descriptor.CaseSensitiveHeader)
             throw new ArgumentException("PocketCsvReader doesn't support caseSensitiveHeader set to true in the CSV dialect descriptor.");
+
+        if (descriptor.NullSequence is not null)
+            Sequences.Add(descriptor.NullSequence, null);
 
         Descriptor = descriptor;
         ParserOptimizations = new ParserOptimizationOptions();

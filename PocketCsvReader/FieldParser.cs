@@ -17,7 +17,7 @@ public class FieldParser
     protected PoolString FetchString { get; }
 
     private static readonly PoolString defaultPoolString = (ReadOnlySpan<char> span) => span.ToString();
-
+     
     public FieldParser(CsvProfile profile)
         : this(profile, ArrayPool<char>.Shared) { }
 
@@ -53,17 +53,23 @@ public class FieldParser
                         ? buffer.Slice(indexFieldStart + 1, currentIndex - indexFieldStart - 2)
                         : buffer.Slice(indexFieldStart, currentIndex - indexFieldStart);
 
+        string? strField = null;
         if (Profile.ParserOptimizations.HandleSpecialValues && field.Length == 0)
             return Profile.EmptyCell;
-        else if (Profile.ParserOptimizations.HandleSpecialValues && field.ToString() == "(null)" && !isFieldWithTextQualifier)
-            return null;
-        else if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
+        else if (Profile.ParserOptimizations.HandleSpecialValues && !isFieldWithTextQualifier)
+        {
+            strField = FetchString(field);
+            if (Profile.Sequences.TryGetValue(strField, out var value))
+                return value;
+        }
+
+        if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
         {
             var span = UnescapeTextQualifier(field, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
             return FetchString(span);
         }
         else
-            return FetchString(field);
+            return strField ?? FetchString(field);
     }
 
     private ReadOnlySpan<char> UnescapeTextQualifier(ReadOnlySpan<char> value, char textQualifier, char escapeTextQualifier)
