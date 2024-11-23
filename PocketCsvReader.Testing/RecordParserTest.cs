@@ -12,23 +12,22 @@ public class RecordParserTest
     [Test]
     [TestCase("foo")]
     [TestCase("'foo'")]
-    [TestCase("foo;")]
-    [TestCase("'foo';")]
+    [TestCase("foo\r\n")]
+    [TestCase("'foo'\r\n")]
     public void ReadNextRecord_SingleField_CorrectParsing(string record)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         var (values, eof) = reader.ReadNextRecord();
-        Assert.That(eof, Is.True);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo("foo"));
     }
 
     [TestCase("foo\r\n", "foo")]
     [TestCase("foo;bar\r\n", "foo", "bar")]
-    [TestCase("foo;bar;\r\n", "foo", "bar")]
+    [TestCase("foo;bar;\r\n", "foo", "bar", "(empty)")]
     public void ReadNextRecord_RecordWithLineTerminator_CorrectParsing(string record, params string[] tokens)
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
@@ -43,10 +42,10 @@ public class RecordParserTest
 
     [TestCase("foo", "foo")]
     [TestCase("foo;bar", "foo", "bar")]
-    [TestCase("foo;bar;", "foo", "bar")]
+    [TestCase("foo;bar;", "foo", "bar", "(empty)")]
     public void ReadNextRecord_RecordWithoutLineTerminator_CorrectParsing(string record, params string[] tokens)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
@@ -87,9 +86,10 @@ public class RecordParserTest
     [TestCase("'a''b'';c';'xyz'", "a'b';c")]
     public void ReadNextRecord_RecordWithTwoFields_CorrectParsing(string record, string firstToken)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "", "(null)");
+        var profile = new CsvProfile(
+            new CsvDialectDescriptor() { Delimiter=';', QuoteChar='\'', DoubleQuote=true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         (var values, var _) = reader.ReadNextRecord();
         Assert.That(values[0], Is.EqualTo(firstToken));
@@ -98,12 +98,11 @@ public class RecordParserTest
 
     [Test]
     [TestCase("'fo;o'", "fo;o")]
-    [TestCase("'fo;o';", "fo;o")]
-    [TestCase("';foo';", ";foo")]
-    [TestCase("'foo;';", "foo;")]
+    [TestCase("';foo'", ";foo")]
+    [TestCase("'foo;'", "foo;")]
     public void ReadNextRecord_SingleFieldWithTextQualifier_CorrectParsing(string record, string expected)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
@@ -113,14 +112,29 @@ public class RecordParserTest
     }
 
     [Test]
-    [TestCase("'fo''o'", '\'')]
-    [TestCase("'fo?'o'", '?')]
+    
     [TestCase("'fo\\'o'", '\\')]
+    [TestCase("'fo?'o'", '?')]
     public void ReadNextRecord_SingleFieldWithTextEscaper_CorrectParsing(string record, char escapeTextQualifier)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '\'', escapeTextQualifier, "\r\n", false, true, 4096, string.Empty, string.Empty);
+        using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
+        var (values, _) = reader.ReadNextRecord();
+        Assert.That(values, Has.Length.EqualTo(1));
+        Assert.That(values.First(), Is.EqualTo("fo'o"));
+    }
+
+    [Test]
+    [TestCase("'fo''o'")]
+    public void ReadNextRecord_SingleFieldWithDoubleQuote_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var profile = new CsvProfile(
+                new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote=true }
+            );
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         var (values, _) = reader.ReadNextRecord();
         Assert.That(values, Has.Length.EqualTo(1));
@@ -133,13 +147,13 @@ public class RecordParserTest
     [TestCase("abc;'xyz';123", "123")]
     [TestCase("'abc';xyz;123", "123")]
     [TestCase("'abc';xyz;'123'", "123")]
-    [TestCase("'ab;;;c';xyz;;", "")]
+    [TestCase("'ab;;;c';xyz;", "")]
     [TestCase("'a;b;;c';'x;;;y;;z';123", "123")]
-    [TestCase(";'xyz';;", "")]
-    [TestCase(";;;", "")]
+    [TestCase(";'xyz';", "")]
+    [TestCase(";;", "")]
     public void ReadNextRecord_RecordWithThreeFields_CorrectParsing(string record, string thirdToken)
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
@@ -151,7 +165,7 @@ public class RecordParserTest
     [Test]
     public void ReadNextRecord_NullField_NullValue()
     {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes("a;(null)\0"));
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes("a;(null)"));
 
         var profile = new CsvProfile(new CsvDialectDescriptor() {Delimiter=';', NullSequence="(null)" });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
@@ -207,7 +221,7 @@ public class RecordParserTest
     [TestCase("`foo`;     `bar`")]
     public void ReadNextRecord_SkipInitialWhitespace_CorrectResults(string record)
     {
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(record + '\0'));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(';', '`');
         profile.Descriptor.SkipInitialSpace = true;
@@ -220,22 +234,8 @@ public class RecordParserTest
     }
 
     [Test]
-    [TestCase("abc\0", "+@", "abc")]
-    [TestCase("abc+@\0", "+@", "abc")]
-    [TestCase("abc\0\0\0", "+@", "abc")]
-    public void CleanRecord_Record_CorrectResult(string text, string recordSeparator, string result)
-    {
-        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(text));
-
-        var profile = new CsvProfile(';', recordSeparator);
-        using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (value, _) = reader.ReadNextRecord();
-        Assert.That(value[0], Is.EqualTo(result));
-    }
-
-    [Test]
     [TestCase("foo;bar\r\n1;2\r\n3;4", true, "foo", "bar")]
-    [TestCase("foo;;\r\n1;2\r\n3;4", true, "foo", "field_1")]
+    [TestCase("foo;\r\n1;2\r\n3;4", true, "foo", "field_1")]
     [TestCase("1;2\r\n3;4", false, "field_0", "field_1")]
     public void ReadHeaders_Record_CorrectResult(string text, bool hasHeader, params string[] headers)
     {

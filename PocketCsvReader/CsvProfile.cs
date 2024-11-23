@@ -62,8 +62,6 @@ public class CsvProfile
 
     public CsvProfile(CsvDialectDescriptor descriptor)
     {
-        if (descriptor.DoubleQuote)
-            throw new ArgumentException("PocketCsvReader doesn't support doubleQuote set to true in the CSV dialect descriptor.");
         if (descriptor.CaseSensitiveHeader)
             throw new ArgumentException("PocketCsvReader doesn't support caseSensitiveHeader set to true in the CSV dialect descriptor.");
 
