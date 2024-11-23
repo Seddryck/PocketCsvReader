@@ -17,87 +17,88 @@ public class FieldParser
     protected PoolString FetchString { get; }
 
     private static readonly PoolString defaultPoolString = (ReadOnlySpan<char> span) => span.ToString();
-     
+
     public FieldParser(CsvProfile profile)
         : this(profile, ArrayPool<char>.Shared) { }
 
     public FieldParser(CsvProfile profile, ArrayPool<char>? pool, PoolString? fetchString = null)
         => (Profile, Pool, FetchString) = (profile, pool, profile.ParserOptimizations.PoolString ?? defaultPoolString);
 
-    public string? ReadField(Span<char> longField, int longFieldIndex, ReadOnlySpan<char> buffer, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
+    public string? ReadField(ReadOnlySpan<char> buffer, int start, int length, bool isEscapedField, bool wasQuotedField)
+        => ReadField(Span<char>.Empty, buffer, start, length, isEscapedField, wasQuotedField);
+
+    public string? ReadField(ReadOnlySpan<char> longSpan, ReadOnlySpan<char> buffer, int start, int length, bool isEscapedField, bool wasQuotedField)
     {
-        if (longField.Length > longFieldIndex + currentIndex)
+        ReadOnlySpan<char> fieldSpan;
+        if (longSpan.Length > 0 && length>=0)
         {
-            buffer.Slice(0, currentIndex + 1).CopyTo(longField.Slice(longFieldIndex));
-        }
-        else
-        {
-            var newArray = Pool?.Rent(longFieldIndex + currentIndex) ?? new char[longFieldIndex + currentIndex];
-            longField.CopyTo(newArray);
-            buffer.Slice(0, currentIndex).ToArray().CopyTo(newArray, longFieldIndex);
-            longField = newArray;
+            var newSize = longSpan.Length + length;
+            var newArray = Pool?.Rent(newSize) ?? new char[newSize];
+            longSpan.CopyTo(newArray);
+            buffer.Slice(start, length).ToArray().CopyTo(newArray, longSpan.Length);
+            fieldSpan = newArray;
+            fieldSpan = fieldSpan.Slice(0, newSize);
             Pool?.Return(newArray);
         }
-        return ReadField(longField, 0, longFieldIndex + currentIndex, isFieldWithTextQualifier, isFieldEndingByTextQualifier);
+        else if (longSpan.Length > 0 && length < 0)
+            fieldSpan = longSpan.Slice(0, longSpan.Length + length);
+        else
+            fieldSpan = buffer.Slice(start, length);
+        return ReadField(fieldSpan, isEscapedField, wasQuotedField);
     }
 
-    public string? ReadField(ReadOnlySpan<char> buffer, int indexFieldStart, int currentIndex, bool isFieldWithTextQualifier, bool isFieldEndingByTextQualifier)
+    public string? ReadField(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
     {
-        if (isFieldWithTextQualifier != isFieldEndingByTextQualifier)
-            if (isFieldWithTextQualifier)
-                throw new InvalidDataException($"the token {buffer.Slice(indexFieldStart, currentIndex - indexFieldStart)} is starting by a text-qualifier but not ending by a text-qualifier.");
-            else
-                throw new InvalidDataException($"the token {buffer.Slice(indexFieldStart, currentIndex - indexFieldStart)} is ending by a text-qualifier but not starting by a text-qualifier.");
-
-        var field = isFieldWithTextQualifier
-                        ? buffer.Slice(indexFieldStart + 1, currentIndex - indexFieldStart - 2)
-                        : buffer.Slice(indexFieldStart, currentIndex - indexFieldStart);
-
-        string? strField = null;
-        if (Profile.ParserOptimizations.HandleSpecialValues && field.Length == 0)
+        if (Profile.ParserOptimizations.HandleSpecialValues && buffer.Length == 0)
             return Profile.EmptyCell;
-        else if (Profile.ParserOptimizations.HandleSpecialValues && !isFieldWithTextQualifier)
+        else if (Profile.ParserOptimizations.HandleSpecialValues && !isEscapedField && !wasQuotedField)
         {
-            strField = FetchString(field);
+            var strField = FetchString(buffer);
             if (Profile.Sequences.TryGetValue(strField, out var value))
                 return value;
+            return strField;
         }
 
-        if (Profile.ParserOptimizations.UnescapeChars && field.Contains(Profile.Descriptor.EscapeChar))
+        if (Profile.ParserOptimizations.UnescapeChars && isEscapedField)
         {
-            var span = UnescapeTextQualifier(field, Profile.Descriptor.QuoteChar, Profile.Descriptor.EscapeChar);
+            var span = UnescapeField(buffer);
             return FetchString(span);
         }
         else
-            return strField ?? FetchString(field);
+            return FetchString(buffer);
     }
 
-    private ReadOnlySpan<char> UnescapeTextQualifier(ReadOnlySpan<char> value, char textQualifier, char escapeTextQualifier)
+    private ReadOnlySpan<char> UnescapeField(ReadOnlySpan<char> value)
     {
-        if (value.Length==0)
+        if (value.Length == 0)
             return Span<char>.Empty;
 
         var array = Pool?.Rent(value.Length) ?? new char[value.Length];
         var result = new Span<char>(array);
-        int i =0, j = 0;
+        int i = 0, j = 0;
         while (i < value.Length)
         {
             var c = value[i];
-            if (c == escapeTextQualifier)
+            if (c == Profile.Descriptor.EscapeChar)
             {
-                if (i+1 == value.Length)
-                    throw new InvalidDataException($"the token {value.ToString()} contains an escape-text-qualifier at the last position '{i + 1}'");
-                else if (value[i+1] != textQualifier)
-                    throw new InvalidDataException($"the token {value.ToString()} contains a text-qualifier not preceded by a an escape-text-qualifier at the position '{j}'");
-                result[j++] = textQualifier;
-                i+=2;
+                if (i + 1 == value.Length)
+                    result[j++] = c;
+                else if (value[i + 1] == Profile.Descriptor.EscapeChar || value[i + 1] == Profile.Descriptor.Delimiter || value[i + 1] == Profile.Descriptor.QuoteChar)
+                    result[j++] = value[++i];
+                else
+                    result[j++] = c;
+            }
+            else if (c == Profile.Descriptor.QuoteChar && Profile.Descriptor.DoubleQuote)
+            {
+                if (value[i + 1] == Profile.Descriptor.QuoteChar)
+                    result[j++] = value[++i];
+                else
+                    result[j++] = c;
             }
             else
-            {
                 result[j++] = c;
-                i += 1;
-            }
-        } ;
+            i++;
+        };
 
         Pool?.Return(array);
         return result.Slice(0, j);
