@@ -27,8 +27,9 @@ public class ToDataReader
     private Assembly? _csvAssembly;
 
     //[Params(16_300, 163_000, 1_630_000)]
-    [Params(16_300, 163_000)]
+    //[Params(16_300, 163_000)]
     //[Params(16_300)]
+    [Params(1_630_000)]
     public int recordCount;
 
     [GlobalSetup]

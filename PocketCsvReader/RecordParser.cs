@@ -33,7 +33,6 @@ public class RecordParser : IDisposable
 
     public virtual (string?[] fields, bool eof) ReadNextRecord()
     {
-        var bufferSize = 0;
         var index = 0;
         var eof = false;
         var fields = new List<string?>();
@@ -41,43 +40,35 @@ public class RecordParser : IDisposable
 
         if (Buffer.Length == 0)
         {
-            if (Reader.IsEof)
-                bufferSize = 0;
-            else
-            {
+            if (!Reader.IsEof)
                 Buffer = Reader.Read();
-                bufferSize = Buffer.Length;
-            }
-
-            eof = bufferSize == 0;
+            eof = Buffer.Length == 0;
         }
-        else
-            bufferSize = Buffer.Length;
 
         var span = Buffer.Span;
-        span = span.Slice(0, bufferSize);
+        var bufferSize = span.Length;
 
         while (!eof && index < bufferSize)
         {
             char c = span[index];
             var state = CharParser.Parse(c);
-
             if (state == ParserState.Field || state == ParserState.Record)
             {
+                // Parse field and reset longSpan
                 fields.Add(FieldParser.ReadField(longSpan, span, CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
                 longSpan = Span<char>.Empty;
-            }
 
-            if (state == ParserState.Record)
-            {
-                CharParser.Reset();
-                Buffer = Buffer.Slice(index + 1);
-                return (fields.ToArray(), false);
+                if (state == ParserState.Record)
+                {
+                    CharParser.Reset();
+                    Buffer = Buffer.Slice(index + 1);
+                    return (fields.ToArray(), false);
+                }
             }
-                
-            if (state == ParserState.Error)
+            else if (state == ParserState.Error)
                 throw new InvalidDataException($"Invalid character '{c}' at position {index}.");
 
+            // Handle continuation for fields spanning multiple buffers
             if (++index == bufferSize)
             {
                 if (state == ParserState.Continue)
@@ -113,6 +104,31 @@ public class RecordParser : IDisposable
                 throw new InvalidDataException($"Invalid character End-of-File.");
             default:
                 throw new InvalidOperationException($"Invalid state at end-of-file.");
+        }
+    }
+
+    private void MoveNextBuffer(ref int index, ref bool eof, ref Span<char> longSpan, ref ReadOnlySpan<char> span, ref int bufferSize, ParserState state)
+    {
+        if (++index == bufferSize)
+        {
+            if (state == ParserState.Continue)
+                longSpan = longSpan.Concat(span.Slice(CharParser.FieldStart, bufferSize - CharParser.FieldStart), Pool);
+
+            if (!Reader.IsEof)
+            {
+                Buffer = Reader.Read();
+                bufferSize = Buffer.Length;
+                span = Buffer.Span;
+                eof = bufferSize == 0;
+                index = 0;
+                if (!eof)
+                    CharParser.Reset();
+            }
+            else
+            {
+                bufferSize = 0;
+                eof = true;
+            }
         }
     }
 
