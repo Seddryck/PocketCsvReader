@@ -12,8 +12,6 @@ internal class AfterQuoteCharParser : IInternalCharParser
     public AfterQuoteCharParser(CharParser parser)
         => Parser = parser;
 
-    public void Initialize()
-    { }
 
     public virtual ParserState Parse(char c)
     {

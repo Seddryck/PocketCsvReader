@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
@@ -48,14 +49,14 @@ public class CharParser
         Internal = FirstCharOfRecord;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ParserState Parse(char c)
     {
-        Internal.Initialize();
         Position++;
-        var state = Internal.Parse(c);
-        return state;
+        return Internal.Parse(c);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset()
     {
         Position = Internal == LineTerminator && LineTerminator is LineTerminatorParser parser
@@ -82,21 +83,28 @@ public class CharParser
         return ParserState.Error;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ZeroField()
         => (FieldStart, FieldLength) = (Position, 0);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldStart()
         => (FieldStart, FieldLength) = (Position, 1);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldEnd(int i)
         => (FieldLength) = (Position - FieldStart + 1 + i);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldEnd()
         => SetFieldEnd(0);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ResetFieldState()
         => IsQuotedField = IsEscapedField = false;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetQuotedField()
         => IsQuotedField = true;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetEscapedField()
         => IsEscapedField = true;
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Switch(IInternalCharParser parser)
         => Internal = parser;
 }

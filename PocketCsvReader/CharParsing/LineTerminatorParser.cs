@@ -22,9 +22,6 @@ internal class LineTerminatorParser : IInternalCharParser
     private bool IsLast()
         => Index == _length;
 
-    public void Initialize()
-    { }
-
     public ParserState Parse(char c)
     {
         if (c == Parser.Profile.Descriptor.LineTerminator[Index])

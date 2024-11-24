@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{0A83AC1A
 		Directory.Build.targets = Directory.Build.targets
 		github.ps1 = github.ps1
 		GitVersion.yml = GitVersion.yml
+		nuget-download-package-version.ps1 = nuget-download-package-version.ps1
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{467AF34F-9111-4D0C-8957-8CEA46E7883E}"
@@ -42,6 +43,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Packaging", "Packaging", "{
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PocketCsvReader.Benchmark", "PocketCsvReader.Benchmark\PocketCsvReader.Benchmark.csproj", "{0E69FA85-7E85-41F8-BF17-AE27E8472B04}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Profiler", "PocketCsvReader.Profiler\PocketCsvReader.Profiler.csproj", "{AF5684EA-625E-4AE4-B355-E906590506BB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,6 +63,10 @@ Global
 		{0E69FA85-7E85-41F8-BF17-AE27E8472B04}.Debug|Any CPU.Build.0 = Release|Any CPU
 		{0E69FA85-7E85-41F8-BF17-AE27E8472B04}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0E69FA85-7E85-41F8-BF17-AE27E8472B04}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF5684EA-625E-4AE4-B355-E906590506BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF5684EA-625E-4AE4-B355-E906590506BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF5684EA-625E-4AE4-B355-E906590506BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF5684EA-625E-4AE4-B355-E906590506BB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

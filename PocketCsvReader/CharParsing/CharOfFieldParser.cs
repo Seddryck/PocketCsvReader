@@ -8,22 +8,25 @@ namespace PocketCsvReader.CharParsing;
 internal class CharOfFieldParser : IInternalCharParser
 {
     protected CharParser Parser { get; set; }
+    private char FirstCharOfLineTerminator { get; set; }
+    private char Delimiter { get; set; }
+    private char EscapeChar { get; set; }
 
     public CharOfFieldParser(CharParser parser)
-        => Parser = parser;
-    public void Initialize()
-    { }
+        => (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
+                = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.Delimiter
+                    , parser.Profile.Descriptor.EscapeChar);
 
     public virtual ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.Delimiter)
+        if (c == Delimiter)
         {
             Parser.SetFieldEnd(-1);
             Parser.Switch(Parser.FirstCharOfField);
             return ParserState.Field;
         }
 
-        if (c == Parser.Profile.Descriptor.LineTerminator[0])
+        if (c == FirstCharOfLineTerminator)
         {
             Parser.SetFieldEnd(-1);
             Parser.Switch(Parser.LineTerminator);

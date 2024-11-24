@@ -7,6 +7,5 @@ using System.Threading.Tasks;
 namespace PocketCsvReader;
 public interface IInternalCharParser
 {
-    void Initialize();
     ParserState Parse(char c);
 }

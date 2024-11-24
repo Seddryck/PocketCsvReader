@@ -37,7 +37,7 @@ public class RecordParser : IDisposable
         var index = 0;
         var eof = false;
         var fields = new List<string?>();
-        Span<char> longSpan = stackalloc char[0];
+        var longSpan = Span<char>.Empty;
 
         if (Buffer.Length == 0)
         {
@@ -60,11 +60,6 @@ public class RecordParser : IDisposable
         while (!eof && index < bufferSize)
         {
             char c = span[index];
-            if (c == '\0')
-            {
-                eof = true;
-                break;
-            }
             var state = CharParser.Parse(c);
 
             if (state == ParserState.Field || state == ParserState.Record)
@@ -86,16 +81,7 @@ public class RecordParser : IDisposable
             if (++index == bufferSize)
             {
                 if (state == ParserState.Continue)
-                {
-                    var newLength = longSpan.Length + bufferSize - CharParser.FieldStart;
-                    var newArray = Pool?.Rent(newLength) ?? new char[newLength];
-                    var newSpan = newArray.AsSpan().Slice(0, newLength);
-                    longSpan.CopyTo(newSpan);
-                    var remaining = span.Slice(CharParser.FieldStart, bufferSize - CharParser.FieldStart);
-                    remaining.CopyTo(newSpan.Slice(longSpan.Length));
-                    longSpan = newSpan.Slice(0, newLength);
-                    Pool?.Return(newArray);
-                }
+                    longSpan = longSpan.Concat(span.Slice(CharParser.FieldStart, bufferSize - CharParser.FieldStart), Pool);
 
                 if (!Reader.IsEof)
                 {

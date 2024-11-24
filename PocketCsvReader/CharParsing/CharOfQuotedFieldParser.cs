@@ -11,8 +11,6 @@ internal class CharOfQuotedFieldParser : IInternalCharParser
 
     public CharOfQuotedFieldParser(CharParser parser)
         => Parser = parser;
-    public void Initialize()
-    { }
 
     public virtual ParserState Parse(char c)
     {
