@@ -6,25 +6,41 @@ using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
 
-internal class FirstCharOfFieldParser : IInternalCharParser
+internal class FirstCharOfFieldLookupParser : IInternalCharParser
 {
     protected CharParser Parser { get; set; }
-
+    protected readonly bool[] InterestingChars;
     private char FirstCharOfLineTerminator { get; set; }
     private char QuoteChar { get; set; }
     private char Delimiter { get; set; }
     private bool IsSkipInitialSpace { get; set; }
     private char EscapeChar { get; set; }
 
-    public FirstCharOfFieldParser(CharParser parser)
-        => (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
+    public FirstCharOfFieldLookupParser(CharParser parser)
+    {
+        (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
                 = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.QuoteChar
                     , parser.Profile.Descriptor.Delimiter, parser.Profile.Descriptor.SkipInitialSpace
                     , parser.Profile.Descriptor.EscapeChar);
 
+        InterestingChars = new bool[char.MaxValue + 1];
+        InterestingChars[Delimiter] = true;
+        InterestingChars[FirstCharOfLineTerminator] = true;
+        InterestingChars[EscapeChar] = true;
+        InterestingChars[QuoteChar] = true;
+        InterestingChars[' '] = IsSkipInitialSpace;
+    }
+
     public virtual ParserState Parse(char c)
     {
         Parser.ResetFieldState();
+
+        if (!InterestingChars[c])
+        {
+            Parser.SetFieldStart();
+            Parser.Switch(Parser.CharOfField);
+            return ParserState.Continue;
+        }
 
         if (c == QuoteChar)
         {
@@ -50,14 +66,13 @@ internal class FirstCharOfFieldParser : IInternalCharParser
             return ParserState.Continue;
         }
 
+
         if (c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;
         }
 
-        Parser.SetFieldStart();
-        Parser.Switch(Parser.CharOfField);
-        return ParserState.Continue;
+        throw new InvalidOperationException("Unexpected character");
     }
 }

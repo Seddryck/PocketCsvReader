@@ -35,7 +35,7 @@ public class FieldParserTest
     }
 
     [Test]
-    [TestCase("(null)", null)] //Parse (null) to a real null value
+    [TestCase("(null)", null)] //InternalParse (null) to a real null value
     public void ReadField_Null_CorrectString(string item, string result)
     {
         Span<char> buffer = stackalloc char[64];

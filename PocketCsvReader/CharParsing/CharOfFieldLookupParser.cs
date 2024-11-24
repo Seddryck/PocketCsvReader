@@ -5,20 +5,31 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-internal class CharOfFieldParser : IInternalCharParser
+internal class CharOfFieldLookupParser : IInternalCharParser
 {
     protected CharParser Parser { get; set; }
+    protected readonly bool[] InterestingChars;
     private char FirstCharOfLineTerminator { get; set; }
     private char Delimiter { get; set; }
     private char EscapeChar { get; set; }
 
-    public CharOfFieldParser(CharParser parser)
-        => (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
-                = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.Delimiter
-                    , parser.Profile.Descriptor.EscapeChar);
+    public CharOfFieldLookupParser(CharParser parser)
+    {
+        (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
+                    = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.Delimiter
+                        , parser.Profile.Descriptor.EscapeChar);
+
+        InterestingChars = new bool[char.MaxValue + 1];
+        InterestingChars[Delimiter] = true;
+        InterestingChars[FirstCharOfLineTerminator] = true;
+        InterestingChars[EscapeChar] = true;
+    }
 
     public virtual ParserState Parse(char c)
     {
+        if (!InterestingChars[c])
+            return ParserState.Continue;
+
         if (c == Delimiter)
         {
             Parser.SetFieldEnd(-1);
@@ -41,6 +52,7 @@ internal class CharOfFieldParser : IInternalCharParser
             return ParserState.Continue;
         }
 
-        return ParserState.Continue;
+        throw new InvalidOperationException("Unexpected character");
     }
 }
+

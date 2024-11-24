@@ -15,6 +15,8 @@ public class FieldParser
     protected ArrayPool<char>? Pool { get; }
 
     protected PoolString FetchString { get; }
+    protected bool HandlesSpecialValues { get; }
+    protected bool UnescapesChars { get; }
 
     private static readonly PoolString defaultPoolString = (ReadOnlySpan<char> span) => span.ToString();
 
@@ -22,7 +24,9 @@ public class FieldParser
         : this(profile, ArrayPool<char>.Shared) { }
 
     public FieldParser(CsvProfile profile, ArrayPool<char>? pool, PoolString? fetchString = null)
-        => (Profile, Pool, FetchString) = (profile, pool, profile.ParserOptimizations.PoolString ?? defaultPoolString);
+        => (Profile, Pool, FetchString, HandlesSpecialValues, UnescapesChars)
+            = (profile, pool, profile.ParserOptimizations.PoolString ?? defaultPoolString
+                , profile.ParserOptimizations.HandleSpecialValues, profile.ParserOptimizations.UnescapeChars);
 
     public string? ReadField(ReadOnlySpan<char> buffer, int start, int length, bool isEscapedField, bool wasQuotedField)
         => ReadField(Span<char>.Empty, buffer, start, length, isEscapedField, wasQuotedField);
@@ -31,41 +35,36 @@ public class FieldParser
     {
         ReadOnlySpan<char> fieldSpan;
         if (longSpan.Length > 0 && length>=0)
-        {
-            var newSize = longSpan.Length + length;
-            var newArray = Pool?.Rent(newSize) ?? new char[newSize];
-            longSpan.CopyTo(newArray);
-            buffer.Slice(start, length).ToArray().CopyTo(newArray, longSpan.Length);
-            fieldSpan = newArray;
-            fieldSpan = fieldSpan.Slice(0, newSize);
-            Pool?.Return(newArray);
-        }
+            fieldSpan = longSpan.Concat(buffer.Slice(start, length));
         else if (longSpan.Length > 0 && length < 0)
             fieldSpan = longSpan.Slice(0, longSpan.Length + length);
         else
             fieldSpan = buffer.Slice(start, length);
-        return ReadField(fieldSpan, isEscapedField, wasQuotedField);
+        return ExtractField(fieldSpan, isEscapedField, wasQuotedField);
     }
 
-    public string? ReadField(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
+    public string? ExtractField(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
     {
-        if (Profile.ParserOptimizations.HandleSpecialValues && buffer.Length == 0)
-            return Profile.EmptyCell;
-        else if (Profile.ParserOptimizations.HandleSpecialValues && !isEscapedField && !wasQuotedField)
-        {
-            var strField = FetchString(buffer);
-            if (Profile.Sequences.TryGetValue(strField, out var value))
-                return value;
-            return strField;
+        if (HandlesSpecialValues)
+        { 
+            if (buffer.Length == 0)
+                return Profile.EmptyCell;
+            else if (!isEscapedField && !wasQuotedField)
+            {
+                var strField = FetchString(buffer);
+                if (Profile.Sequences.TryGetValue(strField, out var value))
+                    return value;
+                return strField;
+            }
         }
 
-        if (Profile.ParserOptimizations.UnescapeChars && isEscapedField)
+        if (UnescapesChars && isEscapedField)
         {
             var span = UnescapeField(buffer);
             return FetchString(span);
         }
-        else
-            return FetchString(buffer);
+
+        return FetchString(buffer);
     }
 
     private ReadOnlySpan<char> UnescapeField(ReadOnlySpan<char> value)
