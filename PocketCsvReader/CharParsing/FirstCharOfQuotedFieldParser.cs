@@ -26,6 +26,7 @@ internal class FirstCharOfQuotedFieldParser : IInternalCharParser
             return ParserState.Continue;
         }
 
+
         if (c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeCharQuotedField);

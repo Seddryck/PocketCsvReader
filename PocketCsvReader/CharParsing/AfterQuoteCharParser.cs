@@ -12,7 +12,6 @@ internal class AfterQuoteCharParser : IInternalCharParser
     public AfterQuoteCharParser(CharParser parser)
         => Parser = parser;
 
-
     public virtual ParserState Parse(char c)
     {
         if (c == Parser.Profile.Descriptor.Delimiter)

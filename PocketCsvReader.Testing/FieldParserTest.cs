@@ -56,7 +56,7 @@ public class FieldParserTest
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
         var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, false, true);
+        var value = reader.ReadField(buffer, 0, item.Length, false, false);
         Assert.That(value, Is.EqualTo(result));
     }
 

@@ -9,6 +9,7 @@ namespace PocketCsvReader.CharParsing;
 internal class FirstCharOfFieldParser : IInternalCharParser
 {
     protected CharParser Parser { get; set; }
+
     private char FirstCharOfLineTerminator { get; set; }
     private char QuoteChar { get; set; }
     private char Delimiter { get; set; }
@@ -32,6 +33,7 @@ internal class FirstCharOfFieldParser : IInternalCharParser
             return ParserState.Continue;
         }
 
+
         if (c == ' ' && IsSkipInitialSpace)
             return ParserState.Continue;
 
@@ -42,12 +44,14 @@ internal class FirstCharOfFieldParser : IInternalCharParser
             return ParserState.Field;
         }
 
+
         if (c == FirstCharOfLineTerminator)
         {
             Parser.ZeroField();
             Parser.Switch(Parser.LineTerminator);
             return ParserState.Continue;
         }
+
 
         if (c == EscapeChar)
         {
