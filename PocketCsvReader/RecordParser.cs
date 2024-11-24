@@ -234,7 +234,7 @@ public class RecordParser : IDisposable
     public virtual string[] ReadHeaders()
     {
         var unnamedFieldIndex = -1;
-        if (ReadNextRecord(out var fields))
+        ReadNextRecord(out var fields);
         return fields.Select(value =>
                 {
                     unnamedFieldIndex++;
@@ -242,8 +242,6 @@ public class RecordParser : IDisposable
                         ? $"field_{unnamedFieldIndex}"
                         : value!;
                 }).ToArray();
-        else
-            throw new InvalidOperationException("Headers are not available.");
     }
 
     public void Dispose()
