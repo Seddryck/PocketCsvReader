@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
@@ -36,7 +37,9 @@ public class CharParser
         Profile = profile;
         FirstCharOfRecord = new FirstCharOfRecordParser(this).Parse;
         FirstCharOfQuotedField = new FirstCharOfQuotedFieldParser(this).Parse;
-        FirstCharOfField = new FirstCharOfFieldParser(this).Parse;
+        FirstCharOfField = Profile.ParserOptimizations.LookupTableChar
+            ? new FirstCharOfFieldLookupParser(this).Parse
+            : new FirstCharOfFieldParser(this).Parse;
         LineTerminatorParser = Profile.Descriptor.LineTerminator.Length == 1
             ? new FirstCharOfRecordParser(this)
             : new LineTerminatorParser(this, Profile.Descriptor.LineTerminator.Length);
