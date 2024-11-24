@@ -66,10 +66,9 @@ public class CsvArrayString : IDisposable
         if (IsEof)
             return null;
 
-        string?[]? values;
-        (values, IsEof) = RecordParser!.ReadNextRecord();
+        IsEof = RecordParser!.ReadNextRecord(out var values);
 
-        if (IsEof && values!.Length == 0)
+        if (IsEof && values.Length == 0)
         {
             values = null;
             Extra = null;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -55,7 +56,8 @@ public class CsvDataReader : IDataReader
         if (IsEof)
             return false;
 
-        (Values, IsEof) = RecordParser!.ReadNextRecord();
+        IsEof = RecordParser!.ReadNextRecord(out var values);
+        Values = values;
         if (IsEof && Values!.Length == 0)
         {
             Values = null;
@@ -67,7 +69,8 @@ public class CsvDataReader : IDataReader
 
         if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
         {
-            (Values, IsEof) = RecordParser.ReadNextRecord();
+            IsEof = RecordParser.ReadNextRecord(out values);
+            Values = values;
             if (IsEof && Values!.Length == 0)
             {
                 Values = null;

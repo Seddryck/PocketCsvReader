@@ -20,7 +20,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, eof) = reader.ReadNextRecord();
+        var eof = reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo("foo"));
     }
@@ -34,7 +34,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        (var values, var _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
             Assert.That(values[i], Is.EqualTo(tokens[i]));
@@ -49,7 +49,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        (var values, var _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
             Assert.That(values[i], Is.EqualTo(tokens[i]));
@@ -66,7 +66,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         Assert.Throws<InvalidDataException>(() =>
         {
-            reader.ReadNextRecord();
+            reader.ReadNextRecord(out var values);
         });
     }
 
@@ -91,7 +91,7 @@ public class RecordParserTest
         var profile = new CsvProfile(
             new CsvDialectDescriptor() { Delimiter=';', QuoteChar='\'', DoubleQuote=true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        (var values, var _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values[0], Is.EqualTo(firstToken));
         Assert.That(values[1], Is.EqualTo("xyz"));
     }
@@ -106,7 +106,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo(expected));
     }
@@ -121,7 +121,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', escapeTextQualifier, "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo("fo'o"));
     }
@@ -136,7 +136,7 @@ public class RecordParserTest
                 new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote=true }
             );
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
         Assert.That(values.First(), Is.EqualTo("fo'o"));
     }
@@ -157,7 +157,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(3));
         Assert.That(values[2], Is.EqualTo(thirdToken));
     }
@@ -169,7 +169,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(new CsvDialectDescriptor() {Delimiter=';', NullSequence="(null)" });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var (values, eof) = reader.ReadNextRecord();
+        var eof = reader.ReadNextRecord(out var values);
         Assert.That(eof, Is.True);
         Assert.That(values, Has.Length.EqualTo(2));
         Assert.That(values[1], Is.Null);
@@ -204,7 +204,7 @@ public class RecordParserTest
             using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
-                var (values, _) = reader.ReadNextRecord();
+                reader.ReadNextRecord(out var values);
                 Assert.That(values, Has.Length.GreaterThan(0));
                 foreach (var value in values)
                     Assert.That(value, Is.EqualTo("abc"));
@@ -227,7 +227,7 @@ public class RecordParserTest
         profile.Descriptor.SkipInitialSpace = true;
         using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
         using var streamReader = new StreamReader(stream);
-        var (values, _) = reader.ReadNextRecord();
+        reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(2));
         Assert.That(values[0], Is.EqualTo("foo"));
         Assert.That(values[1], Is.EqualTo("bar"));
@@ -300,14 +300,14 @@ public class RecordParserTest
         for (int i = 0; i < result; i++)
         {
             if (i<result-1)
-                Assert.That(reader.ReadNextRecord().eof, Is.False);
+                Assert.That(reader.ReadNextRecord(out var _), Is.False);
             else
             {
-                var (values, eof) = reader.ReadNextRecord();
+                var eof = reader.ReadNextRecord(out var values);
                 if (values is not null)
                     Assert.Pass();
                 if (!eof)
-                    Assert.That(reader.ReadNextRecord().eof, Is.True);
+                    Assert.That(reader.ReadNextRecord(out var _), Is.True);
             }
         }
     }

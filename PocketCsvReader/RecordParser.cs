@@ -33,11 +33,11 @@ public class RecordParser : IDisposable
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
         => (Profile, Reader, FieldParser, CharParser) = (profile, buffer, new FieldParser(profile, pool ?? ArrayPool<char>.Shared), new(profile));
 
-    public virtual (string?[] fields, bool eof) ReadNextRecord()
+    public virtual bool ReadNextRecord(out string?[] fields)
     {
         var index = 0;
         var eof = false;
-        var fields = new List<string?>(FieldsCount ?? 20);
+        var listFields = new List<string?>(FieldsCount ?? 20);
         var longSpan = Span<char>.Empty;
 
         if (Buffer.Length == 0)
@@ -57,15 +57,16 @@ public class RecordParser : IDisposable
             if (state == ParserState.Field || state == ParserState.Record)
             {
                 // InternalParse field and reset longSpan
-                fields.Add(FieldParser.ReadField(longSpan, span, CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
+                listFields.Add(FieldParser.ReadField(longSpan, span, CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
                 longSpan = Span<char>.Empty;
 
                 if (state == ParserState.Record)
                 {
                     CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
-                    FieldsCount ??= fields.Count;
-                    return (fields.ToArray(), false);
+                    FieldsCount ??= listFields.Count;
+                    fields = [.. listFields];
+                    return false;
                 }
             }
             else if (state == ParserState.Error)
@@ -99,10 +100,12 @@ public class RecordParser : IDisposable
         switch (CharParser.ParseEof())
         {
             case ParserState.Record:
-                fields.Add(FieldParser.ReadField(longSpan, 0, longSpan.Length + CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
-                return (fields.ToArray(), true);
+                listFields.Add(FieldParser.ReadField(longSpan, 0, longSpan.Length + CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
+                fields = [.. listFields];
+                return true;
             case ParserState.Eof:
-                return ([], true);
+                fields = [];
+                return true;
             case ParserState.Error:
                 throw new InvalidDataException($"Invalid character End-of-File.");
             default:
@@ -231,14 +234,16 @@ public class RecordParser : IDisposable
     public virtual string[] ReadHeaders()
     {
         var unnamedFieldIndex = -1;
-        return ReadNextRecord().fields
-                .Select(value =>
+        if (ReadNextRecord(out var fields))
+        return fields.Select(value =>
                 {
                     unnamedFieldIndex++;
                     return string.IsNullOrWhiteSpace(value) || !Profile.Descriptor.Header
                         ? $"field_{unnamedFieldIndex}"
                         : value!;
                 }).ToArray();
+        else
+            throw new InvalidOperationException("Headers are not available.");
     }
 
     public void Dispose()
