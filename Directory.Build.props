@@ -1,8 +1,10 @@
 <Project>
 	<PropertyGroup>
-		<!-- By default every projects are packable except Testing projects-->
+		<!-- By default every projects are packable except Testing, Benchmark, Profiler projects-->
 		<IsPackable>true</IsPackable>
 		<IsPackable Condition="$(MSBuildProjectName.EndsWith('Testing'))">false</IsPackable>
+        <IsPackable Condition="$(MSBuildProjectName.EndsWith('Benchmark'))">false</IsPackable>
+        <IsPackable Condition="$(MSBuildProjectName.EndsWith('Profiler'))">false</IsPackable>
 		<DebugType>portable</DebugType>
 	</PropertyGroup>
 

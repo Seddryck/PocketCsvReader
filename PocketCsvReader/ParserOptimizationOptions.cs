@@ -14,5 +14,6 @@ public record ParserOptimizationOptions
     bool ExtendIncompleteRecords = true,
     bool ReadAhead = true,
     int BufferSize = 4096,
-    PoolString? PoolString = null
+    PoolString? PoolString = null,
+    bool LookupTableChar = true
 ) { }

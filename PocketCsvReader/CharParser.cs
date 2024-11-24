@@ -16,36 +16,42 @@ public class CharParser
     public bool IsEscapedField { get; private set; } = false;
     public CsvProfile Profile { get; }
 
-    public IInternalCharParser Internal { get; private set; } = null!;
+    internal delegate ParserState InternalParse(char c);
+    internal InternalParse Internal { get; private set; }
 
-    internal FirstCharOfRecordParser FirstCharOfRecord { get; }
-    internal FirstCharOfFieldParser FirstCharOfField { get; }
-    internal FirstCharOfQuotedFieldParser FirstCharOfQuotedField { get; }
-    internal CharOfFieldParser CharOfField { get; }
-    internal CharOfQuotedFieldParser CharOfQuotedField { get; }
-    internal IInternalCharParser LineTerminator { get; }
-    internal CommentParser Comment { get; }
-    internal AfterQuoteCharParser AfterQuoteChar { get; }
-    internal AfterEscapeCharQuotedFieldParser AfterEscapeCharQuotedField { get; }
-    internal AfterEscapeCharParser AfterEscapeChar { get; }
+    internal IInternalCharParser LineTerminatorParser { get; }
+
+    internal InternalParse FirstCharOfRecord { get; }
+    internal InternalParse FirstCharOfField { get; }
+    internal InternalParse FirstCharOfQuotedField { get; }
+    internal InternalParse CharOfField { get; }
+    internal InternalParse CharOfQuotedField { get; }
+    internal InternalParse LineTerminator { get; }
+    internal InternalParse Comment { get; }
+    internal InternalParse AfterQuoteChar { get; }
+    internal InternalParse AfterEscapeCharQuotedField { get; }
+    internal InternalParse AfterEscapeChar { get; }
 
     public CharParser(CsvProfile profile)
     {
         Profile = profile;
-        FirstCharOfRecord = new FirstCharOfRecordParser(this);
-        FirstCharOfQuotedField = new FirstCharOfQuotedFieldParser(this);
-        FirstCharOfField = new FirstCharOfFieldParser(this);
-        LineTerminator = Profile.Descriptor.LineTerminator.Length == 1
+        FirstCharOfRecord = new FirstCharOfRecordParser(this).Parse;
+        FirstCharOfQuotedField = new FirstCharOfQuotedFieldParser(this).Parse;
+        FirstCharOfField = new FirstCharOfFieldParser(this).Parse;
+        LineTerminatorParser = Profile.Descriptor.LineTerminator.Length == 1
             ? new FirstCharOfRecordParser(this)
             : new LineTerminatorParser(this, Profile.Descriptor.LineTerminator.Length);
-        Comment = new CommentParser(this, Profile.Descriptor.LineTerminator.Length);
-        CharOfField = new CharOfFieldParser(this);
-        CharOfQuotedField = new CharOfQuotedFieldParser(this);
+        LineTerminator = LineTerminatorParser.Parse;
+        Comment = new CommentParser(this, Profile.Descriptor.LineTerminator.Length).Parse;
+        CharOfField = Profile.ParserOptimizations.LookupTableChar
+            ? new CharOfFieldLookupParser(this).Parse
+            : new CharOfFieldParser(this).Parse;
+        CharOfQuotedField = new CharOfQuotedFieldParser(this).Parse;
         AfterQuoteChar = Profile.Descriptor.DoubleQuote
-            ? new AfterQuoteCharDoubleParser(this)
-            : new AfterQuoteCharParser(this);
-        AfterEscapeCharQuotedField = new AfterEscapeCharQuotedFieldParser(this);
-        AfterEscapeChar = new AfterEscapeCharParser(this);
+            ? new AfterQuoteCharDoubleParser(this).Parse
+            : new AfterQuoteCharParser(this).Parse;
+        AfterEscapeCharQuotedField = new AfterEscapeCharQuotedFieldParser(this).Parse;
+        AfterEscapeChar = new AfterEscapeCharParser(this).Parse;
         Internal = FirstCharOfRecord;
     }
 
@@ -53,13 +59,13 @@ public class CharParser
     public ParserState Parse(char c)
     {
         Position++;
-        return Internal.Parse(c);
+        return Internal.Invoke(c);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset()
     {
-        Position = Internal == LineTerminator && LineTerminator is LineTerminatorParser parser
+        Position = Internal == LineTerminator && LineTerminatorParser is LineTerminatorParser parser
             ? FieldStart + FieldLength - Position - parser.Index - 1
             : -1;
         FieldStart = FieldLength = 0;
@@ -105,8 +111,8 @@ public class CharParser
     internal void SetEscapedField()
         => IsEscapedField = true;
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Switch(IInternalCharParser parser)
-        => Internal = parser;
+    internal void Switch(InternalParse parse)
+        => Internal = parse;
 }
 
 public enum ParserState

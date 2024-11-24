@@ -16,6 +16,8 @@ public class RecordParser : IDisposable
     protected ReadOnlyMemory<char> Buffer { get; private set; }
     protected ArrayPool<char>? Pool { get; }
 
+    private int? FieldsCount { get; set; }
+
     public RecordParser(StreamReader reader, CsvProfile profile)
         : this(reader, profile, ArrayPool<char>.Shared)
     { }
@@ -35,7 +37,7 @@ public class RecordParser : IDisposable
     {
         var index = 0;
         var eof = false;
-        var fields = new List<string?>();
+        var fields = new List<string?>(FieldsCount ?? 20);
         var longSpan = Span<char>.Empty;
 
         if (Buffer.Length == 0)
@@ -54,7 +56,7 @@ public class RecordParser : IDisposable
             var state = CharParser.Parse(c);
             if (state == ParserState.Field || state == ParserState.Record)
             {
-                // Parse field and reset longSpan
+                // InternalParse field and reset longSpan
                 fields.Add(FieldParser.ReadField(longSpan, span, CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
                 longSpan = Span<char>.Empty;
 
@@ -62,6 +64,7 @@ public class RecordParser : IDisposable
                 {
                     CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
+                    FieldsCount ??= fields.Count;
                     return (fields.ToArray(), false);
                 }
             }
@@ -104,31 +107,6 @@ public class RecordParser : IDisposable
                 throw new InvalidDataException($"Invalid character End-of-File.");
             default:
                 throw new InvalidOperationException($"Invalid state at end-of-file.");
-        }
-    }
-
-    private void MoveNextBuffer(ref int index, ref bool eof, ref Span<char> longSpan, ref ReadOnlySpan<char> span, ref int bufferSize, ParserState state)
-    {
-        if (++index == bufferSize)
-        {
-            if (state == ParserState.Continue)
-                longSpan = longSpan.Concat(span.Slice(CharParser.FieldStart, bufferSize - CharParser.FieldStart), Pool);
-
-            if (!Reader.IsEof)
-            {
-                Buffer = Reader.Read();
-                bufferSize = Buffer.Length;
-                span = Buffer.Span;
-                eof = bufferSize == 0;
-                index = 0;
-                if (!eof)
-                    CharParser.Reset();
-            }
-            else
-            {
-                bufferSize = 0;
-                eof = true;
-            }
         }
     }
 
