@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace PocketCsvReader;
 
 public delegate string PoolString(ReadOnlySpan<char> memory);
 
-public class FieldParser
+public class ArrayOfStringMapper
 {
     protected internal CsvProfile Profile { get; private set; }
     protected ArrayPool<char>? Pool { get; }
@@ -20,30 +21,27 @@ public class FieldParser
 
     private static readonly PoolString defaultPoolString = (ReadOnlySpan<char> span) => span.ToString();
 
-    public FieldParser(CsvProfile profile)
+    public ArrayOfStringMapper(CsvProfile profile)
         : this(profile, ArrayPool<char>.Shared) { }
 
-    public FieldParser(CsvProfile profile, ArrayPool<char>? pool, PoolString? fetchString = null)
+    public ArrayOfStringMapper(CsvProfile profile, ArrayPool<char>? pool)
         => (Profile, Pool, FetchString, HandlesSpecialValues, UnescapesChars)
             = (profile, pool, profile.ParserOptimizations.PoolString ?? defaultPoolString
                 , profile.ParserOptimizations.HandleSpecialValues, profile.ParserOptimizations.UnescapeChars);
 
-    public string? ReadField(ReadOnlySpan<char> buffer, int start, int length, bool isEscapedField, bool wasQuotedField)
-        => ReadField(Span<char>.Empty, buffer, start, length, isEscapedField, wasQuotedField);
-
-    public string? ReadField(ReadOnlySpan<char> longSpan, ReadOnlySpan<char> buffer, int start, int length, bool isEscapedField, bool wasQuotedField)
+    public string?[] Map(ReadOnlySpan<char> span, IEnumerable<FieldSpan> fieldSpans)
     {
-        ReadOnlySpan<char> fieldSpan;
-        if (longSpan.Length > 0 && length>=0)
-            fieldSpan = longSpan.Concat(buffer.Slice(start, length));
-        else if (longSpan.Length > 0 && length < 0)
-            fieldSpan = longSpan.Slice(0, longSpan.Length + length);
-        else
-            fieldSpan = buffer.Slice(start, length);
-        return ExtractField(fieldSpan, isEscapedField, wasQuotedField);
+        var fields = new string?[fieldSpans.Count()];
+        var index = 0;
+        foreach (var fieldSpan in fieldSpans)
+            fields[index++] = Map(span, fieldSpan);
+        return fields;
     }
 
-    public string? ExtractField(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
+    public string? Map(ReadOnlySpan<char> span, FieldSpan fieldSpan)
+        => ExtractField(span.Slice(fieldSpan.Start, fieldSpan.Length), fieldSpan.IsEscaped, fieldSpan.WasQuoted);
+
+    protected internal string? ExtractField(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
     {
         if (HandlesSpecialValues)
         { 

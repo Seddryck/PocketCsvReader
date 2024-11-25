@@ -10,11 +10,11 @@ namespace PocketCsvReader;
 public class RecordParser : IDisposable
 {
     public CsvProfile Profile { get; }
-    protected FieldParser FieldParser { get; }
     protected CharParser CharParser { get; }
     protected IBufferReader Reader { get; }
     protected ReadOnlyMemory<char> Buffer { get; private set; }
     protected ArrayPool<char>? Pool { get; }
+    protected SpanMapper<string?[]> SpanMapper { get; }
 
     private int? FieldsCount { get; set; }
 
@@ -31,13 +31,13 @@ public class RecordParser : IDisposable
     { }
 
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        => (Profile, Reader, FieldParser, CharParser) = (profile, buffer, new FieldParser(profile, pool ?? ArrayPool<char>.Shared), new(profile));
+        => (Profile, Reader, SpanMapper, CharParser) = (profile, buffer, new ArrayOfStringMapper(profile, pool ?? ArrayPool<char>.Shared).Map, new(profile));
 
     public virtual bool ReadNextRecord(out string?[] fields)
     {
         var index = 0;
         var eof = false;
-        var listFields = new List<string?>(FieldsCount ?? 20);
+        var fieldSpans = new List<FieldSpan>(FieldsCount ?? 20);
         var longSpan = Span<char>.Empty;
 
         if (Buffer.Length == 0)
@@ -56,16 +56,14 @@ public class RecordParser : IDisposable
             var state = CharParser.Parse(c);
             if (state == ParserState.Field || state == ParserState.Record)
             {
-                // InternalParse field and reset longSpan
-                listFields.Add(FieldParser.ReadField(longSpan, span, CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
-                longSpan = Span<char>.Empty;
+                fieldSpans.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
 
                 if (state == ParserState.Record)
                 {
                     CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
-                    FieldsCount ??= listFields.Count;
-                    fields = [.. listFields];
+                    FieldsCount ??= fieldSpans.Count;
+                    fields = SpanMapper.Invoke(longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span, fieldSpans);
                     return false;
                 }
             }
@@ -75,8 +73,8 @@ public class RecordParser : IDisposable
             // Handle continuation for fields spanning multiple buffers
             if (++index == bufferSize)
             {
-                if (state == ParserState.Continue)
-                    longSpan = longSpan.Concat(span.Slice(CharParser.FieldStart, bufferSize - CharParser.FieldStart), Pool);
+                if (state == ParserState.Continue || state == ParserState.Field)
+                    longSpan = longSpan.Concat(span, Pool);
 
                 if (!Reader.IsEof)
                 {
@@ -85,8 +83,6 @@ public class RecordParser : IDisposable
                     span = Buffer.Span;
                     eof = bufferSize == 0;
                     index = 0;
-                    if (!eof)
-                        CharParser.Reset();
                 }
                 else
                 {
@@ -96,12 +92,11 @@ public class RecordParser : IDisposable
             }
         }
 
-        CharParser.Reset();
         switch (CharParser.ParseEof())
         {
             case ParserState.Record:
-                listFields.Add(FieldParser.ReadField(longSpan, 0, longSpan.Length + CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
-                fields = [.. listFields];
+                fieldSpans.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
+                fields = SpanMapper.Invoke(longSpan.Length > 0 ? (ReadOnlySpan<char>)longSpan.Concat(span) : span, fieldSpans);
                 return true;
             case ParserState.Eof:
                 fields = [];
