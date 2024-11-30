@@ -16,8 +16,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, item.Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, item.Length, false, false));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -29,8 +29,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "?", "(null)");
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, 0, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, 0, false, false));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -42,8 +42,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, item.Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, item.Length, false, false));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -55,8 +55,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, false, true);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, true));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -70,8 +70,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)");
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, false));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -86,8 +86,8 @@ public class FieldParserTest
         {
             ParserOptimizations = new ParserOptimizationOptions { HandleSpecialValues = false }
         };
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, false));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -100,8 +100,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, true, true);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -115,8 +115,8 @@ public class FieldParserTest
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
         profile.ParserOptimizations = new ParserOptimizationOptions { UnescapeChars = false };
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, true, true);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -130,8 +130,8 @@ public class FieldParserTest
         item.AsSpan().CopyTo(buffer);
 
         var profile = new CsvProfile(';', '\"', '\"', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 1, item.Length - 2, true, true);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -147,8 +147,8 @@ public class FieldParserTest
         {
             ParserOptimizations = new ParserOptimizationOptions { PoolString = stringPool.GetOrAdd }
         };
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, "foo".Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, "foo".Length, false, false));
         Assert.That(value, Is.EqualTo("foo"));
     }
 
@@ -170,8 +170,8 @@ public class FieldParserTest
         {
             ParserOptimizations = new ParserOptimizationOptions { PoolString = poolString }
         };
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, "foo".Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, "foo".Length, false, false));
         Assert.That(value, Is.EqualTo("foo"));
         Assert.That(count, Is.EqualTo(1));
     }
@@ -186,8 +186,8 @@ public class FieldParserTest
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
 
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
         Assert.That(value, Is.Null);
     }
 
@@ -201,8 +201,8 @@ public class FieldParserTest
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
 
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
         Assert.That(value, Is.Not.Null);
         Assert.That(value, Is.EqualTo(field));
     }
@@ -217,8 +217,8 @@ public class FieldParserTest
         var profile = CsvProfile.CommaDoubleQuote;
         profile.Sequences.Add(sequence, map);
 
-        var reader = new FieldParser(profile);
-        var value = reader.ReadField(buffer, 0, field.Length, false, false);
+        var reader = new ArrayOfStringMapper(profile);
+        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
         Assert.That(value, Is.Not.Null);
         Assert.That(value, Is.EqualTo(map));
     }

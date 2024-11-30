@@ -122,6 +122,36 @@ namespace PocketCsvReader
             return new CsvArrayString(stream, Profile).Read();
         }
 
+        /// <summary>
+        /// Reads the specified CSV file and returns an <see cref="IDataReader"/> for iterating over its records and fields.
+        /// </summary>
+        /// <param name="filename">The name or full path of the CSV file to read.</param>
+        /// <returns>An <see cref="IDataReader"/> instance for sequentially reading each record and field in the CSV file.</returns>
+        /// <remarks>
+        /// This method provides an <see cref="IDataReader"/> for efficient, read-only, forward-only access to CSV data,
+        /// suitable for large files or cases where full file loading into memory is unnecessary.
+        /// </remarks>
+        public IEnumerable<T> To<T>(string filename, SpanMapper<T>? spanMapper = null)
+        {
+            CheckFileExists(filename);
+            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
+            return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
+        }
+
+        /// <summary>
+        /// Reads the CSV data from the provided stream and returns an <see cref="IEnumerable<T>"/> for efficient object-by-object access.
+        /// </summary>
+        /// <param name="stream">The <see cref="Stream"/> containing CSV data, positioned at the beginning of the content.</param>
+        /// <returns>An <see cref="IDataReader"/> that allows sequential access to each record and field in the CSV file.</returns>
+        /// <remarks>
+        /// This method processes the CSV data from the stream and provides an <see cref="IDataReader"/> for forward-only, read-only access,
+        /// ideal for handling large datasets without loading the entire file into memory at once.
+        /// </remarks>
+        public IEnumerable<T> To<T>(Stream stream, SpanMapper<T>? spanMapper = null)
+        {
+            return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
+        }
+
         protected virtual void CheckFileExists(string filename)
         {
             if (!File.Exists(filename))

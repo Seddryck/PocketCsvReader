@@ -146,7 +146,7 @@ public class ToDataReader
 
                 // Create a specific job for each version
                 AddJob(Job.Default
-                    .WithRuntime(CoreRuntime.Core80)
+                    .WithRuntime(CoreRuntime.Core90)
                     .WithWarmupCount(1)    // 1 warm-up iteration
                     .WithIterationCount(5) // 5 actual iterations
                 ); // Identify the job by version
