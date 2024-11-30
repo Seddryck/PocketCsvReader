@@ -22,7 +22,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         var eof = reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
-        Assert.That(values.First(), Is.EqualTo("foo"));
+        Assert.That(values!.First(), Is.EqualTo("foo"));
     }
 
     [TestCase("foo\r\n", "foo")]
@@ -37,7 +37,7 @@ public class RecordParserTest
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
-            Assert.That(values[i], Is.EqualTo(tokens[i]));
+            Assert.That(values![i], Is.EqualTo(tokens[i]));
     }
 
     [TestCase("foo", "foo")]
@@ -52,7 +52,7 @@ public class RecordParserTest
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
-            Assert.That(values[i], Is.EqualTo(tokens[i]));
+            Assert.That(values![i], Is.EqualTo(tokens[i]));
     }
 
     [Test]
@@ -92,8 +92,8 @@ public class RecordParserTest
             new CsvDialectDescriptor() { Delimiter=';', QuoteChar='\'', DoubleQuote=true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
-        Assert.That(values[0], Is.EqualTo(firstToken));
-        Assert.That(values[1], Is.EqualTo("xyz"));
+        Assert.That(values![0], Is.EqualTo(firstToken));
+        Assert.That(values![1], Is.EqualTo("xyz"));
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
-        Assert.That(values.First(), Is.EqualTo(expected));
+        Assert.That(values!.First(), Is.EqualTo(expected));
     }
 
     [Test]
@@ -123,7 +123,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
-        Assert.That(values.First(), Is.EqualTo("fo'o"));
+        Assert.That(values!.First(), Is.EqualTo("fo'o"));
     }
 
     [Test]
@@ -138,7 +138,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(1));
-        Assert.That(values.First(), Is.EqualTo("fo'o"));
+        Assert.That(values!.First(), Is.EqualTo("fo'o"));
     }
 
     [Test]
@@ -159,7 +159,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(3));
-        Assert.That(values[2], Is.EqualTo(thirdToken));
+        Assert.That(values![2], Is.EqualTo(thirdToken));
     }
 
     [Test]
@@ -172,7 +172,7 @@ public class RecordParserTest
         var eof = reader.ReadNextRecord(out var values);
         Assert.That(eof, Is.True);
         Assert.That(values, Has.Length.EqualTo(2));
-        Assert.That(values[1], Is.Null);
+        Assert.That(values![1], Is.Null);
     }
 
     [Test]
@@ -206,7 +206,7 @@ public class RecordParserTest
             {
                 reader.ReadNextRecord(out var values);
                 Assert.That(values, Has.Length.GreaterThan(0));
-                foreach (var value in values)
+                foreach (var value in values!)
                     Assert.That(value, Is.EqualTo("abc"));
             }
             writer.Dispose();
@@ -229,7 +229,7 @@ public class RecordParserTest
         using var streamReader = new StreamReader(stream);
         reader.ReadNextRecord(out var values);
         Assert.That(values, Has.Length.EqualTo(2));
-        Assert.That(values[0], Is.EqualTo("foo"));
+        Assert.That(values![0], Is.EqualTo("foo"));
         Assert.That(values[1], Is.EqualTo("bar"));
     }
 

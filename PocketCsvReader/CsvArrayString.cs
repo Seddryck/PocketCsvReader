@@ -68,7 +68,7 @@ public class CsvArrayString : IDisposable
 
         IsEof = RecordParser!.ReadNextRecord(out var values);
 
-        if (IsEof && values.Length == 0)
+        if (IsEof && (values is null || values.Length == 0))
         {
             values = null;
             Extra = null;
@@ -80,12 +80,12 @@ public class CsvArrayString : IDisposable
             int unnamedFieldIndex = 0;
             if (RecordParser.Profile.Descriptor.Header)
             {
-                Fields = values.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
+                Fields = values!.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
                 return ReadNextRecord(); // Skip header and read next record
             }
             else
             {
-                Fields = values.Select(_ => $"field_{unnamedFieldIndex++}").ToArray();
+                Fields = values!.Select(_ => $"field_{unnamedFieldIndex++}").ToArray();
             }
         }
         else
