@@ -345,9 +345,9 @@ public class RecordParserTest
 
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
-                var reader = new RecordParser(streamReader, CsvProfile.SemiColumnDoubleQuote, ArrayPool<char>.Create(256, 5));
-                var value = reader.GetFirstRecord(streamReader, recordSeparator, bufferSize);
-                Assert.That(value, Is.EqualTo("abc" + recordSeparator).Or.EqualTo("abc"));
+                var reader = new RecordParser(streamReader, new CsvProfile(',', '\\', recordSeparator, false, false, bufferSize), ArrayPool<char>.Create(256, 5));
+                var value = reader.GetFirstRecord();
+                Assert.That(value, Is.EqualTo("abc"));
             }
             writer.Dispose();
         }
@@ -368,9 +368,9 @@ public class RecordParserTest
 
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
-                var reader = new RecordParser(streamReader, CsvProfile.SemiColumnDoubleQuote);
-                var value = reader.GetFirstRecord(streamReader, recordSeparator, bufferSize);
-                Assert.That(value, Is.EqualTo("abc+abc" + recordSeparator).Or.EqualTo("abc+abc"));
+                var reader = new RecordParser(streamReader, new CsvProfile(',', '\\', recordSeparator, false, false, bufferSize));
+                var value = reader.GetFirstRecord();
+                Assert.That(value, Is.EqualTo("abc+abc"));
             }
             writer.Dispose();
         }
