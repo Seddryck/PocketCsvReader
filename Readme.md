@@ -1,14 +1,14 @@
 # PocketCsvReader
 
-![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/pocket-csv-reader.png)
+![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/assets/PocketCsvReader-icon-256.png)
 
 PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files like CSV and TSV. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface. Designed for projects requiring rapid data ingestion with minimal configuration, PocketCsvReader is a dependable solution for handling structured flat-file data effortlessly.
 
-[About][] | [Releases][] | [License][]
+[About][] | [Install][] | [Quick-start][]
 
 [About]: #about (About)
-[Releases]: #releases (Releases)
-[License]: #license (License)
+[Install]: #install (Install)
+[Quick-start]: #quick-start (Quick-start)
 
 ## About
 
@@ -62,7 +62,7 @@ Replace `<VersionNumber>` with the desired version in each of the following solu
    ```bash
    dotnet add package PocketCsvReader --version <VersionNumber>
    ```
-## Basic usage
+## Quick-start
 
 The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
 
