@@ -6,6 +6,7 @@
   list:
   - Mapper to strongly typed classes
   - Support of custom mappers
+  - Documentation
 
 - title: IDataReader support
   label:

@@ -2,7 +2,7 @@
 layout: page
 width: expand
 hero:
-    subtitle:  Adaptability with performance.`
+    subtitle:  PocketCsvReader - adaptability with performance.
     image: pocketcsvreader-title.png
     search: false
 ---
