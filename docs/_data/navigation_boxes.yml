@@ -1,0 +1,16 @@
+# Boxes include navigation
+
+- title: Why PocketCsvReader
+  desc: PocketCsvReader - Efficient and lightweight reader.
+  icon: check
+  doc: why-pocketcsvreader
+
+- title: CSV Profiles
+  desc: Get started fast CSV profiles
+  icon: cog
+  doc: csv-profile
+
+- title: Usage
+  desc: Learn about how to configure the reader
+  icon: settings
+  doc: basic-usage

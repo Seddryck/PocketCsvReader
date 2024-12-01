@@ -1,0 +1,29 @@
+# Changelog page source
+
+- title: To&lt;T&gt; support
+  label:
+  date: Nov 30, 2024
+  list:
+  - Mapper to strongly typed classes
+  - Support of custom mappers
+
+- title: IDataReader support
+  label:
+  date: Nov 7, 2024
+  list:
+  - IDataReader implementation
+  - Array of strings implementation
+
+- title: Version 2.0
+  label:
+  date: Jul 31, 2024
+  list:
+  - First release out of .NET framework
+
+- title: First commit
+  label:
+  date: Jan 8, 2019
+  list:
+  - Create repository on GitHub
+  - Initial README with first ideas and references
+  - selection of license Apache 2.0
