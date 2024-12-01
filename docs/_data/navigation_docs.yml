@@ -1,0 +1,15 @@
+- title: Getting Started
+  docs:
+  - why-pocketcsvreader
+  
+- title: CSV Profiles
+  docs:
+  - csv-dialect-descriptor
+  - parser-optimizations
+  - sequences
+
+- title: Usage
+  docs:
+  - installation
+  - basic-usage
+
