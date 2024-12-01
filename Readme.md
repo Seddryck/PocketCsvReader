@@ -2,7 +2,7 @@
 
 ![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/pocket-csv-reader.png)
 
-PocketCsvReader is an efficient, lightweight library designed for parsing delimited flat files, such as CSV and TSV. Prioritizing simplicity and performance, it facilitates seamless reading and loading of file contents into a DataTable, Array of strings or through an IDataReader. Perfect for projects needing quick data ingestion with minimal configuration, PocketCsvReader is your reliable tool for managing structured flat-file data with ease.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files like CSV and TSV. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface. Designed for projects requiring rapid data ingestion with minimal configuration, PocketCsvReader is a dependable solution for handling structured flat-file data effortlessly.
 
 [About][] | [Releases][] | [License][]
 
@@ -32,28 +32,125 @@ PocketCsvReader is an efficient, lightweight library designed for parsing delimi
 [![Bugs badge](https://img.shields.io/github/issues/Seddryck/PocketCsvReader/bug.svg?color=red&label=Bugs)](https://github.com/Seddryck/PocketCsvReader/issues?utf8=%E2%9C%93&q=is:issue+is:open+label:bug+)
 [![Top language](https://img.shields.io/github/languages/top/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/search?l=C%23)
 
-## Releases
+## Install
 
-Binaries for the different releases are hosted on [NuGet](https://www.nuget.org/packages/?q=PocketCsvReader) [GitHub](https://github.com/Seddryck/PocketCsvReader/releases).
+Replace `<VersionNumber>` with the desired version in each of the following solutions. If no version is specified, the latest version will be installed.
 
-## License
+### NuGet CLI
 
-PocketCsvReader is available on the terms of Apache 2.0.
+1. Open a command prompt or terminal.
+2. Run the following command:
 
-## Bugs, issues and requests for new features
+   ```bash
+   nuget install PocketCsvReader -Version <VersionNumber>
+   ```
+   
+## Visual Studio Package Manager Console
 
-The list of bugs and feature's requests is hosted on [GitHub](https://github.com/Seddryck/PocketCsvReader/issues).
+1. Open the **Package Manager Console** from **Tools > NuGet Package Manager > Package Manager Console**.
+2. Run the following command:
 
-## Continuous Integration
+   ```powershell
+   Install-Package PocketCsvReader -Version <VersionNumber>
+   ```
+## Dotnet-CLI
 
-A continuous integration service is available on [AppVeyor](https://ci.appveyor.com/project/Seddryck/pocketcsvreader/).
+1. Open a terminal or command prompt.
+2. Navigate to the directory of your project.
+3. Run the following command:
 
-## Code
+   ```bash
+   dotnet add package PocketCsvReader --version <VersionNumber>
+   ```
+## Basic usage
 
-PocketCsvReader is using **Git** as DCVS and the code is hosted on [Github](https://github.com/Seddryck/PocketCsvReader).
+The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
 
-## Tracking
+### Features
 
-This OSS project is tracked by [Ohloh](http://www.ohloh.net/p/pocketcsvreader)
+- Read CSV files or streams into a `DataTable`.
+- Access CSV data in a forward-only, read-only manner using `IDataReader`.
+- Map CSV records to strongly-typed objects.
+- Map CSV records to array of strings.
+- Customizable CSV parsing profiles for delimiters, quote handling, and more.
+- Supports encoding detection through the `IEncodingDetector` interface.
 
-[![Project Stats](https://www.ohloh.net/p/pocketcsvreader/widgets/project_thin_badge.gif)](https://www.ohloh.net/p/pocketcsvreader)
+### Initialization
+
+You can create an instance of `CsvReader` with various configurations:
+
+```csharp
+// Default configuration: comma-delimited, double quotes for escaping, 4 KB buffer size.
+var csvReader = new CsvReader();
+
+// Custom CSV profile (e.g., semicolon-delimited, double quotes for escaping).
+var csvReaderWithProfile = new CsvReader(CsvProfile.SemiColumnDoubleQuote);
+
+// Custom buffer size for large files.
+var csvReaderWithBuffer = new CsvReader(bufferSize: 64 * 1024);
+
+// Both custom profile and buffer size.
+var csvReaderCustom = new CsvReader(CsvProfile.SemiColumnDoubleQuote, bufferSize: 16 * 1024);
+```
+
+### Reading CSV Data
+
+#### Reading Into a `DataTable`
+
+The `ToDataTable` method reads CSV data and returns a `DataTable` containing all rows and fields.
+
+```csharp
+DataTable dataTable = csvReader.ToDataTable("example.csv");
+```
+
+or to read from a stream,
+
+```csharp
+using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
+DataTable dataTable = csvReader.ToDataTable(stream);
+```
+
+### Accessing Data with `IDataReader`
+
+The `ToDataReader` method provides a forward-only, read-only `IDataReader` for processing large files efficiently.
+
+```csharp
+using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
+using var reader = csvReader.ToDataReader(stream);
+while (reader.Read())
+{
+    Console.WriteLine(reader[0]); // Access the first column of the current row.
+}
+```
+
+### Reading as Arrays
+
+```csharp
+using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
+foreach (var record in csvReader.ToArrayString(stream))
+{
+    Console.WriteLine(string.Join(", ", record));
+}
+```
+
+### Mapping Records to Strongly-Typed Objects
+
+The `To<T>` method maps CSV records to objects of a specified type.
+
+```csharp
+public class Person
+{
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public int Age { get; set; }
+}
+
+using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
+IEnumerable<Person> people = csvReader.To<Person>(stream);
+
+foreach (var person in people)
+{
+    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
+}
+```
+
