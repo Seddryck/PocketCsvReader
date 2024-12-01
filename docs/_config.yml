@@ -5,12 +5,12 @@
 # 'bundle exec jekyll serve'. If you change this file, please restart the server process.
 
 # Site title and description
-title:              pocketcsvreader
+title:              PocketCsvReader
 description:        Documentation of PocketCsvReader, a lightweigth CSV parser
 lang:               en
 
 # Site subpath, e.g. /blog
-baseurl:            "/pocketcsvreader"
+baseurl:            "/PocketCsvReader"
 
 # Permalink URLs structure, for permalink style options see: https://jekyllrb.com/docs/permalinks/
 permalink:          /:title/
