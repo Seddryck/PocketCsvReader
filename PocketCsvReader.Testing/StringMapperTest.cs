@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 
 namespace PocketCsvReader.Testing;
-public class FieldParserTest
+public class StringMapperTest
 {
     [Test]
     [TestCase("foo", "foo")]
@@ -14,10 +14,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, item.Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -27,10 +28,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "?", "(null)");
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, 0, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -40,10 +42,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, item.Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -53,10 +56,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, true));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), false, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -68,10 +72,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)");
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), false, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -81,13 +86,14 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '`', '\\', "\r\n", false, false, 4096, "?", "(null)")
         {
             ParserOptimizations = new ParserOptimizationOptions { HandleSpecialValues = false }
         };
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), false, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -98,10 +104,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), true, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -112,11 +119,12 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '\'', '`', "\r\n", false, false, 4096, "(empty)", "(null)");
         profile.ParserOptimizations = new ParserOptimizationOptions { UnescapeChars = false };
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), true, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -128,10 +136,11 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, item.Length);
 
         var profile = new CsvProfile(';', '\"', '\"', "\r\n", false, false, 4096, "(empty)", "(null)");
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(1, item.Length - 2, true, true));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer.Slice(1, item.Length - 2), true, true);
         Assert.That(value, Is.EqualTo(result));
     }
 
@@ -140,6 +149,7 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         "foo".AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, "foo".Length);
 
         var stringPool = new CommunityToolkit.HighPerformance.Buffers.StringPool();
 
@@ -147,17 +157,17 @@ public class FieldParserTest
         {
             ParserOptimizations = new ParserOptimizationOptions { PoolString = stringPool.GetOrAdd }
         };
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, "foo".Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo("foo"));
     }
-
 
     [Test]
     public void ReadField_StringPool_Called()
     {
         Span<char> buffer = stackalloc char[64];
         "foo".AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, "foo".Length);
         int count = 0;
 
         PoolString poolString = (span) =>
@@ -170,8 +180,8 @@ public class FieldParserTest
         {
             ParserOptimizations = new ParserOptimizationOptions { PoolString = poolString }
         };
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, "foo".Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo("foo"));
         Assert.That(count, Is.EqualTo(1));
     }
@@ -183,11 +193,12 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         field.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, field.Length);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
 
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.Null);
     }
 
@@ -198,11 +209,12 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         field.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, field.Length);
 
         var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
 
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.Not.Null);
         Assert.That(value, Is.EqualTo(field));
     }
@@ -213,12 +225,13 @@ public class FieldParserTest
     {
         Span<char> buffer = stackalloc char[64];
         field.AsSpan().CopyTo(buffer);
+        buffer = buffer.Slice(0, field.Length);
 
         var profile = CsvProfile.CommaDoubleQuote;
         profile.Sequences.Add(sequence, map);
 
-        var reader = new ArrayOfStringMapper(profile);
-        var value = reader.Map(buffer, new FieldSpan(0, field.Length, false, false));
+        var mapper = new StringMapper(profile);
+        var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.Not.Null);
         Assert.That(value, Is.EqualTo(map));
     }
