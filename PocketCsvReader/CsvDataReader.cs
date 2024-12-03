@@ -6,31 +6,34 @@ using System.IO;
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
+using System.Globalization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
 {
     private bool _isClosed = false;
-    protected RecordParser? RecordParser { get; set; }
-    protected CsvProfile Profile { get; }
-    protected Stream Stream { get; }
-    protected StreamReader? StreamReader { get; private set; }
-    protected Memory<char> buffer;
+    private RecordParser? RecordParser { get; set; }
+    private CsvProfile Profile { get; }
+    private Stream Stream { get; }
+    private StreamReader? StreamReader { get; set; }
+    private Memory<char> Buffer { get; set; }
+    private StringMapper StringMapper { get; }
+    private EncodingInfo? FileEncoding { get; set; }
 
-    protected EncodingInfo? FileEncoding { get; private set; }
-
-    protected bool IsEof { get; private set; } = false;
+    private bool IsEof { get; set; } = false;
     public int RowCount { get; private set; } = 0;
-    protected int BufferSize { get; private set; } = 64 * 1024;
+    private int BufferSize { get; set; } = 64 * 1024;
 
     public string[]? Fields { get; private set; } = null;
-    public string?[]? Values { get; private set; } = null;
+    public RecordMemory? Record { get; private set; } = null;
 
     public CsvDataReader(Stream stream, CsvProfile profile)
     {
         Stream = stream;
-        buffer = new Memory<char>(new char[BufferSize]);
+        Buffer = new Memory<char>(new char[BufferSize]);
         Profile = profile;
+        StringMapper = new StringMapper(Profile);
     }
 
     public void Initialize()
@@ -56,36 +59,30 @@ public class CsvDataReader : IDataReader
         if (IsEof)
             return false;
 
-        IsEof = RecordParser!.ReadNextRecord(out var values);
-        Values = values;
-        if (IsEof && Values!.Length == 0)
+        if (RowCount == 0)
+            if (RecordParser!.Profile.Descriptor.Header)
+                RegisterHeader(RecordParser!.ReadHeaders(), "field_");
+
+        IsEof = RecordParser!.ReadNextRecord(out RecordSpan rawRecord);
+        if (RowCount == 0 && !RecordParser!.Profile.Descriptor.Header)
+            RegisterHeader((string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length), "field_");
+
+        if (rawRecord.FieldSpans.Length == 0)
         {
-            Values = null;
+            Record = RecordMemory.Empty;
             return false;
         }
+        else
+            Record = rawRecord.AsMemory();
 
-        if (RowCount == 0 && Fields is null)
-            RegisterHeader(Values!, "field_");
-
-        if (RowCount == 0 && RecordParser.Profile.Descriptor.Header)
-        {
-            IsEof = RecordParser.ReadNextRecord(out values);
-            Values = values;
-            if (IsEof && Values!.Length == 0)
-            {
-                Values = null;
-                return false;
-            }
-        }
         RowCount++;
 
-        HandleUnexpectedFields(Fields!.Length, Values!);
-        HandleMissingFields(Fields!.Length);
+        HandleUnexpectedFields(Fields!.Length);
 
         return true;
     }
 
-    protected virtual void RegisterHeader(string?[] names, string prefix)
+    private void RegisterHeader(string?[] names, string prefix)
     {
         int unnamedFieldIndex = 0;
         Fields = (RecordParser!.Profile.Descriptor.Header
@@ -93,44 +90,33 @@ public class CsvDataReader : IDataReader
                 : names.Select(_ => $"{prefix}{unnamedFieldIndex++}")).ToArray();
     }
 
-    protected virtual void HandleUnexpectedFields(int expectedLength, string?[] values)
+    private void HandleUnexpectedFields(int expectedLength)
     {
-        if (expectedLength < values.Length)
+        var length = Record!.FieldSpans.Length;
+        if (expectedLength < length)
             throw new InvalidDataException
             (
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
                     , RowCount + 1 + Convert.ToInt32(RecordParser!.Profile.Descriptor.Header)
-                    , values.Length - expectedLength
-                    , values.Length - expectedLength > 1 ? "s" : string.Empty
+                    , length - expectedLength
+                    , length - expectedLength > 1 ? "s" : string.Empty
                 )
             );
-    }
-
-    protected virtual void HandleMissingFields(int expectedLength)
-    {
-        if (RecordParser!.Profile.ParserOptimizations.ExtendIncompleteRecords && expectedLength > Values!.Length)
-        {
-            var missingFields = expectedLength - Values.Length;
-            var missingFieldsArray = new string[missingFields];
-            Array.Fill(missingFieldsArray,
-                RecordParser.Profile.ParserOptimizations.HandleSpecialValues
-                    ? RecordParser.Profile.MissingCell
-                    : string.Empty);
-            Values = Values.Concat(missingFieldsArray).ToArray();
-        }
     }
 
     public object this[int i]
     {
         get
         {
-            if (Values is null)
+            if (i < Record!.FieldSpans.Length && Fields!.Length > 0)
+                return Record.Slice(i).ToString();
+            if (i < Fields!.Length)
+                return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+            if (Fields!.Length == 0)
                 throw new InvalidOperationException("Values are not defined yet.");
-            if (i < 0 || i >= Values.Length)
-                throw new IndexOutOfRangeException("Index out of range.");
-            return Values[i] ?? throw new InvalidOperationException();
+            throw new IndexOutOfRangeException("Index out of range.");
         }
     }
 
@@ -141,9 +127,11 @@ public class CsvDataReader : IDataReader
             if (Fields is null)
                 throw new InvalidOperationException("Fields are not defined yet.");
             var index = Array.IndexOf(Fields, name);
-            if (index < 0)
-                throw new InvalidOperationException($"Field '{name}' not found.");
-            return Values?[index] ?? throw new InvalidOperationException();
+            if (index < Record!.FieldSpans.Length)
+                return Record.Slice(index).ToString();
+            if (index < Fields!.Length)
+                return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+            throw new InvalidOperationException($"Field '{name}' not found.");
         }
     }
 
@@ -155,23 +143,23 @@ public class CsvDataReader : IDataReader
 
     public int FieldCount => Fields?.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
 
-    public bool GetBoolean(int i) => throw new NotImplementedException();
+    public bool GetBoolean(int i) => bool.Parse(GetValueOrThrow(i));
     public byte GetByte(int i) => throw new NotImplementedException();
     public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
     public char GetChar(int i) => throw new NotImplementedException();
     public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
     public IDataReader GetData(int i) => throw new NotImplementedException();
     public string GetDataTypeName(int i) => throw new NotImplementedException();
-    public DateTime GetDateTime(int i) => throw new NotImplementedException();
-    public decimal GetDecimal(int i) => throw new NotImplementedException();
-    public double GetDouble(int i) => throw new NotImplementedException();
+    public DateTime GetDateTime(int i) => DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
     public Type GetFieldType(int i) => throw new NotImplementedException();
-    public float GetFloat(int i) => throw new NotImplementedException();
+    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public Guid GetGuid(int i) => throw new NotImplementedException();
-    public short GetInt16(int i) => throw new NotImplementedException();
-    public int GetInt32(int i) => throw new NotImplementedException();
-    public long GetInt64(int i) => throw new NotImplementedException();
+    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
     public int GetOrdinal(string name)
@@ -187,20 +175,24 @@ public class CsvDataReader : IDataReader
     public DataTable? GetSchemaTable() => throw new NotImplementedException();
 
     public string GetString(int i)
-        => GetValueOrThrow(i);
-
+        => StringMapper.Parse(GetValueOrThrow(i)
+                , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].IsEscaped
+                , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].WasQuoted)!;
     public object GetValue(int i)
-        => GetValueOrThrow(i);
+        => GetValueOrThrow(i).ToString();
     public int GetValues(object[] values) => throw new NotImplementedException();
     public bool IsDBNull(int i)
-        => Values![i] is null;
+        => StringMapper.Parse(GetValueOrThrow(i), Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted) is null;
+
     public bool NextResult() => throw new NotImplementedException();
 
-    private string GetValueOrThrow(int i)
+    private ReadOnlySpan<char> GetValueOrThrow(int i)
     {
-        if (i < (Values?.Length ?? throw new InvalidDataException()))
-            return Values[i]!;
-        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Values.Length} defined fields.");
+        if (i < Record!.FieldSpans.Length)
+            return Record.Slice(i).Span;
+        if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
+            return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
     public void Close()

@@ -45,77 +45,42 @@ public class CsvArrayString : IDisposable
         RecordParser = new RecordParser(StreamReader, Profile);
     }
 
-    Memory<char> Extra = Memory<char>.Empty;
     public IEnumerable<string?[]> Read()
     {
+        var stringMapper = new SpanMapper<string?[]?>((span, fieldSpans) =>
+        {
+            if (!fieldSpans.Any())
+                return null;
+            var values = new string[fieldSpans.Count()];
+            var index = 0;
+            foreach (var fieldSpan in fieldSpans)
+                values[index++] = span.Slice(fieldSpan.Start, fieldSpan.Length).ToString();
+            return values;
+        });
+
         if (EncodingInfo is null)
             Initialize();
 
         while (!IsEof)
         {
-            string?[]? values = ReadNextRecord();
+            if (RowCount == 0 && Profile.Descriptor.Header)
+                RegisterHeader(RecordParser!.ReadHeaders(), "field_");
+
+            IsEof = RecordParser!.ReadNextRecord(out RecordSpan recordSpan);
+            var values = stringMapper.Invoke(recordSpan.Span, recordSpan.FieldSpans);
             if (values is null)
                 yield break;
-
+            RowCount++;
             yield return values;
         }
     }
 
-    private string?[]? ReadNextRecord()
+    private void RegisterHeader(string?[] names, string prefix)
     {
-        if (IsEof)
-            return null;
-
-        IsEof = RecordParser!.ReadNextRecord(out var values);
-
-        if (IsEof && (values is null || values.Length == 0))
-        {
-            values = null;
-            Extra = null;
-            return null;
-        }
-
-        if (RowCount == 0 && Fields is null)
-        {
-            int unnamedFieldIndex = 0;
-            if (RecordParser.Profile.Descriptor.Header)
-            {
-                Fields = values!.Select(value => value ?? $"field_{unnamedFieldIndex++}").ToArray();
-                return ReadNextRecord(); // Skip header and read next record
-            }
-            else
-            {
-                Fields = values!.Select(_ => $"field_{unnamedFieldIndex++}").ToArray();
-            }
-        }
-        else
-        {
-            RowCount++;
-
-            // Handle case with unexpected fields
-            if ((Fields?.Length ?? int.MaxValue) < values!.Length)
-                throw new InvalidDataException
-                (
-                    string.Format
-                    (
-                        "The record {0} contains {1} more field{2} than expected.",
-                        RowCount + Convert.ToInt32(RecordParser.Profile.Descriptor.Header),
-                        values.Length - Fields!.Length,
-                        values.Length - Fields.Length > 1 ? "s" : string.Empty
-                    )
-                );
-
-            // Fill the missing cells
-            if ((Fields?.Length ?? 0) > values.Length)
-            {
-                var list = new List<string?>(values);
-                while (Fields!.Length > list.Count)
-                    list.Add(RecordParser.Profile.MissingCell);
-                values = list.ToArray();
-            }
-        }
-
-        return values;
+        int unnamedFieldIndex = 0;
+        Fields = (RecordParser!.Profile.Descriptor.Header
+                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{prefix}{unnamedFieldIndex}" : value; })
+                : names.Select(_ => $"{prefix}{unnamedFieldIndex++}")).ToArray();
     }
 
     public void Dispose()

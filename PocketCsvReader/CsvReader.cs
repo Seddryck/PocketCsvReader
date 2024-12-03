@@ -27,7 +27,7 @@ namespace PocketCsvReader
         /// </summary>
         /// <remarks>
         /// The default settings include a profile using comma as the delimiter and double quotes for escaping,
-        /// with a buffer size of 4 KB.
+        /// with a Buffer size of 4 KB.
         /// </remarks>
         public CsvReader()
             : this(CsvProfile.CommaDoubleQuote, 4 * 1024)
@@ -44,23 +44,23 @@ namespace PocketCsvReader
         { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CsvReader"/> class with the specified buffer size.
+        /// Initializes a new instance of the <see cref="CsvReader"/> class with the specified Buffer size.
         /// </summary>
-        /// <param name="bufferSize">The size of the buffer used for reading CSV data.</param>
+        /// <param name="bufferSize">The size of the Buffer used for reading CSV data.</param>
         /// <remarks>
-        /// A buffer size of at least 4 KB is recommended for optimal performance.
+        /// A Buffer size of at least 4 KB is recommended for optimal performance.
         /// </remarks>
         public CsvReader(int bufferSize)
             : this(CsvProfile.SemiColumnDoubleQuote, bufferSize)
         { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CsvReader"/> class with the specified CSV profile and buffer size.
+        /// Initializes a new instance of the <see cref="CsvReader"/> class with the specified CSV profile and Buffer size.
         /// </summary>
         /// <param name="profile">
         /// The <see cref="CsvProfile"/> that defines the delimiter, quote handling, and other parsing rules.
         /// </param>
-        /// <param name="bufferSize">The size of the buffer used for reading CSV data.</param>
+        /// <param name="bufferSize">The size of the Buffer used for reading CSV data.</param>
         public CsvReader(CsvProfile profile, int bufferSize)
         {
             Profile = profile;

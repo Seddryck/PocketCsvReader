@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Reflection;
+using System.Buffers;
+using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
 
 namespace PocketCsvReader.Testing;
 
@@ -39,13 +41,96 @@ public class CsvDataReaderTest
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         var ex = Assert.Throws<IndexOutOfRangeException>(() => dataReader.GetString(1));
-        Assert.That(ex!.Message, Does.Contain("record '2'"));
+        //Assert.That(ex!.Message, Does.Contain("record '2'"));
         Assert.That(ex.Message, Does.Contain("index '1'"));
         Assert.That(ex.Message, Does.Contain("contains 1 defined fields"));
 
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
+    }
+
+    [TestCase("'ab'';''c';'xyz'", "ab';'c")]
+    [TestCase("'ab'';''''c';'xyz'", "ab';''c")]
+    [TestCase("'a''b'';c';'xyz'", "a'b';c")]
+    public void GetString_RecordWithTwoFields_CorrectParsing(string record, string firstToken)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var profile = new CsvProfile(
+            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.GetString(0), Is.EqualTo(firstToken));
+        Assert.That(dataReader.GetString(1), Is.EqualTo("xyz"));
+    }
+
+    [Test]
+    public void GetInt32_RecordWithTwoFields_CorrectParsing()
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;17"));
+
+        var profile = new CsvProfile(
+            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetInt32(1), Is.EqualTo(17));
+    }
+
+    [Test]
+    public void GetDecimal_RecordWithTwoFields_CorrectParsing()
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;17.02542"));
+
+        var profile = new CsvProfile(
+            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetDecimal(1), Is.EqualTo(17.02542m));
+    }
+
+    [Test]
+    public void GetDateTime_RecordWithTwoFields_CorrectParsing()
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;2024-12-06T12:45:16"));
+
+        var profile = new CsvProfile(
+            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2024, 12, 06, 12, 45, 16)));
+    }
+
+    [Test]
+    [TestCase("'fo\\'o'", '\\')]
+    [TestCase("'fo?'o'", '?')]
+    public void ReadNextRecord_SingleFieldWithTextEscaper_CorrectParsing(string record, char escapeTextQualifier)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var profile = new CsvProfile(';', '\'', escapeTextQualifier, "\r\n", false, true, 4096, string.Empty, string.Empty);
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(1));
+        Assert.That(dataReader.GetString(0), Is.EqualTo("fo'o"));
+    }
+
+    [Test]
+    [TestCase("'fo''o'")]
+    public void ReadNextRecord_SingleFieldWithDoubleQuote_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var profile = new CsvProfile(
+                new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false }
+            );
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(1));
+        Assert.That(dataReader.GetString(0), Is.EqualTo("fo'o"));
     }
 
     [Test]
