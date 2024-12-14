@@ -5,6 +5,7 @@
 - title: CSV Profiles
   docs:
   - csv-dialect-descriptor
+  - pre-configured-dialect-descriptor
   - parser-optimizations
   - sequences
 
@@ -12,5 +13,6 @@
   docs:
   - installation
   - basic-usage
+  - fluent-api-profile-configuration
   - mapper-object-builder
 

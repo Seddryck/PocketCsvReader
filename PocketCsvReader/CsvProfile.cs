@@ -1,4 +1,5 @@
 ﻿using System;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 
@@ -45,14 +46,13 @@ public class CsvProfile
 
     public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool rowCountAtStart, int bufferSize, string emptyCell, string missingCell)
     {
-        Descriptor = new CsvDialectDescriptor
-        {
-            Delimiter = fieldSeparator,
-            QuoteChar = textQualifier,
-            EscapeChar = escapeTextQualifier,
-            LineTerminator = recordSeparator,
-            Header = firstRowHeader
-        };
+        Descriptor = new DialectDescriptorBuilder()
+                        .WithDelimiter(fieldSeparator)
+                        .WithLineTerminator(recordSeparator)
+                        .WithQuoteChar(textQualifier)
+                        .WithEscapeChar(escapeTextQualifier)
+                        .WithHeader(firstRowHeader)
+                        .Build();
 
         ParserOptimizations = new ParserOptimizationOptions() { RowCountAtStart = rowCountAtStart, BufferSize = bufferSize };
 
@@ -74,7 +74,55 @@ public class CsvProfile
         MissingCell = string.Empty;
     }
 
-    public static CsvProfile CommaDoubleQuote { get; } = new CsvProfile(',', '\"');
-    public static CsvProfile SemiColumnDoubleQuote { get; } = new CsvProfile(';', '\"');
-    public static CsvProfile TabDoubleQuote { get; } = new CsvProfile('\t', '\"');
+    private static CsvProfile? _commaDoubleQuote;
+    public static CsvProfile CommaDoubleQuote
+    {
+        get => _commaDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
+                                        .WithDelimiter(Delimiter.Comma)
+                                        .WithLineTerminator(Environment.NewLine)
+                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithEscapeChar(EscapeChar.BackSlash)
+                                        .WithDoubleQuote(true)
+                                        .WithoutHeader()
+                                        .Build());
+    }
+
+    private static CsvProfile? _semiColumnDoubleQuote;
+    public static CsvProfile SemiColumnDoubleQuote
+    {
+        get => _semiColumnDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
+                                        .WithDelimiter(Delimiter.Semicolon)
+                                        .WithLineTerminator(Environment.NewLine)
+                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithEscapeChar(EscapeChar.BackSlash)
+                                        .WithDoubleQuote(true)
+                                        .WithoutHeader()
+                                        .Build());
+    }
+
+    private static CsvProfile? _tabDoubleQuote;
+    public static CsvProfile TabDoubleQuote
+    {
+        get => _tabDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
+                                        .WithDelimiter(Delimiter.Tab)
+                                        .WithLineTerminator(Environment.NewLine)
+                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithEscapeChar(EscapeChar.BackSlash)
+                                        .WithDoubleQuote(true)
+                                        .WithoutHeader()
+                                        .Build());
+    }
+
+    private static CsvProfile? _pipeSingleQuote;
+    public static CsvProfile PipeSingleQuote
+    {
+        get => _pipeSingleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
+                                        .WithDelimiter(Delimiter.Pipe)
+                                        .WithLineTerminator(Environment.NewLine)
+                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithEscapeChar(EscapeChar.BackSlash)
+                                        .WithDoubleQuote(true)
+                                        .WithoutHeader()
+                                        .Build());
+    }
 }
