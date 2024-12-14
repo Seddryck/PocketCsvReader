@@ -116,28 +116,19 @@ public class CsvDataTableTest
     [TestCase("abc;\"xyz\"\r\n\"def\";xyz\r\n\"ghl\"\r\n;\"ijk\"", 512, 2)]
     public void Read_Csv_CorrectResult(string text, int bufferSize, int fieldCount)
     {
-        using (var stream = new MemoryStream())
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
+        var reader = new CsvReader(new CsvProfile(';', '\"', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
+        var dataTable = reader.ToDataTable(stream);
+        Assert.That(dataTable.Rows, Has.Count.EqualTo(4));
+        Assert.That(dataTable.Columns, Has.Count.EqualTo(fieldCount));
+        foreach (DataRow row in dataTable.Rows)
         {
-            var writer = new StreamWriter(stream);
-            writer.Write(text);
-            writer.Flush();
-
-            stream.Position = 0;
-
-            var reader = new CsvReader(new CsvProfile(';', '\"', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
-            var dataTable = reader.ToDataTable(stream);
-            Assert.That(dataTable.Rows, Has.Count.EqualTo(4));
-            Assert.That(dataTable.Columns, Has.Count.EqualTo(fieldCount));
-            foreach (DataRow row in dataTable.Rows)
-            {
-                foreach (var cell in row.ItemArray)
-                    Assert.That(cell!.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
-            }
-            Assert.That(dataTable.Rows[0][0], Is.EqualTo("abc"));
-            if (dataTable.Columns.Count == 2)
-                Assert.That(dataTable.Rows[0][1], Is.EqualTo("xyz"));
-            writer.Dispose();
+            foreach (var cell in row.ItemArray)
+                Assert.That(cell!.ToString(), Has.Length.EqualTo(3).Or.EqualTo("(empty)").Or.EqualTo("(null)"));
         }
+        Assert.That(dataTable.Rows[0][0], Is.EqualTo("abc"));
+        if (dataTable.Columns.Count == 2)
+            Assert.That(dataTable.Rows[0][1], Is.EqualTo("xyz"));
     }
 
     [Test]

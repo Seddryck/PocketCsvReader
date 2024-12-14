@@ -14,7 +14,6 @@ public class RecordParser : IDisposable
     protected IBufferReader Reader { get; }
     protected ReadOnlyMemory<char> Buffer { get; private set; }
     protected ArrayPool<char>? Pool { get; }
-    private SpanMapper<string?[]> SpanMapper { get; }
 
     private int? FieldsCount { get; set; }
     public RecordParser(StreamReader reader, CsvProfile profile)
@@ -29,16 +28,31 @@ public class RecordParser : IDisposable
     { }
 
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        => (Profile, Reader, SpanMapper, CharParser) = (profile, buffer, new ArrayOfStringMapper(profile, pool ?? ArrayPool<char>.Shared).Map, new(profile));
+        => (Profile, Reader, CharParser) = (profile, buffer, new(profile));
 
-    public virtual bool ReadNextRecord(out string?[]? value)
-        => ReadNextRecord(SpanMapper, out value);
+    internal bool ReadNextArray(out string?[]? value)
+    {
+        var eof = ReadNextRecord(out RecordSpan rawRecord);
+        var arrayStringMapper = new SpanMapper<string?[]>((span, fieldSpans) =>
+        {
+            var values = new string?[fieldSpans.Count()];
+            var index = 0;
+            foreach (var fieldSpan in fieldSpans)
+            {
+                var value = span.Slice(fieldSpan.Start, fieldSpan.Length);
+                values[index++] = value.Length == 0 ? null : value.ToString();
+            }
+            return values;
+        });
+        value = rawRecord.FieldSpans.Length == 0 ? null : arrayStringMapper(rawRecord.Span, rawRecord.FieldSpans);
+        return eof;
+    }
 
-    protected virtual bool ReadNextRecord<T>(SpanMapper<T> spanMapper, out T value)
+    public virtual bool ReadNextRecord(out RecordSpan record)
     {
         var index = 0;
         var eof = false;
-        var fieldSpans = new List<FieldSpan>(FieldsCount ?? 20);
+        var fieldList = new List<FieldSpan>(FieldsCount ?? 20);
         var longSpan = Span<char>.Empty;
 
         if (Buffer.Length == 0)
@@ -57,14 +71,17 @@ public class RecordParser : IDisposable
             var state = CharParser.Parse(c);
             if (state == ParserState.Field || state == ParserState.Record)
             {
-                fieldSpans.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
+                fieldList.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
 
                 if (state == ParserState.Record)
                 {
                     CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
-                    FieldsCount ??= fieldSpans.Count;
-                    value = spanMapper.Invoke(longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span, fieldSpans);
+                    FieldsCount ??= fieldList.Count;
+                    record =  new RecordSpan(
+                        Profile
+                        , longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
+                        , [.. fieldList]);
                     return false;
                 }
             }
@@ -88,6 +105,7 @@ public class RecordParser : IDisposable
                 else
                 {
                     bufferSize = 0;
+                    span = ReadOnlySpan<char>.Empty;
                     eof = true;
                 }
             }
@@ -96,11 +114,14 @@ public class RecordParser : IDisposable
         switch (CharParser.ParseEof())
         {
             case ParserState.Record:
-                fieldSpans.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
-                value = spanMapper.Invoke(longSpan.Length > 0 ? (ReadOnlySpan<char>)longSpan.Concat(span) : span, fieldSpans);
+                fieldList.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
+                record = new RecordSpan(
+                        Profile
+                        , longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
+                        , [.. fieldList]);
                 return true;
             case ParserState.Eof:
-                value = (typeof(T).IsArray ? (T?)(object)Array.CreateInstance(typeof(T).GetElementType()!, 0) : default)!;
+                record = new RecordSpan(Profile, [], []);
                 return true;
             case ParserState.Error:
                 throw new InvalidDataException($"Invalid character End-of-File.");
@@ -121,7 +142,8 @@ public class RecordParser : IDisposable
         });
 
         var unnamedFieldIndex = -1;
-        ReadNextRecord(headerMapper, out var fields);
+        ReadNextRecord(out RecordSpan rawRecord);
+        var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
         return fields.Select(value =>
                 {
                     unnamedFieldIndex++;
