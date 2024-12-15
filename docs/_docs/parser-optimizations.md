@@ -4,7 +4,7 @@ tags: [configuration]
 ---
 The `ParserOptimizationOptions` record provides a set of parameters to fine-tune the performance and behavior of the CSV parser. These options allow developers to balance flexibility, accuracy, and speed depending on the specific requirements of their use case.
 
-## **Options and Their Descriptions**
+## Options and Their Descriptions
 
 ### `NoTextQualifier`
 
