@@ -15,7 +15,7 @@ public class DoubleBufferTest
         var buffer = new DoubleBuffer(reader, 5);
         var span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(5));
-        Assert.That(span.ToArray, Is.EqualTo("Hello"));
+        Assert.That(span.ToString, Is.EqualTo("Hello"));
     }
 
     [Test]
@@ -25,10 +25,10 @@ public class DoubleBufferTest
         var buffer = new DoubleBuffer(reader, 5);
         var span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(5));
-        Assert.That(span.ToArray, Is.EqualTo("Hello"));
+        Assert.That(span.ToString, Is.EqualTo("Hello"));
         span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(5));
-        Assert.That(span.ToArray, Is.EqualTo("World"));
+        Assert.That(span.ToString, Is.EqualTo("World"));
         Assert.That(buffer.IsEof, Is.False);
         span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(0));
@@ -42,13 +42,13 @@ public class DoubleBufferTest
         var buffer = new DoubleBuffer(reader, 5);
         var span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(5));
-        Assert.That(span.ToArray, Is.EqualTo("Hello"));
+        Assert.That(span.ToString, Is.EqualTo("Hello"));
         span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(5));
-        Assert.That(span.ToArray, Is.EqualTo(" Worl"));
+        Assert.That(span.ToString, Is.EqualTo(" Worl"));
         span = buffer.Read();
         Assert.That(span.Length, Is.EqualTo(2));
-        Assert.That(span.ToArray, Is.EqualTo("d!"));
+        Assert.That(span.ToString, Is.EqualTo("d!"));
         Assert.That(buffer.IsEof, Is.True);
     }
 }
