@@ -18,7 +18,7 @@ public class StreamBufferTest
         Assert.That(buffer.Length, Is.EqualTo(5));
         Assert.That(buffer.Memory.Length, Is.EqualTo(5));
         Assert.That(buffer.IsEof, Is.False);
-        Assert.That(buffer.Memory.ToArray(), Is.EqualTo("Hello"));
+        Assert.That(buffer.Memory.ToString(), Is.EqualTo("Hello"));
     }
 
     [Test]
@@ -31,7 +31,7 @@ public class StreamBufferTest
         Assert.That(buffer.Length, Is.EqualTo(5));
         Assert.That(buffer.Memory.Length, Is.EqualTo(5));
         Assert.That(buffer.IsEof, Is.False);
-        Assert.That(buffer.Memory.ToArray(), Is.EqualTo("Hello"));
+        Assert.That(buffer.Memory.ToString(), Is.EqualTo("Hello"));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class StreamBufferTest
         Assert.That(buffer.Length, Is.EqualTo(2));
         Assert.That(buffer.Memory.Length, Is.EqualTo(2));
         Assert.That(buffer.IsEof, Is.True);
-        Assert.That(buffer.Memory.ToArray(), Is.EqualTo("Hi"));
+        Assert.That(buffer.Memory.ToString(), Is.EqualTo("Hi"));
     }
 
     [Test]
@@ -56,7 +56,7 @@ public class StreamBufferTest
         buffer.Read();
         Assert.That(buffer.Length, Is.EqualTo(5));
         Assert.That(buffer.IsEof, Is.False);
-        Assert.That(buffer.Memory.ToArray(), Is.EqualTo("World"));
+        Assert.That(buffer.Memory.ToString(), Is.EqualTo("World"));
     }
 
     [Test]
@@ -83,6 +83,6 @@ public class StreamBufferTest
         buffer.Read();
         Assert.That(buffer.Length, Is.EqualTo(2));
         Assert.That(buffer.IsEof, Is.True);
-        Assert.That(buffer.Memory.ToArray(), Is.EqualTo("d!"));
+        Assert.That(buffer.Memory.ToString(), Is.EqualTo("d!"));
     }
 }
