@@ -20,6 +20,8 @@ namespace PocketCsvReader
         protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
 
         protected internal CsvProfile Profile { get; private set; }
+        public CsvDialectDescriptor Dialect { get => Profile.Descriptor; }
+
         protected int BufferSize { get; private set; }
 
         /// <summary>

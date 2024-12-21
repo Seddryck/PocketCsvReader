@@ -8,16 +8,16 @@ namespace PocketCsvReader
 {
     public class CsvDialectDescriptor
     {
-        public char Delimiter { get; set; } = ',';
-        public string LineTerminator { get; set; } = "\r\n";
-        public char QuoteChar { get; set; } = '"';
-        public bool DoubleQuote { get; set; } = false; //should be true?
-        public char EscapeChar { get; set; }
-        public string? NullSequence { get; set; } = null;
-        public bool SkipInitialSpace { get; set; } = false;
-        public bool Header { get; set; } = true;
-        public char CommentChar { get; set; }
-        public bool CaseSensitiveHeader { get; set; } = false;
-        public string CsvDdfVersion { get; set; } = "1.0";
+        public char Delimiter { get; internal set; } = ',';
+        public string LineTerminator { get; internal set; } = "\r\n";
+        public char QuoteChar { get; internal set; } = '"';
+        public bool DoubleQuote { get; internal set; } = false; //should be true?
+        public char EscapeChar { get; internal set; }
+        public string? NullSequence { get; internal set; } = null;
+        public bool SkipInitialSpace { get; internal set; } = false;
+        public bool Header { get; internal set; } = true;
+        public char CommentChar { get; internal set; }
+        public bool CaseSensitiveHeader { get; internal set; } = false;
+        public string CsvDdfVersion { get; internal set; } = "1.0";
     }
 }
