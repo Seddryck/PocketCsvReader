@@ -29,7 +29,7 @@ namespace PocketCsvReader.Testing
             {
                 var detector = new EncodingDetector();
                 var result = detector.GetStreamEncoding(stream);
-                Assert.That(result.Encoding.BodyName, Is.EqualTo(filename).Using(new EncodingComparer()));
+                Assert.That(result.Encoding.BodyName, Is.EqualTo(filename)!.Using(new EncodingComparer()));
                 Assert.That(result.BomBytesCount, Is.EqualTo(BomLength));
             }
         }
