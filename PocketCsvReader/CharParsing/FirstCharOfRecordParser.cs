@@ -7,14 +7,19 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.CharParsing;
 internal class FirstCharOfRecordParser : FirstCharOfFieldParser
 {
+    private int[] CommentRows { get; set; }
     private char? CommentChar { get; set; }
 
     public FirstCharOfRecordParser(CharParser parser)
-        : base(parser) { CommentChar = Parser.Profile.Descriptor.CommentChar; }
+        : base(parser)
+    {
+        CommentChar = Parser.Profile.Descriptor.CommentChar;
+        CommentRows = Parser.Profile.Descriptor.CommentRows ?? [];
+    }
 
     public override ParserState Parse(char c)
     {
-        if (CommentChar.HasValue && c == CommentChar)
+        if (CommentRows.Contains(++Parser.RowNumber) || (CommentChar.HasValue && c == CommentChar))
         {
             Parser.ZeroField();
             Parser.Switch(Parser.Comment);

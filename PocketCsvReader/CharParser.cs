@@ -9,6 +9,7 @@ using PocketCsvReader.CharParsing;
 namespace PocketCsvReader;
 public class CharParser
 {
+    public int RowNumber { get; set; } = 0;
     public int Position { get; private set; } = -1;
     public int FieldStart { get; private set; } = 0;
     public int FieldLength { get; private set; } = 0;

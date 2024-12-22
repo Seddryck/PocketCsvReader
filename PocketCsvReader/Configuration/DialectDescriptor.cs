@@ -10,9 +10,9 @@ namespace PocketCsvReader
     (
         string Schema = "https://datapackage.org/profiles/1.0/tabledialect.json",
         bool Header = true,
-        bool HeaderRows = true,
+        int[] HeaderRows = null!,
         string HeaderJoin = " ",
-        int[]? CommentLines = null,
+        int[]? CommentRows = null,
         char? CommentChar = null,
         char Delimiter = ',',
         string LineTerminator = "\r\n",
@@ -22,5 +22,8 @@ namespace PocketCsvReader
         string? NullSequence = null,
         bool SkipInitialSpace = false,
         string CsvDdfVersion = "2.0"
-    );
+    )
+    {
+        public int[] HeaderRows { get; init; } = HeaderRows ?? [1];
+    }
 }

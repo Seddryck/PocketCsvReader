@@ -71,7 +71,7 @@ public class CharParserTest
     [TestCase("#foobar")]
     public void Parse_Comment_StartEnd(string value)
     {
-        var parser = new CharParser(new CsvProfile(new DialectDescriptor() {CommentChar='#', Delimiter=';', LineTerminator="\r\n" }));
+        var parser = new CharParser(new CsvProfile(new DialectDescriptor() { CommentChar = '#', Delimiter = ';', LineTerminator = "\r\n" }));
         var result = value.Aggregate((ParserState?)null, (current, c) => parser.Parse(c));
 
         Assert.That(result, Is.EqualTo(ParserState.Continue));
@@ -99,7 +99,7 @@ public class CharParserTest
     {
         var parser = new CharParser(new CsvProfile(new DialectDescriptor() { Delimiter = ';', LineTerminator = "\r\n" }));
         var result = value.Aggregate(0, (current, c)
-            => parser.Parse(c) != ParserState.Continue ? current+1 : current);
+            => parser.Parse(c) != ParserState.Continue ? current + 1 : current);
 
         Assert.That(result, Is.EqualTo(count));
     }
@@ -127,7 +127,7 @@ public class CharParserTest
     [TestCase("'f\ro\no';", "f\ro\no")]
     public void Parse_QuotedField_CorrectField(string value, string expected)
     {
-        var parser = new CharParser(new CsvProfile(new DialectDescriptor() { QuoteChar='\'', Delimiter = ';', LineTerminator = "\r\n" }));
+        var parser = new CharParser(new CsvProfile(new DialectDescriptor() { QuoteChar = '\'', Delimiter = ';', LineTerminator = "\r\n" }));
         var result = string.Empty;
         foreach (var c in value)
             if (parser.Parse(c) == ParserState.Field)
@@ -233,6 +233,39 @@ public class CharParserTest
         foreach (var c in value)
             parser.Parse(c);
         Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(value.Length-7));
+        Assert.That(parser.FieldLength, Is.EqualTo(value.Length - 7));
+    }
+
+    [TestCase("foo\r\nbar\r\n")]
+    [TestCase("Comment\r\nfoo\r\nbar\r\n", 1)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\n", 1, 2)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\nComment 3", 1, 2, 5)]
+    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\nComment 3", 1, 3, 5)]
+    public void Parse_CommentRows_CommentsSkipped(string value, params int[] commentRows)
+    {
+        var parser = new CharParser(new CsvProfile(
+            new DialectDescriptor() { CommentRows = commentRows, LineTerminator = "\r\n" }));
+        var recordCount = 0;
+        foreach (var c in value)
+            if (parser.Parse(c) == ParserState.Record)
+                recordCount++;
+        Assert.That(recordCount, Is.EqualTo(2));
+    }
+
+
+    [TestCase("foo\r\nbar\r\n")]
+    [TestCase("Comment\r\nfoo\r\nbar\r\n#Comment", 1)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n#Comment\r\nbar\r\n#Comment", 1, 2)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n\r\n#Commentbar\r\nComment 3", 1, 2, 6)]
+    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\n#Comment\r\nComment 3", 1, 3, 6)]
+    public void Parse_CommentRowsAndComments_CommentsSkipped(string value, params int[] commentRows)
+    {
+        var parser = new CharParser(new CsvProfile(
+            new DialectDescriptor() { CommentChar='#', CommentRows = commentRows, LineTerminator = "\r\n" }));
+        var recordCount = 0;
+        foreach (var c in value)
+            if (parser.Parse(c) == ParserState.Record)
+                recordCount++;
+        Assert.That(recordCount, Is.EqualTo(2));
     }
 }
