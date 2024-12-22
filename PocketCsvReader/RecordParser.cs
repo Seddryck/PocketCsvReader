@@ -30,24 +30,6 @@ public class RecordParser : IDisposable
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
         => (Profile, Reader, CharParser) = (profile, buffer, new(profile));
 
-    internal bool ReadNextArray(out string?[]? value)
-    {
-        var eof = ReadNextRecord(out RecordSpan rawRecord);
-        var arrayStringMapper = new SpanMapper<string?[]>((span, fieldSpans) =>
-        {
-            var values = new string?[fieldSpans.Count()];
-            var index = 0;
-            foreach (var fieldSpan in fieldSpans)
-            {
-                var value = span.Slice(fieldSpan.Start, fieldSpan.Length);
-                values[index++] = value.Length == 0 ? null : value.ToString();
-            }
-            return values;
-        });
-        value = rawRecord.FieldSpans.Length == 0 ? null : arrayStringMapper(rawRecord.Span, rawRecord.FieldSpans);
-        return eof;
-    }
-
     public virtual bool ReadNextRecord(out RecordSpan record)
     {
         var index = 0;
@@ -69,16 +51,16 @@ public class RecordParser : IDisposable
         {
             char c = span[index];
             var state = CharParser.Parse(c);
-            if (state == ParserState.Field || state == ParserState.Record)
+            if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
             {
                 fieldList.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
 
-                if (state == ParserState.Record)
+                if (state == ParserState.Record || state == ParserState.Header)
                 {
                     CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
                     FieldsCount ??= fieldList.Count;
-                    record =  new RecordSpan(
+                    record = new RecordSpan(
                         Profile
                         , longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
                         , [.. fieldList]);
@@ -113,6 +95,7 @@ public class RecordParser : IDisposable
 
         switch (CharParser.ParseEof())
         {
+            case ParserState.Header:
             case ParserState.Record:
                 fieldList.Add(new FieldSpan(CharParser.FieldStart, CharParser.FieldLength, CharParser.IsEscapedField, CharParser.IsQuotedField));
                 record = new RecordSpan(
@@ -130,8 +113,11 @@ public class RecordParser : IDisposable
         }
     }
 
-    public virtual string[] ReadHeaders()
+    public virtual string[][] ReadHeaders()
     {
+        if (!Profile.Descriptor.Header)
+            return [];
+
         var headerMapper = new SpanMapper<string[]>((span, fieldSpans) =>
         {
             var headers = new string[fieldSpans.Count()];
@@ -141,16 +127,19 @@ public class RecordParser : IDisposable
             return headers;
         });
 
-        var unnamedFieldIndex = -1;
-        ReadNextRecord(out RecordSpan rawRecord);
-        var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
-        return fields.Select(value =>
-                {
-                    unnamedFieldIndex++;
-                    return string.IsNullOrWhiteSpace(value) || !Profile.Descriptor.Header
-                        ? $"field_{unnamedFieldIndex}"
-                        : value!;
-                }).ToArray();
+        var headerList = new List<string[]>();
+        var rowCount = 1;
+        while (rowCount <= Profile.Descriptor.HeaderRows.Max())
+        {
+            ReadNextRecord(out RecordSpan rawRecord);
+            if (Profile.Descriptor.HeaderRows.Contains(rowCount))
+            {
+                var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
+                headerList.Add(fields);
+            }
+            rowCount++;
+        }
+        return [.. headerList];
     }
 
     public int? CountRecords()
@@ -227,7 +216,7 @@ public class RecordParser : IDisposable
                 index -= Profile.Descriptor.LineTerminator.Length - 1;
                 break;
             }
-                
+
             index++;
         }
         CharParser.Reset();

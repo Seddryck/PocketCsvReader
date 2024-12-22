@@ -65,7 +65,7 @@ public class CsvDataReader : IDataReader
 
         IsEof = RecordParser!.ReadNextRecord(out RecordSpan rawRecord);
         if (RowCount == 0 && !RecordParser!.Profile.Descriptor.Header)
-            RegisterHeader((string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length), "field_");
+            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length)], "field_");
 
         if (rawRecord.FieldSpans.Length == 0)
         {
@@ -82,12 +82,27 @@ public class CsvDataReader : IDataReader
         return true;
     }
 
-    private void RegisterHeader(string?[] names, string prefix)
+    private void RegisterHeader(string?[][] headers, string unamedPrefix)
     {
+        var maxField = headers.Select(x => x.Length).Max();
+        var names = (string[])Array.CreateInstance(typeof(string), maxField);
+
+        foreach (var header in headers)
+        {
+            var last = string.Empty;
+            for (int i = 0; i < maxField; i++)
+            {
+                if (i < header.Length && !string.IsNullOrEmpty(header[i]))
+                    last = header[i];
+                names[i] = string.IsNullOrEmpty(names[i])
+                            ? $"{last}"
+                            : $"{names[i]}{Profile.Descriptor.HeaderJoin}{last}";
+            }
+        }
         int unnamedFieldIndex = 0;
         Fields = (RecordParser!.Profile.Descriptor.Header
-                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{prefix}{unnamedFieldIndex}" : value; })
-                : names.Select(_ => $"{prefix}{unnamedFieldIndex++}")).ToArray();
+                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
+                : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
     }
 
     private void HandleUnexpectedFields(int expectedLength)

@@ -67,18 +67,43 @@ The description of PocketCsvReader is aligned with the [CSV Dialect Specificatio
 
 ## `Header`
 
-- **Description:** Indicates whether the first row of the CSV contains column headers.
+- **Description:** Specifies whether the first row(s) of the CSV contains column headers.
 - **Default Value:** `true`.
 - **Tuning:**
   - Set to `false` if your CSV does not include headers.
   - Useful for datasets where all rows are data.
 
+## `HeaderRows`
+
+- **Description:** Specifies the row indexes that contain the headers.
+- **Default Value:** `[1]`.
+- **Tuning:**
+  - Set to `[1,2]` if your CSV defines headers across the first two rows.
+  - Set to `[2,3]` if your CSV defines headers across the second and third two rows. The first row is ignored.
+  - Useful for datasets where multiple rows combine to define the headers.
+
+## `HeaderJoin`
+
+- **Description:** Specifies the separator used to combine fields when headers span multiple rows.
+- **Default Value:** ` ` (concatenates headers without a space as separator).
+- **Tuning:**
+  - Set to . to produce fields like `fruit.id` and `fruit.name`.
+  - Useful for datasets with multi-line headers that need to be merged into a single row of header fields.
+
 ## `CommentChar`
 
-- **Description:** The character used to denote comments in the CSV file.
+- **Description:** The character used to denote comments in the CSV file. Must be the first character of the row.
 - **Default Value:** `null` (null, indicating no comments).
 - **Tuning:**
   - Specify a comment character (e.g., `'#'` or `';'`) to skip lines starting with that character.
+
+## `CommentRows`
+
+- **Description:** Specifies row indexes that are treated as comments, regardless of whether `commentChar` is set.
+- **Default Value:** `[]` (no specific rows are treated as comments).
+- **Tuning:**
+  - Specify indexes like `[1,3,4]` to treat the first, third, and fourth rows as comments.
+  - Useful for skipping predefined rows that do not contain data.
 
 ## `CaseSensitiveHeader`
 

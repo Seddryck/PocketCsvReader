@@ -15,6 +15,7 @@ public class CharParser
     public int FieldLength { get; private set; } = 0;
     public bool IsQuotedField { get; private set; } = false;
     public bool IsEscapedField { get; private set; } = false;
+    public bool IsHeaderRow { get; private set; } = false;
     public CsvProfile Profile { get; }
 
     internal delegate ParserState InternalParse(char c);
@@ -113,6 +114,10 @@ public class CharParser
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetEscapedField()
         => IsEscapedField = true;
+    internal void SetHeaderRow()
+        => IsHeaderRow = true;
+    internal void UnsetHeaderRow()
+        => IsHeaderRow = false;
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Switch(InternalParse parse)
         => Internal = parse;
@@ -124,5 +129,6 @@ public enum ParserState
     Error,
     Field,
     Record,
+    Header,
     Eof,
 }
