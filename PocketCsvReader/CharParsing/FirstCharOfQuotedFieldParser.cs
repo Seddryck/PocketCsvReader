@@ -9,8 +9,8 @@ namespace PocketCsvReader.CharParsing;
 internal class FirstCharOfQuotedFieldParser : IInternalCharParser
 {
     protected CharParser Parser { get; set; }
-    private char QuoteChar { get; set; }
-    private char EscapeChar { get; set; }
+    private char? QuoteChar { get; set; }
+    private char? EscapeChar { get; set; }
 
     public FirstCharOfQuotedFieldParser(CharParser parser)
         => (Parser, QuoteChar, EscapeChar)
@@ -20,13 +20,13 @@ internal class FirstCharOfQuotedFieldParser : IInternalCharParser
     {
         Parser.SetFieldStart();
 
-        if (c == QuoteChar)
+        if (QuoteChar.HasValue && c == QuoteChar)
         {
             Parser.Switch(Parser.AfterQuoteChar);
             return ParserState.Continue;
         }
 
-        if (c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeCharQuotedField);
             return ParserState.Continue;

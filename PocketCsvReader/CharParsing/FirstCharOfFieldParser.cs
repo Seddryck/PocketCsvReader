@@ -11,10 +11,10 @@ internal class FirstCharOfFieldParser : IInternalCharParser
     protected CharParser Parser { get; set; }
 
     private char FirstCharOfLineTerminator { get; set; }
-    private char QuoteChar { get; set; }
+    private char? QuoteChar { get; set; }
     private char Delimiter { get; set; }
     private bool IsSkipInitialSpace { get; set; }
-    private char EscapeChar { get; set; }
+    private char? EscapeChar { get; set; }
 
     public FirstCharOfFieldParser(CharParser parser)
         => (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
@@ -26,7 +26,7 @@ internal class FirstCharOfFieldParser : IInternalCharParser
     {
         Parser.ResetFieldState();
 
-        if (c == QuoteChar)
+        if (QuoteChar.HasValue && c == QuoteChar)
         {
             Parser.SetQuotedField();
             Parser.Switch(Parser.FirstCharOfQuotedField);
@@ -50,7 +50,7 @@ internal class FirstCharOfFieldParser : IInternalCharParser
             return ParserState.Continue;
         }
 
-        if (c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;

@@ -235,39 +235,6 @@ public class DialectDescriptorBuilderTest
         Assert.That(descriptor.CommentChar, Is.EqualTo(value));
     }
 
-
-    [Test]
-    [TestCase(true)]
-    [TestCase(false)]
-    public void WithCaseSensitiveHeader_ShouldSetCaseSensitiveHeaderToValue(bool value)
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithCaseSensitiveHeader(value)
-            .Build();
-
-        Assert.That(descriptor.CaseSensitiveHeader, Is.EqualTo(value));
-    }
-
-    [Test]
-    public void WithCaseSensitiveHeader_ShouldSetCaseSensitiveHeaderToTrue()
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithCaseSensitiveHeader()
-            .Build();
-
-        Assert.That(descriptor.CaseSensitiveHeader, Is.True);
-    }
-
-    [Test]
-    public void WithCaseSensitiveHeader_WithoutParameter_ShouldSetCaseSensitiveHeaderToFalse()
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithoutCaseSensitiveHeader()
-            .Build();
-
-        Assert.That(descriptor.CaseSensitiveHeader, Is.False);
-    }
-
     [Test]
     public void WithCsvDdfVersion_ShouldSetCsvDdfVersion()
     {

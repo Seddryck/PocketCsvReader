@@ -188,7 +188,7 @@ public class CsvDataTableTest
     public void Read_Comment_CommentedLinesSkipped(string content)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
-        var profile = new CsvProfile(new CsvDialectDescriptor { Header = false, Delimiter = ';', CommentChar = '#', DoubleQuote = false });
+        var profile = new CsvProfile(new DialectDescriptor { Header = false, Delimiter = ';', CommentChar = '#', DoubleQuote = false });
         var reader = new CsvReader(profile);
         var dataTable = reader.ToDataTable(stream);
         Assert.That(dataTable.Rows.Count, Is.EqualTo(2));

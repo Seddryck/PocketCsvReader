@@ -9,8 +9,8 @@ namespace PocketCsvReader;
 internal class FieldEscaper
 {
     protected ArrayPool<char>? Pool { get; }
-    protected char QuoteChar { get; }
-    protected char EscapeChar { get; }
+    protected char? QuoteChar { get; }
+    protected char? EscapeChar { get; }
     protected char Delimiter { get; }
     protected bool DoubleQuote { get; }
 
@@ -18,7 +18,7 @@ internal class FieldEscaper
         : this(Profile.Descriptor.QuoteChar, Profile.Descriptor.DoubleQuote, Profile.Descriptor.EscapeChar, Profile.Descriptor.Delimiter, pool)
     { }
 
-    public FieldEscaper(char quoteChar, bool doubleQuote, char escapeChar, char delimiter, ArrayPool<char>? pool = null)
+    public FieldEscaper(char? quoteChar, bool doubleQuote, char? escapeChar, char delimiter, ArrayPool<char>? pool = null)
         => (QuoteChar, DoubleQuote, EscapeChar, Delimiter, Pool) = (quoteChar, doubleQuote, escapeChar, delimiter, pool);
 
     public ReadOnlySpan<char> Escape(ReadOnlySpan<char> value)

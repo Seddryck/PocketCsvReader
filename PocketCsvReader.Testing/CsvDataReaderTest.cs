@@ -58,7 +58,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();
         Assert.That(dataReader.GetString(0), Is.EqualTo(firstToken));
@@ -71,7 +71,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;17"));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
@@ -84,7 +84,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;17.02542"));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
@@ -97,7 +97,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;2024-12-06T12:45:16"));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false });
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
@@ -125,7 +125,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(
-                new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false }
+                new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true, Header = false }
             );
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();

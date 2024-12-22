@@ -10,7 +10,7 @@ internal class CharOfFieldParser : IInternalCharParser
     protected CharParser Parser { get; set; }
     private char FirstCharOfLineTerminator { get; set; }
     private char Delimiter { get; set; }
-    private char EscapeChar { get; set; }
+    private char? EscapeChar { get; set; }
 
     public CharOfFieldParser(CharParser parser)
         => (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
@@ -35,7 +35,7 @@ internal class CharOfFieldParser : IInternalCharParser
                 : ParserState.Continue;
         }
 
-        if (c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;

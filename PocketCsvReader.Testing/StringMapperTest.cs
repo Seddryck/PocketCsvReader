@@ -44,7 +44,7 @@ public class StringMapperTest
         item.AsSpan().CopyTo(buffer);
         buffer = buffer.Slice(0, item.Length);
 
-        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
+        var profile = new CsvProfile(new DialectDescriptor { NullSequence = "(null)" });
         var mapper = new StringMapper(profile);
         var value = mapper.Parse(buffer, false, false);
         Assert.That(value, Is.EqualTo(result));
@@ -58,7 +58,7 @@ public class StringMapperTest
         item.AsSpan().CopyTo(buffer);
         buffer = buffer.Slice(0, item.Length);
 
-        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = "(null)" });
+        var profile = new CsvProfile(new DialectDescriptor { NullSequence = "(null)" });
         var mapper = new StringMapper(profile);
         var value = mapper.Parse(buffer.Slice(1, item.Length - 2), false, true);
         Assert.That(value, Is.EqualTo(result));
@@ -195,7 +195,7 @@ public class StringMapperTest
         field.AsSpan().CopyTo(buffer);
         buffer = buffer.Slice(0, field.Length);
 
-        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
+        var profile = new CsvProfile(new DialectDescriptor { NullSequence = NullSequence });
 
         var mapper = new StringMapper(profile);
         var value = mapper.Parse(buffer, false, false);
@@ -211,7 +211,7 @@ public class StringMapperTest
         field.AsSpan().CopyTo(buffer);
         buffer = buffer.Slice(0, field.Length);
 
-        var profile = new CsvProfile(new CsvDialectDescriptor { NullSequence = NullSequence });
+        var profile = new CsvProfile(new DialectDescriptor { NullSequence = NullSequence });
 
         var mapper = new StringMapper(profile);
         var value = mapper.Parse(buffer, false, false);

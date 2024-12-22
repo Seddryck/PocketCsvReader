@@ -86,7 +86,7 @@ public class RecordParserTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values.Slice(0).ToString(), Is.EqualTo(firstToken));
@@ -179,8 +179,8 @@ public class RecordParserTest
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '`');
-        profile.Descriptor.SkipInitialSpace = true;
+        var dialect = new DialectDescriptor() with { Delimiter = ';', QuoteChar = '`', SkipInitialSpace = true };
+        var profile = new CsvProfile(dialect);
         using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
         using var streamReader = new StreamReader(stream);
         reader.ReadNextRecord(out var values);
@@ -338,7 +338,7 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("a;(null)"));
 
-        var profile = new CsvProfile(new CsvDialectDescriptor() { Delimiter = ';', NullSequence = "(null)", Header = false });
+        var profile = new CsvProfile(new DialectDescriptor() { Delimiter = ';', NullSequence = "(null)", Header = false });
         using var reader = new CsvDataReader(buffer, profile);
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.IsDBNull(0), Is.False);

@@ -11,7 +11,7 @@ internal class CharOfFieldLookupParser : IInternalCharParser
     protected readonly bool[] InterestingChars;
     private char FirstCharOfLineTerminator { get; set; }
     private char Delimiter { get; set; }
-    private char EscapeChar { get; set; }
+    private char? EscapeChar { get; set; }
 
     public CharOfFieldLookupParser(CharParser parser)
     {
@@ -22,7 +22,8 @@ internal class CharOfFieldLookupParser : IInternalCharParser
         InterestingChars = new bool[char.MaxValue + 1];
         InterestingChars[Delimiter] = true;
         InterestingChars[FirstCharOfLineTerminator] = true;
-        InterestingChars[EscapeChar] = true;
+        if (EscapeChar.HasValue)
+            InterestingChars[EscapeChar.Value] = true;
     }
 
     public virtual ParserState Parse(char c)
@@ -46,7 +47,7 @@ internal class CharOfFieldLookupParser : IInternalCharParser
                 : ParserState.Continue;
         }
 
-        if (c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;

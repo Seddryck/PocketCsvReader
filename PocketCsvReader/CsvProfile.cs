@@ -5,7 +5,7 @@ namespace PocketCsvReader;
 
 public class CsvProfile
 {
-    public CsvDialectDescriptor Descriptor { get; private set; }
+    public DialectDescriptor Descriptor { get; private set; }
     public ParserOptimizationOptions ParserOptimizations { get; set; }
     public Dictionary<string, string?> Sequences { get; } = new();
 
@@ -60,11 +60,8 @@ public class CsvProfile
         MissingCell = missingCell;
     }
 
-    public CsvProfile(CsvDialectDescriptor descriptor)
+    public CsvProfile(DialectDescriptor descriptor)
     {
-        if (descriptor.CaseSensitiveHeader)
-            throw new ArgumentException("PocketCsvReader doesn't support caseSensitiveHeader set to true in the CSV dialect descriptor.");
-
         if (descriptor.NullSequence is not null)
             Sequences.Add(descriptor.NullSequence, null);
 
