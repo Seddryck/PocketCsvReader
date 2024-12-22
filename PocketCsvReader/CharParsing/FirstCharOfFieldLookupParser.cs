@@ -11,10 +11,10 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
     protected CharParser Parser { get; set; }
     protected readonly bool[] InterestingChars;
     private char FirstCharOfLineTerminator { get; set; }
-    private char QuoteChar { get; set; }
+    private char? QuoteChar { get; set; }
     private char Delimiter { get; set; }
     private bool IsSkipInitialSpace { get; set; }
-    private char EscapeChar { get; set; }
+    private char? EscapeChar { get; set; }
 
     public FirstCharOfFieldLookupParser(CharParser parser)
     {
@@ -26,8 +26,10 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
         InterestingChars = new bool[char.MaxValue + 1];
         InterestingChars[Delimiter] = true;
         InterestingChars[FirstCharOfLineTerminator] = true;
-        InterestingChars[EscapeChar] = true;
-        InterestingChars[QuoteChar] = true;
+        if (EscapeChar.HasValue)
+            InterestingChars[EscapeChar.Value] = true;
+        if (QuoteChar.HasValue)
+            InterestingChars[QuoteChar.Value] = true;
         InterestingChars[' '] = IsSkipInitialSpace;
     }
 
@@ -42,7 +44,7 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
             return ParserState.Continue;
         }
 
-        if (c == QuoteChar)
+        if (QuoteChar.HasValue && c == QuoteChar)
         {
             Parser.SetQuotedField();
             Parser.Switch(Parser.FirstCharOfQuotedField);
@@ -67,7 +69,7 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
         }
 
 
-        if (c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;

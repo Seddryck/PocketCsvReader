@@ -42,7 +42,7 @@ internal class LineTerminatorParser : IInternalCharParser
     }
 
     public virtual ParserState NextState()
-        => ParserState.Record;
+        => Parser.IsHeaderRow ? ParserState.Header : ParserState.Record;
 
     public virtual ParserState SetBack()
     {

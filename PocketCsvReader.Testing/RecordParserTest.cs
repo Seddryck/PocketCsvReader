@@ -86,7 +86,7 @@ public class RecordParserTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(
-            new CsvDialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true });
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         reader.ReadNextRecord(out var values);
         Assert.That(values.Slice(0).ToString(), Is.EqualTo(firstToken));
@@ -179,8 +179,8 @@ public class RecordParserTest
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '`');
-        profile.Descriptor.SkipInitialSpace = true;
+        var dialect = new DialectDescriptor() with { Delimiter = ';', QuoteChar = '`', SkipInitialSpace = true };
+        var profile = new CsvProfile(dialect);
         using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
         using var streamReader = new StreamReader(stream);
         reader.ReadNextRecord(out var values);
@@ -191,8 +191,9 @@ public class RecordParserTest
 
     [Test]
     [TestCase("foo;bar\r\n1;2\r\n3;4", true, "foo", "bar")]
-    [TestCase("foo;\r\n1;2\r\n3;4", true, "foo", "field_1")]
-    [TestCase("1;2\r\n3;4", false, "field_0", "field_1")]
+    [TestCase("foo;\r\n1;2\r\n3;4", true, "foo", "")]
+    [TestCase("foo\r\n1;2\r\n3;4", true, "foo")]
+    [TestCase("1;2\r\n3;4", false)]
     public void ReadHeaders_Record_CorrectResult(string text, bool hasHeader, params string[] headers)
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(text));
@@ -200,9 +201,13 @@ public class RecordParserTest
         var profile = new CsvProfile(';', '`', "\r\n", hasHeader);
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         var values = reader.ReadHeaders();
-        Assert.That(values, Has.Length.EqualTo(2));
-        Assert.That(values[0], Is.EqualTo(headers[0]));
-        Assert.That(values[1], Is.EqualTo(headers[1]));
+        Assert.That(values, Has.Length.EqualTo(Convert.ToInt32(hasHeader)));
+        if (hasHeader)
+        {
+            Assert.That(values[0], Has.Length.EqualTo(headers.Length));
+            for (int i = 0; i < headers.Length; i++)
+                Assert.That(values[0][i], Is.EqualTo(headers[i]));
+        }
     }
 
     [Test]
@@ -338,7 +343,7 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes("a;(null)"));
 
-        var profile = new CsvProfile(new CsvDialectDescriptor() { Delimiter = ';', NullSequence = "(null)", Header = false });
+        var profile = new CsvProfile(new DialectDescriptor() { Delimiter = ';', NullSequence = "(null)", Header = false });
         using var reader = new CsvDataReader(buffer, profile);
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.IsDBNull(0), Is.False);

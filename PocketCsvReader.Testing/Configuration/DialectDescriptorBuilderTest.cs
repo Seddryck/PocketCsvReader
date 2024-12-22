@@ -198,6 +198,19 @@ public class DialectDescriptorBuilderTest
             .Build();
 
         Assert.That(descriptor.Header, Is.True);
+        Assert.That(descriptor.HeaderRows, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public void SwitchHeaderValue_ShouldSetHeaderToTrue()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithoutHeader()
+            .WithHeader()
+            .Build();
+
+        Assert.That(descriptor.Header, Is.True);
+        Assert.That(descriptor.HeaderRows, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -207,6 +220,54 @@ public class DialectDescriptorBuilderTest
             .WithoutHeader()
             .Build();
 
+        Assert.That(descriptor.Header, Is.False);
+        Assert.That(descriptor.HeaderRows, Is.Empty);
+    }
+
+    [Test]
+    [TestCase(" ")]
+    [TestCase("-")]
+    [TestCase(" - ")]
+    public void WithHeaderJoin_ShouldSetHeaderJoin(string join)
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithHeaderJoin(join)
+            .Build();
+
+        Assert.That(descriptor.HeaderJoin, Is.EqualTo(join));
+    }
+
+    [Test]
+    [TestCase(1)]
+    [TestCase(1, 2, 3)]
+    public void WithHeaderRows_ShouldSetHeaderRows(params int[] rows)
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithHeaderRows(rows)
+            .Build();
+
+        Assert.That(descriptor.HeaderRows, Is.EqualTo(rows));
+    }
+
+    [Test]
+    public void WithHeaderRowsEmpty_ShouldSetHeaderRowsAndHeader()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithHeaderRows([])
+            .Build();
+
+        Assert.That(descriptor.HeaderRows, Is.Empty);
+        Assert.That(descriptor.Header, Is.False);
+    }
+
+    [Test]
+    public void WithoutHeaderRows_ShouldSetHeaderRowsAndHeader()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithoutHeaderRows()
+            .Build();
+
+        Assert.That(descriptor.HeaderRows, Is.Empty);
         Assert.That(descriptor.Header, Is.False);
     }
 
@@ -235,37 +296,17 @@ public class DialectDescriptorBuilderTest
         Assert.That(descriptor.CommentChar, Is.EqualTo(value));
     }
 
-
     [Test]
-    [TestCase(true)]
-    [TestCase(false)]
-    public void WithCaseSensitiveHeader_ShouldSetCaseSensitiveHeaderToValue(bool value)
+    [TestCase()]
+    [TestCase(1)]
+    [TestCase(1, 2, 3)]
+    public void WithCommentRows_ShouldSetCommentChar(params int[] rows)
     {
         var descriptor = new DialectDescriptorBuilder()
-            .WithCaseSensitiveHeader(value)
+            .WithCommentRows(rows)
             .Build();
 
-        Assert.That(descriptor.CaseSensitiveHeader, Is.EqualTo(value));
-    }
-
-    [Test]
-    public void WithCaseSensitiveHeader_ShouldSetCaseSensitiveHeaderToTrue()
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithCaseSensitiveHeader()
-            .Build();
-
-        Assert.That(descriptor.CaseSensitiveHeader, Is.True);
-    }
-
-    [Test]
-    public void WithCaseSensitiveHeader_WithoutParameter_ShouldSetCaseSensitiveHeaderToFalse()
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithoutCaseSensitiveHeader()
-            .Build();
-
-        Assert.That(descriptor.CaseSensitiveHeader, Is.False);
+        Assert.That(descriptor.CommentRows, Is.EqualTo(rows));
     }
 
     [Test]
