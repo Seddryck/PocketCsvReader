@@ -35,7 +35,7 @@
     <Owners>Seddryck</Owners>
     <Company>nbiguity</Company>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Seddrycl/PocketCsvReader</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Seddryck/PocketCsvReader</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <RequireLicenseAcceptance>false</RequireLicenseAcceptance>
     <PackageIcon>icon\pocket-csv-reader.png</PackageIcon>
