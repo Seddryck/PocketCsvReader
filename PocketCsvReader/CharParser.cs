@@ -77,7 +77,7 @@ public class CharParser
 
     public ParserState ParseEof()
     {
-        if (Internal == FirstCharOfRecord || Internal == Comment)
+        if (Internal == FirstCharOfRecord || Internal == Comment || (Internal == LineTerminator && Profile.Descriptor.LineTerminator.Length == 1))
             return ParserState.Eof;
         else if (Internal == FirstCharOfField)
         {

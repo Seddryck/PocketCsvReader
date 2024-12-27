@@ -42,7 +42,7 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         var ex = Assert.Throws<IndexOutOfRangeException>(() => dataReader.GetString(1));
         //Assert.That(ex!.Message, Does.Contain("record '2'"));
-        Assert.That(ex.Message, Does.Contain("index '1'"));
+        Assert.That(ex!.Message, Does.Contain("index '1'"));
         Assert.That(ex.Message, Does.Contain("contains 1 defined fields"));
 
         Assert.That(dataReader.Read(), Is.True);
@@ -399,5 +399,25 @@ public class CsvDataReaderTest
             }
             Assert.That(rowCount, Is.EqualTo(lineCount));
         }
+    }
+
+    [Test]
+    [TestCase("\r\n")]
+    [TestCase("\n")]
+    [TestCase("\t\r\n")]
+    public void ToDataReader_(string lineTerminator)
+    {
+        var dialect = new DialectDescriptor()
+        {
+            Delimiter = ',',
+            LineTerminator = lineTerminator,
+            Header = true
+        };
+        var profile = new CsvProfile(dialect);
+        var data = $"a,b,c{lineTerminator}1,2,3{lineTerminator}4,5,6{lineTerminator}";
+        var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(data)), profile);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.Read(), Is.False);
     }
 }
