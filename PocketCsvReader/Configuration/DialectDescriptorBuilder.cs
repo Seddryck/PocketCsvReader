@@ -27,7 +27,7 @@ public class DialectDescriptorBuilder
         };
         return WithLineTerminator(terminator);
     }
-    public DialectDescriptorBuilder WithQuoteChar(char quoteChar)
+    public DialectDescriptorBuilder WithQuoteChar(char? quoteChar)
         => (Descriptor = Descriptor with { QuoteChar = quoteChar }, Builder: this).Builder;
     public DialectDescriptorBuilder WithQuoteChar(QuoteChar quoteChar)
         => WithQuoteChar((char)quoteChar);
@@ -37,7 +37,7 @@ public class DialectDescriptorBuilder
         => (Descriptor = Descriptor with { DoubleQuote = doubleQuote }, Builder: this).Builder;
     public DialectDescriptorBuilder WithoutDoubleQuote()
         => WithDoubleQuote(false);
-    public DialectDescriptorBuilder WithEscapeChar(char escapeChar)
+    public DialectDescriptorBuilder WithEscapeChar(char? escapeChar)
         => (Descriptor = Descriptor with { EscapeChar = escapeChar}, Builder: this).Builder;
     public DialectDescriptorBuilder WithEscapeChar(EscapeChar escapeChar)
         => WithEscapeChar((char)escapeChar);
@@ -69,13 +69,13 @@ public class DialectDescriptorBuilder
         => (Descriptor = Descriptor with { HeaderJoin = join }, Builder: this).Builder;
     public DialectDescriptorBuilder WithHeaderRows(int[] headerRows)
     {
-        if (headerRows.Length == 0)
+        if (headerRows is null || headerRows.Length == 0)
             return WithoutHeader();
         return (Descriptor = Descriptor with { HeaderRows = headerRows }, Builder: this).Builder;
     }
     public DialectDescriptorBuilder WithoutHeaderRows()
         => WithHeaderRows([]);
-    public DialectDescriptorBuilder WithCommentChar(char commentChar)
+    public DialectDescriptorBuilder WithCommentChar(char? commentChar)
         => (Descriptor = Descriptor with { CommentChar = commentChar}, Builder: this).Builder;
     public DialectDescriptorBuilder WithCommentChar(CommentChar commentChar)
        => WithCommentChar((char)commentChar);
