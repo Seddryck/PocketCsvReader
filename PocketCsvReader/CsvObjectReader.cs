@@ -56,7 +56,7 @@ public class CsvObjectReader<T> : IDisposable
 
         while (!IsEof)
         {
-            if (RowCount == 0 && Profile.Descriptor.Header)
+            if (RowCount == 0 && Profile.Dialect.Header)
             {
                 var _ = RecordParser!.ReadHeaders();
             }

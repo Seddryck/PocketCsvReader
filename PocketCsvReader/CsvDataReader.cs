@@ -60,11 +60,11 @@ public class CsvDataReader : IDataReader
             return false;
 
         if (RowCount == 0)
-            if (RecordParser!.Profile.Descriptor.Header)
+            if (RecordParser!.Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
         IsEof = RecordParser!.ReadNextRecord(out RecordSpan rawRecord);
-        if (RowCount == 0 && !RecordParser!.Profile.Descriptor.Header)
+        if (RowCount == 0 && !RecordParser!.Profile.Dialect.Header)
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length)], "field_");
 
         if (rawRecord.FieldSpans.Length == 0)
@@ -96,11 +96,11 @@ public class CsvDataReader : IDataReader
                     last = header[i];
                 names[i] = string.IsNullOrEmpty(names[i])
                             ? $"{last}"
-                            : $"{names[i]}{Profile.Descriptor.HeaderJoin}{last}";
+                            : $"{names[i]}{Profile.Dialect.HeaderJoin}{last}";
             }
         }
         int unnamedFieldIndex = 0;
-        Fields = (RecordParser!.Profile.Descriptor.Header
+        Fields = (RecordParser!.Profile.Dialect.Header
                 ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
                 : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
     }
@@ -114,7 +114,7 @@ public class CsvDataReader : IDataReader
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
-                    , RowCount + 1 + Convert.ToInt32(RecordParser!.Profile.Descriptor.Header)
+                    , RowCount + 1 + Convert.ToInt32(RecordParser!.Profile.Dialect.Header)
                     , length - expectedLength
                     , length - expectedLength > 1 ? "s" : string.Empty
                 )

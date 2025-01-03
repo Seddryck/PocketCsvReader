@@ -24,7 +24,7 @@ internal class LineTerminatorParser : IInternalCharParser
 
     public ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.LineTerminator[Index])
+        if (c == Parser.Profile.Dialect.LineTerminator[Index])
         {
             Index++;
             if (IsLast())

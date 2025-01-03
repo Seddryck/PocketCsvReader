@@ -115,7 +115,7 @@ public class RecordParser : IDisposable
 
     public virtual string[][] ReadHeaders()
     {
-        if (!Profile.Descriptor.Header)
+        if (!Profile.Dialect.Header)
             return [];
 
         var headerMapper = new SpanMapper<string[]>((span, fieldSpans) =>
@@ -129,10 +129,10 @@ public class RecordParser : IDisposable
 
         var headerList = new List<string[]>();
         var rowCount = 1;
-        while (rowCount <= Profile.Descriptor.HeaderRows.Max())
+        while (rowCount <= Profile.Dialect.HeaderRows.Max())
         {
             ReadNextRecord(out RecordSpan rawRecord);
-            if (Profile.Descriptor.HeaderRows.Contains(rowCount))
+            if (Profile.Dialect.HeaderRows.Contains(rowCount))
             {
                 var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
                 headerList.Add(fields);
@@ -148,7 +148,7 @@ public class RecordParser : IDisposable
             return null;
 
         var count = CountRecordSeparators();
-        count -= Convert.ToInt16(Profile.Descriptor.Header);
+        count -= Convert.ToInt16(Profile.Dialect.Header);
 
         CharParser.Reset();
         Reader.Reset();
@@ -213,7 +213,7 @@ public class RecordParser : IDisposable
 
             if (CharParser.Parse(span[index]) == ParserState.Record)
             {
-                index -= Profile.Descriptor.LineTerminator.Length - 1;
+                index -= Profile.Dialect.LineTerminator.Length - 1;
                 break;
             }
 

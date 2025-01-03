@@ -14,13 +14,13 @@ internal class CharOfQuotedFieldParser : IInternalCharParser
 
     public virtual ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.QuoteChar)
+        if (c == Parser.Profile.Dialect.QuoteChar)
         {
             Parser.Switch(Parser.AfterQuoteChar);
             return ParserState.Continue;
         }
 
-        if (c == Parser.Profile.Descriptor.EscapeChar)
+        if (c == Parser.Profile.Dialect.EscapeChar)
         {
             Parser.Switch(Parser.AfterEscapeCharQuotedField);
             return ParserState.Continue;

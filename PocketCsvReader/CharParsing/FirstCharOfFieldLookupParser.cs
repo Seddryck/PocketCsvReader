@@ -19,9 +19,9 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
     public FirstCharOfFieldLookupParser(CharParser parser)
     {
         (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
-                = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.QuoteChar
-                    , parser.Profile.Descriptor.Delimiter, parser.Profile.Descriptor.SkipInitialSpace
-                    , parser.Profile.Descriptor.EscapeChar);
+                = (parser, parser.Profile.Dialect.LineTerminator[0], parser.Profile.Dialect.QuoteChar
+                    , parser.Profile.Dialect.Delimiter, parser.Profile.Dialect.SkipInitialSpace
+                    , parser.Profile.Dialect.EscapeChar);
 
         InterestingChars = new bool[char.MaxValue + 1];
         InterestingChars[Delimiter] = true;

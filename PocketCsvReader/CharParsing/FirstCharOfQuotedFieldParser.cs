@@ -14,7 +14,7 @@ internal class FirstCharOfQuotedFieldParser : IInternalCharParser
 
     public FirstCharOfQuotedFieldParser(CharParser parser)
         => (Parser, QuoteChar, EscapeChar)
-                = (parser, parser.Profile.Descriptor.QuoteChar, parser.Profile.Descriptor.EscapeChar);
+                = (parser, parser.Profile.Dialect.QuoteChar, parser.Profile.Dialect.EscapeChar);
 
     public virtual ParserState Parse(char c)
     {

@@ -14,8 +14,8 @@ internal class CharOfFieldParser : IInternalCharParser
 
     public CharOfFieldParser(CharParser parser)
         => (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
-                = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.Delimiter
-                    , parser.Profile.Descriptor.EscapeChar);
+                = (parser, parser.Profile.Dialect.LineTerminator[0], parser.Profile.Dialect.Delimiter
+                    , parser.Profile.Dialect.EscapeChar);
 
     public virtual ParserState Parse(char c)
     {
@@ -30,7 +30,7 @@ internal class CharOfFieldParser : IInternalCharParser
         {
             Parser.SetFieldEnd(-1);
             Parser.Switch(Parser.LineTerminator);
-            return Parser.Profile.Descriptor.LineTerminator.Length == 1
+            return Parser.Profile.Dialect.LineTerminator.Length == 1
                 ? ParserState.Record
                 : ParserState.Continue;
         }

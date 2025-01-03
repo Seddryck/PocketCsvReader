@@ -12,7 +12,7 @@ internal class AfterQuoteCharDoubleParser : AfterQuoteCharParser
 
     public override ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.QuoteChar)
+        if (c == Parser.Profile.Dialect.QuoteChar)
         {
             Parser.SetEscapedField();
             Parser.Switch(Parser.CharOfQuotedField);
