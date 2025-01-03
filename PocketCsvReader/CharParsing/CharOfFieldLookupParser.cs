@@ -16,8 +16,8 @@ internal class CharOfFieldLookupParser : IInternalCharParser
     public CharOfFieldLookupParser(CharParser parser)
     {
         (Parser, FirstCharOfLineTerminator, Delimiter, EscapeChar)
-                    = (parser, parser.Profile.Descriptor.LineTerminator[0], parser.Profile.Descriptor.Delimiter
-                        , parser.Profile.Descriptor.EscapeChar);
+                    = (parser, parser.Profile.Dialect.LineTerminator[0], parser.Profile.Dialect.Delimiter
+                        , parser.Profile.Dialect.EscapeChar);
 
         InterestingChars = new bool[char.MaxValue + 1];
         InterestingChars[Delimiter] = true;
@@ -42,7 +42,7 @@ internal class CharOfFieldLookupParser : IInternalCharParser
         {
             Parser.SetFieldEnd(-1);
             Parser.Switch(Parser.LineTerminator);
-            return Parser.Profile.Descriptor.LineTerminator.Length == 1
+            return Parser.Profile.Dialect.LineTerminator.Length == 1
                 ? ParserState.Record
                 : ParserState.Continue;
         }

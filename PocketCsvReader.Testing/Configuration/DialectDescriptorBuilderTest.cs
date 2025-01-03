@@ -331,9 +331,9 @@ public class DialectDescriptorBuilderTest
             .Build();
         var csvReader = new CsvReader(new CsvProfile(descriptor));
 
-        Assert.That(csvReader.Profile.Descriptor.Delimiter, Is.EqualTo('\t'));
-        Assert.That(csvReader.Profile.Descriptor.LineTerminator, Is.EqualTo("\r"));
-        Assert.That(csvReader.Profile.Descriptor.QuoteChar, Is.EqualTo('\''));
-        Assert.That(csvReader.Profile.Descriptor.DoubleQuote, Is.True);
+        Assert.That(csvReader.Profile.Dialect.Delimiter, Is.EqualTo('\t'));
+        Assert.That(csvReader.Profile.Dialect.LineTerminator, Is.EqualTo("\r"));
+        Assert.That(csvReader.Profile.Dialect.QuoteChar, Is.EqualTo('\''));
+        Assert.That(csvReader.Profile.Dialect.DoubleQuote, Is.True);
     }
 }

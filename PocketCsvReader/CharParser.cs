@@ -42,16 +42,16 @@ public class CharParser
         FirstCharOfField = Profile.ParserOptimizations.LookupTableChar
             ? new FirstCharOfFieldLookupParser(this).Parse
             : new FirstCharOfFieldParser(this).Parse;
-        LineTerminatorParser = Profile.Descriptor.LineTerminator.Length == 1
+        LineTerminatorParser = Profile.Dialect.LineTerminator.Length == 1
             ? new FirstCharOfRecordParser(this)
-            : new LineTerminatorParser(this, Profile.Descriptor.LineTerminator.Length);
+            : new LineTerminatorParser(this, Profile.Dialect.LineTerminator.Length);
         LineTerminator = LineTerminatorParser.Parse;
-        Comment = new CommentParser(this, Profile.Descriptor.LineTerminator.Length).Parse;
+        Comment = new CommentParser(this, Profile.Dialect.LineTerminator.Length).Parse;
         CharOfField = Profile.ParserOptimizations.LookupTableChar
             ? new CharOfFieldLookupParser(this).Parse
             : new CharOfFieldParser(this).Parse;
         CharOfQuotedField = new CharOfQuotedFieldParser(this).Parse;
-        AfterQuoteChar = Profile.Descriptor.DoubleQuote
+        AfterQuoteChar = Profile.Dialect.DoubleQuote
             ? new AfterQuoteCharDoubleParser(this).Parse
             : new AfterQuoteCharParser(this).Parse;
         AfterEscapeCharQuotedField = new AfterEscapeCharQuotedFieldParser(this).Parse;
@@ -77,7 +77,7 @@ public class CharParser
 
     public ParserState ParseEof()
     {
-        if (Internal == FirstCharOfRecord || Internal == Comment || (Internal == LineTerminator && Profile.Descriptor.LineTerminator.Length == 1))
+        if (Internal == FirstCharOfRecord || Internal == Comment || (Internal == LineTerminator && Profile.Dialect.LineTerminator.Length == 1))
             return ParserState.Eof;
         else if (Internal == FirstCharOfField)
         {

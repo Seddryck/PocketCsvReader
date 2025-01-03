@@ -14,18 +14,18 @@ internal class AfterQuoteCharParser : IInternalCharParser
 
     public virtual ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.Delimiter)
+        if (c == Parser.Profile.Dialect.Delimiter)
         {
             Parser.SetFieldEnd(-2);
             Parser.Switch(Parser.FirstCharOfField);
             return ParserState.Field;
         }
 
-        if (c == Parser.Profile.Descriptor.LineTerminator[0])
+        if (c == Parser.Profile.Dialect.LineTerminator[0])
         {
             Parser.SetFieldEnd(-2);
             Parser.Switch(Parser.LineTerminator);
-            return Parser.Profile.Descriptor.LineTerminator.Length == 1
+            return Parser.Profile.Dialect.LineTerminator.Length == 1
                 ? ParserState.Record
                 : ParserState.Continue;
         }
