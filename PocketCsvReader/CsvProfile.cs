@@ -5,7 +5,8 @@ namespace PocketCsvReader;
 
 public class CsvProfile
 {
-    public DialectDescriptor Descriptor { get; private set; }
+    public DialectDescriptor Dialect { get; private set; }
+    public SchemaDescriptor? Schema { get; private set; }
     public ParserOptimizationOptions ParserOptimizations { get; set; }
     public Dictionary<string, string?> Sequences { get; } = new();
 
@@ -46,7 +47,7 @@ public class CsvProfile
 
     public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool rowCountAtStart, int bufferSize, string emptyCell, string missingCell)
     {
-        Descriptor = new DialectDescriptorBuilder()
+        Dialect = new DialectDescriptorBuilder()
                         .WithDelimiter(fieldSeparator)
                         .WithLineTerminator(recordSeparator)
                         .WithQuoteChar(textQualifier)
@@ -60,15 +61,21 @@ public class CsvProfile
         MissingCell = missingCell;
     }
 
-    public CsvProfile(DialectDescriptor descriptor)
+    public CsvProfile(DialectDescriptor dialect)
     {
-        if (descriptor.NullSequence is not null)
-            Sequences.Add(descriptor.NullSequence, null);
+        if (dialect.NullSequence is not null)
+            Sequences.Add(dialect.NullSequence, null);
 
-        Descriptor = descriptor;
+        Dialect = dialect;
         ParserOptimizations = new ParserOptimizationOptions();
         EmptyCell = string.Empty;
         MissingCell = string.Empty;
+    }
+
+    public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema)
+        : this(dialect)
+    {
+        Schema = schema;
     }
 
     private static CsvProfile? _commaDoubleQuote;

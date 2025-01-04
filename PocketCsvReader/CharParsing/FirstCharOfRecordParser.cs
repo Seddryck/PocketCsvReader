@@ -14,9 +14,9 @@ internal class FirstCharOfRecordParser : FirstCharOfFieldParser
     public FirstCharOfRecordParser(CharParser parser)
         : base(parser)
     {
-        CommentChar = Parser.Profile.Descriptor.CommentChar;
-        CommentRows = Parser.Profile.Descriptor.CommentRows ?? [];
-        HeaderRows = Parser.Profile.Descriptor.Header ? Parser.Profile.Descriptor.HeaderRows : [];
+        CommentChar = Parser.Profile.Dialect.CommentChar;
+        CommentRows = Parser.Profile.Dialect.CommentRows ?? [];
+        HeaderRows = Parser.Profile.Dialect.Header ? Parser.Profile.Dialect.HeaderRows : [];
     }
 
     public override ParserState Parse(char c)

@@ -15,7 +15,7 @@ internal class FieldEscaper
     protected bool DoubleQuote { get; }
 
     public FieldEscaper(CsvProfile Profile, ArrayPool<char>? pool = null)
-        : this(Profile.Descriptor.QuoteChar, Profile.Descriptor.DoubleQuote, Profile.Descriptor.EscapeChar, Profile.Descriptor.Delimiter, pool)
+        : this(Profile.Dialect.QuoteChar, Profile.Dialect.DoubleQuote, Profile.Dialect.EscapeChar, Profile.Dialect.Delimiter, pool)
     { }
 
     public FieldEscaper(char? quoteChar, bool doubleQuote, char? escapeChar, char delimiter, ArrayPool<char>? pool = null)

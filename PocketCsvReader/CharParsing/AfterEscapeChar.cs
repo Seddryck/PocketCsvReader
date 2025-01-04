@@ -12,8 +12,8 @@ internal class AfterEscapeCharParser : CharOfFieldParser
 
     public override ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.Delimiter
-            || c == Parser.Profile.Descriptor.EscapeChar)
+        if (c == Parser.Profile.Dialect.Delimiter
+            || c == Parser.Profile.Dialect.EscapeChar)
         {
             Parser.SetEscapedField();
             Parser.Switch(Parser.CharOfField);

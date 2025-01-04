@@ -63,7 +63,7 @@ public class CsvArrayString : IDisposable
 
         while (!IsEof)
         {
-            if (RowCount == 0 && Profile.Descriptor.Header)
+            if (RowCount == 0 && Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
             IsEof = RecordParser!.ReadNextRecord(out RecordSpan recordSpan);
@@ -89,11 +89,11 @@ public class CsvArrayString : IDisposable
                     last = header[i];
                 names[i] = string.IsNullOrEmpty(names[i])
                             ? $"{last}"
-                            : $"{names[i]}{Profile.Descriptor.HeaderJoin}{last}";
+                            : $"{names[i]}{Profile.Dialect.HeaderJoin}{last}";
             }
         }
         int unnamedFieldIndex = 0;
-        Fields = (RecordParser!.Profile.Descriptor.Header
+        Fields = (RecordParser!.Profile.Dialect.Header
                 ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
                 : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
     }

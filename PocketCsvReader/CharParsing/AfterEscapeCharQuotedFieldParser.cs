@@ -12,8 +12,8 @@ internal class AfterEscapeCharQuotedFieldParser : CharOfQuotedFieldParser
 
     public override ParserState Parse(char c)
     {
-        if (c == Parser.Profile.Descriptor.QuoteChar
-            || c == Parser.Profile.Descriptor.EscapeChar)
+        if (c == Parser.Profile.Dialect.QuoteChar
+            || c == Parser.Profile.Dialect.EscapeChar)
         {
             Parser.SetEscapedField();
             Parser.Switch(Parser.CharOfQuotedField);
