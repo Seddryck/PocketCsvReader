@@ -200,8 +200,7 @@ public class CsvDataReaderTest
             .WithDialect(
                 (dialect) => dialect
                     .WithDelimiter(';')
-                    .WithHeader(true)
-                    .WithDelimiter(';'))
+                    .WithHeader(true))
             .WithSchema(
                 (schema) => schema
                     .Named()
@@ -217,8 +216,8 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(DateTime)));
         Assert.That(dataReader.GetDateTime(0), Is.EqualTo(new DateTime(2025, 1, 4)));
         Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2025, 1, 4)));
-        Assert.That(((CsvDataReader)dataReader).GetDate(0), Is.EqualTo(new DateOnly(2025, 1, 4)));
-        Assert.That(((CsvDataReader)dataReader).GetDate(1), Is.EqualTo(new DateOnly(2025, 1, 4)));
+        Assert.That(dataReader.GetDate(0), Is.EqualTo(new DateOnly(2025, 1, 4)));
+        Assert.That(dataReader.GetDate(1), Is.EqualTo(new DateOnly(2025, 1, 4)));
     }
 
     [Test]
@@ -231,8 +230,7 @@ public class CsvDataReaderTest
             .WithDialect(
                 (dialect) => dialect
                     .WithDelimiter(';')
-                    .WithHeader(true)
-                    .WithDelimiter(';'))
+                    .WithHeader(true))
             .WithSchema(
                 (schema) => schema
                     .Named()
@@ -246,8 +244,8 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(TimeOnly)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(TimeOnly)));
-        Assert.That(((CsvDataReader)dataReader).GetTime(0), Is.EqualTo(new TimeOnly(14, 35, 8)));
-        Assert.That(((CsvDataReader)dataReader).GetTime(1), Is.EqualTo(new TimeOnly(14, 35, 8)));
+        Assert.That(dataReader.GetTime(0), Is.EqualTo(new TimeOnly(14, 35, 8)));
+        Assert.That(dataReader.GetTime(1), Is.EqualTo(new TimeOnly(14, 35, 8)));
     }
 
     [Test]
@@ -260,8 +258,7 @@ public class CsvDataReaderTest
             .WithDialect(
                 (dialect) => dialect
                     .WithDelimiter(';')
-                    .WithHeader(true)
-                    .WithDelimiter(';'))
+                    .WithHeader(true))
             .WithSchema(
                 (schema) => schema
                     .Named()
@@ -290,8 +287,7 @@ public class CsvDataReaderTest
             .WithDialect(
                 (dialect) => dialect
                     .WithDelimiter(';')
-                    .WithHeader(true)
-                    .WithDelimiter(';'))
+                    .WithHeader(true))
             .WithSchema(
                 (schema) => schema
                     .Named()
@@ -305,8 +301,70 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTimeOffset)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(DateTimeOffset)));
-        Assert.That(((CsvDataReader)dataReader).GetDateTimeOffset(0), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(0))));
-        Assert.That(((CsvDataReader)dataReader).GetDateTimeOffset(1), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(1, 0, 0))));
+        Assert.That(dataReader.GetDateTimeOffset(0), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(0))));
+        Assert.That(dataReader.GetDateTimeOffset(1), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(1, 0, 0))));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-01-04T14:35:08;108")]
+    public void GetValue_WithSchemaAndFormatDateTimeAndShort_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
+                    .WithField<short>("bar")
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(short)));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo((short)108));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-01-04T14:35:08;108")]
+    public void GetFieldValue_WithSchemaAndFormatDateTimeAndShort_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
+                    .WithField<short>("bar")
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(short)));
+        Assert.That(dataReader.GetFieldValue<DateTime>(0), Is.TypeOf<DateTime>());
+        Assert.That(dataReader.GetFieldValue<short>(1), Is.TypeOf<short>());
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.TypeOf<int>());
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.TypeOf<decimal>());
+        Assert.That(dataReader.GetFieldValue<DateTime>(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader.GetFieldValue<short>(1), Is.EqualTo((short)108));
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.EqualTo(108));
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.EqualTo(108m));
     }
 
     [Test]
