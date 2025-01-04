@@ -119,14 +119,14 @@ namespace PocketCsvReader
         /// </summary>
         /// <param name="filename">The full path of the CSV file to read.</param>
         /// <returns>
-        /// An <see cref="IDataReader"/> instance for sequential, read-only access to the CSV records and fields.
+        /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
         /// </returns>
         /// <exception cref="FileNotFoundException">Thrown if the specified file does not exist.</exception>
         /// <remarks>
         /// This method is designed for scenarios where loading the entire file into memory is impractical,
-        /// such as processing large datasets. The caller must dispose of the <see cref="IDataReader"/> after use.
+        /// such as processing large datasets. The caller must dispose of the <see cref="CsvDataReader"/> after use.
         /// </remarks>
-        public IDataReader ToDataReader(string filename)
+        public CsvDataReader ToDataReader(string filename)
         {
             CheckFileExists(filename);
             var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
@@ -141,13 +141,13 @@ namespace PocketCsvReader
         /// at the start of the content.
         /// </param>
         /// <returns>
-        /// An <see cref="IDataReader"/> instance for sequential, read-only access to the CSV records and fields.
+        /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
         /// </returns>
         /// <exception cref="ArgumentNullException">Thrown if the stream is null.</exception>
         /// <remarks>
         /// This method does not manage the lifecycle of the stream; the caller is responsible for closing it.
         /// </remarks>
-        public IDataReader ToDataReader(Stream stream)
+        public CsvDataReader ToDataReader(Stream stream)
         {
             return new CsvDataReader(stream, Profile);
         }

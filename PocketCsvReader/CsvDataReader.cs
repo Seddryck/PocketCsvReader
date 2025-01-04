@@ -7,12 +7,13 @@ using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 using System.Globalization;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
 {
+    private TypeIndexer TypeFunctions = new();
+
     private bool _isClosed = false;
     private RecordParser? RecordParser { get; set; }
     private CsvProfile Profile { get; }
@@ -35,6 +36,22 @@ public class CsvDataReader : IDataReader
         Buffer = new Memory<char>(new char[BufferSize]);
         Profile = profile;
         StringMapper = new StringMapper(Profile);
+
+        TypeFunctions.Register(GetByte);
+        TypeFunctions.Register(GetChar);
+        TypeFunctions.Register(GetString);
+        TypeFunctions.Register(GetBoolean);
+        TypeFunctions.Register(GetInt16);
+        TypeFunctions.Register(GetInt32);
+        TypeFunctions.Register(GetInt64);
+        TypeFunctions.Register(GetFloat);
+        TypeFunctions.Register(GetDouble);
+        TypeFunctions.Register(GetDecimal);
+        TypeFunctions.Register(GetGuid);
+        TypeFunctions.Register(GetDate);
+        TypeFunctions.Register(GetTime);
+        TypeFunctions.Register(GetDateTime);
+        TypeFunctions.Register(GetDateTimeOffset);
     }
 
     public void Initialize()
@@ -229,14 +246,14 @@ public class CsvDataReader : IDataReader
             var headerName = GetName(i);
             if (Profile.Schema.Fields.TryGetValue(headerName, out var field))
                 return field;
-            throw new ArgumentOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
+            throw new IndexOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
         }
 
         if (Profile.Schema.IsMatchingByIndex)
         {
             if (i < Profile.Schema.Fields.Length)
                 return Profile.Schema.Fields[i];
-            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
         }
 
         throw new NotImplementedException("Schema matching is not defined.");
@@ -289,7 +306,29 @@ public class CsvDataReader : IDataReader
                 , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].IsEscaped
                 , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].WasQuoted)!;
     public object GetValue(int i)
-        => GetValueOrThrow(i).ToString();
+    {
+        if (i >= FieldCount)
+            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+
+        if (!TryGetFieldDescriptor(i, out var field)
+            || !TypeFunctions.TryGetFunction(field.RuntimeType, out var func))
+            return GetString(i);
+
+        return func.DynamicInvoke(i)!;
+    }
+
+    public T GetFieldValue<T>(int i)
+    {
+        if (i >= FieldCount)
+            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+
+        if (!TryGetFieldDescriptor(i, out var field)
+            || !TypeFunctions.TryGetFunction<T>(out var func))
+            throw new NotImplementedException($"No function registered for type {typeof(T).Name}");
+
+        return func.Invoke(i);
+    }
+
     public int GetValues(object[] values) => throw new NotImplementedException();
     public bool IsDBNull(int i)
         => StringMapper.Parse(GetValueOrThrow(i), Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted) is null;
@@ -325,5 +364,61 @@ public class CsvDataReader : IDataReader
     ~CsvDataReader()
     {
         Dispose();
+    }
+
+    internal class TypeIndexer
+    {
+        private readonly Dictionary<Type, object> _typeToFunctionMap = new();
+
+        public void Register<T>(Func<int, T> func)
+        {
+            if (func == null)
+                throw new ArgumentNullException(nameof(func));
+
+            _typeToFunctionMap[typeof(T)] = func;
+        }
+
+        public bool TryGetFunction<T>([NotNullWhen(true)] out Func<int, T>? func)
+        {
+            if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
+            {
+                func = (Func<int, T>)value; 
+                return true;
+            }
+            func = null;
+            return false;
+        }
+
+        public bool TryGetFunction(Type type, [NotNullWhen(true)] out Delegate? dlg)
+        {
+            ArgumentNullException.ThrowIfNull(type);
+
+            if (_typeToFunctionMap.TryGetValue(type, out var func))
+            {
+                dlg = (Delegate)func;
+                return true;
+            }
+            dlg = null;
+            return false;
+        }
+
+
+        public Delegate GetFunction(Type type)
+        {
+            ArgumentNullException.ThrowIfNull(type);
+
+            if (_typeToFunctionMap.TryGetValue(type, out var func))
+                return (Delegate)func;
+
+            throw new InvalidOperationException($"No function registered for type {type.Name}");
+        }
+
+        public Func<int, T> GetFunction<T>()
+        {
+            if (_typeToFunctionMap.TryGetValue(typeof(T), out var func))
+                return (Func<int, T>)func;
+
+            throw new InvalidOperationException($"No function registered for type {typeof(T).Name}");
+        }
     }
 }
