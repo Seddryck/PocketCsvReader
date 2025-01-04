@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,11 +11,13 @@ namespace PocketCsvReader.Configuration;
 public abstract class FieldCollectionDescriptor : IEnumerable<FieldDescriptor>
 {
     public abstract void Add(FieldDescriptor field);
-    
+
     public abstract int Length { get; }
 
     public abstract FieldDescriptor this[int index] { get; }
     public abstract FieldDescriptor this[string name] { get; }
+
+    public abstract bool TryGetValue(string name, [NotNullWhen(true)] out FieldDescriptor? field);
 
     public abstract IEnumerator<FieldDescriptor> GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -43,6 +46,9 @@ public abstract class FieldCollectionDescriptor : IEnumerable<FieldDescriptor>
             get => throw new NotSupportedException();
         }
 
+        public override bool TryGetValue(string name, [NotNullWhen(true)] out FieldDescriptor? field)
+            => _dict.TryGetValue(name, out field);
+
         public override IEnumerator<FieldDescriptor> GetEnumerator() => _dict.Values.GetEnumerator();
     }
 
@@ -65,6 +71,12 @@ public abstract class FieldCollectionDescriptor : IEnumerable<FieldDescriptor>
         public override FieldDescriptor this[string name]
         {
             get => throw new NotSupportedException();
+        }
+
+        public override bool TryGetValue(string name, [NotNullWhen(true)] out FieldDescriptor? field)
+        {
+            field = _list.FirstOrDefault(f => f.Name == name);
+            return field is not null;
         }
 
         public override IEnumerator<FieldDescriptor> GetEnumerator() => _list.GetEnumerator();

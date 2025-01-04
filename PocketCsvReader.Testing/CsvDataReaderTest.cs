@@ -9,6 +9,7 @@ using System.Text;
 using System.Reflection;
 using System.Buffers;
 using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Testing;
 
@@ -133,7 +134,6 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetString(0), Is.EqualTo("fo'o"));
     }
 
-
     [Test]
     [TestCase("field0;field1\r\nfoo;bar")]
     public void Read_WithHeader_CorrectParsing(string record)
@@ -160,7 +160,7 @@ public class CsvDataReaderTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         var profile = new CsvProfile(
-                new DialectDescriptor() { Delimiter = ';', HeaderRows = [1,2], HeaderJoin="." }
+                new DialectDescriptor() { Delimiter = ';', HeaderRows = [1, 2], HeaderJoin = "." }
             );
         using var dataReader = new CsvDataReader(buffer, profile);
         dataReader.Read();
@@ -188,6 +188,125 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("1"));
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025/01/04;04-01-25")]
+    public void Read_WithSchemaAndFormatDate_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+                    .WithDelimiter(';'))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<DateTime>("bar", (f) => f.WithFormat("%d-%m-%y"))
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y/%m/%d"))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetDateTime(0), Is.EqualTo(new DateTime(2025, 1, 4)));
+        Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2025, 1, 4)));
+        Assert.That(((CsvDataReader)dataReader).GetDate(0), Is.EqualTo(new DateOnly(2025, 1, 4)));
+        Assert.That(((CsvDataReader)dataReader).GetDate(1), Is.EqualTo(new DateOnly(2025, 1, 4)));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n14:35:08;02:35:08 PM")]
+    public void Read_WithSchemaAndFormatTime_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+                    .WithDelimiter(';'))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<TimeOnly>("foo", (f) => f.WithFormat("%H:%M:%S"))
+                    .WithField<TimeOnly>("bar", (f) => f.WithFormat("%I:%M:%S %p"))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(TimeOnly)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(TimeOnly)));
+        Assert.That(((CsvDataReader)dataReader).GetTime(0), Is.EqualTo(new TimeOnly(14, 35, 8)));
+        Assert.That(((CsvDataReader)dataReader).GetTime(1), Is.EqualTo(new TimeOnly(14, 35, 8)));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-01-04T14:35:08;01/04/2025 02:35:08 PM")]
+    public void Read_WithSchemaAndFormatDateTime_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+                    .WithDelimiter(';'))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
+                    .WithField<DateTime>("bar", (f) => f.WithFormat("%m/%d/%Y %I:%M:%S %p"))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(DateTime)));
+        Assert.That(dataReader.GetDateTime(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+    }
+
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-01-04T14:35:08Z;01/04/2025 02:35:08 PM +0100")]
+    public void Read_WithSchemaAndFormatDateTimeOffset_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+                    .WithDelimiter(';'))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<DateTimeOffset>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%SZ"))
+                    .WithField<DateTimeOffset>("bar", (f) => f.WithFormat("%m/%d/%Y %I:%M:%S %p %z"))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTimeOffset)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(DateTimeOffset)));
+        Assert.That(((CsvDataReader)dataReader).GetDateTimeOffset(0), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(0))));
+        Assert.That(((CsvDataReader)dataReader).GetDateTimeOffset(1), Is.EqualTo(new DateTimeOffset(2025, 1, 4, 14, 35, 8, new TimeSpan(1, 0, 0))));
     }
 
     [Test]
@@ -405,7 +524,7 @@ public class CsvDataReaderTest
     [TestCase("\r\n")]
     [TestCase("\n")]
     [TestCase("\t\r\n")]
-    public void ToDataReader_(string lineTerminator)
+    public void ToDataReader_ReadUntilEndOfFile(string lineTerminator)
     {
         var dialect = new DialectDescriptor()
         {

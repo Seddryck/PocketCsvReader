@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Globalization;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
@@ -165,11 +166,105 @@ public class CsvDataReader : IDataReader
     public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
     public IDataReader GetData(int i) => throw new NotImplementedException();
     public string GetDataTypeName(int i) => throw new NotImplementedException();
-    public DateTime GetDateTime(int i) => DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public DateTime GetDateTime(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
+        {
+            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
+            return DateTime.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
+        }
+        
+        return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
+    public DateOnly GetDate(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
+        {
+            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
+            return DateOnly.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
+        }
+
+        return DateOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
+    public TimeOnly GetTime(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
+        {
+            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
+            return TimeOnly.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
+        }
+
+        return TimeOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
+    public DateTimeOffset GetDateTimeOffset(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
+        {
+            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
+            return DateTimeOffset.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
+        }
+
+        return DateTimeOffset.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
     public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
-    public Type GetFieldType(int i) => throw new NotImplementedException();
+    public Type GetFieldType(int i)
+        => GetFieldDescriptor(i).RuntimeType;
+
+    protected FieldDescriptor GetFieldDescriptor(int i)
+    {
+        if (Fields is null)
+            throw new InvalidOperationException("Fields are not defined yet.");
+
+        if (Profile.Schema is null)
+            throw new InvalidOperationException("Schema is not defined.");
+
+        if (Profile.Schema.IsMatchingByName)
+        {
+            var headerName = GetName(i);
+            if (Profile.Schema.Fields.TryGetValue(headerName, out var field))
+                return field;
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
+        }
+
+        if (Profile.Schema.IsMatchingByIndex)
+        {
+            if (i < Profile.Schema.Fields.Length)
+                return Profile.Schema.Fields[i];
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        }
+
+        throw new NotImplementedException("Schema matching is not defined.");
+    }
+
+    protected bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
+    {
+        if (Fields is null)
+            throw new InvalidOperationException("Fields are not defined yet.");
+
+        if (Profile.Schema is null)
+        {
+            field = null;
+            return false;
+        }
+
+        if (Profile.Schema.IsMatchingByName)
+            return Profile.Schema.Fields.TryGetValue(GetName(i), out field);
+
+        if (Profile.Schema.IsMatchingByIndex)
+        {
+            field = i < Profile.Schema.Fields.Length
+                        ? Profile.Schema.Fields[i] : null;
+            return field is not null;
+        }
+        throw new NotImplementedException("Schema matching is not defined.");
+    }
+
     public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public Guid GetGuid(int i) => throw new NotImplementedException();
     public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);

@@ -9,5 +9,6 @@ public record FieldDescriptor
 (
     Type RuntimeType
     , string? Name = null
+    , string? Format = null
 )
 { }

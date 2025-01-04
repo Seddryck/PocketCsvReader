@@ -44,8 +44,8 @@ public class CsvReaderBuilderTest
         (
             (schema) => schema
                         .Indexed()
-                        .WithField<int>("foo")
-                        .WithField(typeof(bool), "bar")
+                        .WithField<int>((f) => f.WithName("foo"))
+                        .WithField(typeof(bool), (f) => f.WithName("bar"))
         );
         var reader = builder.Build();
         Assert.That(reader.Profile.Schema, Is.Not.Null);
@@ -59,8 +59,8 @@ public class CsvReaderBuilderTest
         (
             new SchemaDescriptorBuilder()
                         .Indexed()
-                        .WithField<int>("foo")
-                        .WithField(typeof(bool), "bar")
+                        .WithField<int>((f) => f.WithName("foo"))
+                        .WithField(typeof(bool), (f) => f.WithName("bar"))
         );
         var reader = builder.Build();
         Assert.That(reader.Profile.Schema, Is.Not.Null);
