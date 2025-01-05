@@ -19,6 +19,7 @@ public interface ISchemaDescriptorBuilder
 {
     SchemaDescriptor? Build();
     ISchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func);
+    ISchemaDescriptorBuilder WithNumericField(Type type, string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func);
 }
 
 public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
@@ -41,11 +42,26 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
         return this;
     }
 
+    public IndexedSchemaDescriptorBuilder WithNumericField<T>(Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+        => WithNumericField(typeof(T), func);
+
+    public IndexedSchemaDescriptorBuilder WithNumericField(Type type, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+    {
+        _fields.Add(func(new NumericFieldDescriptorBuilder(type)));
+        return this;
+    }
+
+    public IndexedSchemaDescriptorBuilder WithNumericField(Type type, string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+        => WithNumericField(type, (builder) => (NumericFieldDescriptorBuilder)(func(builder)).WithName(name));
+
     public IndexedSchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
         => WithField(type, (builder) => func(builder.WithName(name)));
 
     ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
         => WithField(type, name, func);
+
+    ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithNumericField(Type type, string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+        => WithNumericField(type, name, func);
 
     public SchemaDescriptor? Build()
     {
@@ -69,12 +85,23 @@ public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
     public NamedSchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
     {
-        _fields.Add(func(new FieldDescriptorBuilder(type).WithName(name)));
+        _fields.Add(func(new FieldDescriptorBuilder(type)).WithName(name));
+        return this;
+    }
+
+    public NamedSchemaDescriptorBuilder WithNumericField<T>(string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+        => WithNumericField(typeof(T), name, func);
+
+    public NamedSchemaDescriptorBuilder WithNumericField(Type type, string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+    {
+        _fields.Add(func(new NumericFieldDescriptorBuilder(type)).WithName(name));
         return this;
     }
 
     ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
         => WithField(type, name, func);
+    ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithNumericField(Type type, string name, Func<NumericFieldDescriptorBuilder, NumericFieldDescriptorBuilder> func)
+        => WithNumericField(type, name, func);
 
     public SchemaDescriptor? Build()
     {

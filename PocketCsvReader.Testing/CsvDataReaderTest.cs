@@ -377,6 +377,83 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    [TestCase("foo;bar\r\n125,210.17;456.211,205")]
+    public void GetDecimal_WithDecimalCharAndGroupChar_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithNumericField<decimal>("foo", (f) => f.WithDecimalChar('.').WithGroupChar(','))
+                    .WithNumericField<decimal>("bar", (f) => f.WithDecimalChar(',').WithGroupChar('.'))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(decimal)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(decimal)));
+        Assert.That(dataReader.GetFieldValue<decimal>(0), Is.EqualTo(125210.17m));
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.EqualTo(456211.205m));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(125210.17m));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo(456211.205m));
+        Assert.That(dataReader.GetFloat(0), Is.EqualTo(125210.17m));
+        Assert.That(dataReader.GetFloat(1), Is.EqualTo(456211.205m));
+        Assert.That(dataReader.GetDouble(0), Is.EqualTo(125210.17m));
+        Assert.That(dataReader.GetDouble(1), Is.EqualTo(456211.205m));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n+12,210;-16 211\r\n1e6;-456 211e2")]
+    public void GetInt32_WithGroupChar_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithNumericField<int>("foo", (f) => f.WithGroupChar(','))
+                    .WithNumericField<int>("bar", (f) => f.WithGroupChar(' '))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(int)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(int)));
+        Assert.That(dataReader.GetFieldValue<int>(0), Is.EqualTo(12210));
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.EqualTo(-16211));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(12210));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo(-16211));
+        Assert.That(dataReader.GetInt64(0), Is.EqualTo(12210));
+        Assert.That(dataReader.GetInt64(1), Is.EqualTo(-16211));
+        Assert.That(dataReader.GetInt16(0), Is.EqualTo(12210));
+        Assert.That(dataReader.GetInt16(1), Is.EqualTo(-16211));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetFieldValue<int>(0), Is.EqualTo(1000000));
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.EqualTo(-45621100));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(1000000));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo(-45621100));
+        Assert.That(dataReader.GetInt64(0), Is.EqualTo(1000000));
+        Assert.That(dataReader.GetInt64(1), Is.EqualTo(-45621100));
+        Assert.Throws<OverflowException>(() => dataReader.GetInt16(0));
+        Assert.Throws<OverflowException>(() => dataReader.GetInt16(1));
+    }
+
+    [Test]
     [TestCase("foo;bar\r\n2025-01-04T14:35:08;108")]
     public void GetFieldValue_WithoutSchema_CorrectParsing(string record)
     {

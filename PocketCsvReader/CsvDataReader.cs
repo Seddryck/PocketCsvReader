@@ -216,8 +216,35 @@ public class CsvDataReader : IDataReader
         return DateTimeOffset.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
-    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    private Dictionary<int, CultureInfo> CacheCulture { get; } = [];
+
+    protected virtual CultureInfo GetCulture(int i)
+    {
+        if (!CacheCulture.TryGetValue(i, out var culture))
+        {
+            if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
+            {
+                var numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+                if ((numericField.DecimalChar is not null && numericField.DecimalChar.ToString() != numberFormat.NumberDecimalSeparator)
+                    || (numericField.GroupChar is not null && numericField.GroupChar.ToString() != numberFormat.NumberGroupSeparator))
+                {
+                    culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+                    culture.NumberFormat.NumberDecimalSeparator = numericField.DecimalChar?.ToString() ?? numberFormat.NumberDecimalSeparator;
+                    culture.NumberFormat.NumberGroupSeparator = numericField.GroupChar?.ToString() ?? numberFormat.NumberGroupSeparator;
+                }
+                else
+                    culture = CultureInfo.InvariantCulture;
+            }
+            else
+                culture = CultureInfo.InvariantCulture;
+            CacheCulture.Add(i, culture);
+        }
+        return culture;
+    }
+
+    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), GetCulture(i));
+
+    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), GetCulture(i));
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
     public Type GetFieldType(int i)
     {
@@ -275,11 +302,14 @@ public class CsvDataReader : IDataReader
         throw new NotImplementedException("Schema matching is not defined.");
     }
 
-    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    protected virtual NumberStyles GetNumericStyle()
+        => NumberStyles.AllowThousands | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent;
+
+    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), GetCulture(i));
     public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
+    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
+    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
     public string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
     public int GetOrdinal(string name)

@@ -9,11 +9,11 @@ namespace PocketCsvReader.Configuration;
 
 public class FieldDescriptorBuilder
 {
-    private Type _runtimeType;
-    private string? _format;
-    private string? _name;
+    protected Type _runtimeType;
+    protected string? _format;
+    protected string? _name;
 
-    internal FieldDescriptorBuilder(Type runtimeType)
+    protected internal FieldDescriptorBuilder(Type runtimeType)
     {
         _runtimeType = runtimeType;
     }
@@ -30,7 +30,7 @@ public class FieldDescriptorBuilder
         return this;
     }
 
-    public FieldDescriptor Build()
+    public virtual FieldDescriptor Build()
     {
         return new FieldDescriptor(_runtimeType, _name, _format);
     }
