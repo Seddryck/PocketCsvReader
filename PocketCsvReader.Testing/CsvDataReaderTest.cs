@@ -406,6 +406,36 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    [TestCase("foo\r\nd3c7f3e0-4b3a-4a95-a6b9-81a519e4a8c1")]
+    public void GetGuid_ValidGuid_CorrectParsing(string record)
+    {
+        var guid = new Guid("d3c7f3e0-4b3a-4a95-a6b9-81a519e4a8c1");
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithField<Guid>("foo")
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(1));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(Guid)));
+        Assert.That(dataReader.GetValue(0), Is.TypeOf<Guid>());
+        Assert.That(dataReader.GetFieldValue<Guid>(0), Is.EqualTo(guid));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(guid));
+        Assert.That(dataReader[0], Is.EqualTo(guid));
+        Assert.That(dataReader["foo"], Is.EqualTo(guid));
+        Assert.That(dataReader.GetGuid(0), Is.EqualTo(guid));
+    }
+
+    [Test]
     [TestCase("Ansi")]
     [TestCase("Utf16-BE")]
     [TestCase("Utf16-LE")]
