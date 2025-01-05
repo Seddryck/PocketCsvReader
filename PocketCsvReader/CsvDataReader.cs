@@ -276,7 +276,7 @@ public class CsvDataReader : IDataReader
     }
 
     public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public Guid GetGuid(int i) => throw new NotImplementedException();
+    public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
