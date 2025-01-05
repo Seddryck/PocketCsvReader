@@ -242,9 +242,9 @@ public class CsvDataReader : IDataReader
         return culture;
     }
 
-    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), GetCulture(i));
+    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
 
-    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), GetCulture(i));
+    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
     public Type GetFieldType(int i)
     {
@@ -302,14 +302,22 @@ public class CsvDataReader : IDataReader
         throw new NotImplementedException("Schema matching is not defined.");
     }
 
-    protected virtual NumberStyles GetNumericStyle()
-        => NumberStyles.AllowThousands | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent;
+    protected virtual NumberStyles GetNumericStyle(int i)
+    {
+        var style = NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint;
+        if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
+        {
+            if (numericField.GroupChar is not null)
+                style |= NumberStyles.AllowThousands;
+        }
+        return style;
+    }
 
-    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), GetCulture(i));
+    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
     public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
-    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
-    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), GetNumericStyle(), GetCulture(i));
+    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
+    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
+    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
     public string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
     public int GetOrdinal(string name)

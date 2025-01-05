@@ -20,9 +20,15 @@ public class NumericFieldDescriptorBuilder : FieldDescriptorBuilder
         return this;
     }
 
-    public NumericFieldDescriptorBuilder WithGroupChar(char groupChar)
+    public NumericFieldDescriptorBuilder WithGroupChar(char? groupChar)
     {
         _groupChar = groupChar;
+        return this;
+    }
+
+    public NumericFieldDescriptorBuilder WithoutGroupChar()
+    {
+        _groupChar = null;
         return this;
     }
 
