@@ -96,6 +96,32 @@ public class SchemaDescriptionBuilderTest
             Assert.That(field.Name, Is.Not.Null.Or.Empty);
     }
 
+    private static IEnumerable<ISchemaDescriptorBuilder> CreateBuilder()
+    {
+        yield return new SchemaDescriptorBuilder().Named();
+        yield return new SchemaDescriptorBuilder().Indexed();
+    }
+
+    [Test]
+    [TestCaseSource(nameof(CreateBuilder))]
+    public void InterfaceWithFields_ShouldSetFields(ISchemaDescriptorBuilder builder)
+    {
+        builder.WithField(typeof(int), "foo", (x) => x);
+        builder.WithField(typeof(DateTime), "bar", (f) => f.WithFormat("%Y-%M-%d"));
+        var descriptor = builder.Build();
+        Assert.That(descriptor, Is.Not.Null);
+        Assert.That(descriptor!.Fields, Has.Length.EqualTo(2));
+        Assert.That(descriptor.Fields["foo"].RuntimeType, Is.EqualTo(typeof(int)));
+        Assert.That(descriptor.Fields["foo"].Name, Is.EqualTo("foo"));
+        Assert.That(descriptor.Fields["foo"].Format, Is.Null);
+        Assert.That(descriptor.Fields["bar"].RuntimeType, Is.EqualTo(typeof(DateTime)));
+        Assert.That(descriptor.Fields["bar"].Name, Is.EqualTo("bar"));
+        Assert.That(descriptor.Fields["bar"].Format, Is.EqualTo("%Y-%M-%d"));
+
+        foreach (var field in descriptor.Fields)
+            Assert.That(field.Name, Is.Not.Null.Or.Empty);
+    }
+
     [Test]
     public void DuplicateNames_ShouldThrow()
     {

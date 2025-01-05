@@ -18,6 +18,7 @@ public class SchemaDescriptorBuilder
 public interface ISchemaDescriptorBuilder
 {
     SchemaDescriptor? Build();
+    ISchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func);
 }
 
 public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
@@ -40,6 +41,12 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
         return this;
     }
 
+    public IndexedSchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
+        => WithField(type, (builder) => func(builder.WithName(name)));
+
+    ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
+        => WithField(type, name, func);
+
     public SchemaDescriptor? Build()
     {
         foreach (var field in _fields)
@@ -58,10 +65,16 @@ public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
         => WithField<T>(name, x => x);
 
     public NamedSchemaDescriptorBuilder WithField<T>(string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
+        => WithField(typeof(T), name, func);
+
+    public NamedSchemaDescriptorBuilder WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
     {
-        _fields.Add(func(new FieldDescriptorBuilder(typeof(T)).WithName(name)));
+        _fields.Add(func(new FieldDescriptorBuilder(type).WithName(name)));
         return this;
     }
+
+    ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithField(Type type, string name, Func<FieldDescriptorBuilder, FieldDescriptorBuilder> func)
+        => WithField(type, name, func);
 
     public SchemaDescriptor? Build()
     {
