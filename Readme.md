@@ -112,7 +112,7 @@ DataTable dataTable = csvReader.ToDataTable(stream);
 
 ### Accessing Data with `IDataReader`
 
-The `ToDataReader` method provides a forward-only, read-only `IDataReader` for processing large files efficiently.
+The `ToDataReader` method provides a forward-only, read-only `CsvDataReader` implementing `IDataReader` for processing large files efficiently.
 
 ```csharp
 using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
@@ -120,6 +120,8 @@ using var reader = csvReader.ToDataReader(stream);
 while (reader.Read())
 {
     Console.WriteLine(reader[0]); // Access the first column of the current row.
+    Console.WriteLine(reader.GetDateTime[1]); // Access the second column of the current row as an object boxing a DateTime.
+    Console.WriteLine(reader.GetFieldValue<DateOnly>[2]); // Access the third column of the current row as DateOnly.
 }
 ```
 
