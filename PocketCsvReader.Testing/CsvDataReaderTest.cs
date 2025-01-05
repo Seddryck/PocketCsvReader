@@ -330,7 +330,16 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(short)));
         Assert.That(dataReader.GetValue(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader[0], Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader.GetDate(0), Is.EqualTo(new DateOnly(2025, 1, 4)));
+        Assert.That(dataReader.GetTime(0), Is.EqualTo(new TimeOnly(14, 35, 8)));
         Assert.That(dataReader.GetValue(1), Is.EqualTo((short)108));
+        Assert.That(dataReader[1], Is.EqualTo((short)108));
+        Assert.That(dataReader.GetInt32(1), Is.EqualTo(108));
+        Assert.That(dataReader.GetInt64(1), Is.EqualTo((short)108));
+        Assert.That(dataReader.GetFloat(1), Is.EqualTo((float)108));
+        Assert.That(dataReader.GetDouble(1), Is.EqualTo((double)108));
+        Assert.That(dataReader.GetDecimal(1), Is.EqualTo((decimal)108));
     }
 
     [Test]
@@ -357,6 +366,35 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(DateTime)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(short)));
+        Assert.That(dataReader.GetFieldValue<DateTime>(0), Is.TypeOf<DateTime>());
+        Assert.That(dataReader.GetFieldValue<short>(1), Is.TypeOf<short>());
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.TypeOf<int>());
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.TypeOf<decimal>());
+        Assert.That(dataReader.GetFieldValue<DateTime>(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
+        Assert.That(dataReader.GetFieldValue<short>(1), Is.EqualTo((short)108));
+        Assert.That(dataReader.GetFieldValue<int>(1), Is.EqualTo(108));
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.EqualTo(108m));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-01-04T14:35:08;108")]
+    public void GetFieldValue_WithoutSchema_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(object)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(object)));
         Assert.That(dataReader.GetFieldValue<DateTime>(0), Is.TypeOf<DateTime>());
         Assert.That(dataReader.GetFieldValue<short>(1), Is.TypeOf<short>());
         Assert.That(dataReader.GetFieldValue<int>(1), Is.TypeOf<int>());

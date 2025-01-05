@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Globalization;
 using PocketCsvReader.Configuration;
+using System.Reflection;
+using System.Xml.Linq;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
@@ -141,16 +143,7 @@ public class CsvDataReader : IDataReader
 
     public object this[int i]
     {
-        get
-        {
-            if (i < Record!.FieldSpans.Length && Fields!.Length > 0)
-                return Record.Slice(i).ToString();
-            if (i < Fields!.Length)
-                return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
-            if (Fields!.Length == 0)
-                throw new InvalidOperationException("Values are not defined yet.");
-            throw new IndexOutOfRangeException("Index out of range.");
-        }
+        get => GetValue(i);
     }
 
     public object this[string name]
@@ -160,11 +153,7 @@ public class CsvDataReader : IDataReader
             if (Fields is null)
                 throw new InvalidOperationException("Fields are not defined yet.");
             var index = Array.IndexOf(Fields, name);
-            if (index < Record!.FieldSpans.Length)
-                return Record.Slice(index).ToString();
-            if (index < Fields!.Length)
-                return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
-            throw new InvalidOperationException($"Field '{name}' not found.");
+            return GetValue(index);
         }
     }
 
@@ -190,7 +179,7 @@ public class CsvDataReader : IDataReader
             var netFormat = new DateTimeFormatConverter().Convert(field.Format);
             return DateTime.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
         }
-        
+
         return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
@@ -231,7 +220,11 @@ public class CsvDataReader : IDataReader
     public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
     public Type GetFieldType(int i)
-        => GetFieldDescriptor(i).RuntimeType;
+    {
+        if (TryGetFieldDescriptor(i, out var field))
+            return field.RuntimeType;
+        return typeof(object);
+    }
 
     protected FieldDescriptor GetFieldDescriptor(int i)
     {
@@ -309,6 +302,8 @@ public class CsvDataReader : IDataReader
     {
         if (i >= FieldCount)
             throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i < Fields!.Length && i >= Record!.FieldSpans.Length)
+            return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
 
         if (!TryGetFieldDescriptor(i, out var field)
             || !TypeFunctions.TryGetFunction(field.RuntimeType, out var func))
@@ -322,8 +317,7 @@ public class CsvDataReader : IDataReader
         if (i >= FieldCount)
             throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
 
-        if (!TryGetFieldDescriptor(i, out var field)
-            || !TypeFunctions.TryGetFunction<T>(out var func))
+        if (!TypeFunctions.TryGetFunction<T>(out var func))
             throw new NotImplementedException($"No function registered for type {typeof(T).Name}");
 
         return func.Invoke(i);
@@ -382,7 +376,7 @@ public class CsvDataReader : IDataReader
         {
             if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
             {
-                func = (Func<int, T>)value; 
+                func = (Func<int, T>)value;
                 return true;
             }
             func = null;
