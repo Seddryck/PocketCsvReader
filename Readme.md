@@ -120,8 +120,8 @@ using var reader = csvReader.ToDataReader(stream);
 while (reader.Read())
 {
     Console.WriteLine(reader[0]); // Access the first column of the current row.
-    Console.WriteLine(reader.GetDateTime[1]); // Access the second column of the current row as an object boxing a DateTime.
-    Console.WriteLine(reader.GetFieldValue<DateOnly>[2]); // Access the third column of the current row as DateOnly.
+    Console.WriteLine(reader.GetDateTime(1)); // Access the second column of the current row as an object boxing a DateTime.
+    Console.WriteLine(reader.GetFieldValue<DateOnly>(2); // Access the third column of the current row as DateOnly.
 }
 ```
 
