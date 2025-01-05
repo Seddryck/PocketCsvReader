@@ -454,6 +454,55 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    [TestCase("foo\r\n+12,210")]
+    public void GetInt32_WithoutGroupChar_ThrowsFormat(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithNumericField<int>("foo", (f) => f.WithoutGroupChar())
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(1));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(int)));
+        Assert.Throws<FormatException>(() => dataReader.GetFieldValue<int>(0));
+    }
+
+
+    [Test]
+    [TestCase("foo\r\n+12210")]
+    public void GetInt32_WithoutGroupChar_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithNumericField<int>("foo", (f) => f.WithoutGroupChar())
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(1));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(int)));
+        Assert.That(dataReader.GetFieldValue<int>(0), Is.EqualTo(12210));
+    }
+
+    [Test]
     [TestCase("foo;bar\r\n2025-01-04T14:35:08;108")]
     public void GetFieldValue_WithoutSchema_CorrectParsing(string record)
     {
