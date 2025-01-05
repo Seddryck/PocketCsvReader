@@ -70,7 +70,7 @@ public abstract class FieldCollectionDescriptor : IEnumerable<FieldDescriptor>
 
         public override FieldDescriptor this[string name]
         {
-            get => throw new NotSupportedException();
+            get => _list.FirstOrDefault(f => f.Name == name) ?? throw new KeyNotFoundException($"Field '{name}' not found.");
         }
 
         public override bool TryGetValue(string name, [NotNullWhen(true)] out FieldDescriptor? field)
