@@ -347,7 +347,15 @@ public class CsvDataReader : IDataReader
             || !TypeFunctions.TryGetFunction(field.RuntimeType, out var func))
             return GetString(i);
 
-        return func.DynamicInvoke(i)!;
+        try
+        {
+            var value = func.DynamicInvoke(i)!;
+            return value;
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
     }
 
     public T GetFieldValue<T>(int i)

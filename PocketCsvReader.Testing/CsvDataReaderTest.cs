@@ -475,8 +475,9 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(int)));
         Assert.Throws<FormatException>(() => dataReader.GetFieldValue<int>(0));
+        Assert.Throws<FormatException>(() => dataReader.GetValue(0));
+        Assert.Throws<FormatException>(() => dataReader.GetInt32(0));
     }
-
 
     [Test]
     [TestCase("foo\r\n+12210")]
