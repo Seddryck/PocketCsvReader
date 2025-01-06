@@ -310,16 +310,6 @@ public class DialectDescriptorBuilderTest
     }
 
     [Test]
-    public void WithCsvDdfVersion_ShouldSetCsvDdfVersion()
-    {
-        var descriptor = new DialectDescriptorBuilder()
-            .WithCsvDdfVersion("1.0")
-            .Build();
-
-        Assert.That(descriptor.CsvDdfVersion, Is.EqualTo("1.0"));
-    }
-
-    [Test]
     public void WithCsvDdfVersion_ShouldSetCsvDdfVersionToValue()
     {
         var descriptor = new DialectDescriptorBuilder()
@@ -327,7 +317,6 @@ public class DialectDescriptorBuilderTest
             .WithLineTerminator("\r")
             .WithQuoteChar('\'')
             .WithDoubleQuote()
-            .WithCsvDdfVersion("1.1")
             .Build();
         var csvReader = new CsvReader(new CsvProfile(descriptor));
 

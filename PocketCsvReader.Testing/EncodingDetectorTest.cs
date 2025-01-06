@@ -59,7 +59,7 @@ namespace PocketCsvReader.Testing
         };
 
         [TestCaseSource(nameof(Encodings))]
-        public void ToDataReader_Financial_CorrectRowsColumns(Encoding encoding)
+        public void GetStreamEncoding_Stream_CorrectResult(Encoding encoding)
         {
             using (var stream = new MemoryStream())
             {
@@ -71,6 +71,42 @@ namespace PocketCsvReader.Testing
                 var detector = new EncodingDetector();
                 var result = detector.GetStreamEncoding(stream);
                 Assert.That(result.Encoding, Is.EqualTo(encoding));
+            }
+        }
+
+        [TestCaseSource(nameof(Encodings))]
+        public void FromMime_StreamWithoutMime_CorrectResult(Encoding encoding)
+        {
+            using (var stream = new MemoryStream())
+            {
+                using var writer = new StreamWriter(stream, encoding);
+                writer.Write("A,B,C\r\n1,2,3\r\n4,5,6\r\n");
+                writer.Flush();
+                stream.Position = 0;
+
+                var detector = new EncodingDetector();
+                var result = detector.GetStreamEncoding(stream, encoding.BodyName);
+                Assert.That(result.Encoding, Is.EqualTo(encoding));
+            }
+        }
+
+        [TestCase("ISO-8859-2")]
+        [TestCase("utf-8")]
+        public void FromMime_StreamWithMime_CorrectResult(string mime)
+        {
+            if (!Encoding.GetEncodings().Any(e => e.Name.Equals(mime, StringComparison.OrdinalIgnoreCase)))
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+            using (var stream = new MemoryStream())
+            {
+                using var writer = new StreamWriter(stream, Encoding.GetEncoding(mime));
+                writer.Write("A,B,C\r\n1,2,3\r\n4,5,6\r\n");
+                writer.Flush();
+                stream.Position = 0;
+
+                var detector = new EncodingDetector();
+                var result = detector.GetStreamEncoding(stream, mime);
+                Assert.That(result.Encoding.WebName, Is.EqualTo(mime).Using(StringComparer.OrdinalIgnoreCase));
             }
         }
     }

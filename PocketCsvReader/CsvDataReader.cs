@@ -58,7 +58,7 @@ public class CsvDataReader : IDataReader
 
     public void Initialize()
     {
-        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream);
+        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream, Profile.Resource?.Encoding);
         StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
         var bufferBOM = new char[1];
         StreamReader.Read(bufferBOM, 0, bufferBOM.Length);

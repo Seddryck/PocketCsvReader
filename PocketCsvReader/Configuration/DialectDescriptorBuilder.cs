@@ -83,8 +83,6 @@ public class DialectDescriptorBuilder
         => (Descriptor = Descriptor with { CommentRows = commentRows }, Builder: this).Builder;
     public DialectDescriptorBuilder WithoutCommentRows()
         => WithCommentRows([]);
-    public DialectDescriptorBuilder WithCsvDdfVersion(string version)
-        => (Descriptor = Descriptor with { CsvDdfVersion = version}, Builder: this).Builder;
 
     public DialectDescriptor Build()
         => Descriptor;

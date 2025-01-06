@@ -8,7 +8,6 @@ namespace PocketCsvReader;
 
 public record DialectDescriptor
 (
-    string Schema = "https://datapackage.org/profiles/1.0/tabledialect.json",
     bool Header = true,
     int[] HeaderRows = null!,
     string HeaderJoin = " ",
@@ -20,8 +19,7 @@ public record DialectDescriptor
     bool DoubleQuote = true,
     char? EscapeChar = null,
     string? NullSequence = null,
-    bool SkipInitialSpace = false,
-    string CsvDdfVersion = "2.0"
+    bool SkipInitialSpace = false
 )
 {
     public int[] HeaderRows { get; init; } = HeaderRows ?? [1];

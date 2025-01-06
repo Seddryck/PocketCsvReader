@@ -9,6 +9,7 @@ public class CsvReaderBuilder
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
     private ISchemaDescriptorBuilder? _schemaBuilder;
+    private ResourceDescriptorBuilder? _resourceBuilder;
 
     public CsvReaderBuilder WithDialect(Func<DialectDescriptorBuilder, DialectDescriptorBuilder> func)
     {
@@ -33,10 +34,20 @@ public class CsvReaderBuilder
         return this;
     }
 
-    public CsvReader Build()
+
+    public CsvReaderBuilder WithResource(Func<ResourceDescriptorBuilder, ResourceDescriptorBuilder> func)
     {
-        var csvReader = new CsvReader(new CsvProfile(_dialectBuilder.Build(), _schemaBuilder?.Build()));
-        return csvReader;
+        _resourceBuilder = func(new());
+        return this;
     }
+
+    public CsvReaderBuilder WithResource(ResourceDescriptorBuilder resourceBuilder)
+    {
+        _resourceBuilder = resourceBuilder;
+        return this;
+    }
+
+    public CsvReader Build()
+        => new (new CsvProfile(_dialectBuilder.Build(), _schemaBuilder?.Build(), _resourceBuilder?.Build()));
 
 }

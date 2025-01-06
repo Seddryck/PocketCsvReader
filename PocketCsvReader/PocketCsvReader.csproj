@@ -3,7 +3,7 @@
   <PropertyGroup>
     <PackageId>PocketCsvReader</PackageId>
     <RepositoryUrl>https://github.com/Seddryck/PocketCsvReader</RepositoryUrl>
-    <PackageTags>CSV TSV DataTable Parser</PackageTags>
+    <PackageTags>CSV csvhelper TSV DataTable DataReader Parser Separated Delimited</PackageTags>
     <Description>PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.</Description>
   </PropertyGroup>
   <PropertyGroup>
