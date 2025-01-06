@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
@@ -7,6 +8,7 @@ public class CsvProfile
 {
     public DialectDescriptor Dialect { get; private set; }
     public SchemaDescriptor? Schema { get; private set; }
+    public ResourceDescriptor? Resource { get; private set; }
     public ParserOptimizationOptions ParserOptimizations { get; set; }
     public Dictionary<string, string?> Sequences { get; } = new();
 
@@ -61,7 +63,7 @@ public class CsvProfile
         MissingCell = missingCell;
     }
 
-    public CsvProfile(DialectDescriptor dialect)
+    public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null)
     {
         if (dialect.NullSequence is not null)
             Sequences.Add(dialect.NullSequence, null);
@@ -70,12 +72,9 @@ public class CsvProfile
         ParserOptimizations = new ParserOptimizationOptions();
         EmptyCell = string.Empty;
         MissingCell = string.Empty;
-    }
 
-    public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema)
-        : this(dialect)
-    {
         Schema = schema;
+        Resource = resource;
     }
 
     private static CsvProfile? _commaDoubleQuote;
