@@ -32,6 +32,15 @@ public class NumericFieldDescriptorBuilder : FieldDescriptorBuilder
         return this;
     }
 
+    public new NumericFieldDescriptorBuilder WithName(string value)
+        => (NumericFieldDescriptorBuilder)base.WithName(value);
+
+    public new NumericFieldDescriptorBuilder WithFormat(string value)
+        => (NumericFieldDescriptorBuilder)base.WithFormat(value);
+
+    public new NumericFieldDescriptorBuilder WithSequence(string pattern, string? value)
+        => (NumericFieldDescriptorBuilder)base.WithSequence(pattern, value);
+
     public override FieldDescriptor Build()
-        => new NumericFieldDescriptor(_runtimeType, _name, _format, _decimalChar, _groupChar);
+        => new NumericFieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable(), _decimalChar, _groupChar);
 }
