@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel.Design;
 using System.Linq;
 using System.Text;
@@ -12,6 +13,7 @@ public class FieldDescriptorBuilder
     protected Type _runtimeType;
     protected string? _format;
     protected string? _name;
+    protected SequenceCollection? _sequences;
 
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
@@ -30,8 +32,14 @@ public class FieldDescriptorBuilder
         return this;
     }
 
+    public FieldDescriptorBuilder WithSequence(string pattern, string? value)
+    {
+        (_sequences ??= new()).Add(pattern, value);
+        return this;
+    }
+
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(_runtimeType, _name, _format);
+        return new FieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable());
     }
 }

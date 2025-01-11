@@ -563,6 +563,80 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    [TestCase("foo;bar\r\n(null);NaN\r\n;")]
+    public void Read_WithSchemaAndSequences_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+            )
+            .WithSchema(
+                (schema) => schema
+                    .Indexed()
+                    .WithField<string>((f) => f.WithSequence("(null)", null))
+                    .WithField<string>((f) => f.WithSequence("NaN", null))
+            
+            )
+            .WithResource((r) => r.WithSequence("", null));
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.IsDBNull(0), Is.True);
+        Assert.That(dataReader.IsDBNull(1), Is.True);
+        dataReader.Read();
+        Assert.That(dataReader.IsDBNull(0), Is.True);
+        Assert.That(dataReader.IsDBNull(1), Is.True);
+        Assert.That(dataReader.GetFieldValue<string?>(1), Is.Null);
+        Assert.That(dataReader.GetFieldValue<string>(1), Is.Null);
+        Assert.Throws<InvalidCastException>(() => dataReader.GetValue(1));
+        Assert.Throws<InvalidCastException>(() => dataReader.GetString(1));
+    }
+
+    [Test]
+    [TestCase("foo;bar\r\n20;NaN\r\n;15")]
+    public void Read_WithSchemaNotStringAndSequences_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true)
+            )
+            .WithSchema(
+                (schema) => schema
+                    .Indexed()
+                    .WithField<int>()
+                    .WithField<int>((f) => f.WithSequence("NaN", "0"))
+
+            )
+            .WithResource((r) => r.WithSequence("", "-1"));
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.IsDBNull(0), Is.False);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(20));
+        Assert.That(dataReader.IsDBNull(1), Is.False);
+        Assert.That(dataReader.GetInt32(1), Is.EqualTo(0));
+        dataReader.Read();
+        Assert.That(dataReader.IsDBNull(0), Is.False);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(-1));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(-1));
+        Assert.That(dataReader.GetFieldValue<int>(0), Is.EqualTo(-1));
+        Assert.That(dataReader.IsDBNull(1), Is.False);
+        Assert.That(dataReader.GetInt32(1), Is.EqualTo(15));
+    }
+
+    [Test]
     [TestCase("Ansi")]
     [TestCase("Utf16-BE")]
     [TestCase("Utf16-LE")]

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
+using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
 
@@ -22,7 +23,7 @@ internal class ArrayOfStringMapper
         var fields = new string?[fieldSpans.Count()];
         var index = 0;
         foreach (var fieldSpan in fieldSpans)
-            fields[index++] = StringMapper.Parse(span, fieldSpan.IsEscaped, fieldSpan.WasQuoted);
+            fields[index++] = StringMapper.Map(span);
         return fields;
     }
 }

@@ -49,5 +49,4 @@ public class CsvReaderBuilder
 
     public CsvReader Build()
         => new (new CsvProfile(_dialectBuilder.Build(), _schemaBuilder?.Build(), _resourceBuilder?.Build()));
-
 }
