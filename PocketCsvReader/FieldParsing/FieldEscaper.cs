@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PocketCsvReader;
+namespace PocketCsvReader.FieldParsing;
 internal class FieldEscaper
 {
     protected ArrayPool<char>? Pool { get; }
@@ -51,10 +51,9 @@ internal class FieldEscaper
             else
                 result[j++] = c;
             i++;
-        };
+        }
 
         Pool?.Return(array);
         return result.Slice(0, j);
     }
-
 }

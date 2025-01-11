@@ -10,6 +10,7 @@ using System.Globalization;
 using PocketCsvReader.Configuration;
 using System.Reflection;
 using System.Xml.Linq;
+using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
 public class CsvDataReader : IDataReader
@@ -37,7 +38,7 @@ public class CsvDataReader : IDataReader
         Stream = stream;
         Buffer = new Memory<char>(new char[BufferSize]);
         Profile = profile;
-        StringMapper = new StringMapper(Profile);
+        StringMapper = new StringMapper(Profile.ParserOptimizations.PoolString);
 
         TypeFunctions.Register(GetByte);
         TypeFunctions.Register(GetChar);
@@ -333,9 +334,8 @@ public class CsvDataReader : IDataReader
     public DataTable? GetSchemaTable() => throw new NotImplementedException();
 
     public string GetString(int i)
-        => StringMapper.Parse(GetValueOrThrow(i)
-                , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].IsEscaped
-                , i < Record!.FieldSpans.Length && Record!.FieldSpans[i].WasQuoted)!;
+        => StringMapper.Map(GetValueOrThrow(i))!;
+
     public object GetValue(int i)
     {
         if (i >= FieldCount)
@@ -363,6 +363,10 @@ public class CsvDataReader : IDataReader
         if (i >= FieldCount)
             throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
 
+        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
+            if (IsDBNull(i))
+                return default!;
+
         if (!TypeFunctions.TryGetFunction<T>(out var func))
             throw new NotImplementedException($"No function registered for type {typeof(T).Name}");
 
@@ -370,18 +374,38 @@ public class CsvDataReader : IDataReader
     }
 
     public int GetValues(object[] values) => throw new NotImplementedException();
+
     public bool IsDBNull(int i)
-        => StringMapper.Parse(GetValueOrThrow(i), Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted) is null;
+        => !GetValueOrThrow(i).HasValue;
 
     public bool NextResult() => throw new NotImplementedException();
 
-    private ReadOnlySpan<char> GetValueOrThrow(int i)
+    private SanitizerFactory? sanitizerFactory;
+    private Dictionary<int, ISanitizer> CacheSanitizer { get; } = [];
+    private NullableSpan GetValueOrThrow(int i)
     {
         if (i < Record!.FieldSpans.Length)
-            return Record.Slice(i).Span;
+        {
+            sanitizerFactory ??= new SanitizerFactory(Profile);
+            var sanitizer = CacheSanitizer.GetOrAdd(i,
+                sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, GetSchemaField(i)?.Sequences)
+                                            , new FieldEscaper(Profile)
+                ));
+            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted);
+        }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
         throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
+    }
+
+    private FieldDescriptor? GetSchemaField(int i)
+    {
+        if (Profile.Schema?.IsMatchingByIndex ?? false)
+            return Profile.Schema?.Fields[i];
+        else if (Profile.Schema?.IsMatchingByName ?? false)
+            return Profile.Schema?.Fields[GetName(i)];
+        else
+            return null;
     }
 
     public void Close()
@@ -397,7 +421,7 @@ public class CsvDataReader : IDataReader
 
     public void Dispose()
     {
-        Close(); // Ensures resources are released
+        Close(); // Ensures resSequences are released
         GC.SuppressFinalize(this); // Prevents finalizer from running
     }
 

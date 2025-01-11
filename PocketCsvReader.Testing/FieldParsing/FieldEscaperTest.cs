@@ -4,8 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using PocketCsvReader.FieldParsing;
 
-namespace PocketCsvReader.Testing;
+namespace PocketCsvReader.Testing.FieldParsing;
 public class FieldEscaperTest
 {
     [Test]
