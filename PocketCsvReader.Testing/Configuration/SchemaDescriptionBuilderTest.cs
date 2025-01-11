@@ -145,4 +145,18 @@ public class SchemaDescriptionBuilderTest
         var ex = Assert.Throws<ArgumentException>(() => descriptor.Build());
         Assert.That(ex!.Message.ToLower(), Does.Contain("empty or null"));
     }
+
+    [Test]
+    public void IndexedWithSequences_ShouldSetSequences()
+    {
+        var descriptor = new SchemaDescriptorBuilder()
+            .Indexed()
+            .WithNumericField<int>((f) => f.WithSequence("NaN", "0"))
+            .WithField<string>((f) => f.WithSequence("", "Unknown"))
+            .Build();
+        Assert.That(descriptor, Is.Not.Null);
+        Assert.That(descriptor!.Fields, Has.Length.EqualTo(2));
+        Assert.That(descriptor.Fields[0].Sequences?.Count(), Is.EqualTo(1));
+        Assert.That(descriptor.Fields[1].Sequences?.Count(), Is.EqualTo(1));
+    }
 }
