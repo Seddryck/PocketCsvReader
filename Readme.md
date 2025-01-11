@@ -19,7 +19,7 @@ PocketCsvReader is a highly efficient and lightweight library tailored for parsi
 [![nuget](https://img.shields.io/nuget/v/PocketCsvReader.svg)](https://www.nuget.org/packages/PocketCsvReader/) [![GitHub Release Date](https://img.shields.io/github/release-date/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/releases/latest) [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE) 
 
 **Dev. activity:** [![GitHub last commit](https://img.shields.io/github/last-commit/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/commits)
-![Still maintained](https://img.shields.io/maintenance/yes/2024.svg)
+![Still maintained](https://img.shields.io/maintenance/yes/2025.svg)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Seddryck/PocketCsvReader)
 
 **Continuous integration builds:** [![Build status](https://ci.appveyor.com/api/projects/status/t3d6qtln4hcjyrkl?svg=true)](https://ci.appveyor.com/project/Seddryck/PocketCsvReader/)
