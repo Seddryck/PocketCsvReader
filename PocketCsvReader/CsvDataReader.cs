@@ -13,48 +13,22 @@ using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
-public class CsvDataReader : IDataReader
+public class CsvDataReader : CsvDataRecord, IDataReader
 {
-    private TypeIndexer TypeFunctions = new();
-
     private bool _isClosed = false;
     private RecordParser? RecordParser { get; set; }
-    private CsvProfile Profile { get; }
     private Stream Stream { get; }
     private StreamReader? StreamReader { get; set; }
     private Memory<char> Buffer { get; set; }
-    private StringMapper StringMapper { get; }
     private EncodingInfo? FileEncoding { get; set; }
-
     private bool IsEof { get; set; } = false;
-    public int RowCount { get; private set; } = 0;
     private int BufferSize { get; set; } = 64 * 1024;
 
-    public string[]? Fields { get; private set; } = null;
-    public RecordMemory? Record { get; private set; } = null;
-
     public CsvDataReader(Stream stream, CsvProfile profile)
+        : base(profile)
     {
         Stream = stream;
         Buffer = new Memory<char>(new char[BufferSize]);
-        Profile = profile;
-        StringMapper = new StringMapper(Profile.ParserOptimizations.PoolString);
-
-        TypeFunctions.Register(GetByte);
-        TypeFunctions.Register(GetChar);
-        TypeFunctions.Register(GetString);
-        TypeFunctions.Register(GetBoolean);
-        TypeFunctions.Register(GetInt16);
-        TypeFunctions.Register(GetInt32);
-        TypeFunctions.Register(GetInt64);
-        TypeFunctions.Register(GetFloat);
-        TypeFunctions.Register(GetDouble);
-        TypeFunctions.Register(GetDecimal);
-        TypeFunctions.Register(GetGuid);
-        TypeFunctions.Register(GetDate);
-        TypeFunctions.Register(GetTime);
-        TypeFunctions.Register(GetDateTime);
-        TypeFunctions.Register(GetDateTimeOffset);
     }
 
     public void Initialize()
@@ -142,271 +116,15 @@ public class CsvDataReader : IDataReader
             );
     }
 
-    public object this[int i]
-    {
-        get => GetValue(i);
-    }
-
-    public object this[string name]
-    {
-        get
-        {
-            if (Fields is null)
-                throw new InvalidOperationException("Fields are not defined yet.");
-            var index = Array.IndexOf(Fields, name);
-            return GetValue(index);
-        }
-    }
-
     public int Depth => 1;
 
     public bool IsClosed => _isClosed;
 
     public int RecordsAffected => 0;
 
-    public int FieldCount => Fields?.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
-
-    public bool GetBoolean(int i) => bool.Parse(GetValueOrThrow(i));
-    public byte GetByte(int i) => throw new NotImplementedException();
-    public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
-    public char GetChar(int i) => throw new NotImplementedException();
-    public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
-    public IDataReader GetData(int i) => throw new NotImplementedException();
-    public string GetDataTypeName(int i) => throw new NotImplementedException();
-    public DateTime GetDateTime(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-        {
-            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
-            return DateTime.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
-        }
-
-        return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
-
-    public DateOnly GetDate(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-        {
-            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
-            return DateOnly.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
-        }
-
-        return DateOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
-
-    public TimeOnly GetTime(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-        {
-            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
-            return TimeOnly.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
-        }
-
-        return TimeOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
-
-    public DateTimeOffset GetDateTimeOffset(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-        {
-            var netFormat = new DateTimeFormatConverter().Convert(field.Format);
-            return DateTimeOffset.ParseExact(GetValueOrThrow(i), netFormat, CultureInfo.InvariantCulture);
-        }
-
-        return DateTimeOffset.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
-
-    private Dictionary<int, CultureInfo> CacheCulture { get; } = [];
-
-    protected virtual CultureInfo GetCulture(int i)
-    {
-        if (!CacheCulture.TryGetValue(i, out var culture))
-        {
-            if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
-            {
-                var numberFormat = CultureInfo.InvariantCulture.NumberFormat;
-                if ((numericField.DecimalChar is not null && numericField.DecimalChar.ToString() != numberFormat.NumberDecimalSeparator)
-                    || (numericField.GroupChar is not null && numericField.GroupChar.ToString() != numberFormat.NumberGroupSeparator))
-                {
-                    culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-                    culture.NumberFormat.NumberDecimalSeparator = numericField.DecimalChar?.ToString() ?? numberFormat.NumberDecimalSeparator;
-                    culture.NumberFormat.NumberGroupSeparator = numericField.GroupChar?.ToString() ?? numberFormat.NumberGroupSeparator;
-                }
-                else
-                    culture = CultureInfo.InvariantCulture;
-            }
-            else
-                culture = CultureInfo.InvariantCulture;
-            CacheCulture.Add(i, culture);
-        }
-        return culture;
-    }
-
-    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-
-    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-    [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
-    public Type GetFieldType(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field))
-            return field.RuntimeType;
-        return typeof(object);
-    }
-
-    protected FieldDescriptor GetFieldDescriptor(int i)
-    {
-        if (Fields is null)
-            throw new InvalidOperationException("Fields are not defined yet.");
-
-        if (Profile.Schema is null)
-            throw new InvalidOperationException("Schema is not defined.");
-
-        if (Profile.Schema.IsMatchingByName)
-        {
-            var headerName = GetName(i);
-            if (Profile.Schema.Fields.TryGetValue(headerName, out var field))
-                return field;
-            throw new IndexOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
-        }
-
-        if (Profile.Schema.IsMatchingByIndex)
-        {
-            if (i < Profile.Schema.Fields.Length)
-                return Profile.Schema.Fields[i];
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-        }
-
-        throw new NotImplementedException("Schema matching is not defined.");
-    }
-
-    protected bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
-    {
-        if (Fields is null)
-            throw new InvalidOperationException("Fields are not defined yet.");
-
-        if (Profile.Schema is null)
-        {
-            field = null;
-            return false;
-        }
-
-        if (Profile.Schema.IsMatchingByName)
-            return Profile.Schema.Fields.TryGetValue(GetName(i), out field);
-
-        if (Profile.Schema.IsMatchingByIndex)
-        {
-            field = i < Profile.Schema.Fields.Length
-                        ? Profile.Schema.Fields[i] : null;
-            return field is not null;
-        }
-        throw new NotImplementedException("Schema matching is not defined.");
-    }
-
-    protected virtual NumberStyles GetNumericStyle(int i)
-    {
-        var style = NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint;
-        if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
-        {
-            if (numericField.GroupChar is not null)
-                style |= NumberStyles.AllowThousands;
-        }
-        return style;
-    }
-
-    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-    public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetCulture(i));
-    public string GetName(int i)
-        => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
-    public int GetOrdinal(string name)
-    {
-        if (Fields is null)
-            throw new InvalidOperationException("Fields are not defined yet.");
-        var index = Array.IndexOf(Fields, name);
-        if (index < 0)
-            throw new IndexOutOfRangeException($"Field '{name}' not found.");
-        return index;
-    }
-
     public DataTable? GetSchemaTable() => throw new NotImplementedException();
 
-    public string GetString(int i)
-        => StringMapper.Map(GetValueOrThrow(i))!;
-
-    public object GetValue(int i)
-    {
-        if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i < Fields!.Length && i >= Record!.FieldSpans.Length)
-            return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
-
-        if (!TryGetFieldDescriptor(i, out var field)
-            || !TypeFunctions.TryGetFunction(field.RuntimeType, out var func))
-            return GetString(i);
-
-        try
-        {
-            var value = func.DynamicInvoke(i)!;
-            return value;
-        }
-        catch (TargetInvocationException ex)
-        {
-            throw ex.InnerException!;
-        }
-    }
-
-    public T GetFieldValue<T>(int i)
-    {
-        if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-
-        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
-            if (IsDBNull(i))
-                return default!;
-
-        if (!TypeFunctions.TryGetFunction<T>(out var func))
-            throw new NotImplementedException($"No function registered for type {typeof(T).Name}");
-
-        return func.Invoke(i);
-    }
-
-    public int GetValues(object[] values) => throw new NotImplementedException();
-
-    public bool IsDBNull(int i)
-        => !GetValueOrThrow(i).HasValue;
-
     public bool NextResult() => throw new NotImplementedException();
-
-    private SanitizerFactory? sanitizerFactory;
-    private Dictionary<int, ISanitizer> CacheSanitizer { get; } = [];
-    private NullableSpan GetValueOrThrow(int i)
-    {
-        if (i < Record!.FieldSpans.Length)
-        {
-            sanitizerFactory ??= new SanitizerFactory(Profile);
-            var sanitizer = CacheSanitizer.GetOrAdd(i,
-                sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, GetSchemaField(i)?.Sequences)
-                                            , new FieldEscaper(Profile)
-                ));
-            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted);
-        }
-        if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
-        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
-    }
-
-    private FieldDescriptor? GetSchemaField(int i)
-    {
-        if (Profile.Schema?.IsMatchingByIndex ?? false)
-            return Profile.Schema?.Fields[i];
-        else if (Profile.Schema?.IsMatchingByName ?? false)
-            return Profile.Schema?.Fields[GetName(i)];
-        else
-            return null;
-    }
 
     public void Close()
     {
@@ -428,61 +146,5 @@ public class CsvDataReader : IDataReader
     ~CsvDataReader()
     {
         Dispose();
-    }
-
-    internal class TypeIndexer
-    {
-        private readonly Dictionary<Type, object> _typeToFunctionMap = new();
-
-        public void Register<T>(Func<int, T> func)
-        {
-            if (func == null)
-                throw new ArgumentNullException(nameof(func));
-
-            _typeToFunctionMap[typeof(T)] = func;
-        }
-
-        public bool TryGetFunction<T>([NotNullWhen(true)] out Func<int, T>? func)
-        {
-            if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
-            {
-                func = (Func<int, T>)value;
-                return true;
-            }
-            func = null;
-            return false;
-        }
-
-        public bool TryGetFunction(Type type, [NotNullWhen(true)] out Delegate? dlg)
-        {
-            ArgumentNullException.ThrowIfNull(type);
-
-            if (_typeToFunctionMap.TryGetValue(type, out var func))
-            {
-                dlg = (Delegate)func;
-                return true;
-            }
-            dlg = null;
-            return false;
-        }
-
-
-        public Delegate GetFunction(Type type)
-        {
-            ArgumentNullException.ThrowIfNull(type);
-
-            if (_typeToFunctionMap.TryGetValue(type, out var func))
-                return (Delegate)func;
-
-            throw new InvalidOperationException($"No function registered for type {type.Name}");
-        }
-
-        public Func<int, T> GetFunction<T>()
-        {
-            if (_typeToFunctionMap.TryGetValue(typeof(T), out var func))
-                return (Func<int, T>)func;
-
-            throw new InvalidOperationException($"No function registered for type {typeof(T).Name}");
-        }
     }
 }
