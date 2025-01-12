@@ -41,6 +41,9 @@ public class NumericFieldDescriptorBuilder : FieldDescriptorBuilder
     public new NumericFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (NumericFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
+    public new NumericFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
+        => (NumericFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+
     public override FieldDescriptor Build()
-        => new NumericFieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable(), _decimalChar, _groupChar);
+        => new NumericFieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty, _decimalChar, _groupChar);
 }
