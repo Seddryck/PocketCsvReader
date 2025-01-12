@@ -12,7 +12,8 @@ public record NumericFieldDescriptor
     , string? Name = null
     , string? Format = null
     , ImmutableSequenceCollection? Sequences = null
+    , string DataSourceTypeName = ""
     , char ? DecimalChar = null
     , char ? GroupChar = null
-) : FieldDescriptor(RuntimeType, Name, Format, Sequences)
+) : FieldDescriptor(RuntimeType, Name, Format, Sequences, DataSourceTypeName)
 { }

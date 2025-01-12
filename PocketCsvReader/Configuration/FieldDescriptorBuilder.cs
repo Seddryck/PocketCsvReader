@@ -14,6 +14,7 @@ public class FieldDescriptorBuilder
     protected string? _format;
     protected string? _name;
     protected SequenceCollection? _sequences;
+    protected string? _dataSourceTypeName;
 
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
@@ -38,8 +39,14 @@ public class FieldDescriptorBuilder
         return this;
     }
 
+    public FieldDescriptorBuilder WithDataSourceTypeName(string typeName)
+    {
+        _dataSourceTypeName = typeName;
+        return this;
+    }
+
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable());
+        return new FieldDescriptor(_runtimeType, _name, _format, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
     }
 }

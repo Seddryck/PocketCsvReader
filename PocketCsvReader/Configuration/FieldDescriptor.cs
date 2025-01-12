@@ -12,5 +12,6 @@ public record FieldDescriptor
     , string? Name = null
     , string? Format = null
     , ImmutableSequenceCollection? Sequences = null
+    , string DataSourceTypeName = ""
 )
 { }

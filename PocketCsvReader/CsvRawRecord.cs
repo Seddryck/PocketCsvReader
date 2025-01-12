@@ -43,7 +43,11 @@ public class CsvRawRecord
     }
 
     public string GetDataTypeName(int i)
-        => throw new NotSupportedException();
+    {
+        if (TryGetFieldDescriptor(i, out var field))
+            return field.DataSourceTypeName;
+        return string.Empty;
+    }
 
     public Type GetFieldType(int i)
     {
@@ -54,14 +58,14 @@ public class CsvRawRecord
 
     protected FieldDescriptor GetFieldDescriptor(int i)
     {
-        if (Fields is null)
-            throw new InvalidOperationException("Fields are not defined yet.");
-
         if (Profile.Schema is null)
             throw new InvalidOperationException("Schema is not defined.");
 
         if (Profile.Schema.IsMatchingByName)
         {
+            if (Fields is null)
+                throw new InvalidOperationException("Fields are not defined yet.");
+
             var headerName = GetName(i);
             if (Profile.Schema.Fields.TryGetValue(headerName, out var field))
                 return field;
@@ -80,9 +84,6 @@ public class CsvRawRecord
 
     protected bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
     {
-        if (Fields is null)
-            throw new InvalidOperationException("Fields are not defined yet.");
-
         if (Profile.Schema is null)
         {
             field = null;
@@ -90,7 +91,11 @@ public class CsvRawRecord
         }
 
         if (Profile.Schema.IsMatchingByName)
+        {
+            if (Fields is null)
+                throw new InvalidOperationException("Fields are not defined yet.");
             return Profile.Schema.Fields.TryGetValue(GetName(i), out field);
+        }
 
         if (Profile.Schema.IsMatchingByIndex)
         {
