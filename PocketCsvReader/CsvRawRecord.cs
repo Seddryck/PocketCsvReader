@@ -15,7 +15,6 @@ using PocketCsvReader.FieldParsing;
 namespace PocketCsvReader;
 public class CsvRawRecord
 {
-    protected TypeIndexer TypeFunctions = new();
     protected CsvProfile Profile { get; }
     private StringMapper StringMapper { get; }
     public int RowCount { get; protected set; } = 0;
@@ -124,10 +123,11 @@ public class CsvRawRecord
     public string GetString(int i)
         => StringMapper.Map(GetValueOrThrow(i))!;
 
-    private Dictionary<int, CultureInfo> CacheCultures { get; } = [];
-    protected virtual CultureInfo GetCulture(int i)
+    private Dictionary<int, IFormatProvider> CacheFormatProviders { get; } = [];
+
+    protected virtual IFormatProvider GetFormatProvider(int i)
     {
-        if (!CacheCultures.TryGetValue(i, out var culture))
+        if (!CacheFormatProviders.TryGetValue(i, out var provider))
         {
             if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
             {
@@ -135,18 +135,19 @@ public class CsvRawRecord
                 if ((numericField.DecimalChar is not null && numericField.DecimalChar.ToString() != numberFormat.NumberDecimalSeparator)
                     || (numericField.GroupChar is not null && numericField.GroupChar.ToString() != numberFormat.NumberGroupSeparator))
                 {
-                    culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+                    var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
                     culture.NumberFormat.NumberDecimalSeparator = numericField.DecimalChar?.ToString() ?? numberFormat.NumberDecimalSeparator;
                     culture.NumberFormat.NumberGroupSeparator = numericField.GroupChar?.ToString() ?? numberFormat.NumberGroupSeparator;
+                    provider = culture;
                 }
                 else
-                    culture = CultureInfo.InvariantCulture;
+                    provider = CultureInfo.InvariantCulture;
             }
             else
-                culture = CultureInfo.InvariantCulture;
-            CacheCultures.Add(i, culture);
+                provider = CultureInfo.InvariantCulture;
+            CacheFormatProviders.Add(i, provider);
         }
-        return culture;
+        return provider;
     }
 
     protected virtual NumberStyles GetNumericStyle(int i)
