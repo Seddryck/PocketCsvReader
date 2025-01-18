@@ -9,6 +9,6 @@ public record struct FieldSpan
 (
     int Start,
     int Length,
-    bool WasQuoted,
-    bool IsEscaped
+    bool WasQuoted = false,
+    bool IsEscaped = false
 );

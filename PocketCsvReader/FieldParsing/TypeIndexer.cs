@@ -12,9 +12,7 @@ public class TypeIndexer
 
     public void Register<T>(Func<int, T> func)
     {
-        if (func == null)
-            throw new ArgumentNullException(nameof(func));
-
+        ArgumentNullException.ThrowIfNull(func);
         _typeToFunctionMap[typeof(T)] = func;
     }
 

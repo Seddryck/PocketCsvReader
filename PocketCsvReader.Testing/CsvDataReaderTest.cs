@@ -204,8 +204,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("bar", (f) => f.WithFormat("%d-%m-%y"))
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y/%m/%d"))
+                    .WithField<DateTime>("bar", (f) => f.WithFormat("dd-MM-yy"))
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy/MM/dd"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -234,8 +234,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<TimeOnly>("foo", (f) => f.WithFormat("%H:%M:%S"))
-                    .WithField<TimeOnly>("bar", (f) => f.WithFormat("%I:%M:%S %p"))
+                    .WithField<TimeOnly>("foo", (f) => f.WithFormat("HH:mm:ss"))
+                    .WithField<TimeOnly>("bar", (f) => f.WithFormat("hh:mm:ss tt"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -262,8 +262,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
-                    .WithField<DateTime>("bar", (f) => f.WithFormat("%m/%d/%Y %I:%M:%S %p"))
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
+                    .WithField<DateTime>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -291,8 +291,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTimeOffset>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%SZ"))
-                    .WithField<DateTimeOffset>("bar", (f) => f.WithFormat("%m/%d/%Y %I:%M:%S %p %z"))
+                    .WithField<DateTimeOffset>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ssZ"))
+                    .WithField<DateTimeOffset>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt zzz"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -319,7 +319,7 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
                     .WithField<short>("bar")
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
@@ -356,7 +356,7 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("%Y-%m-%dT%H:%M:%S"))
+                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
                     .WithField<short>("bar")
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
