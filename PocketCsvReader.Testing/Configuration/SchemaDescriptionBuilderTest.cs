@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -59,18 +60,18 @@ public class SchemaDescriptionBuilderTest
         var descriptor = new SchemaDescriptorBuilder()
             .Indexed()
             .WithField<int>((f) => f.WithName("foo"))
-            .WithField<bool>((f) => f.WithName("bar").WithFormat("%Y-%M-%d"))
+            .WithField<bool>((f) => f.WithName("bar"))
             .Build();
         Assert.That(descriptor, Is.Not.Null);
         Assert.That(descriptor!.Fields, Has.Length.EqualTo(2));
         Assert.That(descriptor.Fields[0].RuntimeType, Is.EqualTo(typeof(int)));
         Assert.That(descriptor.Fields[0].Name, Is.EqualTo("foo"));
-        Assert.That(descriptor.Fields[0].Format, Is.Null);
+        Assert.That(descriptor.Fields[0].Format, Is.Not.Null);
         Assert.That(descriptor.Fields.TryGetValue("foo", out var _), Is.True);
         Assert.That(descriptor.Fields.TryGetValue("qrk", out var _), Is.False);
         Assert.That(descriptor.Fields[1].Name, Is.EqualTo("bar"));
         Assert.That(descriptor.Fields[1].RuntimeType, Is.EqualTo(typeof(bool)));
-        Assert.That(descriptor.Fields[1].Format, Is.EqualTo("%Y-%M-%d"));
+        Assert.That(descriptor.Fields[1].Format, Is.EqualTo(IFormatDescriptor.None));
     }
 
     [Test]
@@ -79,7 +80,7 @@ public class SchemaDescriptionBuilderTest
         var descriptor = new SchemaDescriptorBuilder()
             .Named()
             .WithField<int>("foo")
-            .WithField<DateTime>("bar", (f) => f.WithFormat("%Y-%M-%d"))
+            .WithTemporalField<DateTime>("bar", (f) => f.WithFormat("yyyy-MM-dd"))
             .Build();
         Assert.That(descriptor, Is.Not.Null);
         Assert.That(descriptor!.IsMatchingByName, Is.True);
@@ -87,10 +88,15 @@ public class SchemaDescriptionBuilderTest
         Assert.That(descriptor!.Fields, Has.Length.EqualTo(2));
         Assert.That(descriptor.Fields["foo"].RuntimeType, Is.EqualTo(typeof(int)));
         Assert.That(descriptor.Fields["foo"].Name, Is.EqualTo("foo"));
-        Assert.That(descriptor.Fields["foo"].Format, Is.Null);
+        Assert.That(descriptor.Fields["foo"].Format, Is.TypeOf<NumericFormatDescriptor>());
+        var formatInfo = (descriptor.Fields["foo"].Format as NumericFormatDescriptor)!.Culture as NumberFormatInfo;
+        Assert.That(formatInfo!.NumberGroupSeparator, Is.EqualTo(","));
+        
         Assert.That(descriptor.Fields["bar"].RuntimeType, Is.EqualTo(typeof(DateTime)));
         Assert.That(descriptor.Fields["bar"].Name, Is.EqualTo("bar"));
-        Assert.That(descriptor.Fields["bar"].Format, Is.EqualTo("%Y-%M-%d"));
+        Assert.That(descriptor.Fields["bar"].Format, Is.TypeOf<TemporalFormatDescriptor>());
+        var format = descriptor.Fields["bar"].Format as TemporalFormatDescriptor;
+        Assert.That(format!.Pattern, Is.EqualTo("yyyy-MM-dd"));
 
         foreach (var field in descriptor.Fields)
             Assert.That(field.Name, Is.Not.Null.Or.Empty);
@@ -107,16 +113,17 @@ public class SchemaDescriptionBuilderTest
     public void InterfaceWithFields_ShouldSetFields(ISchemaDescriptorBuilder builder)
     {
         builder.WithField(typeof(int), "foo", (x) => x);
-        builder.WithField(typeof(DateTime), "bar", (f) => f.WithFormat("%Y-%M-%d"));
+        builder.WithTemporalField(typeof(DateTime), "bar", (f) => f.WithFormat("yyyy-MM-dd"));
         var descriptor = builder.Build();
         Assert.That(descriptor, Is.Not.Null);
         Assert.That(descriptor!.Fields, Has.Length.EqualTo(2));
         Assert.That(descriptor.Fields["foo"].RuntimeType, Is.EqualTo(typeof(int)));
         Assert.That(descriptor.Fields["foo"].Name, Is.EqualTo("foo"));
-        Assert.That(descriptor.Fields["foo"].Format, Is.Null);
+        Assert.That(descriptor.Fields["foo"].Format, Is.TypeOf<NumericFormatDescriptor>());
         Assert.That(descriptor.Fields["bar"].RuntimeType, Is.EqualTo(typeof(DateTime)));
         Assert.That(descriptor.Fields["bar"].Name, Is.EqualTo("bar"));
-        Assert.That(descriptor.Fields["bar"].Format, Is.EqualTo("%Y-%M-%d"));
+        var format = descriptor.Fields["bar"].Format as TemporalFormatDescriptor;
+        Assert.That(format!.Pattern, Is.EqualTo("yyyy-MM-dd"));
 
         foreach (var field in descriptor.Fields)
             Assert.That(field.Name, Is.Not.Null.Or.Empty);
@@ -151,7 +158,7 @@ public class SchemaDescriptionBuilderTest
     {
         var descriptor = new SchemaDescriptorBuilder()
             .Indexed()
-            .WithNumericField<int>((f) => f.WithSequence("NaN", "0"))
+            .WithNumberField<int>((f) => f.WithSequence("NaN", "0"))
             .WithField<string>((f) => f.WithSequence("", "Unknown"))
             .Build();
         Assert.That(descriptor, Is.Not.Null);

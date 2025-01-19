@@ -10,7 +10,7 @@ public record FieldDescriptor
 (
     Type RuntimeType
     , string? Name = null
-    , string? Format = null
+    , IFormatDescriptor? Format = null
     , ImmutableSequenceCollection? Sequences = null
     , string DataSourceTypeName = ""
 )

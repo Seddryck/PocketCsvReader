@@ -123,42 +123,11 @@ public class CsvRawRecord
     public string GetString(int i)
         => StringMapper.Map(GetValueOrThrow(i))!;
 
-    private Dictionary<int, IFormatProvider> CacheFormatProviders { get; } = [];
-
-    protected virtual IFormatProvider GetFormatProvider(int i)
+    protected virtual IFormatDescriptor GetFormat(int i)
     {
-        if (!CacheFormatProviders.TryGetValue(i, out var provider))
-        {
-            if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
-            {
-                var numberFormat = CultureInfo.InvariantCulture.NumberFormat;
-                if ((numericField.DecimalChar is not null && numericField.DecimalChar.ToString() != numberFormat.NumberDecimalSeparator)
-                    || (numericField.GroupChar is not null && numericField.GroupChar.ToString() != numberFormat.NumberGroupSeparator))
-                {
-                    var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-                    culture.NumberFormat.NumberDecimalSeparator = numericField.DecimalChar?.ToString() ?? numberFormat.NumberDecimalSeparator;
-                    culture.NumberFormat.NumberGroupSeparator = numericField.GroupChar?.ToString() ?? numberFormat.NumberGroupSeparator;
-                    provider = culture;
-                }
-                else
-                    provider = CultureInfo.InvariantCulture;
-            }
-            else
-                provider = CultureInfo.InvariantCulture;
-            CacheFormatProviders.Add(i, provider);
-        }
-        return provider;
-    }
-
-    protected virtual NumberStyles GetNumericStyle(int i)
-    {
-        var style = NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint;
-        if (TryGetFieldDescriptor(i, out var field) && field is NumericFieldDescriptor numericField)
-        {
-            if (numericField.GroupChar is not null)
-                style |= NumberStyles.AllowThousands;
-        }
-        return style;
+        if (!TryGetFieldDescriptor(i, out var field))
+            return IFormatDescriptor.None;
+        return field.Format ?? IFormatDescriptor.None;
     }
 
     private SanitizerFactory? sanitizerFactory;
