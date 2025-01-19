@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Buffers;
 using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
 using PocketCsvReader.Configuration;
+using System.Globalization;
 
 namespace PocketCsvReader.Testing;
 
@@ -204,8 +205,10 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("bar", (f) => f.WithFormat("dd-MM-yy"))
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy/MM/dd"))
+                    .WithTemporalField<DateTime>("bar", (f) => f.WithFormat("dd-MM-yy"))
+                    .WithTemporalField<DateTime>("foo", (f) => f.WithFormat(
+                                                                    "yyyy/MM/dd"
+                                                                    , (fmt) => fmt.WithDateSeparator("/")))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -234,8 +237,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<TimeOnly>("foo", (f) => f.WithFormat("HH:mm:ss"))
-                    .WithField<TimeOnly>("bar", (f) => f.WithFormat("hh:mm:ss tt"))
+                    .WithTemporalField<TimeOnly>("foo", (f) => f.WithFormat("HH:mm:ss"))
+                    .WithTemporalField<TimeOnly>("bar", (f) => f.WithFormat("hh:mm:ss tt"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -262,8 +265,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
-                    .WithField<DateTime>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt"))
+                    .WithTemporalField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
+                    .WithTemporalField<DateTime>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -291,8 +294,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTimeOffset>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ssZ"))
-                    .WithField<DateTimeOffset>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt zzz"))
+                    .WithTemporalField<DateTimeOffset>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ssZ"))
+                    .WithTemporalField<DateTimeOffset>("bar", (f) => f.WithFormat("MM/dd/yyyy hh:mm:ss tt zzz"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -319,8 +322,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
-                    .WithField<short>("bar")
+                    .WithTemporalField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
+                    .WithIntegerField<short>("bar")
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -356,7 +359,7 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithField<DateTime>("foo", (f) => f.WithFormat("yyyy-MM-ddTHH:mm:ss"))
+                    .WithField<DateTime>("foo")
                     .WithField<short>("bar")
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
@@ -390,8 +393,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithNumericField<decimal>("foo", (f) => f.WithDecimalChar('.').WithGroupChar(','))
-                    .WithNumericField<decimal>("bar", (f) => f.WithDecimalChar(',').WithGroupChar('.'))
+                    .WithNumberField<decimal>("foo", (f) => f.WithFormat((fmt) => fmt.WithDecimalChar('.').WithGroupChar(',')))
+                    .WithNumberField<decimal>("bar", (f) => f.WithFormat((fmt) => fmt.WithDecimalChar(',').WithGroupChar('.')))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -424,8 +427,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithNumericField<int>("foo", (f) => f.WithGroupChar(','))
-                    .WithNumericField<int>("bar", (f) => f.WithGroupChar(' '))
+                    .WithNumberField<int>("foo", (f) => f.WithFormat((fmt) => fmt.WithGroupChar(",")))
+                    .WithNumberField<int>("bar", (f) => f.WithFormat((fmt) => fmt.WithGroupChar(" ")))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -467,7 +470,7 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithNumericField<int>("foo", (f) => f.WithoutGroupChar())
+                    .WithNumberField<int>("foo", (f) => f.WithFormat((fmt) => fmt.WithoutGroupChar()))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -493,7 +496,7 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithNumericField<int>("foo", (f) => f.WithoutGroupChar())
+                    .WithNumberField<int>("foo", (f) => f.WithFormat((fmt) => fmt.WithoutGroupChar()))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
@@ -635,6 +638,35 @@ public class CsvDataReaderTest
         Assert.That(dataReader.IsDBNull(1), Is.False);
         Assert.That(dataReader.GetInt32(1), Is.EqualTo(15));
     }
+
+    [Test]
+    [TestCase("foo;bar\r\n2025-02;Q1.25")]
+    public void Read_WithSchemaParsableTypes_CorrectParsing(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        var builder = new CsvReaderBuilder()
+            .WithDialect(
+                (dialect) => dialect
+                    .WithDelimiter(';')
+                    .WithHeader(true))
+            .WithSchema(
+                (schema) => schema
+                    .Named()
+                    .WithCustomField<Chrononuensis.YearMonth>("foo", (f) => f.WithFormat("yyyy-MM"))
+                    .WithCustomField<Chrononuensis.YearQuarter>("bar", (f) => f.WithFormat("'Q'q.yy"))
+            );
+        using var dataReader = builder.Build().ToDataReader(buffer);
+        dataReader.Read();
+        Assert.That(dataReader.FieldCount, Is.EqualTo(2));
+        Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
+        Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(Chrononuensis.YearMonth)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(Chrononuensis.YearQuarter)));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025,2)));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo(new Chrononuensis.YearQuarter(2025, 1)));
+    }
+
 
     [Test]
     [TestCase("Ansi")]

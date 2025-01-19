@@ -14,7 +14,7 @@ public class CsvRawRecordTest
     {
         var schema = new SchemaDescriptorBuilder()
                             .Indexed()   
-                            .WithNumericField<decimal>((f) => f.WithDataSourceTypeName("number"))
+                            .WithNumberField<decimal>((f) => f.WithDataSourceTypeName("number"))
                             .WithField<string>((f) => f.WithDataSourceTypeName("string"))
                             .Build();
         var profile = new CsvProfile(new DialectDescriptor(), schema);

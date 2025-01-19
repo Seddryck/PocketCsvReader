@@ -16,6 +16,12 @@ public class TypeIndexer
         _typeToFunctionMap[typeof(T)] = func;
     }
 
+    public void Register(Type type, Func<int, object> func)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        _typeToFunctionMap[type] = func;
+    }
+
     public bool TryGetFunction<T>([NotNullWhen(true)] out Func<int, T>? func)
     {
         if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
