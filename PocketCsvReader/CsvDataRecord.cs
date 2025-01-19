@@ -11,6 +11,8 @@ using PocketCsvReader.Configuration;
 using System.Reflection;
 using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
+using System.Linq.Expressions;
+using static System.Net.WebRequestMethods;
 
 namespace PocketCsvReader;
 public class CsvDataRecord : CsvRawRecord, IDataRecord
@@ -37,10 +39,10 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         TypeFunctions.Register(GetDateTimeOffset);
     }
 
-    public void Register<T>(Func<string?, IFormatProvider?>? format = null) where T : IParsable<T>
+    public void Register<T>(Func<FieldDescriptor?, IFormatProvider?>? format = null) where T : IParsable<T>
     {
-        IFormatProvider? provide(int i) => format is not null && TryGetFieldDescriptor(i, out var field) ? format(field.Format) : null;
-        TypeFunctions.Register((i) => T.Parse(GetValueOrThrow(i).Value.ToString(), provide(i) ?? CultureInfo.InvariantCulture));
+        TryGetFieldDescriptor(0, out var field);
+        TypeFunctions.Register((i) => T.Parse(GetValueOrThrow(i).Value.ToString(), format?.Invoke(field)));
     }
 
     public void Register<T>(Func<string, T> parse)
@@ -54,7 +56,7 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
     {
         Record = record;
 
-        int i =0;
+        int i = 0;
         Fields = record.FieldSpans.Select(_ => $"field_{i++}").ToArray();
     }
 
@@ -84,39 +86,73 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
 
     public DateTime GetDateTime(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-            return DateTime.ParseExact(GetValueOrThrow(i), field.Format, CultureInfo.InvariantCulture);
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
+            return DateTime.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
+
         return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
     public DateOnly GetDate(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-            return DateOnly.ParseExact(GetValueOrThrow(i), field.Format, CultureInfo.InvariantCulture);
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
+            return DateOnly.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
         return DateOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
     public TimeOnly GetTime(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-            return TimeOnly.ParseExact(GetValueOrThrow(i), field.Format, CultureInfo.InvariantCulture);
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
+            return TimeOnly.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
         return TimeOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
     public DateTimeOffset GetDateTimeOffset(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && !string.IsNullOrWhiteSpace(field.Format))
-            return DateTimeOffset.ParseExact(GetValueOrThrow(i), field.Format, CultureInfo.InvariantCulture);
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
+            return DateTimeOffset.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
         return DateTimeOffset.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
-    public decimal GetDecimal(int i) => decimal.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
-    public double GetDouble(int i) => double.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
-    public float GetFloat(int i) => float.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
     public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    public short GetInt16(int i) => short.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
-    public int GetInt32(int i) => int.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
-    public long GetInt64(int i) => long.Parse(GetValueOrThrow(i), GetNumericStyle(i), GetFormatProvider(i));
+
+    public decimal GetDecimal(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return decimal.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return decimal.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
+    public double GetDouble(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return double.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+
+    public float GetFloat(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return float.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+    public short GetInt16(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return short.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+    public int GetInt32(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return int.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return int.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
+    public long GetInt64(int i)
+    {
+        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            return long.Parse(GetValueOrThrow(i), format.Style, format.Culture);
+        return long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    }
 
     public object GetValue(int i)
     {
@@ -125,8 +161,32 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         if (i < Fields!.Length && i >= Record!.FieldSpans.Length)
             return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
 
-        if (!TryGetFieldDescriptor(i, out var field)
-             || !TypeFunctions.TryGetFunction(field.RuntimeType, out var func))
+        Delegate? func = null;
+        if (TryGetFieldDescriptor(i, out var field) && !TypeFunctions.TryGetFunction(field.RuntimeType, out func))
+        {
+            var parsableInterface = typeof(IParsable<>).MakeGenericType(field.RuntimeType);
+            //This case only happens for configurable types AND at the first call
+            if (parsableInterface.IsAssignableFrom(field.RuntimeType))
+            {
+                IFormatProvider? getFormatProvider(int i)
+                {
+                    if (TryGetFieldDescriptor(i, out var field))
+                        return (field?.Format as ICultureFormatDescriptor)?.Culture;
+                    return null;
+                }
+
+                string getValue(int i) => GetValueOrThrow(i).Value.ToString();
+
+                var method = field.RuntimeType.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+                                ?? throw new NotSupportedException($"Type {field.RuntimeType.Name} does not have a Parse method.");
+
+                Func<int, object> parse = (int i) => method.Invoke(null, [getValue(i), getFormatProvider(i)])!;
+                TypeFunctions.Register(field!.RuntimeType, parse);
+                func = parse;
+            }
+        }
+
+        if (func is null)
             return GetString(i);
 
         try
