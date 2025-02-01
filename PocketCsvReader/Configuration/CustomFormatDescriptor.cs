@@ -18,7 +18,7 @@ internal class CustomFormatDescriptor : ICultureFormatDescriptor
 
     public string Pattern
         => _pattern;
-
+        
     public IFormatProvider Culture
         => _formatProvider;
 }

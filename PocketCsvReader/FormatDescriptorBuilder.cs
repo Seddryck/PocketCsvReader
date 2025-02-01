@@ -144,6 +144,7 @@ public class CustomFormatDescriptorBuilder : FormatDescriptorBuilder
 
     public override IFormatDescriptor Build()
         => new CustomFormatDescriptor(_pattern, BuildCulture());
+        
     protected override IFormatProvider BuildCulture()
         => _formatProvider ?? CultureInfo.InvariantCulture;
 }

@@ -665,6 +665,7 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(Chrononuensis.YearQuarter)));
         Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025,2)));
         Assert.That(dataReader.GetValue(1), Is.EqualTo(new Chrononuensis.YearQuarter(2025, 1)));
+
     }
 
 
