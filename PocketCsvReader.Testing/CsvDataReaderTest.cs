@@ -653,18 +653,19 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithCustomField<YearMonth>("foo", (f) => f.WithFormat(new DateTimeFormatInfo() { YearMonthPattern = "yyyy-MM" }))
-                    .WithCustomField<YearQuarter>("bar", (f) => f.WithFormat(new YearQuarterFormatProvider() { YearQuarterPattern="Qq.yy" }))
+                    .WithCustomField<Chrononuensis.YearMonth>("foo", (f) => f.WithFormat("yyyy-MM"))
+                    .WithCustomField<Chrononuensis.YearQuarter>("bar", (f) => f.WithFormat("'Q'q.yy"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();
         Assert.That(dataReader.FieldCount, Is.EqualTo(2));
         Assert.That(dataReader.GetName(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
-        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(YearMonth)));
-        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(YearQuarter)));
-        Assert.That(dataReader.GetValue(0), Is.EqualTo(new YearMonth(2025,2)));
-        Assert.That(dataReader.GetValue(1), Is.EqualTo(new YearQuarter(2025, 1)));
+        Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(Chrononuensis.YearMonth)));
+        Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(Chrononuensis.YearQuarter)));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025,2)));
+        Assert.That(dataReader.GetValue(1), Is.EqualTo(new Chrononuensis.YearQuarter(2025, 1)));
+
     }
 
 

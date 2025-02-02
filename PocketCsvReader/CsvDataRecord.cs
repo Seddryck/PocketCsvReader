@@ -39,12 +39,6 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         TypeFunctions.Register(GetDateTimeOffset);
     }
 
-    public void Register<T>(Func<FieldDescriptor?, IFormatProvider?>? format = null) where T : IParsable<T>
-    {
-        TryGetFieldDescriptor(0, out var field);
-        TypeFunctions.Register((i) => T.Parse(GetValueOrThrow(i).Value.ToString(), format?.Invoke(field)));
-    }
-
     public void Register<T>(Func<string, T> parse)
     {
         ArgumentNullException.ThrowIfNull(parse);
@@ -161,43 +155,55 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         if (i < Fields!.Length && i >= Record!.FieldSpans.Length)
             return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
 
-        Delegate? func = null;
-        if (TryGetFieldDescriptor(i, out var field) && !TypeFunctions.TryGetFunction(field.RuntimeType, out func))
-        {
-            var parsableInterface = typeof(IParsable<>).MakeGenericType(field.RuntimeType);
-            //This case only happens for configurable types AND at the first call
-            if (parsableInterface.IsAssignableFrom(field.RuntimeType))
-            {
-                IFormatProvider? getFormatProvider(int i)
-                {
-                    if (TryGetFieldDescriptor(i, out var field))
-                        return (field?.Format as ICultureFormatDescriptor)?.Culture;
-                    return null;
-                }
-
-                string getValue(int i) => GetValueOrThrow(i).Value.ToString();
-
-                var method = field.RuntimeType.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-                                ?? throw new NotSupportedException($"Type {field.RuntimeType.Name} does not have a Parse method.");
-
-                Func<int, object> parse = (int i) => method.Invoke(null, [getValue(i), getFormatProvider(i)])!;
-                TypeFunctions.Register(field!.RuntimeType, parse);
-                func = parse;
-            }
-        }
-
-        if (func is null)
+        if (!TryGetFieldDescriptor(i, out var field))
             return GetString(i);
 
+        Func<int, object>? parse = TypeFunctions.TryGetFunction(field.RuntimeType, out var dlg)
+                                        ? (int i) => dlg.DynamicInvoke(i)!
+                                        : RegisterFunction(field);
         try
         {
-            var value = func.DynamicInvoke(i)!;
+            var value = parse!(i);
             return value;
         }
         catch (TargetInvocationException ex)
         {
             throw ex.InnerException!;
         }
+    }
+
+    private Func<int, object>? RegisterFunction(FieldDescriptor field)
+    {
+        var type = typeof(TypeParserLocator<>).MakeGenericType(field.RuntimeType);
+        var locator = (ITypeParserLocator)(Activator.CreateInstance(type) ?? throw new InvalidOperationException());
+        var parameters = GetParameters(field.Format).ToArray();
+
+        IEnumerable<object> GetParameters(object? format)
+        {
+            switch (format)
+            {
+                case TemporalFormatDescriptor temporalFormat:
+                    yield return temporalFormat.Pattern;
+                    yield return temporalFormat.Culture;
+                    break;
+
+                case NumericFormatDescriptor numericFormat:
+                    yield return numericFormat.Style;
+                    yield return numericFormat.Culture;
+                    break;
+                case CustomFormatDescriptor customFormat:
+                    yield return customFormat.Pattern;
+                    yield return customFormat.Culture;
+                    break;
+                default: break;
+            }
+        }
+        var func = locator.Locate(parameters);
+        string getValue(int i) => GetValueOrThrow(i).Value.ToString();
+
+        var parse = (int i) => func.Invoke(getValue(i))!;
+        TypeFunctions.Register(field!.RuntimeType, parse);
+        return parse;
     }
 
     public T GetFieldValue<T>(int i)
@@ -225,6 +231,21 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
                 return default!;
 
         return T.Parse(GetValueOrThrow(i).Value.ToString(), format);
+    }
+
+    public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format=null) where T : IParsable<T>
+    {
+        if (i >= FieldCount)
+            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+
+        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
+            if (IsDBNull(i))
+                return default!;
+
+        var locator = new TypeParserLocator<T>();
+        var func = locator.Locate([pattern, format ?? CultureInfo.InvariantCulture]);
+
+        return func(GetValueOrThrow(i).Value.ToString());
     }
 
     public T GetFieldValue<T>(int i, Func<string, T> parse)

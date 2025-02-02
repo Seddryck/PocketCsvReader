@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,9 +11,9 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
     internal CustomFieldDescriptorBuilder(Type runtimeType)
         : base(runtimeType) { }
 
-    public CustomFieldDescriptorBuilder WithFormat(IFormatProvider formatProvider)
+    public CustomFieldDescriptorBuilder WithFormat(string pattern, IFormatProvider? formatProvider = null)
     {
-        _format = new CustomFormatDescriptorBuilder(formatProvider);
+        _format = new CustomFormatDescriptorBuilder(pattern, formatProvider);
         return this;
     }
 

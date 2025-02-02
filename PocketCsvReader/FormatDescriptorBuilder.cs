@@ -133,15 +133,18 @@ public class TemporalFormatDescriptorBuilder : FormatDescriptorBuilder
 
 public class CustomFormatDescriptorBuilder : FormatDescriptorBuilder
 {
+    private string _pattern;
     private IFormatProvider? _formatProvider;
 
-    public CustomFormatDescriptorBuilder(IFormatProvider? formatProvider)
+    public CustomFormatDescriptorBuilder(string pattern, IFormatProvider? formatProvider)
     {
+        _pattern = pattern;
         _formatProvider = formatProvider;
     }
 
     public override IFormatDescriptor Build()
-        => new CustomFormatDescriptor(BuildCulture());
+        => new CustomFormatDescriptor(_pattern, BuildCulture());
+        
     protected override IFormatProvider BuildCulture()
         => _formatProvider ?? CultureInfo.InvariantCulture;
 }
