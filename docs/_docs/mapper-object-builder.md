@@ -4,10 +4,9 @@ tags: [configuration]
 ---
 
 This documentation explains how to use the `SpanMapper<T>` and `SpanObjectBuilder<T>` classes for mapping and parsing flat-file data. Their primary purpose is to configure the mapping of fields from delimited data to a strongly-typed class.
+These features are designed to work with the `To<T>` method, which facilitates conversion of CSV rows into instances of T. Each row's fields are mapped according to the schema defined in `SpanObjectBuilder<T>` or the `SpanMapper<T>` delegate, ensuring accurate transformation into structured objects.
 
-## Delegates
-
-### SpanMapper&lt;T&gt;
+## SpanMapper&lt;T&gt;
 
 ```csharp
 public delegate T SpanMapper<T>(ReadOnlySpan<char> span, IEnumerable<FieldSpan> fieldSpans);
@@ -19,49 +18,11 @@ The `SpanMapper<T>` delegate maps data from a `ReadOnlySpan<char>` representing 
 - **`span`**: The source `ReadOnlySpan<char>` containing the delimited row data.
 - **`fieldSpans`**: A collection of `FieldSpan` objects defining the start position and length of each field in the row.
 
-### Parse
-
-```csharp
-public delegate object? Parse(ReadOnlySpan<char> span);
-```
-
-**Purpose:**  
-The `Parse` delegate defines a method for parsing a `ReadOnlySpan<char>` into an object of a specific type. It is used to handle custom parsing for various data types in the `SpanObjectBuilder<T>` class.
-
-- **`span`**: The `ReadOnlySpan<char>` containing the value to parse.
-
 ## Class SpanObjectBuilder&lt;T&gt;
 
-The `SpanObjectBuilder<T>` class is designed to instantiate strongly-typed objects (`T`) from delimited flat-file data using `SpanMapper<T>` and the `Parse` delegates. It supports default parsers for common data types and allows customization via the `SetParser` method.
+The `SpanObjectBuilder<T>` class is designed to instantiate strongly-typed objects (`T`) from delimited flat-file data. It supports default parsers for common data types and allows customization via the `SetParser` method and the `Parse` delegate.
 
-### Default Parsers
-
-By default, the `SpanObjectBuilder<T>` supports the following types:
-
-- Strings
-- Numbers (`int`, `long`, `short`, `byte`, `float`, `double`, `decimal`)
-- Booleans
-- Dates (`DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`)
-- Characters (`char`)
-
-### SetParser&lt;T&gt;TField&lt;T&gt;
-
-If you need to parse additional types or override the default behavior, use the `SetParser` method.
-
-**Purpose:**  
-Customizes the parser for a specific data type.
-
-- **`TField`**: The type for which the parser is being set.
-- **`parse`**: A delegate implementing custom parsing logic for `TField`.
-
-**Example:**
-
-```csharp
-var builder = new SpanObjectBuilder<MyClass>();
-builder.SetParser<Guid>(s => Guid.Parse(s));
-```
-
-### `Instantiate`
+### `Instantiate` a SpanObjectBuilder
 
 ```csharp
 public T Instantiate(ReadOnlySpan<char> span, IEnumerable<FieldSpan> fieldSpans)
@@ -91,6 +52,46 @@ var spans = new List<FieldSpan>
 };
 var obj = builder.Instantiate("12345     true", spans);
 ```
+
+### Specifying the field parsers
+
+#### SetParser&lt;TField&gt;
+
+If you need to parse additional types or override the default behavior, use the `SetParser` method.
+
+**Purpose:**  
+Customizes the parser for a specific data type.
+
+- **`TField`**: The type for which the parser is being set.
+- **`parse`**: A delegate implementing custom parsing logic for `TField`.
+
+**Example:**
+
+```csharp
+var builder = new SpanObjectBuilder<MyClass>();
+builder.SetParser<Guid>(s => Guid.Parse(s));
+```
+
+#### Parse delegate
+
+```csharp
+public delegate object? Parse(ReadOnlySpan<char> span);
+```
+
+**Purpose:**  
+The `Parse` delegate defines a method for parsing a `ReadOnlySpan<char>` into an object of a specific type. It is used to handle custom parsing for various data types in the `SpanObjectBuilder<T>` class.
+
+- **`span`**: The `ReadOnlySpan<char>` containing the value to parse.
+
+#### Default Parsers
+
+By default, the `SpanObjectBuilder<T>` supports the following types:
+
+- Strings
+- Numbers (`int`, `long`, `short`, `byte`, `float`, `double`, `decimal`)
+- Booleans
+- Dates (`DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`)
+- Characters (`char`)
 
 ### To&lt;T&gt; Method
 

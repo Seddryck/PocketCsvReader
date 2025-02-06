@@ -2,7 +2,7 @@
 title: CSV dialect descriptor
 tags: [configuration]
 ---
-The `CsvDialectDescriptor` class provides extensive configuration options for tuning the behavior of CSV parsing operations. Below is an explanation of each property and its potential impact on CSV processing. 
+The `CsvDialectDescriptor` class provides extensive configuration options for tuning the behavior of CSV parsing operations. Below is an explanation of each property and its potential impact on CSV processing.
 
 The description of PocketCsvReader is aligned with the [CSV Dialect Specification](https://specs.frictionlessdata.io/csv-dialect/#specification) provided by Frictionless Data.
 
