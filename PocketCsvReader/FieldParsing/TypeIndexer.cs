@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -55,7 +55,7 @@ internal class TypeIndexer
     {
         if (_typeToFunctionMap.TryGetValue(typeof(T), out var func))
             return (func as Func<int, T>)
-                ?? throw new InvalidOperationException($"No function returning a type registered {typeof(T).Name} for type {typeof(T).Name}"); ;
+                ?? throw new InvalidOperationException($"No function returning a type registered {typeof(T).Name} for type {typeof(T).Name}");
 
         throw new InvalidOperationException($"No function registered for type {typeof(T).Name}");
     }
