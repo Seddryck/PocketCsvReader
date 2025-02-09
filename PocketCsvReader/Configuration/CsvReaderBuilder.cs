@@ -10,6 +10,7 @@ public class CsvReaderBuilder
     private DialectDescriptorBuilder _dialectBuilder = new();
     private ISchemaDescriptorBuilder? _schemaBuilder;
     private ResourceDescriptorBuilder? _resourceBuilder;
+    private RuntimeParsersDescriptorBuilder? _parserBuilder;
 
     public CsvReaderBuilder WithDialect(Func<DialectDescriptorBuilder, DialectDescriptorBuilder> func)
     {
@@ -34,7 +35,6 @@ public class CsvReaderBuilder
         return this;
     }
 
-
     public CsvReaderBuilder WithResource(Func<ResourceDescriptorBuilder, ResourceDescriptorBuilder> func)
     {
         _resourceBuilder = func(new());
@@ -47,6 +47,18 @@ public class CsvReaderBuilder
         return this;
     }
 
+    public CsvReaderBuilder WithParsers(Func<RuntimeParsersDescriptorBuilder, RuntimeParsersDescriptorBuilder> func)
+    {
+        _parserBuilder = func(new());
+        return this;
+    }
+
+    public CsvReaderBuilder WithParsers(RuntimeParsersDescriptorBuilder parserBuilder)
+    {
+        _parserBuilder = parserBuilder;
+        return this;
+    }
+
     public CsvReader Build()
-        => new (new CsvProfile(_dialectBuilder.Build(), _schemaBuilder?.Build(), _resourceBuilder?.Build()));
+        => new (new CsvProfile(_dialectBuilder.Build(), _schemaBuilder?.Build(), _resourceBuilder?.Build(), _parserBuilder?.Build()));
 }

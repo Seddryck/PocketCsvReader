@@ -13,6 +13,7 @@ public class FieldDescriptorBuilder
     private Dictionary<Type, FormatDescriptorBuilder> DefaultFormatBuilders = new();
     protected Type _runtimeType;
     protected FormatDescriptorBuilder? _format;
+    protected ParseFunction? _parse;
     protected string? _name;
     protected SequenceCollection? _sequences;
     protected string? _dataSourceTypeName;
@@ -57,6 +58,11 @@ public class FieldDescriptorBuilder
         return this;
     }
 
+    public FieldDescriptorBuilder WithParser(ParseFunction parse)
+    {
+        _parse = parse;
+        return this;
+    }
 
     private FormatDescriptorBuilder GetDefaultFormat()
     {
@@ -67,6 +73,6 @@ public class FieldDescriptorBuilder
 
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(_runtimeType, _name, (_format ?? GetDefaultFormat()).Build(), _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
+        return new FieldDescriptor(_runtimeType, _name, (_format ?? GetDefaultFormat()).Build(), _parse, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
     }
 }

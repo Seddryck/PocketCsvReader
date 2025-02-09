@@ -24,4 +24,6 @@ public class IntegerFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new IntegerFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (IntegerFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+    public new IntegerFieldDescriptorBuilder WithParser(ParseFunction parse)
+        => (IntegerFieldDescriptorBuilder)base.WithParser(parse);
 }

@@ -1,5 +1,4 @@
-﻿using PocketCsvReader;
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -7,10 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Reflection;
-using System.Buffers;
-using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
 using PocketCsvReader.Configuration;
-using System.Globalization;
 
 namespace PocketCsvReader.Testing;
 
