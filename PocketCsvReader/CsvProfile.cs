@@ -10,6 +10,8 @@ public class CsvProfile
     public DialectDescriptor Dialect { get; private set; }
     public SchemaDescriptor? Schema { get; private set; }
     public ResourceDescriptor? Resource { get; private set; }
+    public RuntimeParsersDescriptor? Parsers { get; private set; }
+
     public ParserOptimizationOptions ParserOptimizations { get; set; }
 
     public virtual string EmptyCell { get; private set; }
@@ -67,7 +69,7 @@ public class CsvProfile
         MissingCell = missingCell;
     }
 
-    public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null)
+    public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers = null)
     {
         if (dialect.NullSequence is not null)
             resource = (resource ??= new ResourceDescriptor()) with
@@ -85,6 +87,7 @@ public class CsvProfile
 
         Schema = schema;
         Resource = resource;
+        Parsers = parsers;
     }
 
     private static CsvProfile? _commaDoubleQuote;

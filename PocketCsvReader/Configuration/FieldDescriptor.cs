@@ -11,6 +11,7 @@ public record FieldDescriptor
     Type RuntimeType
     , string? Name = null
     , IFormatDescriptor? Format = null
+    , ParseFunction? Parse = null
     , ImmutableSequenceCollection? Sequences = null
     , string DataSourceTypeName = ""
 )

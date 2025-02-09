@@ -1,48 +1,44 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 using System.Globalization;
 using PocketCsvReader.Configuration;
 using System.Reflection;
-using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
-using System.Linq.Expressions;
-using static System.Net.WebRequestMethods;
 
 namespace PocketCsvReader;
 public class CsvDataRecord : CsvRawRecord, IDataRecord
 {
-    protected TypeIndexer TypeFunctions = new();
+    private TypeIndexer TypeParsers = new();
+    protected Dictionary<int, ParseFunction> FieldParsers = new();
 
     public CsvDataRecord(CsvProfile profile)
         : base(profile)
     {
-        TypeFunctions.Register(GetByte);
-        TypeFunctions.Register(GetChar);
-        TypeFunctions.Register(GetString);
-        TypeFunctions.Register(GetBoolean);
-        TypeFunctions.Register(GetInt16);
-        TypeFunctions.Register(GetInt32);
-        TypeFunctions.Register(GetInt64);
-        TypeFunctions.Register(GetFloat);
-        TypeFunctions.Register(GetDouble);
-        TypeFunctions.Register(GetDecimal);
-        TypeFunctions.Register(GetGuid);
-        TypeFunctions.Register(GetDate);
-        TypeFunctions.Register(GetTime);
-        TypeFunctions.Register(GetDateTime);
-        TypeFunctions.Register(GetDateTimeOffset);
-    }
+        TypeParsers.Register(GetByte);
+        TypeParsers.Register(GetChar);
+        TypeParsers.Register(GetString);
+        TypeParsers.Register(GetBoolean);
+        TypeParsers.Register(GetInt16);
+        TypeParsers.Register(GetInt32);
+        TypeParsers.Register(GetInt64);
+        TypeParsers.Register(GetFloat);
+        TypeParsers.Register(GetDouble);
+        TypeParsers.Register(GetDecimal);
+        TypeParsers.Register(GetGuid);
+        TypeParsers.Register(GetDate);
+        TypeParsers.Register(GetTime);
+        TypeParsers.Register(GetDateTime);
+        TypeParsers.Register(GetDateTimeOffset);
 
-    public void Register<T>(Func<string, T> parse)
-    {
-        ArgumentNullException.ThrowIfNull(parse);
-        TypeFunctions.Register((i) => parse(GetValueOrThrow(i).Value.ToString()));
+        foreach (var parser in profile.Parsers ?? [])
+        {
+            string getValue(int i) => GetValueOrThrow(i).Value.ToString();
+            object parse(int i) => parser.Value(getValue(i));
+            TypeParsers.Register(parser.Key, parse);
+        }
     }
 
     internal CsvDataRecord(RecordMemory record, CsvProfile? profile = null)
@@ -53,7 +49,6 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         int i = 0;
         Fields = record.FieldSpans.Select(_ => $"field_{i++}").ToArray();
     }
-
 
     public object this[int i]
     {
@@ -158,7 +153,11 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         if (!TryGetFieldDescriptor(i, out var field))
             return GetString(i);
 
-        Func<int, object>? parse = TypeFunctions.TryGetFunction(field.RuntimeType, out var dlg)
+        Func<int, object>? parse = field.Parse is not null
+                                    ? FieldParsers.TryGetValue(i, out var fparse)
+                                        ? (int i) => fparse
+                                        : RegisterParser(i, field.Parse)
+                                    : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
                                         ? (int i) => dlg.DynamicInvoke(i)!
                                         : RegisterFunction(field);
         try
@@ -170,6 +169,13 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         {
             throw ex.InnerException!;
         }
+    }
+
+
+    private Func<int, object>? RegisterParser(int i, ParseFunction parse)
+    {
+        FieldParsers.Add(i, parse);
+        return (int i) => parse.Invoke(GetValueOrThrow(i).Value.ToString());
     }
 
     private Func<int, object>? RegisterFunction(FieldDescriptor field)
@@ -202,7 +208,7 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         string getValue(int i) => GetValueOrThrow(i).Value.ToString();
 
         var parse = (int i) => func.Invoke(getValue(i))!;
-        TypeFunctions.Register(field!.RuntimeType, parse);
+        TypeParsers.Register(field!.RuntimeType, parse);
         return parse;
     }
 
@@ -215,7 +221,7 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
             if (IsDBNull(i))
                 return default!;
 
-        if (TypeFunctions.TryGetFunction<T>(out var func))
+        if (TypeParsers.TryGetParser<T>(out var func))
             return func.Invoke(i);
 
         throw new NotImplementedException($"No function registered for type {typeof(T).Name}");

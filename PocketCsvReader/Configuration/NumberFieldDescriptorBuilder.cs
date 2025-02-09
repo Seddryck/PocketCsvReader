@@ -25,7 +25,9 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new NumberFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (NumberFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+    public new NumberFieldDescriptorBuilder WithParser(ParseFunction parse)
+        => (NumberFieldDescriptorBuilder)base.WithParser(parse);
 
     public override FieldDescriptor Build()
-        => new FieldDescriptor(_runtimeType, _name, _format?.Build(), _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
+        => new FieldDescriptor(_runtimeType, _name, _format?.Build(), _parse, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
 }

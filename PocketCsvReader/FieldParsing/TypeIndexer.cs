@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -6,15 +6,12 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.FieldParsing;
-public class TypeIndexer
+internal class TypeIndexer
 {
-    private readonly Dictionary<Type, object> _typeToFunctionMap = new();
+    private readonly Dictionary<Type, Func<int, object>> _typeToFunctionMap = new();
 
     public void Register<T>(Func<int, T> func)
-    {
-        ArgumentNullException.ThrowIfNull(func);
-        _typeToFunctionMap[typeof(T)] = func;
-    }
+        => Register(typeof(T), (int i) => func.Invoke(i)!);
 
     public void Register(Type type, Func<int, object> func)
     {
@@ -22,27 +19,24 @@ public class TypeIndexer
         _typeToFunctionMap[type] = func;
     }
 
-    public bool TryGetFunction<T>([NotNullWhen(true)] out Func<int, T>? func)
+    public bool TryGetParser<T>([NotNullWhen(true)] out Func<int, T>? func)
     {
         if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
         {
-            func = (Func<int, T>)value;
+            func = (int i) => (T)value(i);
             return true;
         }
         func = null;
         return false;
     }
 
-    public bool TryGetFunction(Type type, [NotNullWhen(true)] out Delegate? dlg)
+    public bool TryGetParser(Type type, [NotNullWhen(true)] out Func<int, object>? func)
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        if (_typeToFunctionMap.TryGetValue(type, out var func))
-        {
-            dlg = (Delegate)func;
+        if (_typeToFunctionMap.TryGetValue(type, out func))
             return true;
-        }
-        dlg = null;
+        func = null;
         return false;
     }
 
@@ -52,7 +46,7 @@ public class TypeIndexer
         ArgumentNullException.ThrowIfNull(type);
 
         if (_typeToFunctionMap.TryGetValue(type, out var func))
-            return (Delegate)func;
+            return func;
 
         throw new InvalidOperationException($"No function registered for type {type.Name}");
     }
@@ -60,7 +54,8 @@ public class TypeIndexer
     public Func<int, T> GetFunction<T>()
     {
         if (_typeToFunctionMap.TryGetValue(typeof(T), out var func))
-            return (Func<int, T>)func;
+            return (func as Func<int, T>)
+                ?? throw new InvalidOperationException($"No function returning a type registered {typeof(T).Name} for type {typeof(T).Name}");
 
         throw new InvalidOperationException($"No function registered for type {typeof(T).Name}");
     }

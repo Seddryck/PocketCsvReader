@@ -66,4 +66,17 @@ public class CsvReaderBuilderTest
         Assert.That(reader.Profile.Schema, Is.Not.Null);
         Assert.That(reader.Profile.Schema!.Fields, Is.Not.Null.And.Not.Empty);
     }
+
+    [Test]
+    public void WithParsers_ShouldSetParsers()
+    {
+        var builder = new CsvReaderBuilder().WithParsers
+        (
+            new RuntimeParsersDescriptorBuilder()
+                        .WithParser((string s) => s.Equals(s, StringComparison.InvariantCultureIgnoreCase))
+        );
+        var reader = builder.Build();
+        Assert.That(reader.Profile.Parsers, Is.Not.Null);
+        Assert.That(reader.Profile.Parsers!.Count, Is.EqualTo(1));
+    }
 }

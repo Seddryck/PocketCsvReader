@@ -25,4 +25,6 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new CustomFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (CustomFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+    public new CustomFieldDescriptorBuilder WithParser(ParseFunction parse)
+        => (CustomFieldDescriptorBuilder)base.WithParser(parse);
 }

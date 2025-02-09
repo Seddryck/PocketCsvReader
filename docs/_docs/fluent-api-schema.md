@@ -5,7 +5,7 @@ tags: [configuration]
 
 ## Overview
 
-The Fluent API for schema definition in PocketCsvReader provides an intuitive and expressive way to define the structure of CSV data. This is particularly useful when working with `IDataReader`, where the `GetValue` method returns a boxed `object`. This powerful feature enables dynamic retrieval of any column's value without prior type knowledge, making it highly flexible for handling various data types. It seamlessly integrates with schema definitions to ensure proper casting and minimize conversion overhead..
+The Fluent API for schema definition in PocketCsvReader provides an intuitive and expressive way to define the structure of CSV data. This is particularly useful when working with `IDataReader`, where the `GetValue` method returns a boxed `object`. This powerful feature enables dynamic retrieval of any column's value without prior type knowledge, making it highly flexible for handling various data types. It seamlessly integrates with schema definitions to ensure proper casting and minimize conversion overhead.
 
 Defining a schema ensures that values are correctly interpreted and cast to their expected types, avoiding unnecessary type conversions at runtime.
 
@@ -88,7 +88,11 @@ var schema = new SchemaDescriptorBuilder()
 
 This defines an "Amount" field as a double, using `,` as the decimal separator and disabling digit grouping.
 
-### Custom Field Formatting
+### Custom Field
+
+#### Defining a Custom Field with Formatting
+
+You can define a custom field in your schema and specify how format should be interpreted when deserialized.
 
 ```csharp
 var schema = new SchemaDescriptorBuilder()
@@ -97,9 +101,40 @@ var schema = new SchemaDescriptorBuilder()
     .Build();
 ```
 
-This ensures that the "Location" field is interpreted as a `Point` and formatted accordingly.
+In this example, the "Location" field is registered as a Point and formatted using the `x;y` pattern.
 
-When assigning a custom field, the parser is automatically searched for a method named `Parse` that accepts a string (the span to read) and an `IFormatProvider` as the last argument. Optionally, a second argument of type string can be provided to accept a format.
+By default, when assigning a custom field, the system looks for a Parse method on the specified type that:
+
+- Accepts a string (the input to parse).
+- Has an optional string parameter for a custom format.
+- Takes an IFormatProvider as the last argument.
+
+If such a method exists, it is used automatically.
+
+#### Providing a Custom Parser
+
+If the default method resolution does not find a suitable Parse method, or if the required method is inaccessible, you can manually register a parser using `WithParser`:
+
+```csharp
+Point parse(string input)
+{
+    var parts = input.Split(';');
+    return new Point(parts[0], parts[1]);
+}
+
+var schema = new SchemaDescriptorBuilder()
+    .Named()
+    .WithCustomField<Point>("Location", x => x.WithParser(parse))
+    .Build();
+```
+
+Here, the custom parser method:
+
+- Splits the input string using ; as a delimiter.
+- Parses the resulting parts into Point coordinates.
+- Returns a new Point instance.
+
+This approach ensures that custom parsing logic is used when the default method resolution does not apply.
 
 ## Benefits of Using a Schema
 

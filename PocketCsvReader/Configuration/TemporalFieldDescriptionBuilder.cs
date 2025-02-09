@@ -26,4 +26,7 @@ public class TemporalFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new TemporalFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (TemporalFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+
+    public new TemporalFieldDescriptorBuilder WithParser(ParseFunction parse)
+        => (TemporalFieldDescriptorBuilder)base.WithParser(parse);
 }
