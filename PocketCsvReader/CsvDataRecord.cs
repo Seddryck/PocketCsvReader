@@ -158,7 +158,7 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
                                         ? (int i) => fparse
                                         : RegisterParser(i, field.Parse)
                                     : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
-                                        ? (int i) => dlg.DynamicInvoke(i)!
+                                        ? (int i) => dlg.Invoke(i)!
                                         : RegisterFunction(field);
         try
         {
