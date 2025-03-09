@@ -112,7 +112,7 @@ public class CsvDataTableTest
     public void Read_Csv_CorrectResult(string text, int bufferSize, int fieldCount)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
-        var reader = new CsvReader(new CsvProfile(';', '\"', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
+        var reader = new CsvReader(new CsvProfile(';', '\"', '\\', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
         var dataTable = reader.ToDataTable(stream);
         Assert.That(dataTable.Rows, Has.Count.EqualTo(4));
         Assert.That(dataTable.Columns, Has.Count.EqualTo(fieldCount));
@@ -132,7 +132,7 @@ public class CsvDataTableTest
     public void Read_CsvWithTextQualifier_CorrectResult(string text, int columnCount)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
-        var reader = new CsvReader(new CsvProfile(';', '\'', "\r\n", false, false, 4096, "foo", "(null)"));
+        var reader = new CsvReader(new CsvProfile(';', '\'', '\\', "\r\n", false, false, 4096, "foo", "(null)"));
         var dataTable = reader.ToDataTable(stream);
         Assert.That(dataTable.Columns, Has.Count.EqualTo(columnCount));
         Assert.That(dataTable.Rows[0][0], Is.EqualTo("azerty"));
@@ -170,7 +170,7 @@ public class CsvDataTableTest
     public void Read_MissingValue_MatchWithNullValue()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a;b;c\r\na;b\r\na;b;c"));
-        var profile = new CsvProfile(';', '"', "\r\n", false, true, 512, string.Empty, "(null)");
+        var profile = new CsvProfile(';', '"', '\\', "\r\n", false, true, 512, string.Empty, "(null)");
         var reader = new CsvReader(profile);
         var dataTable = reader.ToDataTable(stream);
         Assert.That(dataTable.Rows[1][2], Is.EqualTo("(null)"));
