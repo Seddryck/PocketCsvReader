@@ -17,36 +17,12 @@ public class CsvProfile
     public virtual string EmptyCell { get; private set; }
     public virtual string MissingCell { get; private set; }
 
-    protected CsvProfile()
-        : this(',', '\"')
-    { }
-
-    public CsvProfile(bool firstRowHeader)
-        : this(',', '\"', "\r\n", firstRowHeader)
-    { }
-
-    public CsvProfile(char fieldSeparator, char textQualifier)
-        : this(fieldSeparator, textQualifier, "\r\n")
-    { }
-
     public CsvProfile(char fieldSeparator, string recordSeparator)
-        : this(fieldSeparator, '\"', recordSeparator)
-    { }
-
-    public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator)
-        : this(fieldSeparator, textQualifier, recordSeparator, false)
+        : this(fieldSeparator, '\"', recordSeparator, false)
     { }
 
     public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader)
         : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, false, 4096, string.Empty, string.Empty)
-    { }
-
-    public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized, int bufferSize)
-        : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, performanceOptimized, bufferSize, string.Empty, string.Empty)
-    { }
-
-    public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader, bool performanceOptimized, int bufferSize, string emptyCell, string missingCell)
-        : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, performanceOptimized, bufferSize, emptyCell, missingCell)
     { }
 
     public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool rowCountAtStart, int bufferSize, string emptyCell, string missingCell)
