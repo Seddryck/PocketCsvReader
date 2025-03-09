@@ -152,7 +152,7 @@ public class CsvDataTableTest
         var reader = new CsvReader(profile, 1024);
 
         var ex = Assert.Throws<InvalidDataException>(() => reader.ToDataTable(stream));
-        Assert.That(ex!.Message, Does.Contain(string.Format("record {0} ", rowNumber + 1)));
+        Assert.That(ex!.Message, Does.Contain(string.Format("record {0} ", rowNumber)));
         Assert.That(ex.Message, Does.Contain(string.Format("{0} more", moreField)));
     }
 

@@ -109,7 +109,7 @@ public class CsvDataReader : CsvDataRecord, IDataReader
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
-                    , RowCount + 1 + Convert.ToInt32(RecordParser!.Profile.Dialect.Header)
+                    , RowCount + Convert.ToInt32(RecordParser!.Profile.Dialect.Header)
                     , length - expectedLength
                     , length - expectedLength > 1 ? "s" : string.Empty
                 )
