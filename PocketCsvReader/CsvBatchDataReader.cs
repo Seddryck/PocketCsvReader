@@ -65,10 +65,10 @@ public class CsvBatchDataReader : IDataReader
     public char GetChar(int i) => Current!.GetChar(i);
     public DateTime GetDateTime(int i) => Current!.GetDateTime(i);
     public decimal GetDecimal(int i) => Current!.GetDecimal(i);
-    public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferOffset, int length)
-        => Current!.GetBytes(i, fieldOffset, buffer, bufferOffset, length);
-    public long GetChars(int i, long fieldOffset, char[]? buffer, int bufferOffset, int length)
-        => Current!.GetChars(i, fieldOffset, buffer, bufferOffset, length);
+    public long GetBytes(int i, long fieldoffset, byte[]? buffer, int bufferoffset, int length)
+        => Current!.GetBytes(i, fieldoffset, buffer, bufferoffset, length);
+    public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length)
+        => Current!.GetChars(i, fieldoffset, buffer, bufferoffset, length);
     public IDataReader GetData(int i) => Current!.GetData(i);
     public string GetDataTypeName(int i) => Current!.GetDataTypeName(i);
     public int GetValues(object[] values) => Current!.GetValues(values);
@@ -88,14 +88,28 @@ public class CsvBatchDataReader : IDataReader
 
     public bool IsClosed => _isClosed;
 
+    private bool _disposed = false;
     public void Dispose()
     {
-        Close(); // Ensures CsvDataReader is disposed
-        GC.SuppressFinalize(this); // Prevents finalizer from running
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (disposing)
+        {
+            // free managed resources
+            Current?.Dispose();
+            Streams.Dispose();
+        }
     }
 
     ~CsvBatchDataReader()
     {
-        Dispose();
+        Dispose(false);
     }
 }
