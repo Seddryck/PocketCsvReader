@@ -5,7 +5,7 @@ using System.Data;
 namespace PocketCsvReader;
 public class CsvBatchDataReader : IDataReader
 {
-    private Queue<Stream> Streams { get; }
+    private IEnumerator<Stream> Streams { get; }
     private CsvProfile Profile { get; }
 
     private CsvDataReader? Current { get; set; }
@@ -14,7 +14,7 @@ public class CsvBatchDataReader : IDataReader
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
 
     {
-        (Streams, Profile) = (new(streams), profile);
+        (Streams, Profile) = (streams.GetEnumerator(), profile);
         MoveNext();
     }
 
@@ -22,15 +22,10 @@ public class CsvBatchDataReader : IDataReader
     {
         Current?.Dispose();
 
-        if (Streams.Count > 0)
-        {
-            var currentStream = Streams.Dequeue();
-            Current = new CsvDataReader(currentStream, Profile);
-        }
+        if (Streams.MoveNext())
+            Current = new CsvDataReader(Streams.Current, Profile);
         else
-        {
             Current = null;
-        }
     }
 
     public bool Read()
@@ -86,8 +81,8 @@ public class CsvBatchDataReader : IDataReader
         {
             _isClosed = true;
             Current?.Dispose();
-            while(Streams.Count > 0)
-                Streams.Dequeue()?.Dispose();
+            while(Streams.MoveNext())
+                Streams.Current?.Dispose();
         }
     }
 

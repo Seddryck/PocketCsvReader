@@ -147,14 +147,17 @@ namespace PocketCsvReader
         /// </remarks>
         public CsvBatchDataReader ToDataReader(string[] filenames)
         {
-            var streams = new List<Stream>();
-            foreach (var filename in filenames)
+            IEnumerable<Stream> fileToStream(string[] filenames)
             {
-                CheckFileExists(filename);
-                var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-                streams.Add(stream);
+                foreach (var filename in filenames)
+                {
+                    CheckFileExists(filename);
+                    var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
+                    yield return stream;
+                }
             }
-            return new CsvBatchDataReader([.. streams], Profile);
+            
+            return new CsvBatchDataReader(fileToStream(filenames), Profile);
         }
 
         /// <summary>
@@ -180,7 +183,7 @@ namespace PocketCsvReader
         /// Reads CSV data from a set of streams and provides an <see cref="IDataReader"/> for record-by-record access.
         /// </summary>
         /// <param name="streams">
-        /// The array of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
+        /// The enumerable of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
         /// at the start of the content.
         /// </param>
         /// <returns>
@@ -190,7 +193,7 @@ namespace PocketCsvReader
         /// <remarks>
         /// This method does not manage the lifecycle of the stream; the caller is responsible for closing it.
         /// </remarks>
-        public CsvBatchDataReader ToDataReader(Stream[] streams)
+        public CsvBatchDataReader ToDataReader(IEnumerable<Stream> streams)
         {
             return new CsvBatchDataReader(streams, Profile);
         }

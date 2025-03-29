@@ -28,6 +28,22 @@ public class CsvReaderTest
 
     [Test]
     [TestCase(@"Resources\PackageAssets.csv")]
+    public void ToDataReader_PackageAssetFileTwice_Successful(string filename)
+    {
+        var rowCount = 0;
+        var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
+        var reader = new CsvReader(profile).ToDataReader([filename, filename]);
+        while (reader.Read())
+        {
+            rowCount++;
+            for (var i = 0; i < reader.FieldCount; i++)
+                reader.GetString(i);
+        }
+        Assert.That(rowCount, Is.EqualTo(1695 * 2));
+    }
+
+    [Test]
+    [TestCase(@"Resources\PackageAssets.csv")]
     public void ToDataReader_PackageAssetStream_Successful(string filename)
     {
         using var stream = File.OpenRead(filename);
