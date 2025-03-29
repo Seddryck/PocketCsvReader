@@ -12,7 +12,7 @@ public class IntegerFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public IntegerFieldDescriptorBuilder WithFormat(Func<IntegerFormatDescriptorBuilder, IntegerFormatDescriptorBuilder> func)
     {
-        format = func(new IntegerFormatDescriptorBuilder());
+        Format = func(new IntegerFormatDescriptorBuilder());
         return this;
     }
 

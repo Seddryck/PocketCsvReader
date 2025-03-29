@@ -82,6 +82,7 @@ public class CsvBatchDataReader : IDataReader
             Current?.Dispose();
             while(Streams.MoveNext())
                 Streams.Current?.Dispose();
+            (Streams as IDisposable)?.Dispose();
         }
     }
 

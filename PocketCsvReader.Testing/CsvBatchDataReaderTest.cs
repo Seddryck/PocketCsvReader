@@ -58,7 +58,7 @@ public class CsvBatchDataReaderTest
 
             // Delay creation of stream2 until it's requested
             stream2Created = true;
-            using var stream2 = CreateStream("4,foo,bar\r\n5,foo,bar");
+            var stream2 = CreateStream("4,foo,bar\r\n5,foo,bar");
             yield return stream2;
         }
 

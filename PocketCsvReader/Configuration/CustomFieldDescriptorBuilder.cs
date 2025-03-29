@@ -13,7 +13,7 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public CustomFieldDescriptorBuilder WithFormat(string pattern, IFormatProvider? formatProvider = null)
     {
-        format = new CustomFormatDescriptorBuilder(pattern, formatProvider);
+        Format = new CustomFormatDescriptorBuilder(pattern, formatProvider);
         return this;
     }
 

@@ -12,7 +12,7 @@ public class FieldDescriptorBuilder
 {
     private readonly Dictionary<Type, FormatDescriptorBuilder> defaultFormatBuilders = [];
     protected Type runtimeType;
-    protected FormatDescriptorBuilder? format;
+    protected FormatDescriptorBuilder? Format { get; set; }
     protected ParseFunction? parse;
     protected string? name;
     protected SequenceCollection? sequences;
@@ -73,6 +73,6 @@ public class FieldDescriptorBuilder
 
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(runtimeType, name, (format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty);
+        return new FieldDescriptor(runtimeType, name, (Format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty);
     }
 }

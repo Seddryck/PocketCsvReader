@@ -147,6 +147,9 @@ namespace PocketCsvReader
         /// </remarks>
         public CsvBatchDataReader ToDataReader(string[] filenames)
         {
+            if (filenames == null || filenames.Length == 0)
+                throw new ArgumentException("File names collection cannot be null or empty.", nameof(filenames));
+
             IEnumerable<Stream> fileToStream(string[] filenames)
             {
                 foreach (var filename in filenames)
@@ -156,7 +159,7 @@ namespace PocketCsvReader
                     yield return stream;
                 }
             }
-            
+
             return new CsvBatchDataReader(fileToStream(filenames), Profile);
         }
 
@@ -195,6 +198,12 @@ namespace PocketCsvReader
         /// </remarks>
         public CsvBatchDataReader ToDataReader(IEnumerable<Stream> streams)
         {
+            if (streams == null)
+                throw new ArgumentNullException(nameof(streams), "Streams collection cannot be null.");
+
+            if (!streams.Any())
+                throw new ArgumentException("Streams collection cannot be empty.", nameof(streams));
+
             return new CsvBatchDataReader(streams, Profile);
         }
 
