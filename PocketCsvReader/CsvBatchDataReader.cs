@@ -32,11 +32,13 @@ public class CsvBatchDataReader : IDataReader
         if (Current == null)
             return false;
 
-        if (Current.Read())
-            return true;
-
-        MoveNext();
-        return Read();
+        while (!Current.Read())
+        {
+            MoveNext();
+            if (Current == null)
+                return false;
+        }
+        return true;
     }
 
     #region composite
