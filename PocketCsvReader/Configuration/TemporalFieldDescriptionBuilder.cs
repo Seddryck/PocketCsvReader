@@ -12,7 +12,7 @@ public class TemporalFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public TemporalFieldDescriptorBuilder WithFormat(string pattern, Func<TemporalFormatDescriptorBuilder, TemporalFormatDescriptorBuilder>? func = null)
     {
-        _format = func is null
+        Format = func is null
                     ? new TemporalFormatDescriptorBuilder(pattern)
                     : func(new TemporalFormatDescriptorBuilder(pattern));
         return this;

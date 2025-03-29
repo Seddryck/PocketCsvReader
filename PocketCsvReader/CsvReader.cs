@@ -134,6 +134,36 @@ namespace PocketCsvReader
         }
 
         /// <summary>
+        /// Opens a CSV file and provides an <see cref="IDataReader"/> for efficient record-by-record access.
+        /// </summary>
+        /// <param name="filename">The full path of the CSV file to read.</param>
+        /// <returns>
+        /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
+        /// </returns>
+        /// <exception cref="FileNotFoundException">Thrown if the specified file does not exist.</exception>
+        /// <remarks>
+        /// This method is designed for scenarios where loading the entire file into memory is impractical,
+        /// such as processing large datasets. The caller must dispose of the <see cref="CsvDataReader"/> after use.
+        /// </remarks>
+        public CsvBatchDataReader ToDataReader(string[] filenames)
+        {
+            if (filenames == null || filenames.Length == 0)
+                throw new ArgumentException("File names collection cannot be null or empty.", nameof(filenames));
+
+            IEnumerable<Stream> fileToStream(string[] filenames)
+            {
+                foreach (var filename in filenames)
+                {
+                    CheckFileExists(filename);
+                    var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
+                    yield return stream;
+                }
+            }
+
+            return new CsvBatchDataReader(fileToStream(filenames), Profile);
+        }
+
+        /// <summary>
         /// Reads CSV data from a stream and provides an <see cref="IDataReader"/> for record-by-record access.
         /// </summary>
         /// <param name="stream">
@@ -150,6 +180,31 @@ namespace PocketCsvReader
         public CsvDataReader ToDataReader(Stream stream)
         {
             return new CsvDataReader(stream, Profile);
+        }
+
+        /// <summary>
+        /// Reads CSV data from a set of streams and provides an <see cref="IDataReader"/> for record-by-record access.
+        /// </summary>
+        /// <param name="streams">
+        /// The enumerable of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
+        /// at the start of the content.
+        /// </param>
+        /// <returns>
+        /// An <see cref="CsvBatchDataReader"/> instance for sequential, read-only access to the CSV records and fields.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">Thrown if the streams contain no element.</exception>
+        /// <remarks>
+        /// This method does not manage the lifecycle of the stream; the caller is responsible for closing it.
+        /// </remarks>
+        public CsvBatchDataReader ToDataReader(IEnumerable<Stream> streams)
+        {
+            if (streams == null)
+                throw new ArgumentNullException(nameof(streams), "Streams collection cannot be null.");
+
+            if (!streams.Any())
+                throw new ArgumentException("Streams collection cannot be empty.", nameof(streams));
+
+            return new CsvBatchDataReader(streams, Profile);
         }
 
         /// <summary>

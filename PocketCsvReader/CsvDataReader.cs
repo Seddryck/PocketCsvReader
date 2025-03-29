@@ -137,14 +137,28 @@ public class CsvDataReader : CsvDataRecord, IDataReader
         }
     }
 
+    private bool _disposed = false;
     public void Dispose()
     {
-        Close(); // Ensures resSequences are released
-        GC.SuppressFinalize(this); // Prevents finalizer from running
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (disposing)
+        {
+            // free managed resources
+            StreamReader?.Dispose();
+            Stream?.Dispose();
+            RecordParser?.Dispose();
+        }
+    }
     ~CsvDataReader()
     {
-        Dispose();
+        Dispose(false);
     }
 }
