@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 
@@ -12,7 +12,6 @@ public class CsvBatchDataReader : IDataReader
     private bool _isClosed = false;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
-
     {
         (Streams, Profile) = (streams.GetEnumerator(), profile);
         MoveNext();
