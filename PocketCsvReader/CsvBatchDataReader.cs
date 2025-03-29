@@ -78,6 +78,8 @@ public class CsvBatchDataReader : IDataReader
     public string GetDataTypeName(int i) => Current!.GetDataTypeName(i);
     public int GetValues(object[] values) => Current!.GetValues(values);
 
+    public T GetFieldValue<T>(int i) => Current!.GetFieldValue<T>(i);
+
     #endregion
 
     public void Close()
