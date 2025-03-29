@@ -73,6 +73,12 @@ public class DialectDescriptorBuilder
             return WithoutHeader();
         return (Descriptor = Descriptor with { HeaderRows = headerRows }, Builder: this).Builder;
     }
+    public DialectDescriptorBuilder WithHeaderRepeat(bool value)
+        => (Descriptor = Descriptor with { HeaderRepeat = value }, Builder: this).Builder;
+    public DialectDescriptorBuilder WithHeaderRepeat()
+        => WithHeaderRepeat(true);
+    public DialectDescriptorBuilder WithoutHeaderRepeat()
+        => WithHeaderRepeat(false);
     public DialectDescriptorBuilder WithoutHeaderRows()
         => WithHeaderRows([]);
     public DialectDescriptorBuilder WithCommentChar(char? commentChar)

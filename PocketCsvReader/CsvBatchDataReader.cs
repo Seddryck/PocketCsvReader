@@ -10,6 +10,7 @@ public class CsvBatchDataReader : IDataReader
 
     private CsvDataReader? Current { get; set; }
     private bool _isClosed = false;
+    private int fileCount = 0;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
     {
@@ -19,8 +20,15 @@ public class CsvBatchDataReader : IDataReader
 
     private void MoveNext()
     {
+        fileCount++;
+        var fields = Current?.Fields;
+
         Current?.Dispose();
-        Current = Streams.MoveNext() ? new CsvDataReader(Streams.Current, Profile): null;
+
+        Current = Streams.MoveNext() ? new CsvDataReader(Streams.Current, Profile) : null;
+
+        if (Current is not null && fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
+            Current!.SetHeaders(fields);
     }
 
     public bool Read()
@@ -78,7 +86,7 @@ public class CsvBatchDataReader : IDataReader
         {
             _isClosed = true;
             Current?.Dispose();
-            while(Streams.MoveNext())
+            while (Streams.MoveNext())
                 Streams.Current?.Dispose();
             (Streams as IDisposable)?.Dispose();
         }

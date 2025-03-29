@@ -43,7 +43,6 @@ public class CsvBatchDataReaderTest
         Assert.That(dataReader.Read(), Is.False);
     }
 
-
     [Test]
     public void Read_LazyInitialization_Successful()
     {
@@ -77,6 +76,64 @@ public class CsvBatchDataReaderTest
         Assert.That(dataReader.GetInt32(0), Is.EqualTo(4));
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetInt32(0), Is.EqualTo(5));
+        Assert.That(dataReader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Read_TwoStreamsRepeatHeaders_Successful()
+    {
+        var dialect = new DialectDescriptorBuilder()
+            .WithDelimiter(',')
+            .WithLineTerminator("\r\n")
+            .WithHeader(true)
+            .WithHeaderRepeat(true)
+            .Build();
+        var profile = new CsvProfile(dialect);
+        using var stream1 = CreateStream("foo,bar\r\n1,alpha\r\n2,beta");
+        using var stream2 = CreateStream("foo,bar\r\n3,gamma\r\n4,delta");
+        using var dataReader = new CsvBatchDataReader([stream1, stream2], profile);
+
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(1));
+        Assert.That(dataReader["foo"], Is.EqualTo("1"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(2));
+        Assert.That(dataReader["foo"], Is.EqualTo("2"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(3));
+        Assert.That(dataReader["foo"], Is.EqualTo("3"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(4));
+        Assert.That(dataReader["foo"], Is.EqualTo("4"));
+        Assert.That(dataReader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Read_TwoStreamsDoNotRepeatHeaders_Successful()
+    {
+        var dialect = new DialectDescriptorBuilder()
+            .WithDelimiter(',')
+            .WithLineTerminator("\r\n")
+            .WithHeader(true)
+            .WithHeaderRepeat(false)
+            .Build();
+        var profile = new CsvProfile(dialect);
+        using var stream1 = CreateStream("foo,bar\r\n1,alpha\r\n2,beta");
+        using var stream2 = CreateStream("3,gamma\r\n4,delta");
+        using var dataReader = new CsvBatchDataReader([stream1, stream2], profile);
+
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(1));
+        Assert.That(dataReader["foo"], Is.EqualTo("1"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(2));
+        Assert.That(dataReader["foo"], Is.EqualTo("2"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(3));
+        Assert.That(dataReader["foo"], Is.EqualTo("3"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(4));
+        Assert.That(dataReader["foo"], Is.EqualTo("4"));
         Assert.That(dataReader.Read(), Is.False);
     }
 
