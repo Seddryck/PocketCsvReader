@@ -54,7 +54,7 @@ public class CsvDataReader : CsvDataRecord, IDataReader
         if (IsEof)
             return false;
 
-        if (RowCount == 0)
+        if (RowCount == 0 && (Fields?.Length ?? 0) == 0)
             if (RecordParser!.Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
@@ -99,6 +99,9 @@ public class CsvDataReader : CsvDataRecord, IDataReader
                 ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
                 : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
     }
+
+    internal void SetHeaders(string[] headers)
+        => Fields = headers;
 
     private void HandleUnexpectedFields(int expectedLength)
     {

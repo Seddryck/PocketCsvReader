@@ -11,6 +11,7 @@ public record DialectDescriptor
     bool Header = true,
     int[] HeaderRows = null!,
     string HeaderJoin = " ",
+    bool HeaderRepeat = true,
     int[]? CommentRows = null,
     char? CommentChar = null,
     char Delimiter = ',',
