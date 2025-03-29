@@ -10,69 +10,69 @@ namespace PocketCsvReader.Configuration;
 
 public class FieldDescriptorBuilder
 {
-    private Dictionary<Type, FormatDescriptorBuilder> DefaultFormatBuilders = new();
-    protected Type _runtimeType;
-    protected FormatDescriptorBuilder? _format;
-    protected ParseFunction? _parse;
-    protected string? _name;
-    protected SequenceCollection? _sequences;
-    protected string? _dataSourceTypeName;
+    private readonly Dictionary<Type, FormatDescriptorBuilder> defaultFormatBuilders = [];
+    protected Type runtimeType;
+    protected FormatDescriptorBuilder? format;
+    protected ParseFunction? parse;
+    protected string? name;
+    protected SequenceCollection? sequences;
+    protected string? dataSourceTypeName;
 
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
-        _runtimeType = runtimeType;
+        this.runtimeType = runtimeType;
         Initialize();
     }
 
     private void Initialize()
     {
-        DefaultFormatBuilders.Add(typeof(short), new IntegerFormatDescriptorBuilder());
-        DefaultFormatBuilders.Add(typeof(int), new IntegerFormatDescriptorBuilder());
-        DefaultFormatBuilders.Add(typeof(long), new IntegerFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(short), new IntegerFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(int), new IntegerFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(long), new IntegerFormatDescriptorBuilder());
 
-        DefaultFormatBuilders.Add(typeof(float), new NumberFormatDescriptorBuilder());
-        DefaultFormatBuilders.Add(typeof(double), new NumberFormatDescriptorBuilder());
-        DefaultFormatBuilders.Add(typeof(decimal), new NumberFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(float), new NumberFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(double), new NumberFormatDescriptorBuilder());
+        defaultFormatBuilders.Add(typeof(decimal), new NumberFormatDescriptorBuilder());
 
-        DefaultFormatBuilders.Add(typeof(DateTime), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss"));
-        DefaultFormatBuilders.Add(typeof(DateTimeOffset), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss"));
-        DefaultFormatBuilders.Add(typeof(DateOnly), new TemporalFormatDescriptorBuilder("yyyy-MM-dd"));
-        DefaultFormatBuilders.Add(typeof(TimeOnly), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss zzz"));
+        defaultFormatBuilders.Add(typeof(DateTime), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss"));
+        defaultFormatBuilders.Add(typeof(DateTimeOffset), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss"));
+        defaultFormatBuilders.Add(typeof(DateOnly), new TemporalFormatDescriptorBuilder("yyyy-MM-dd"));
+        defaultFormatBuilders.Add(typeof(TimeOnly), new TemporalFormatDescriptorBuilder("yyyy-MM-ddTHH:mm:ss zzz"));
     }
 
     public FieldDescriptorBuilder WithName(string name)
     {
-        _name = name;
+        this.name = name;
         return this;
     }
 
     public FieldDescriptorBuilder WithSequence(string pattern, string? value)
     {
-        (_sequences ??= new()).Add(pattern, value);
+        (sequences ??= []).Add(pattern, value);
         return this;
     }
 
     public FieldDescriptorBuilder WithDataSourceTypeName(string typeName)
     {
-        _dataSourceTypeName = typeName;
+        dataSourceTypeName = typeName;
         return this;
     }
 
     public FieldDescriptorBuilder WithParser(ParseFunction parse)
     {
-        _parse = parse;
+        this.parse = parse;
         return this;
     }
 
     private FormatDescriptorBuilder GetDefaultFormat()
     {
-        if (DefaultFormatBuilders.TryGetValue(_runtimeType, out var builder))
+        if (defaultFormatBuilders.TryGetValue(runtimeType, out var builder))
             return builder;
         return FormatDescriptorBuilder.None;
     }
 
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(_runtimeType, _name, (_format ?? GetDefaultFormat()).Build(), _parse, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
+        return new FieldDescriptor(runtimeType, name, (format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty);
     }
 }

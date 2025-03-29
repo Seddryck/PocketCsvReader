@@ -13,7 +13,7 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public NumberFieldDescriptorBuilder WithFormat(Func<NumberFormatDescriptorBuilder, NumberFormatDescriptorBuilder> func)
     {
-        _format = func(new NumberFormatDescriptorBuilder());
+        format = func(new NumberFormatDescriptorBuilder());
         return this;
     }
 
@@ -29,5 +29,5 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
         => (NumberFieldDescriptorBuilder)base.WithParser(parse);
 
     public override FieldDescriptor Build()
-        => new FieldDescriptor(_runtimeType, _name, _format?.Build(), _parse, _sequences?.ToImmutable(), _dataSourceTypeName ?? string.Empty);
+        => new FieldDescriptor(runtimeType, name, format?.Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty);
 }
