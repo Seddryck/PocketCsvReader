@@ -20,22 +20,18 @@ public class CsvBatchDataReader : IDataReader
     private void MoveNext()
     {
         Current?.Dispose();
-
-        if (Streams.MoveNext())
-            Current = new CsvDataReader(Streams.Current, Profile);
-        else
-            Current = null;
+        Current = Streams.MoveNext() ? new CsvDataReader(Streams.Current, Profile): null;
     }
 
     public bool Read()
     {
-        if (Current == null)
+        if (Current is null)
             return false;
 
         while (!Current.Read())
         {
             MoveNext();
-            if (Current == null)
+            if (Current is null)
                 return false;
         }
         return true;
@@ -104,9 +100,7 @@ public class CsvBatchDataReader : IDataReader
 
         if (disposing)
         {
-            // free managed resources
-            Current?.Dispose();
-            Streams.Dispose();
+            Close();
         }
     }
 
