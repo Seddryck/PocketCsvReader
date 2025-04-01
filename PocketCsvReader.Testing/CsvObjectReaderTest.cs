@@ -30,8 +30,8 @@ public class CsvObjectReaderTest
         var spanMapper = new SpanMapper<Human>((span, fieldSpans) =>
         {
             return new Human(
-                span.Slice(fieldSpans.First().Start, fieldSpans.First().Length).ToString(),
-                int.Parse(span.Slice(fieldSpans.Last().Start, fieldSpans.Last().Length).ToString()) > 18);
+                span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString(),
+                int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString()) > 18);
         });
 
         var profile = new CsvProfile(',', '\"', "\r\n", false);
@@ -69,20 +69,20 @@ public class CsvObjectReaderTest
             var spanMapper = new SpanMapper<Financial>((span, fieldSpans) =>
             {
                 return new Financial(
-                    int.Parse(span.Slice(fieldSpans.ElementAt(0).Start, fieldSpans.ElementAt(0).Length)),
-                    int.Parse(span.Slice(fieldSpans.ElementAt(1).Start, fieldSpans.ElementAt(1).Length)),
-                    int.Parse(span.Slice(fieldSpans.ElementAt(2).Start, fieldSpans.ElementAt(2).Length)),
-                    DateTime.Parse(span.Slice(fieldSpans.ElementAt(3).Start, fieldSpans.ElementAt(3).Length)),
-                    span.Slice(fieldSpans.ElementAt(4).Start, fieldSpans.ElementAt(4).Length).ToString(),
-                    span.Slice(fieldSpans.ElementAt(5).Start, fieldSpans.ElementAt(5).Length).ToString(),
-                    span.Slice(fieldSpans.ElementAt(6).Start, fieldSpans.ElementAt(6).Length).ToString(),
-                    span.Slice(fieldSpans.ElementAt(7).Start, fieldSpans.ElementAt(7).Length).ToString(),
-                    span.Slice(fieldSpans.ElementAt(8).Start, fieldSpans.ElementAt(8).Length).ToString(),
-                    span.Slice(fieldSpans.ElementAt(9).Start, fieldSpans.ElementAt(9).Length).ToString(),
-                    decimal.Parse(span.Slice(fieldSpans.ElementAt(10).Start, fieldSpans.ElementAt(10).Length)),
-                    decimal.Parse(span.Slice(fieldSpans.ElementAt(11).Start, fieldSpans.ElementAt(11).Length)),
-                    span.Slice(fieldSpans.ElementAt(12).Start, fieldSpans.ElementAt(12).Length).ToString(),
-                    DateTime.Parse(span.Slice(fieldSpans.ElementAt(13).Start, fieldSpans.ElementAt(13).Length)));
+                    int.Parse(span.Slice(fieldSpans.ElementAt(0).ValueStart, fieldSpans.ElementAt(0).ValueLength)),
+                    int.Parse(span.Slice(fieldSpans.ElementAt(1).ValueStart, fieldSpans.ElementAt(1).ValueLength)),
+                    int.Parse(span.Slice(fieldSpans.ElementAt(2).ValueStart, fieldSpans.ElementAt(2).ValueLength)),
+                    DateTime.Parse(span.Slice(fieldSpans.ElementAt(3).ValueStart, fieldSpans.ElementAt(3).ValueLength)),
+                    span.Slice(fieldSpans.ElementAt(4).ValueStart, fieldSpans.ElementAt(4).ValueLength).ToString(),
+                    span.Slice(fieldSpans.ElementAt(5).ValueStart, fieldSpans.ElementAt(5).ValueLength).ToString(),
+                    span.Slice(fieldSpans.ElementAt(6).ValueStart, fieldSpans.ElementAt(6).ValueLength).ToString(),
+                    span.Slice(fieldSpans.ElementAt(7).ValueStart, fieldSpans.ElementAt(7).ValueLength).ToString(),
+                    span.Slice(fieldSpans.ElementAt(8).ValueStart, fieldSpans.ElementAt(8).ValueLength).ToString(),
+                    span.Slice(fieldSpans.ElementAt(9).ValueStart, fieldSpans.ElementAt(9).ValueLength).ToString(),
+                    decimal.Parse(span.Slice(fieldSpans.ElementAt(10).ValueStart, fieldSpans.ElementAt(10).ValueLength)),
+                    decimal.Parse(span.Slice(fieldSpans.ElementAt(11).ValueStart, fieldSpans.ElementAt(11).ValueLength)),
+                    span.Slice(fieldSpans.ElementAt(12).ValueStart, fieldSpans.ElementAt(12).ValueLength).ToString(),
+                    DateTime.Parse(span.Slice(fieldSpans.ElementAt(13).ValueStart, fieldSpans.ElementAt(13).ValueLength)));
             });
             var rowCount = 0;
             using var dataReader = new CsvObjectReader<Financial>(stream, profile, spanMapper);

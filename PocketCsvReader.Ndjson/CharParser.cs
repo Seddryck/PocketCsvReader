@@ -8,7 +8,7 @@ using PocketCsvReader.Ndjson.CharParsing;
 using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson;
-public class CharParser
+public class CharParser : ICharParser
 {
     public int RowNumber { get; set; } = 0;
     public int Position { get; private set; } = -1;
@@ -115,12 +115,3 @@ public class CharParser
         => Internal = parse;
 }
 
-public enum ParserState
-{
-    Continue,
-    Error,
-    Field,
-    Record,
-    Header,
-    Eof,
-}

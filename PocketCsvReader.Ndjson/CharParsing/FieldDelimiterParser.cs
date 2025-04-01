@@ -31,7 +31,7 @@ internal class FieldDelimiterParser : IInternalCharParser
         else if (EndRecord.HasValue && c == EndRecord.Value)
         {
             Parser.Switch(Parser.LineTerminator);
-            return ParserState.Field;
+            return ParserState.Record;
         }
         else if (Whitespaces.Contains(c))
             return ParserState.Continue;
