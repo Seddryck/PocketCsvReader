@@ -38,7 +38,7 @@ public class FirstCharOfValueParserTests
     [Test]
     [TestCase('f', 1)]
     [TestCase('1', 1)]
-    [TestCase('\"', 0)]
+    [TestCase('\"', 1)]
     [TestCase(' ', 0)]
     public void Parse_Expected_FieldLength(char value, int expected)
     {

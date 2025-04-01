@@ -32,10 +32,9 @@ internal class LineTerminatorParser : IInternalCharParser
             {
                 Parser.Switch(Parser.FirstCharOfRecord);
                 Reset();
-                return ParserState.Record;
-            }
-            else if (Index==0 && Whitespaces.Contains(c))
                 return ParserState.Continue;
+            }
+            return ParserState.Continue;
         }
 
         return ParserState.Error;

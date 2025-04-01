@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
-public class CharParser
+public class CharParser : ICharParser
 {
     public int RowNumber { get; set; } = 0;
     public int Position { get; private set; } = -1;
-    public int FieldStart { get; private set; } = 0;
-    public int FieldLength { get; private set; } = 0;
+    public int ValueStart { get; private set; } = 0;
+    public int ValueLength { get; private set; } = 0;
+    public int LabelStart => 0;
+    public int LabelLength => 0;
     public bool IsQuotedField { get; private set; } = false;
     public bool IsEscapedField { get; private set; } = false;
     public bool IsHeaderRow { get; private set; } = false;
@@ -70,9 +72,9 @@ public class CharParser
     public void Reset()
     {
         Position = Internal == LineTerminator && LineTerminatorParser is LineTerminatorParser parser
-            ? FieldStart + FieldLength - Position - parser.Index - 1
+            ? ValueStart + ValueLength - Position - parser.Index - 1
             : -1;
-        FieldStart = FieldLength = 0;
+        ValueStart = ValueLength = 0;
     }
 
     public ParserState ParseEof()
@@ -95,13 +97,13 @@ public class CharParser
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ZeroField()
-        => (FieldStart, FieldLength) = (Position, 0);
+        => (ValueStart, ValueLength) = (Position, 0);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldStart()
-        => (FieldStart, FieldLength) = (Position, 1);
+        => (ValueStart, ValueLength) = (Position, 1);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldEnd(int i)
-        => (FieldLength) = (Position - FieldStart + 1 + i);
+        => (ValueLength) = (Position - ValueStart + 1 + i);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetFieldEnd()
         => SetFieldEnd(0);

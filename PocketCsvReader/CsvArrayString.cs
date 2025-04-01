@@ -54,7 +54,7 @@ public class CsvArrayString : IDisposable
             var values = new string[fieldSpans.Count()];
             var index = 0;
             foreach (var fieldSpan in fieldSpans)
-                values[index++] = span.Slice(fieldSpan.Start, fieldSpan.Length).ToString();
+                values[index++] = span.Slice(fieldSpan.ValueStart, fieldSpan.ValueLength).ToString();
             return values;
         });
 

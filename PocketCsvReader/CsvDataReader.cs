@@ -19,16 +19,13 @@ public class CsvDataReader : CsvDataRecord, IDataReader
     private RecordParser? RecordParser { get; set; }
     private Stream Stream { get; }
     private StreamReader? StreamReader { get; set; }
-    private Memory<char> Buffer { get; set; }
     private EncodingInfo? FileEncoding { get; set; }
     private bool IsEof { get; set; } = false;
-    private int BufferSize { get; set; } = 64 * 1024;
 
     public CsvDataReader(Stream stream, CsvProfile profile)
         : base(profile)
     {
         Stream = stream;
-        Buffer = new Memory<char>(new char[BufferSize]);
     }
 
     public void Initialize()

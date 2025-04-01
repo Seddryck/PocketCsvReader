@@ -35,7 +35,7 @@ internal class CharOfValueParser : IInternalCharParser
         {
             Parser.SetValueEnd(-1);
             Parser.Switch(Parser.LineTerminator);
-            return ParserState.Field;
+            return ParserState.Record;
         }
         else if (!Parser.IsQuotedField && FieldDelimiter.HasValue && FieldDelimiter.Value == c)
         {

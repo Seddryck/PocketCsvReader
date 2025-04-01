@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader;
-internal class SingleBuffer : IBufferReader
+public class SingleBuffer : IBufferReader
 {
     private StreamBuffer _streamBuffer;
 

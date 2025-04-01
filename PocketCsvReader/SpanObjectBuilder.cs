@@ -54,12 +54,12 @@ public class SpanObjectBuilder<T>
                 throw new Exception($"No parser found for type {type}.");
             try
             {
-                var field = parse(span.Slice(fieldSpan.Start, fieldSpan.Length));
+                var field = parse(span.Slice(fieldSpan.ValueStart, fieldSpan.ValueLength));
                 fields[index++] = field;
             }
             catch (Exception ex)
             {
-                throw new FormatException($"Error parsing field {index} of type {type} for value {span.Slice(fieldSpan.Start, fieldSpan.Length).ToString()}", ex);
+                throw new FormatException($"Error parsing field {index} of type {type} for value {span.Slice(fieldSpan.ValueStart, fieldSpan.ValueLength).ToString()}", ex);
             }
         }
         return (T)ctor.Invoke(fields);

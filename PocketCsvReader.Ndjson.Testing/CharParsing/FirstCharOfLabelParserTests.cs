@@ -23,7 +23,7 @@ public class FirstCharOfLabelParserTests
     [Test]
     [TestCase('f', -1, 1)]
     [TestCase('1', -1, 1)]
-    [TestCase('\"', 0, 0)]
+    [TestCase('\"', 0, 1)]
     [TestCase(' ', 0, 0)]
     public void Parse_Expected_FieldLength(char value, int start, int length)
     {

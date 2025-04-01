@@ -23,15 +23,15 @@ public class CharOfValueParserTests
     }
 
     [Test]
-    [TestCase('}')]
-    [TestCase(',')]
-    [TestCase(' ')]
-    public void Parse_Expected_SetLabel(char value)
+    [TestCase('}', ParserState.Record)]
+    [TestCase(',', ParserState.Field)]
+    [TestCase(' ', ParserState.Continue)]
+    public void Parse_Expected_SetLabel(char value, ParserState expected)
     {
         var parser = new CharParser(NdjsonProfile.Default);
         var intern = new CharOfValueParser(parser);
         intern.Parse(value);
-        Assert.That(intern.Parse(value), Is.EqualTo(ParserState.Continue));
+        Assert.That(intern.Parse(value), Is.EqualTo(expected));
     }
 
     [Test]
@@ -48,10 +48,10 @@ public class CharOfValueParserTests
     }
 
     [Test]
-    [TestCase('f', 0)]
-    [TestCase('1', 0)]
+    [TestCase('f', 1)]
+    [TestCase('1', 1)]
     [TestCase('\"', -1)]
-    [TestCase(' ', 0)]
+    [TestCase(' ', 1)]
     public void Parse_Quoted_FieldLength(char value, int expected)
     {
         var parser = new CharParser(NdjsonProfile.Default);
