@@ -1,15 +1,19 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.Reflection;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Ndjson.Configuration;
 
-public class NdjsonProfile
+public class NdjsonProfile : IProfile
 {
-    public DialectDescriptor Dialect { get; private set; }
+    public DialectDescriptor Dialect { get; }
+    public SchemaDescriptor? Schema { get; }
+    public ResourceDescriptor? Resource { get; }
+    public RuntimeParsersDescriptor? Parsers { get; }
 
-    private NdjsonProfile(DialectDescriptor dialect)
-        => Dialect = dialect;
+    public NdjsonProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null)
+        => (Dialect, Schema) = (dialect, schema);
 
     public NdjsonProfile(string recordSeparator)
     {

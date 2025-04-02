@@ -21,4 +21,7 @@ public class RecordMemory
 
     public ReadOnlyMemory<char> Slice(int i)
         => Span.Length > 0 ? Span.Slice(FieldSpans[i].ValueStart, FieldSpans[i].ValueLength) : throw new InvalidOperationException();
+
+    public ReadOnlyMemory<char> SliceLabel(int i)
+        => Span.Length > 0 ? Span.Slice(FieldSpans[i].LabelStart, FieldSpans[i].LabelLength) : throw new InvalidOperationException();
 }

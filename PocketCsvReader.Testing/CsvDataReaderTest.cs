@@ -683,8 +683,11 @@ public class CsvDataReaderTest
         {
             var rowCount = 0;
             using var dataReader = new CsvDataReader(stream, profile);
-            while (dataReader.Read()) { rowCount++; }
-            Assert.That(dataReader.FieldCount, Is.EqualTo(14));
+            while (dataReader.Read())
+            {
+                rowCount++;
+                Assert.That(dataReader.FieldCount, Is.EqualTo(14));
+            }
             Assert.That(rowCount, Is.EqualTo(21));
         }
     }

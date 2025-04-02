@@ -1,50 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Reflection.PortableExecutable;
 using System.Text;
-using System.Threading.Tasks;
-using System.Globalization;
 using PocketCsvReader.Configuration;
-using System.Reflection;
-using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
-public class CsvDataReader : CsvDataRecord, IDataReader
+public class CsvDataReader : BaseDataReader<CsvProfile>
 {
-    private bool _isClosed = false;
-    private RecordParser? RecordParser { get; set; }
-    private Stream Stream { get; }
-    private StreamReader? StreamReader { get; set; }
-    private EncodingInfo? FileEncoding { get; set; }
-    private bool IsEof { get; set; } = false;
+    protected new RecordParser RecordParser => (RecordParser)base.RecordParser!;
 
     public CsvDataReader(Stream stream, CsvProfile profile)
-        : base(profile)
+        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString))
+    { }
+
+    protected override BaseRecordParser<CsvProfile> CreateRecordParser(StreamReader reader, CsvProfile profile)
+        => new RecordParser(reader, profile);
+
+    public override int FieldCount =>
+        Record?.FieldSpans.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
+
+    protected override object GetMissingField()
+        => Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+
+    public override string GetRawString(int i)
+        => Record!.FieldSpans[i].WasQuoted
+            ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
+            : Record!.Slice(i).ToString();
+
+    private SanitizerFactory? sanitizerFactory;
+    private Dictionary<int, ISanitizer> CacheSanitizers { get; } = [];
+    protected override NullableSpan GetValueOrThrow(int i)
     {
-        Stream = stream;
+        if (i < Record!.FieldSpans.Length)
+        {
+            sanitizerFactory ??= new SanitizerFactory(Profile);
+            var sanitizer = CacheSanitizers.GetOrAdd(i,
+                sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, (Profile.Schema is null ? null : GetFieldDescriptor(i))?.Sequences)
+                                            , new FieldEscaper(Profile)
+                ));
+            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted);
+        }
+        if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
+            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
+        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
-    public void Initialize()
-    {
-        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream, Profile.Resource?.Encoding);
-        StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
-        var bufferBOM = new char[1];
-        StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-        StreamReader.Rewind();
-
-        if (FileEncoding!.BomBytesCount > 0)
-            StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
-
-        IsEof = false;
-        RowCount = 0;
-        RecordParser = new RecordParser(StreamReader, Profile);
-    }
-
-    public bool Read()
+    public override bool Read()
     {
         if (FileEncoding is null)
             Initialize();
@@ -114,51 +116,5 @@ public class CsvDataReader : CsvDataRecord, IDataReader
                     , length - expectedLength > 1 ? "s" : string.Empty
                 )
             );
-    }
-
-    public int Depth => 1;
-
-    public bool IsClosed => _isClosed;
-
-    public int RecordsAffected => 0;
-
-    public DataTable? GetSchemaTable() => throw new NotImplementedException();
-
-    public bool NextResult() => throw new NotImplementedException();
-
-    public void Close()
-    {
-        if (!_isClosed)
-        {
-            _isClosed = true;
-            StreamReader?.Dispose();
-            Stream?.Dispose();
-            RecordParser?.Dispose();
-        }
-    }
-
-    private bool _disposed = false;
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        if (disposing)
-        {
-            // free managed resources
-            StreamReader?.Dispose();
-            Stream?.Dispose();
-            RecordParser?.Dispose();
-        }
-    }
-    ~CsvDataReader()
-    {
-        Dispose(false);
     }
 }

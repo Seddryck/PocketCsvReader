@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.FieldParsing;
-internal class StringMapper
+public class StringMapper
 {
     protected PoolString FetchString { get; }
     private static readonly PoolString defaultPoolString = (span) => span.ToString();

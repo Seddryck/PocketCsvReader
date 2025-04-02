@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <None Remove="Resources\metrics.ndjson" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\metrics.ndjson" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Chrononuensis" Version="0.23.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="NUnit" Version="4.3.2" />

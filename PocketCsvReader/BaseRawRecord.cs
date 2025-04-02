@@ -13,25 +13,26 @@ using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
-public class CsvRawRecord
+public abstract class BaseRawRecord<P> where P : IProfile
 {
-    protected CsvProfile Profile { get; }
+    protected P Profile { get; }
     private StringMapper StringMapper { get; }
     public int RowCount { get; protected set; } = 0;
     public string[]? Fields { get; protected set; } = null;
     protected RecordMemory? Record { get; set; } = null;
 
-    public CsvRawRecord(CsvProfile profile)
+    protected BaseRawRecord(P profile, StringMapper stringMapper)
     {
         Profile = profile;
-        StringMapper = new StringMapper(Profile.ParserOptimizations.PoolString);
+        StringMapper = stringMapper;    
     }
 
-    public int FieldCount => Fields?.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
+    public abstract int FieldCount { get; }
     
     public string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
-    public int GetOrdinal(string name)
+
+    public virtual int GetOrdinal(string name)
     {
         if (Fields is null)
             throw new InvalidOperationException("Fields are not defined yet.");
@@ -113,10 +114,7 @@ public class CsvRawRecord
         => Record!.FieldSpans[i].IsEscaped;
 #endif
 
-    public string GetRawString(int i)
-        => Record!.FieldSpans[i].WasQuoted
-            ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
-            : Record!.Slice(i).ToString();
+    public abstract string GetRawString(int i);
 
     protected bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
@@ -129,22 +127,5 @@ public class CsvRawRecord
             return IFormatDescriptor.None;
         return field.Format ?? IFormatDescriptor.None;
     }
-
-    private SanitizerFactory? sanitizerFactory;
-    private Dictionary<int, ISanitizer> CacheSanitizers { get; } = [];
-    protected NullableSpan GetValueOrThrow(int i)
-    {
-        if (i < Record!.FieldSpans.Length)
-        {
-            sanitizerFactory ??= new SanitizerFactory(Profile);
-            var sanitizer = CacheSanitizers.GetOrAdd(i,
-                sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, (Profile.Schema is null ? null : GetFieldDescriptor(i))?.Sequences)
-                                            , new FieldEscaper(Profile)
-                ));
-            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted);
-        }
-        if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
-        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
-    }
+    protected abstract NullableSpan GetValueOrThrow(int i);
 }
