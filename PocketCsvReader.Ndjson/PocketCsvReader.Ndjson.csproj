@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <PackageId>PocketCsvReader.Ndjson</PackageId>
+    <PackageId>PocketCsvReader.NDJSON</PackageId>
     <RepositoryUrl>https://github.com/Seddryck/PocketCsvReader</RepositoryUrl>
     <PackageTags>NDJSON JSON DataTable DataReader Parser Separated Delimited</PackageTags>
     <Description>PocketCsvReader is a lightweight library dedicated to the parsing of delimited flat file such as CSV or TSV files. The main function is to read the content of the file and load it into a DataTable.</Description>
