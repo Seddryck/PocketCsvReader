@@ -35,7 +35,7 @@ public class FirstCharOfRecordParserTests
 
     [Test]
     [TestCase(' ', '{')]
-    public void Parse_Expected_Error(params char[] values)
+    public void Parse_WithMultipleValues_Continue(params char[] values)
     {
         var parser = new CharParser(NdjsonProfile.Default);
         var intern = new FirstCharOfRecordParser(parser);

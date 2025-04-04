@@ -14,14 +14,10 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
     { }
 
     public RecordParser(StreamReader reader, NdjsonProfile profile, ArrayPool<char>? pool)
-        : base(profile, new SingleBuffer(reader, 64*1024, pool)
-              , pool)
+        : base(profile, new SingleBuffer(reader, 64*1024, pool), pool, (p) => new CharParser(p))
     { }
 
     protected RecordParser(NdjsonProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        : base(profile, buffer, pool)
+        : base(profile, buffer, pool, (p) => new CharParser(p))
     { }
-
-    protected override CharParser CreateCharParser(NdjsonProfile profile)
-        => new(profile);
 }

@@ -3,7 +3,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace PocketCsvReader;
@@ -17,12 +16,10 @@ public abstract class BaseRecordParser<P> : IDisposable
 
     private int? FieldsCount { get; set; }
 
-    protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool)
-        => (Profile, Reader, CharParser) = (profile, buffer, CreateCharParser(profile));
+    protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, ICharParser> parserFactory)
+        => (Profile, Reader, Pool, CharParser) = (profile, buffer, pool, parserFactory(profile));
 
-    protected abstract ICharParser CreateCharParser(P profile);
-
-    public virtual bool ReadNextRecord(out RecordSpan record)
+    public virtual bool IsEndOfFile(out RecordSpan record)
     {
         var index = 0;
         var eof = false;
@@ -141,8 +138,22 @@ public abstract class BaseRecordParser<P> : IDisposable
         return count;
     }
 
+    private bool _disposed;
     public void Dispose()
     {
-        Reader.Dispose();
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            Reader.Dispose();
+        }
+        _disposed = true;
     }
 }

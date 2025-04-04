@@ -43,7 +43,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
             return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
-        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
     public override bool Read()
@@ -57,7 +57,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             if (RecordParser!.Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-        IsEof = RecordParser!.ReadNextRecord(out RecordSpan rawRecord);
+        IsEof = RecordParser!.IsEndOfFile(out RecordSpan rawRecord);
         if (RowCount == 0 && !RecordParser!.Profile.Dialect.Header)
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length)], "field_");
 

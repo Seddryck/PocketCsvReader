@@ -20,7 +20,7 @@ public class RecordParserTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
-        reader.ReadNextRecord(out var values);
+        reader.IsEndOfFile(out var values);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
         Assert.That(values.Slice(0).ToString(), Is.EqualTo("bar").Or.EqualTo("true"));
     }
@@ -39,7 +39,7 @@ public class RecordParserTest
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
         using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
-        reader.ReadNextRecord(out var values);
+        reader.IsEndOfFile(out var values);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(2));
         Assert.That(values.Slice(0).ToString(), Is.EqualTo("123"));
         Assert.That(values.Slice(1).ToString(), Is.EqualTo("456"));

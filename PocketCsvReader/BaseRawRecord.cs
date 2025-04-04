@@ -2,14 +2,8 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Reflection.PortableExecutable;
 using System.Text;
-using System.Threading.Tasks;
-using System.Globalization;
 using PocketCsvReader.Configuration;
-using System.Reflection;
-using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
@@ -38,7 +32,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
             throw new InvalidOperationException("Fields are not defined yet.");
         var index = Array.IndexOf(Fields, name);
         if (index < 0)
-            throw new IndexOutOfRangeException($"Field '{name}' not found.");
+            throw new ArgumentOutOfRangeException($"Field '{name}' not found.");
         return index;
     }
 
@@ -69,14 +63,14 @@ public abstract class BaseRawRecord<P> where P : IProfile
             var headerName = GetName(i);
             if (Profile.Schema.Fields.TryGetValue(headerName, out var field))
                 return field;
-            throw new IndexOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is linked to header '{headerName}' but there is no corresponding field in the schema.");
         }
 
         if (Profile.Schema.IsMatchingByIndex)
         {
             if (i < Profile.Schema.Fields.Length)
                 return Profile.Schema.Fields[i];
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
         }
 
         throw new NotImplementedException("Schema matching is not defined.");

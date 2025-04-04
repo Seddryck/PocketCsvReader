@@ -19,7 +19,7 @@ internal class FirstCharOfLabelParser : IInternalCharParser
 
     public virtual ParserState Parse(char c)
     {
-        if (Whitespaces.Contains(c) || QuoteChar.HasValue && c == QuoteChar.Value)
+        if (Whitespaces.Contains(c) || (QuoteChar.HasValue && c == QuoteChar.Value))
             return ParserState.Error;
 
         Parser.ResetFieldState();

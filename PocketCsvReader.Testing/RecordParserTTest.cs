@@ -21,7 +21,7 @@ public class RecordParserTTest
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
         var spanMapper = new SpanMapper<string>((span, fieldSpans) => span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString());
         using var reader = new RecordParser<string>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
-        var eof = reader.ReadNextRecord(out var value);
+        var eof = reader.IsEndOfFile(out var value);
         Assert.That(value, Is.EqualTo("foo"));
     }
 
@@ -41,7 +41,7 @@ public class RecordParserTTest
                 int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString()));
         });
         using var reader = new RecordParser<Employee>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
-        reader.ReadNextRecord(out var value);
+        reader.IsEndOfFile(out var value);
         Assert.That(value, Is.TypeOf<Employee>());
         Assert.That(value.Name, Is.EqualTo(name));
         Assert.That(value.Age, Is.EqualTo(age));
@@ -61,11 +61,11 @@ public class RecordParserTTest
                 int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString()));
         });
         using var reader = new RecordParser<Employee>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
-        reader.ReadNextRecord(out var value);
+        reader.IsEndOfFile(out var value);
         Assert.That(value, Is.TypeOf<Employee>());
         Assert.That(value.Name, Is.EqualTo("foo"));
         Assert.That(value.Age, Is.EqualTo(16));
-        reader.ReadNextRecord(out value);
+        reader.IsEndOfFile(out value);
         Assert.That(value, Is.TypeOf<Employee>());
         Assert.That(value.Name, Is.EqualTo("bar"));
         Assert.That(value.Age, Is.EqualTo(18));
@@ -86,11 +86,11 @@ public class RecordParserTTest
                 int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString())>18);
         });
         using var reader = new RecordParser<Human>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
-        reader.ReadNextRecord(out var value);
+        reader.IsEndOfFile(out var value);
         Assert.That(value, Is.TypeOf<Human>());
         Assert.That(value.Name, Is.EqualTo("foo"));
         Assert.That(value.IsAdult, Is.True);
-        reader.ReadNextRecord(out value);
+        reader.IsEndOfFile(out value);
         Assert.That(value, Is.TypeOf<Human>());
         Assert.That(value.Name, Is.EqualTo("bar"));
         Assert.That(value.IsAdult, Is.True);

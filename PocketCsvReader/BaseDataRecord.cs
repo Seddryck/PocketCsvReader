@@ -7,15 +7,14 @@ using System.Globalization;
 using PocketCsvReader.Configuration;
 using System.Reflection;
 using PocketCsvReader.FieldParsing;
-using System.Xml.Linq;
 
 namespace PocketCsvReader;
 public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P : IProfile
 {
-    private TypeIndexer TypeParsers = new();
-    protected Dictionary<int, ParseFunction> FieldParsers = new();
+    private TypeIndexer TypeParsers { get; } = new();
+    protected Dictionary<int, ParseFunction> FieldParsers { get; } = new();
 
-    public BaseDataRecord(P profile, StringMapper stringMapper)
+    protected BaseDataRecord(P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
         TypeParsers.Register(GetByte);
@@ -126,7 +125,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public object GetValue(int i)
     {
         if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
         if (i >= Record!.FieldSpans.Length)
             return GetMissingField();
 
@@ -135,7 +134,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
 
         var parse = field.Parse is not null
                         ? FieldParsers.TryGetValue(i, out var fparse)
-                            ? (int i) => fparse
+                            ? (int i) => fparse.Invoke(GetValueOrThrow(i).Value.ToString())
                             : RegisterParser(i, field.Parse)
                         : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
                             ? (int i) => dlg.Invoke(i)!
@@ -197,7 +196,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     protected virtual bool IsNullFieldValue<T>(int i)
     {
         if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
 
         if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
             return IsDBNull(i);

@@ -66,7 +66,7 @@ public class CsvArrayString : IDisposable
             if (RowCount == 0 && Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-            IsEof = RecordParser!.ReadNextRecord(out RecordSpan recordSpan);
+            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan);
             var values = stringMapper.Invoke(recordSpan.Span, recordSpan.FieldSpans);
             if (values is null)
                 yield break;

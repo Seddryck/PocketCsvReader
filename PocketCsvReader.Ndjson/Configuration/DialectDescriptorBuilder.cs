@@ -40,11 +40,7 @@ public class DialectDescriptorBuilder
         => WithEscapeChar((char)escapeChar);
     public DialectDescriptorBuilder WithoutEscapeChar()
         => (Descriptor = Descriptor with { EscapeChar = null }, Builder: this).Builder;
-    //public DialectDescriptorBuilder WithCommentChar(char? commentChar)
-    //    => (Descriptor = Descriptor with { CommentChar = commentChar}, Builder: this).Builder;
-    //public DialectDescriptorBuilder WithCommentChar(CommentChar commentChar)
-    //   => WithCommentChar((char)commentChar);
-    
+
     public DialectDescriptor Build()
         => Descriptor;
 }

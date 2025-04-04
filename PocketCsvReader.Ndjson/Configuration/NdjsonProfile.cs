@@ -27,5 +27,4 @@ public class NdjsonProfile : IProfile
     {
         get => _default ??= new NdjsonProfile(new DialectDescriptor());
     }
-
 }

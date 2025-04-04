@@ -21,14 +21,14 @@ public class FirstCharOfLabelParserTests
     }
 
     [Test]
-    [TestCase('f', -1, 1)]
-    [TestCase('1', -1, 1)]
-    [TestCase('\"', 0, 1)]
+    [TestCase('f', 0, 0)]
+    [TestCase('1', 0, 0)]
+    [TestCase('\"', 0, 0)]
     [TestCase(' ', 0, 0)]
     public void Parse_Expected_FieldLength(char value, int start, int length)
     {
         var parser = new CharParser(NdjsonProfile.Default);
-        var intern = new FirstCharOfValueParser(parser);
+        var intern = new FirstCharOfLabelParser(parser);
         intern.Parse(value);
         Assert.That(parser.ValueStart, Is.EqualTo(start));
         Assert.That(parser.ValueLength, Is.EqualTo(length));

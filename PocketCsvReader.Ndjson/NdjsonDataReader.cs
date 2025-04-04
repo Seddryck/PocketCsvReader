@@ -53,7 +53,7 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         if (IsEof)
             return false;
 
-        IsEof = RecordParser!.ReadNextRecord(out var recordSpan);
+        IsEof = RecordParser!.IsEndOfFile(out var recordSpan);
 
         if (recordSpan.FieldSpans.Length == 0)
         {
@@ -77,6 +77,6 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         {
             return Record!.Slice(i).Span;
         }
-        throw new IndexOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 }

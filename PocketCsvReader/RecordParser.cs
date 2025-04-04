@@ -3,7 +3,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace PocketCsvReader;
@@ -17,16 +16,12 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         : base(profile, profile.ParserOptimizations.ReadAhead
                     ? new DoubleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
                     : new SingleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
-              , pool)
+              , pool, (p) => new CharParser(p))
     { }
 
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        : base(profile, buffer, pool)
+        : base(profile, buffer, pool, (p) => new CharParser(p))
     { }
-
-    protected override CharParser CreateCharParser(CsvProfile profile)
-        => new(profile);
-    
 
     public virtual string[][] ReadHeaders()
     {
@@ -46,7 +41,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         var rowCount = 1;
         while (rowCount <= Profile.Dialect.HeaderRows.Max())
         {
-            ReadNextRecord(out RecordSpan rawRecord);
+            IsEndOfFile(out RecordSpan rawRecord);
             if (Profile.Dialect.HeaderRows.Contains(rowCount))
             {
                 var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);

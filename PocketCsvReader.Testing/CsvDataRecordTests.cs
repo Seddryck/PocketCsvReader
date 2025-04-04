@@ -156,6 +156,29 @@ public class BaseDataRecordTests
         Assert.That(value, Is.EqualTo(new YearMonth(2025, 1)));
     }
 
+    [Test]
+    [TestCase("J25")]
+    public void GetValue_RegisteredWithBuilderNotParsableCallTwice_Correct(string input)
+    {
+        YearMonth parse(string input)
+        {
+            if (input[0] == 'J' && input.EndsWith("25"))
+                return new YearMonth(2025, 1);
+            throw new ArgumentException();
+        }
+
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder().Build()
+            , new SchemaDescriptorBuilder().Indexed().WithTemporalField<YearMonth>(
+                    tf => tf.WithParser((str) => parse(str))
+                ).Build()
+        );
+
+        var record = new StubDataRecord(new RecordMemory(input, [new FieldSpan(0, input.Length)]), profile);
+        record.GetValue(0);
+        var value = record.GetValue(0);
+        Assert.That(value, Is.EqualTo(new YearMonth(2025, 1)));
+    }
 
     [Test]
     [TestCase("J25;F25")]

@@ -29,9 +29,9 @@ public class RecordParser<T> : RecordParser
         SpanMapper = spanMapper;
     }
 
-    public virtual bool ReadNextRecord(out T value)
+    public virtual bool IsEndOfFile(out T value)
     {
-        var eof = ReadNextRecord(out RecordSpan rawRecord);
+        var eof = IsEndOfFile(out RecordSpan rawRecord);
         value = rawRecord.FieldSpans.Length == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans);
         return eof;
     }
