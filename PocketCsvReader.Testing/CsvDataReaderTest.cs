@@ -38,8 +38,8 @@ public class CsvDataReaderTest
 
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
-        var ex = Assert.Throws<IndexOutOfRangeException>(() => dataReader.GetString(1));
-        //Assert.That(ex!.Message, Does.Contain("record '2'"));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => dataReader.GetString(1));
+        Assert.That(ex!.Message, Does.Contain("record '2'"));
         Assert.That(ex!.Message, Does.Contain("index '1'"));
         Assert.That(ex.Message, Does.Contain("contains 1 defined fields"));
 
@@ -683,8 +683,11 @@ public class CsvDataReaderTest
         {
             var rowCount = 0;
             using var dataReader = new CsvDataReader(stream, profile);
-            while (dataReader.Read()) { rowCount++; }
-            Assert.That(dataReader.FieldCount, Is.EqualTo(14));
+            while (dataReader.Read())
+            {
+                rowCount++;
+                Assert.That(dataReader.FieldCount, Is.EqualTo(14));
+            }
             Assert.That(rowCount, Is.EqualTo(21));
         }
     }
@@ -770,7 +773,7 @@ public class CsvDataReaderTest
                 Assert.That(dataReader.GetOrdinal("Day"), Is.EqualTo(2));
                 Assert.That(dataReader.GetOrdinal("UpdateTime"), Is.EqualTo(13));
             });
-            Assert.Throws<IndexOutOfRangeException>(() => dataReader.GetOrdinal("foo"));
+            Assert.Throws<ArgumentOutOfRangeException>(() => dataReader.GetOrdinal("foo"));
         }
     }
 

@@ -5,7 +5,7 @@ using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 
-public class CsvProfile
+public class CsvProfile : IProfile
 {
     public DialectDescriptor Dialect { get; private set; }
     public SchemaDescriptor? Schema { get; private set; }

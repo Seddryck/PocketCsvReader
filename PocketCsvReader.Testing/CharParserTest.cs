@@ -18,8 +18,8 @@ public class CharParserTest
         result = parser.ParseEof();
 
         Assert.That(result, Is.EqualTo(ParserState.Record));
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(length));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(length));
         Assert.That(value.Substring(start, length), Is.EqualTo(value));
     }
 
@@ -31,8 +31,8 @@ public class CharParserTest
         var result = value.Aggregate((ParserState?)null, (current, c) => parser.Parse(c));
 
         Assert.That(result, Is.EqualTo(ParserState.Field));
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(length));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(length));
         Assert.That(value.Substring(start, length), Is.EqualTo(value[..^1]));
     }
 
@@ -46,8 +46,8 @@ public class CharParserTest
         var result = value.Aggregate((ParserState?)null, (current, c) => parser.Parse(c));
 
         Assert.That(result, Is.EqualTo(ParserState.Record));
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(length));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(length));
         Assert.That(value.Substring(start, length), Is.EqualTo(value[..^(sep.Length)]));
     }
 
@@ -61,8 +61,8 @@ public class CharParserTest
         var result = value.Aggregate((ParserState?)null, (current, c) => parser.Parse(c));
 
         Assert.That(result, Is.EqualTo(ParserState.Record));
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(length));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(length));
         Assert.That(value.Substring(start, length), Is.EqualTo("foobar"));
     }
 
@@ -75,7 +75,7 @@ public class CharParserTest
         var result = value.Aggregate((ParserState?)null, (current, c) => parser.Parse(c));
 
         Assert.That(result, Is.EqualTo(ParserState.Continue));
-        Assert.That(parser.FieldLength, Is.EqualTo(0));
+        Assert.That(parser.ValueLength, Is.EqualTo(0));
     }
 
     [TestCase("#foo\r\nbar")]
@@ -88,7 +88,7 @@ public class CharParserTest
         result = parser.ParseEof();
 
         Assert.That(result, Is.EqualTo(ParserState.Record));
-        Assert.That(parser.FieldLength, Is.EqualTo(3));
+        Assert.That(parser.ValueLength, Is.EqualTo(3));
     }
 
 
@@ -142,7 +142,7 @@ public class CharParserTest
         var result = string.Empty;
         foreach (var c in value)
             if (parser.Parse(c) == ParserState.Field)
-                result = value.Substring(parser.FieldStart, parser.FieldLength);
+                result = value.Substring(parser.ValueStart, parser.ValueLength);
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -170,8 +170,8 @@ public class CharParserTest
         foreach (var c in value)
             if (parser.Parse(c) == ParserState.Field)
             {
-                Assert.That(parser.FieldStart, Is.EqualTo(1));
-                Assert.That(parser.FieldLength, Is.EqualTo(5));
+                Assert.That(parser.ValueStart, Is.EqualTo(1));
+                Assert.That(parser.ValueLength, Is.EqualTo(5));
                 Assert.That(parser.IsEscapedField, Is.True);
             }
     }
@@ -186,8 +186,8 @@ public class CharParserTest
         foreach (var c in value)
             if (parser.Parse(c) == ParserState.Field)
             {
-                Assert.That(parser.FieldStart, Is.EqualTo(1));
-                Assert.That(parser.FieldLength, Is.EqualTo(5));
+                Assert.That(parser.ValueStart, Is.EqualTo(1));
+                Assert.That(parser.ValueLength, Is.EqualTo(5));
                 Assert.That(parser.IsEscapedField, Is.True);
             }
     }
@@ -202,8 +202,8 @@ public class CharParserTest
         foreach (var c in value)
             if (parser.Parse(c) == ParserState.Field)
             {
-                Assert.That(parser.FieldStart, Is.EqualTo(0));
-                Assert.That(parser.FieldLength, Is.EqualTo(5));
+                Assert.That(parser.ValueStart, Is.EqualTo(0));
+                Assert.That(parser.ValueLength, Is.EqualTo(5));
                 Assert.That(parser.IsEscapedField, Is.True);
             }
     }
@@ -217,8 +217,8 @@ public class CharParserTest
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" }));
         foreach (var c in value)
             parser.Parse(c);
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(3));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(3));
     }
 
     [TestCase("foo;`bar`;", 5)]
@@ -230,8 +230,8 @@ public class CharParserTest
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" }));
         foreach (var c in value)
             parser.Parse(c);
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(3));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(3));
     }
 
     [TestCase("foo;`bar`;", 5)]
@@ -243,8 +243,8 @@ public class CharParserTest
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" }));
         foreach (var c in value)
             parser.Parse(c);
-        Assert.That(parser.FieldStart, Is.EqualTo(start));
-        Assert.That(parser.FieldLength, Is.EqualTo(value.Length - 7));
+        Assert.That(parser.ValueStart, Is.EqualTo(start));
+        Assert.That(parser.ValueLength, Is.EqualTo(value.Length - 7));
     }
 
     [TestCase("foo\r\nbar\r\n")]

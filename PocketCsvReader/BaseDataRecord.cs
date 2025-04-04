@@ -9,13 +9,13 @@ using System.Reflection;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
-public class CsvDataRecord : CsvRawRecord, IDataRecord
+public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P : IProfile
 {
-    private TypeIndexer TypeParsers = new();
-    protected Dictionary<int, ParseFunction> FieldParsers = new();
+    private TypeIndexer TypeParsers { get; } = new();
+    protected Dictionary<int, ParseFunction> FieldParsers { get; } = new();
 
-    public CsvDataRecord(CsvProfile profile)
-        : base(profile)
+    protected BaseDataRecord(P profile, StringMapper stringMapper)
+        : base(profile, stringMapper)
     {
         TypeParsers.Register(GetByte);
         TypeParsers.Register(GetChar);
@@ -41,31 +41,8 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         }
     }
 
-    internal CsvDataRecord(RecordMemory record, CsvProfile? profile = null)
-        : this(profile ?? CsvProfile.CommaDoubleQuote)
-    {
-        Record = record;
-
-        int i = 0;
-        Fields = record.FieldSpans.Select(_ => $"field_{i++}").ToArray();
-    }
-
-    public object this[int i]
-    {
-        get => GetValue(i);
-    }
-
-    public object this[string name]
-    {
-        get
-        {
-            if (Fields is null)
-                throw new InvalidOperationException("Fields are not defined yet.");
-            var index = Array.IndexOf(Fields, name);
-            return GetValue(index);
-        }
-    }
-
+    public object this[int i] => GetValue(i);
+    public object this[string name] => GetValue(GetOrdinal(name));
     public bool GetBoolean(int i) => bool.Parse(GetValueOrThrow(i));
     public byte GetByte(int i) => throw new NotImplementedException();
     public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
@@ -77,7 +54,6 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
     {
         if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
             return DateTime.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
-
         return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
@@ -143,23 +119,26 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         return long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
     }
 
+    protected virtual object GetMissingField()
+        => string.Empty;
+
     public object GetValue(int i)
     {
         if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i < Fields!.Length && i >= Record!.FieldSpans.Length)
-            return Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i >= Record!.FieldSpans.Length)
+            return GetMissingField();
 
         if (!TryGetFieldDescriptor(i, out var field))
             return GetString(i);
 
-        Func<int, object>? parse = field.Parse is not null
-                                    ? FieldParsers.TryGetValue(i, out var fparse)
-                                        ? (int i) => fparse
-                                        : RegisterParser(i, field.Parse)
-                                    : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
-                                        ? (int i) => dlg.Invoke(i)!
-                                        : RegisterFunction(field);
+        var parse = field.Parse is not null
+                        ? FieldParsers.TryGetValue(i, out var fparse)
+                            ? (int i) => fparse.Invoke(GetValueOrThrow(i).Value.ToString())
+                            : RegisterParser(i, field.Parse)
+                        : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
+                            ? (int i) => dlg.Invoke(i)!
+                            : RegisterFunction(field);
         try
         {
             var value = parse!(i);
@@ -171,6 +150,8 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         }
     }
 
+    public object GetValue(string name)
+        => GetValue(GetOrdinal(name));
 
     private Func<int, object>? RegisterParser(int i, ParseFunction parse)
     {
@@ -212,15 +193,20 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
         return parse;
     }
 
-    public T GetFieldValue<T>(int i)
+    protected virtual bool IsNullFieldValue<T>(int i)
     {
         if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
 
         if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
-            if (IsDBNull(i))
-                return default!;
+            return IsDBNull(i);
+        return false;
+    }
 
+    public T GetFieldValue<T>(int i)
+    {
+        if (IsNullFieldValue<T>(i))
+            return default!;
         if (TypeParsers.TryGetParser<T>(out var func))
             return func.Invoke(i);
 
@@ -229,24 +215,16 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
 
     public T GetFieldValue<T>(int i, IFormatProvider format) where T : IParsable<T>
     {
-        if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-
-        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
-            if (IsDBNull(i))
-                return default!;
+        if (IsNullFieldValue<T>(i))
+            return default!;
 
         return T.Parse(GetValueOrThrow(i).Value.ToString(), format);
     }
 
     public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format=null) where T : IParsable<T>
     {
-        if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-
-        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
-            if (IsDBNull(i))
-                return default!;
+        if (IsNullFieldValue<T>(i))
+            return default!;
 
         var locator = new TypeParserLocator<T>();
         var func = locator.Locate([pattern, format ?? CultureInfo.InvariantCulture]);
@@ -256,15 +234,23 @@ public class CsvDataRecord : CsvRawRecord, IDataRecord
 
     public T GetFieldValue<T>(int i, Func<string, T> parse)
     {
-        if (i >= FieldCount)
-            throw new IndexOutOfRangeException($"Field index '{i}' is out of range.");
-
-        if (Nullable.GetUnderlyingType(typeof(T)) != null || !typeof(T).IsValueType)
-            if (IsDBNull(i))
-                return default!;
+        if (IsNullFieldValue<T>(i))
+            return default!;
 
         return parse(GetValueOrThrow(i).Value.ToString());
     }
+
+    public T GetFieldValue<T>(string name)
+        => GetFieldValue<T>(GetOrdinal(name));
+
+    public T GetFieldValue<T>(string name, IFormatProvider format) where T : IParsable<T>
+        => GetFieldValue<T>(GetOrdinal(name), format);
+
+    public T GetFieldValue<T>(string name, string pattern, IFormatProvider? format = null) where T : IParsable<T>
+        => GetFieldValue<T>(GetOrdinal(name), pattern, format);
+
+    public T GetFieldValue<T>(string name, Func<string, T> parse)
+        => GetFieldValue(GetOrdinal(name), parse);
 
     public int GetValues(object[] values) => throw new NotImplementedException();
 
