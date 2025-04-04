@@ -12,8 +12,8 @@ public class NdjsonProfile : IProfile
     public ResourceDescriptor? Resource { get; }
     public RuntimeParsersDescriptor? Parsers { get; }
 
-    public NdjsonProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null)
-        => (Dialect, Schema) = (dialect, schema);
+    public NdjsonProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers= null)
+        => (Dialect, Schema, Resource, Parsers) = (dialect, schema, resource, parsers);
 
     public NdjsonProfile(string recordSeparator)
     {

@@ -4,7 +4,9 @@
     <None Remove="Resources\metrics.ndjson" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\metrics.ndjson" />
+    <EmbeddedResource Include="Resources\metrics.ndjson">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Chrononuensis" Version="0.23.2" />
