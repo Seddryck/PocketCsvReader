@@ -9,6 +9,7 @@ namespace PocketCsvReader.Configuration;
 public class DialectDescriptorBuilder
 {
     private DialectDescriptor Descriptor { get; set; } = new();
+    private ArrayDialectDescriptorBuilder? ArrayBuilder { get; set; }
 
     public DialectDescriptorBuilder WithDelimiter(char delimiter)
         => (Descriptor = Descriptor with { Delimiter = delimiter }, Builder: this).Builder;
@@ -89,7 +90,21 @@ public class DialectDescriptorBuilder
         => (Descriptor = Descriptor with { CommentRows = commentRows }, Builder: this).Builder;
     public DialectDescriptorBuilder WithoutCommentRows()
         => WithCommentRows([]);
+    public DialectDescriptorBuilder WithArray(Func<ArrayDialectDescriptorBuilder, ArrayDialectDescriptorBuilder> builder)
+        => (ArrayBuilder = builder(ArrayBuilder ?? new()), Builder: this).Builder;
 
     public DialectDescriptor Build()
-        => Descriptor;
+    {
+        if (ArrayBuilder is not null)
+        {
+            var (delimiter, prefix, suffix) = ArrayBuilder.Build();
+            Descriptor = Descriptor with
+            {
+                ArrayDelimiter = delimiter,
+                ArrayPrefix = prefix,
+                ArraySuffix = suffix
+            };
+        }
+        return Descriptor;
+    }
 }

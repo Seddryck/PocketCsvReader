@@ -20,7 +20,10 @@ public record DialectDescriptor
     bool DoubleQuote = true,
     char? EscapeChar = null,
     string? NullSequence = null,
-    bool SkipInitialSpace = false
+    bool SkipInitialSpace = false,
+    char? ArrayDelimiter = null,
+    char? ArrayPrefix = null,
+    char? ArraySuffix = null
 )
 {
     public int[] HeaderRows { get; init; } = HeaderRows ?? [1];
