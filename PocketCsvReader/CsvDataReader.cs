@@ -46,6 +46,25 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
+    protected virtual NullableSpan GetValueOrThrow(int i, int j)
+    {
+        if (i >= Record!.FieldSpans.Length)
+            throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
+        if (j >= Record!.FieldSpans[i].Children!.Length)
+            throw new ArgumentOutOfRangeException($"Attempted to access item at index '{i}' in the array at field '{j}' for the record '{RowCount}', but this array only contains {Record!.FieldSpans[i].Children!.Length} items.");
+
+        sanitizerFactory ??= new SanitizerFactory(Profile);
+        var sanitizer = CacheSanitizers.GetOrAdd(i,
+                sanitizerFactory.Create(null, new FieldEscaper(Profile)
+            ));
+
+        var start = Record!.FieldSpans[i].Children![j].ValueStart;
+        var length = Record!.FieldSpans[i].Children![j].ValueLength;
+        var slice = Record!.Slice(i).Span.Slice(start, length);
+
+        return sanitizer.Sanitize(slice, Record!.FieldSpans[i].Children![j].IsEscaped, Record!.FieldSpans[i].Children![j].WasQuoted);
+    }
+
     public override bool Read()
     {
         if (FileEncoding is null)

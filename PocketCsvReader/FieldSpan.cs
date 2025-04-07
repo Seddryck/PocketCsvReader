@@ -12,5 +12,6 @@ public record struct FieldSpan
     bool WasQuoted = false,
     bool IsEscaped = false,
     int LabelStart = 0,
-    int LabelLength = 0
+    int LabelLength = 0,
+    FieldSpan[]? Children = null
 );

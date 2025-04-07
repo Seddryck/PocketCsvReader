@@ -16,7 +16,10 @@ public class CharParser : ICharParser
     public int LabelStart => 0;
     public int LabelLength => 0;
     public bool IsQuotedField { get; private set; } = false;
+    public bool IsArrayField { get; private set; } = false;
     public bool IsEscapedField { get; private set; } = false;
+    public FieldSpan[] Children => _children.ToArray();
+    private readonly List<FieldSpan> _children = [];
     public bool IsHeaderRow { get; private set; } = false;
     public CsvProfile Profile { get; }
 
@@ -28,13 +31,16 @@ public class CharParser : ICharParser
     internal InternalParse FirstCharOfRecord { get; }
     internal InternalParse FirstCharOfField { get; }
     internal InternalParse FirstCharOfQuotedField { get; }
+    internal InternalParse FirstCharOfArrayField { get; }
     internal InternalParse CharOfField { get; }
     internal InternalParse CharOfQuotedField { get; }
+    internal InternalParse CharOfArrayField { get; }
     internal InternalParse LineTerminator { get; }
     internal InternalParse Comment { get; }
     internal InternalParse AfterQuoteChar { get; }
     internal InternalParse AfterEscapeCharQuotedField { get; }
     internal InternalParse AfterEscapeChar { get; }
+    internal InternalParse AfterArray { get; }
 
     public CharParser(CsvProfile profile)
     {
@@ -58,6 +64,20 @@ public class CharParser : ICharParser
             : new AfterQuoteCharParser(this).Parse;
         AfterEscapeCharQuotedField = new AfterEscapeCharQuotedFieldParser(this).Parse;
         AfterEscapeChar = new AfterEscapeCharParser(this).Parse;
+        if (Profile.Dialect.ArrayDelimiter.HasValue)
+        {
+            var charOfArrayFieldParser = new CharOfArrayFieldParser(this);
+            CharOfArrayField = charOfArrayFieldParser.Parse;
+            FirstCharOfArrayField = new FirstCharOfArrayFieldParser(this, charOfArrayFieldParser).Parse;
+            AfterArray = new AfterArrayParser(this).Parse;
+        }
+        else
+        {
+            FirstCharOfArrayField = (char c) => ParserState.Error;
+            CharOfArrayField = (char c) => ParserState.Error;
+            AfterArray = (char c) => ParserState.Error;
+        }
+
         Internal = FirstCharOfRecord;
     }
 
@@ -87,9 +107,9 @@ public class CharParser : ICharParser
             return ParserState.Record;
         }
         else
-        if (Internal == AfterQuoteChar || Internal == CharOfField)
+        if (Internal == AfterQuoteChar || Internal == AfterArray || Internal == CharOfField)
         {
-            SetFieldEnd(Internal == AfterQuoteChar ? -1 : 0);
+            SetFieldEnd(Internal == CharOfField ? 0 : -1);
             return ParserState.Record;
         }
         return ParserState.Error;
@@ -102,17 +122,20 @@ public class CharParser : ICharParser
     internal void SetFieldStart()
         => (ValueStart, ValueLength) = (Position, 1);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void SetFieldEnd(int i)
+    protected internal virtual void SetFieldEnd(int i)
         => (ValueLength) = (Position - ValueStart + 1 + i);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void SetFieldEnd()
+    protected internal virtual void SetFieldEnd()
         => SetFieldEnd(0);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ResetFieldState()
-        => IsQuotedField = IsEscapedField = false;
+        => IsQuotedField = IsEscapedField = IsArrayField = false;
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetQuotedField()
         => IsQuotedField = true;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void SetArrayField()
+        => IsArrayField = true;
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetEscapedField()
         => IsEscapedField = true;
@@ -123,6 +146,12 @@ public class CharParser : ICharParser
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Switch(InternalParse parse)
         => Internal = parse;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void AddChild(FieldSpan child)
+        => _children.Add(child);
+
+    public IInternalCharParser? InternalCharParser
+        => (IInternalCharParser?)(Internal.Target);
 }
 
 public enum ParserState

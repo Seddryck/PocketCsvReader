@@ -23,7 +23,7 @@ internal class TypeParserLocator<T> : ITypeParserLocator
     public Func<string, T> Locate(object[] parameters)
     {
         var method = FindMethod(parameters.Select(x => x.GetType()).ToArray());
-        var fixedParameters = new List<object>(parameters);
+        var fixedParameters = new List<object>(parameters[0..(method.GetParameters().Length-1)]);
         return (string span) => (T)(method.Invoke(null, fixedParameters.Prepend(span).ToArray())
                                                 ?? throw new InvalidOperationException());
     }
@@ -31,7 +31,7 @@ internal class TypeParserLocator<T> : ITypeParserLocator
     private MethodInfo FindMethod(Type[] expected)
     {
         var methods = Target.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-                        .Where(x => x.Name == "Parse");
+                        .Where(x => x.Name == "Parse" || x.Name == "ParseExact");
 
         var matching = new List<MethodInfo>();
         foreach (var method in methods)
@@ -48,7 +48,11 @@ internal class TypeParserLocator<T> : ITypeParserLocator
         }
 
         if (matching.Count == 0)
+        {
+            if (expected.Length > 2)
+                return FindMethod(expected[0..(expected.Length-1)]);
             throw new InvalidOperationException($"No method found for type {Target.Name}");
+        }
 
         var match = matching.Count > 1 ? matching.First(x => x.GetParameters()[0].GetType() == typeof(string)) : matching[0];
         return match;

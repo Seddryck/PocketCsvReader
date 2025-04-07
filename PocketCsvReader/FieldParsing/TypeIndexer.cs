@@ -6,37 +6,40 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.FieldParsing;
+
+internal delegate T ParseSpan<T>(ReadOnlySpan<char> span);
+
 internal class TypeIndexer
 {
-    private readonly Dictionary<Type, Func<int, object>> _typeToFunctionMap = new();
+    private readonly Dictionary<Type, Delegate> _typeToFunctionMap = new();
 
-    public void Register<T>(Func<int, T> func)
-        => Register(typeof(T), (int i) => func.Invoke(i)!);
+    public void Register<T>(ParseSpan<T> parse)
+        => Register(typeof(T), parse);
 
-    public void Register(Type type, Func<int, object> func)
+    protected void Register(Type type, Delegate parse)
     {
-        ArgumentNullException.ThrowIfNull(func);
-        _typeToFunctionMap[type] = func;
+        ArgumentNullException.ThrowIfNull(parse);
+        _typeToFunctionMap[type] = parse;
     }
 
-    public bool TryGetParser<T>([NotNullWhen(true)] out Func<int, T>? func)
+    public bool TryGetParser<T>([NotNullWhen(true)] out ParseSpan<T>? parse)
     {
-        if (_typeToFunctionMap.TryGetValue(typeof(T), out var value))
+        if (_typeToFunctionMap.TryGetValue(typeof(T), out var dlg))
         {
-            func = (int i) => (T)value(i);
+            parse = (ParseSpan<T>)dlg;
             return true;
         }
-        func = null;
+        parse = null;
         return false;
     }
 
-    public bool TryGetParser(Type type, [NotNullWhen(true)] out Func<int, object>? func)
+    protected bool TryGetParser(Type type, [NotNullWhen(true)] out Delegate? dlg)
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        if (_typeToFunctionMap.TryGetValue(type, out func))
+        if (_typeToFunctionMap.TryGetValue(type, out dlg))
             return true;
-        func = null;
+        dlg = null;
         return false;
     }
 

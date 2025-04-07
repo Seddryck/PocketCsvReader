@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Reflection;
 using PocketCsvReader.Configuration;
+using Chrononuensis;
+using Newtonsoft.Json.Linq;
 
 namespace PocketCsvReader.Testing;
 
@@ -101,6 +103,205 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetString(0), Is.EqualTo("foo"));
         Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2024, 12, 06, 12, 45, 16)));
     }
+
+    [Test]
+    [TestCase("[10|25];foo", "10|25", "foo", 0)]
+    [TestCase("foo;[10|25]", "foo", "10|25", 1)]
+    public void GetArrayUntypedInt_RecordWithTwoFields_CorrectParsing(string content, string value1, string value2, int pos)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        Assert.That(dataReader.GetString(0), Is.EqualTo(value1));
+        Assert.That(dataReader.GetString(1), Is.EqualTo(value2));
+        var array = dataReader.GetArray(pos);
+        Assert.That(array, Has.Length.EqualTo(2));
+        Assert.That(array[0], Is.EqualTo("10"));
+        Assert.That(array[1], Is.EqualTo("25"));
+    }
+
+    [Test]
+    [TestCase("[10|25];foo", 0, 10, 25)]
+    [TestCase("foo;[10|25|36]", 1, 10, 25, 36)]
+    public void GetArrayInt_RecordWithTwoFields_CorrectParsing(string content, int pos, params int[] values)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var array = dataReader.GetArray<int>(pos);
+        Assert.That(array, Has.Length.EqualTo(values.Length));
+        for (int i = 0; i < values.Length; i++)
+            Assert.That(array[i], Is.EqualTo(values[i]));
+    }
+
+    [Test]
+    [TestCase("[foo|bar];125", 0, "foo", "bar")]
+    [TestCase("125;[foo|bar|qrz]", 1, "foo", "bar", "qrz")]
+    public void GetArrayString_RecordWithTwoFields_CorrectParsing(string content, int pos, params string[] values)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var array = dataReader.GetArray<string>(pos);
+        Assert.That(array, Has.Length.EqualTo(values.Length));
+        for (int i = 0; i < values.Length; i++)
+            Assert.That(array[i], Is.EqualTo(values[i]));
+    }
+
+
+    [Test]
+    [TestCase("[foo|bar];125", 0, "foo", "bar")]
+    [TestCase("125;[foo|bar|qrz]", 1, "foo", "bar", "qrz")]
+    public void GetArrayObject_RecordWithTwoFields_CorrectParsing(string content, int pos, params string[] values)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var array = dataReader.GetArray(pos);
+        Assert.That(array, Has.Length.EqualTo(values.Length));
+        for (int i = 0; i < values.Length; i++)
+            Assert.That(array[i], Is.EqualTo(values[i]));
+    }
+
+    [Test]
+    [TestCase("[20-12-2024|20-04-2025];125", 0, "2024-12-20", "2025-04-20")]
+    public void GetArrayUntypedDate_RecordWithTwoFields_CorrectParsing(string content, int pos, params string[] values)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithArray(array => array.WithDelimiter('|').WithPrefix('[').WithSuffix(']'))
+                .WithoutHeader()
+                .Build(),
+            new SchemaDescriptorBuilder()
+                .Indexed()
+                .WithTemporalField<DateOnly>((f) => f.WithFormat("dd-MM-yyyy"))
+                .Build()
+            );
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var array = dataReader.GetArray(pos);
+        Assert.That(array, Has.Length.EqualTo(values.Length));
+        for (int i = 0; i < values.Length; i++)
+            Assert.That(array[i], Is.EqualTo(DateOnly.Parse(values[i])));
+    }
+
+    [Test]
+    [TestCase("[2024-10|2025-04];125")]
+    public void GetArrayCustomType_RecordWithTwoFields_CorrectParsing(string content)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithArray(array => array.WithDelimiter('|').WithPrefix('[').WithSuffix(']'))
+                .WithoutHeader()
+                .Build(),
+            new SchemaDescriptorBuilder()
+                .Indexed()
+                .WithCustomField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
+                .Build()
+            );
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var array = dataReader.GetArray<YearMonth>(0);
+        Assert.That(array, Has.Length.EqualTo(2));
+        Assert.That(array[0], Is.EqualTo(new YearMonth(2024, 10)));
+        Assert.That(array[1], Is.EqualTo(new YearMonth(2025, 4)));
+    }
+
+    #region ArrayItem
+    [Test]
+    [TestCase("[10|25];foo", 0, 1, 25)]
+    [TestCase("foo;[10|25|36]", 1, 2, 36)]
+    public void GetArrayItemInt_RecordWithTwoFields_CorrectParsing(string content, int pos, int item, int value)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var result = dataReader.GetArrayItem<int>(pos, item);
+        Assert.That(result, Is.EqualTo(value));
+    }
+
+    [Test]
+    [TestCase("[foo|bar];125", 0, 1, "bar")]
+    [TestCase("125;[foo|bar|qrz]", 1, 2, "qrz")]
+    public void GetArrayItemString_RecordWithTwoFields_CorrectParsing(string content, int pos, int item, string value)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', ArrayDelimiter = '|', ArrayPrefix = '[', ArraySuffix = ']', Header = false });
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var result = dataReader.GetArrayItem<string>(pos, item);
+        Assert.That(result, Is.EqualTo(value));
+    }
+
+    [Test]
+    [TestCase("[20-12-2024|20-04-2025];125", 0, 0, "2024-12-20")]
+    public void GetArrayItemDate_RecordWithTwoFields_CorrectParsing(string content, int pos, int item, string value)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithArray(array => array.WithDelimiter('|').WithPrefix('[').WithSuffix(']'))
+                .WithoutHeader()
+                .Build(),
+            new SchemaDescriptorBuilder()
+                .Indexed()
+                .WithTemporalField<DateOnly>((f) => f.WithFormat("dd-MM-yyyy"))
+                .Build()
+            );
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var result = dataReader.GetArrayItem<DateOnly>(pos, item);
+        Assert.That(result, Is.EqualTo(DateOnly.Parse(value)));
+    }
+
+    [Test]
+    [TestCase("[2024-10|2025-04];125")]
+    public void GetArrayItemCustomType_RecordWithTwoFields_CorrectParsing(string content)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithArray(array => array.WithDelimiter('|').WithPrefix('[').WithSuffix(']'))
+                .WithoutHeader()
+                .Build(),
+            new SchemaDescriptorBuilder()
+                .Indexed()
+                .WithCustomField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
+                .Build()
+            );
+        using var dataReader = new CsvDataReader(buffer, profile);
+        dataReader.Read();
+        var result = dataReader.GetArrayItem<YearMonth>(0,1);
+        Assert.That(result, Is.EqualTo(new YearMonth(2025,4)));
+    }
+    #endregion
 
     [Test]
     [TestCase("'fo\\'o'", '\\')]
@@ -399,10 +600,10 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(decimal)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(decimal)));
-        Assert.That(dataReader.GetFieldValue<decimal>(0), Is.EqualTo(125210.17m));
-        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.EqualTo(456211.205m));
         Assert.That(dataReader.GetValue(0), Is.EqualTo(125210.17m));
         Assert.That(dataReader.GetValue(1), Is.EqualTo(456211.205m));
+        Assert.That(dataReader.GetFieldValue<decimal>(0), Is.EqualTo(125210.17m));
+        Assert.That(dataReader.GetFieldValue<decimal>(1), Is.EqualTo(456211.205m));
         Assert.That(dataReader.GetFloat(0), Is.EqualTo(125210.17m));
         Assert.That(dataReader.GetFloat(1), Is.EqualTo(456211.205m));
         Assert.That(dataReader.GetDouble(0), Is.EqualTo(125210.17m));
@@ -433,9 +634,9 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(int)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(int)));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(12210));
         Assert.That(dataReader.GetFieldValue<int>(0), Is.EqualTo(12210));
         Assert.That(dataReader.GetFieldValue<int>(1), Is.EqualTo(-16211));
-        Assert.That(dataReader.GetValue(0), Is.EqualTo(12210));
         Assert.That(dataReader.GetValue(1), Is.EqualTo(-16211));
         Assert.That(dataReader.GetInt64(0), Is.EqualTo(12210));
         Assert.That(dataReader.GetInt64(1), Is.EqualTo(-16211));
@@ -578,7 +779,7 @@ public class CsvDataReaderTest
                     .Indexed()
                     .WithField<string>((f) => f.WithSequence("(null)", null))
                     .WithField<string>((f) => f.WithSequence("NaN", null))
-            
+
             )
             .WithResource((r) => r.WithSequence("", null));
         using var dataReader = builder.Build().ToDataReader(buffer);
@@ -659,7 +860,7 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetName(1), Is.EqualTo("bar"));
         Assert.That(dataReader.GetFieldType(0), Is.EqualTo(typeof(Chrononuensis.YearMonth)));
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(Chrononuensis.YearQuarter)));
-        Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025,2)));
+        Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025, 2)));
         Assert.That(dataReader.GetValue(1), Is.EqualTo(new Chrononuensis.YearQuarter(2025, 1)));
 
     }
