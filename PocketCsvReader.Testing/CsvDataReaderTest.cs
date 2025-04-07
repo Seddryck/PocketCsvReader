@@ -1094,9 +1094,98 @@ public class CsvDataReaderTest
         };
         var profile = new CsvProfile(dialect);
         var data = $"a,b,c{lineTerminator}1,2,3{lineTerminator}4,5,6{lineTerminator}";
-        var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(data)), profile);
+        using var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(data)), profile);
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase("a;b;c;d\r\n125;foo;2025-12-25\r\n256;bar\r\n304;qrz;2025-04-01;10.25")]
+    public void GetValues_MixedTypes_Correct(string input)
+    {
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithLineTerminator("\r\n")
+                .WithHeader(true)
+                .Build(),
+            new SchemaDescriptorBuilder()
+                .Indexed()
+                .WithField<int>()
+                .WithField<string>()
+                .WithField<DateOnly>()
+                .Build());
+
+        var values = new object[3];
+
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(input));
+        using var dataReader = new CsvDataReader(buffer, profile);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(3));
+        Assert.That(values[0], Is.EqualTo(125));
+        Assert.That(values[1], Is.EqualTo("foo"));
+        Assert.That(values[2], Is.EqualTo(new DateOnly(2025, 12, 25)));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(2));
+        Assert.That(values[0], Is.EqualTo(256));
+        Assert.That(values[1], Is.EqualTo("bar"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(3));
+        Assert.That(values[0], Is.EqualTo(304));
+        Assert.That(values[1], Is.EqualTo("qrz"));
+        Assert.That(values[2], Is.EqualTo(new DateOnly(2025, 4, 1)));
+        Assert.That(dataReader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase("a;b;c;d\r\n125;foo;2025-12-25\r\n256;bar\r\n304;qrz;2025-04-01;10.25")]
+    public void GetValues_MixedUntyped_Correct(string input)
+    {
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithLineTerminator("\r\n")
+                .WithHeader(true)
+                .Build());
+
+        var values = new object[3];
+
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(input));
+        using var dataReader = new CsvDataReader(buffer, profile);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(3));
+        Assert.That(values[0], Is.EqualTo("125"));
+        Assert.That(values[1], Is.EqualTo("foo"));
+        Assert.That(values[2], Is.EqualTo("2025-12-25"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(2));
+        Assert.That(values[0], Is.EqualTo("256"));
+        Assert.That(values[1], Is.EqualTo("bar"));
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.GetValues(values), Is.EqualTo(3));
+        Assert.That(values[0], Is.EqualTo("304"));
+        Assert.That(values[1], Is.EqualTo("qrz"));
+        Assert.That(values[2], Is.EqualTo("2025-04-01"));
+        Assert.That(dataReader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase("a;b;c;d\r\n125;foo;2025-12-25\r\n256;bar\r\n304;qrz;2025-04-01;10.25")]
+    public void GetValues_NullInput_Correct(string input)
+    {
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithLineTerminator("\r\n")
+                .WithHeader(true)
+                .Build());
+
+        object[]? values = null;
+
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(input));
+        using var dataReader = new CsvDataReader(buffer, profile);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.Throws<ArgumentNullException>(() => dataReader.GetValues(values!));
     }
 }

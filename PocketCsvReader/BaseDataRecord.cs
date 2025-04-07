@@ -272,7 +272,15 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public T GetFieldValue<T>(string name, Func<string, T> parse)
         => GetFieldValue(GetOrdinal(name), parse);
 
-    public int GetValues(object[] values) => throw new NotImplementedException();
+    public int GetValues(object[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var length = Math.Min(values.Length, FieldCount);
+
+        for (int i = 0; i < length; i++)
+            values[i] = IsNull(i) ? null! : GetValue(i);
+        return length;
+    }
 
     public bool IsDBNull(int i)
         => IsNull(i);
