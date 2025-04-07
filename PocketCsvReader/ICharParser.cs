@@ -16,4 +16,6 @@ public interface ICharParser
     int LabelLength { get; }
     bool IsQuotedField { get; }
     bool IsEscapedField { get; }
+    FieldSpan[] Children { get; }
+    IInternalCharParser? InternalCharParser { get; }
 }

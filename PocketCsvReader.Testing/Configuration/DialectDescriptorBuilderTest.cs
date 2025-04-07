@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Formats.Asn1;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -324,5 +325,74 @@ public class DialectDescriptorBuilderTest
         Assert.That(csvReader.Profile.Dialect.LineTerminator, Is.EqualTo("\r"));
         Assert.That(csvReader.Profile.Dialect.QuoteChar, Is.EqualTo('\''));
         Assert.That(csvReader.Profile.Dialect.DoubleQuote, Is.True);
+    }
+
+    [Test]
+    public void WithArrayDelimiter_ShouldSetArrayDelimiter()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(','))
+            .Build();
+        var csvReader = new CsvReader(new CsvProfile(descriptor));
+
+        Assert.That(csvReader.Profile.Dialect.ArrayDelimiter, Is.EqualTo(','));
+    }
+
+    [Test]
+    public void WithArrayDelimiterEnum_ShouldSetArrayDelimiter()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(Delimiter.Comma))
+            .Build();
+        var csvReader = new CsvReader(new CsvProfile(descriptor));
+
+        Assert.That(csvReader.Profile.Dialect.ArrayDelimiter, Is.EqualTo(','));
+    }
+
+    [Test]
+    public void WithArraySuffixPrefix_ShouldSetArraySuffixPrefix()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(',').WithPrefix('[').WithSuffix(']'))
+            .Build();
+        var csvReader = new CsvReader(new CsvProfile(descriptor));
+
+        Assert.That(csvReader.Profile.Dialect.ArrayPrefix, Is.EqualTo('['));
+        Assert.That(csvReader.Profile.Dialect.ArraySuffix, Is.EqualTo(']'));
+    }
+    [Test]
+    public void WithoutPrefixAndSuffix_ShouldThrows()
+    {
+        var descriptor = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(',').WithPrefix('[')
+                .WithSuffix(']').WithoutPrefixAndSuffix())
+            .Build();
+        var csvReader = new CsvReader(new CsvProfile(descriptor));
+        Assert.That(csvReader.Profile.Dialect.ArrayPrefix, Is.Null);
+        Assert.That(csvReader.Profile.Dialect.ArraySuffix, Is.Null);
+    }
+
+    [Test]
+    public void WithoutArrayPrefix_ShouldThrows()
+    {
+        var builder = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(',').WithSuffix(']'));
+        Assert.Throws<InvalidOperationException>(() => builder.Build());
+    }
+
+    [Test]
+    public void WithoutArraySuffix_ShouldThrows()
+    {
+        var builder = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithDelimiter(',').WithPrefix('['));
+        Assert.Throws<InvalidOperationException>(() => builder.Build());
+    }
+
+    [Test]
+    public void WithoutArrayDelimiter_ShouldThrows()
+    {
+        var builder = new DialectDescriptorBuilder()
+            .WithArray(builder => builder.WithPrefix('[').WithSuffix(']'));
+        Assert.Throws<InvalidOperationException>(() => builder.Build());
     }
 }

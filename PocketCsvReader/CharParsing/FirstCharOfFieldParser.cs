@@ -15,21 +15,29 @@ internal class FirstCharOfFieldParser : IInternalCharParser
     private char Delimiter { get; set; }
     private bool IsSkipInitialSpace { get; set; }
     private char? EscapeChar { get; set; }
+    private char? ArrayPrefix { get; set; }
 
     public FirstCharOfFieldParser(CharParser parser)
-        => (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
+        => (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar, ArrayPrefix)
                 = (parser, parser.Profile.Dialect.LineTerminator[0], parser.Profile.Dialect.QuoteChar
                     , parser.Profile.Dialect.Delimiter, parser.Profile.Dialect.SkipInitialSpace
-                    , parser.Profile.Dialect.EscapeChar);
+                    , parser.Profile.Dialect.EscapeChar, parser.Profile.Dialect.ArrayPrefix);
 
     public virtual ParserState Parse(char c)
     {
         Parser.ResetFieldState();
 
-        if (QuoteChar.HasValue && c == QuoteChar)
+        if (QuoteChar.HasValue && c == QuoteChar.Value)
         {
             Parser.SetQuotedField();
             Parser.Switch(Parser.FirstCharOfQuotedField);
+            return ParserState.Continue;
+        }
+
+        if (ArrayPrefix.HasValue && c == ArrayPrefix.Value)
+        {
+            Parser.SetArrayField();
+            Parser.Switch(Parser.FirstCharOfArrayField);
             return ParserState.Continue;
         }
 

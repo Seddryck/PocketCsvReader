@@ -47,7 +47,7 @@ internal class CharOfFieldLookupParser : IInternalCharParser
                 : ParserState.Continue;
         }
 
-        if (EscapeChar.HasValue && c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar.Value)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;

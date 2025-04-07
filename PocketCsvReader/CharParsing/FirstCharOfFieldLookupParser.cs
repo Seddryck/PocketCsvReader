@@ -15,13 +15,14 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
     private char Delimiter { get; set; }
     private bool IsSkipInitialSpace { get; set; }
     private char? EscapeChar { get; set; }
+    private char? ArrayPrefix { get; set; }
 
     public FirstCharOfFieldLookupParser(CharParser parser)
     {
-        (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar)
+        (Parser, FirstCharOfLineTerminator, QuoteChar, Delimiter, IsSkipInitialSpace, EscapeChar, ArrayPrefix)
                 = (parser, parser.Profile.Dialect.LineTerminator[0], parser.Profile.Dialect.QuoteChar
                     , parser.Profile.Dialect.Delimiter, parser.Profile.Dialect.SkipInitialSpace
-                    , parser.Profile.Dialect.EscapeChar);
+                    , parser.Profile.Dialect.EscapeChar, parser.Profile.Dialect.ArrayPrefix);
 
         InterestingChars = new bool[char.MaxValue + 1];
         InterestingChars[Delimiter] = true;
@@ -30,6 +31,8 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
             InterestingChars[EscapeChar.Value] = true;
         if (QuoteChar.HasValue)
             InterestingChars[QuoteChar.Value] = true;
+        if (ArrayPrefix.HasValue)
+            InterestingChars[ArrayPrefix.Value] = true;
         InterestingChars[' '] = IsSkipInitialSpace;
     }
 
@@ -69,9 +72,16 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
         }
 
 
-        if (EscapeChar.HasValue && c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar.Value)
         {
             Parser.Switch(Parser.AfterEscapeChar);
+            return ParserState.Continue;
+        }
+
+        if (ArrayPrefix.HasValue && c == ArrayPrefix.Value)
+        {
+            Parser.SetArrayField();
+            Parser.Switch(Parser.FirstCharOfArrayField);
             return ParserState.Continue;
         }
 

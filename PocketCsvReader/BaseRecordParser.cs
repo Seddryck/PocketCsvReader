@@ -102,7 +102,7 @@ public abstract class BaseRecordParser<P> : IDisposable
 
     protected virtual FieldSpan CreateFieldSpan()
         => new(CharParser.ValueStart, CharParser.ValueLength, CharParser.IsEscapedField, CharParser.IsQuotedField,
-            CharParser.LabelStart, CharParser.LabelLength);
+            CharParser.LabelStart, CharParser.LabelLength, CharParser.Children);
     protected virtual RecordSpan CreateRecordSpan(ReadOnlySpan<char> span, FieldSpan[] fields)
         => new(span, fields);
 

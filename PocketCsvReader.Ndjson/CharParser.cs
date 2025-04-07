@@ -36,6 +36,11 @@ public class CharParser : ICharParser
     internal InternalParse FieldDelimiter { get; }
     internal InternalParse LineTerminator { get; }
 
+    public FieldSpan[] Children => _children.ToArray();
+    private readonly List<FieldSpan> _children = [];
+
+    public IInternalCharParser? InternalCharParser => throw new NotImplementedException();
+
     public CharParser(NdjsonProfile profile)
     {
         Profile = profile;

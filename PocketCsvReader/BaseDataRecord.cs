@@ -7,43 +7,45 @@ using System.Globalization;
 using PocketCsvReader.Configuration;
 using System.Reflection;
 using PocketCsvReader.FieldParsing;
+using PocketCsvReader.CharParsing;
+using System.Linq.Expressions;
+using System.ComponentModel.Design;
 
 namespace PocketCsvReader;
 public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P : IProfile
 {
-    private TypeIndexer TypeParsers { get; } = new();
-    protected Dictionary<int, ParseFunction> FieldParsers { get; } = new();
+    private SpanParser Parser { get; } = new();
 
     protected BaseDataRecord(P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
-        TypeParsers.Register(GetByte);
-        TypeParsers.Register(GetChar);
-        TypeParsers.Register(GetString);
-        TypeParsers.Register(GetBoolean);
-        TypeParsers.Register(GetInt16);
-        TypeParsers.Register(GetInt32);
-        TypeParsers.Register(GetInt64);
-        TypeParsers.Register(GetFloat);
-        TypeParsers.Register(GetDouble);
-        TypeParsers.Register(GetDecimal);
-        TypeParsers.Register(GetGuid);
-        TypeParsers.Register(GetDate);
-        TypeParsers.Register(GetTime);
-        TypeParsers.Register(GetDateTime);
-        TypeParsers.Register(GetDateTimeOffset);
-
         foreach (var parser in profile.Parsers ?? [])
         {
-            string getValue(int i) => GetValueOrThrow(i).Value.ToString();
-            object parse(int i) => parser.Value(getValue(i));
-            TypeParsers.Register(parser.Key, parse);
+            var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+            // Convert span to string: span.ToString()
+            var toStringCall = Expression.Call(spanParam, typeof(ReadOnlySpan<char>).GetMethod(nameof(ReadOnlySpan<char>.ToString), Type.EmptyTypes)!);
+
+            // Call the existing parser.Value(string)
+            var parserFunc = Expression.Constant(parser.Value); // Func<string, X>
+            var invokeParser = Expression.Invoke(parserFunc, toStringCall);
+
+            // Cast the result to the expected return type (if needed)
+            var castResult = Expression.Convert(invokeParser, parser.Key); // parser.Key is typeof(X)
+
+            var delegateType = typeof(ParseSpan<>).MakeGenericType(parser.Key);
+            var lambda = Expression.Lambda(delegateType, castResult, spanParam);
+
+            var parse = lambda.Compile();
+            Parser.Register(parser.Key, parse);
         }
     }
 
-    public object this[int i] => GetValue(i);
-    public object this[string name] => GetValue(GetOrdinal(name));
-    public bool GetBoolean(int i) => bool.Parse(GetValueOrThrow(i));
+    public object this[int i]
+        => GetValue(i);
+    public object this[string name]
+        => GetValue(GetOrdinal(name));
+    public bool GetBoolean(int i)
+        => GetNumeric<bool>(i);
     public byte GetByte(int i) => throw new NotImplementedException();
     public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
     public char GetChar(int i) => throw new NotImplementedException();
@@ -51,72 +53,90 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public IDataReader GetData(int i) => throw new NotImplementedException();
 
     public DateTime GetDateTime(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
-            return DateTime.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
-        return DateTime.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetTemporal<DateTime>(i);
 
     public DateOnly GetDate(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
-            return DateOnly.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
-        return DateOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetTemporal<DateOnly>(i);
 
     public TimeOnly GetTime(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
-            return TimeOnly.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
-        return TimeOnly.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetTemporal<TimeOnly>(i);
 
     public DateTimeOffset GetDateTimeOffset(int i)
+        => GetTemporal<DateTimeOffset>(i);
+
+    protected T GetTemporal<T>(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
-            return DateTimeOffset.ParseExact(GetValueOrThrow(i), format.Pattern, format.Culture);
-        return DateTimeOffset.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+        try
+        {
+            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
+                return value;
+
+            if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor)
+            {
+                Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                return Parser.Parse<T>(i, GetValueOrThrow(i));
+            }
+
+            return Parser.Parse<T>(GetValueOrThrow(i));
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
     }
 
-    public Guid GetGuid(int i) => Guid.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+    public Guid GetGuid(int i)
+    {
+        try
+        {
+            if (Parser.TryParse<Guid>(i, GetValueOrThrow(i), out var value))
+                return value;
+
+            return Parser.Parse<Guid>(GetValueOrThrow(i));
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
+    }
 
     public decimal GetDecimal(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return decimal.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return decimal.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetNumeric<decimal>(i);
 
     public double GetDouble(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return double.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return double.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetNumeric<double>(i);
 
     public float GetFloat(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return float.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return float.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetNumeric<float>(i);
+
     public short GetInt16(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return short.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return short.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetNumeric<short>(i);
+
     public int GetInt32(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return int.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return int.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
-    }
+        => GetNumeric<int>(i);
+
     public long GetInt64(int i)
+        => GetNumeric<long>(i);
+
+    protected T GetNumeric<T>(int i)
     {
-        if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
-            return long.Parse(GetValueOrThrow(i), format.Style, format.Culture);
-        return long.Parse(GetValueOrThrow(i), CultureInfo.InvariantCulture);
+        try
+        {
+            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
+                return value;
+
+            if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor)
+            {
+                Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                return Parser.Parse<T>(i, GetValueOrThrow(i));
+            }
+
+            return Parser.Parse<T>(GetValueOrThrow(i));
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
     }
 
     protected virtual object GetMissingField()
@@ -129,19 +149,26 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         if (i >= Record!.FieldSpans.Length)
             return GetMissingField();
 
-        if (!TryGetFieldDescriptor(i, out var field))
+        if (IsNull(i))
+            throw new InvalidCastException($"Field index '{i}' is null.");
+
+        static bool IsFormatDescriptor(FieldDescriptor field)
+            => field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
+
+        TryGetFieldDescriptor(i, out var field);
+        ParseSpan<object>? parse = null;
+        if (!Parser.TryGetParser(i, out parse))
+            if (field is not null && IsFormatDescriptor(field))
+                parse = RegisterFieldParser(i, field);
+            else if (field is not null)
+                Parser.TryGetParser(field.RuntimeType, out parse);
+
+        if (parse is null)
             return GetString(i);
 
-        var parse = field.Parse is not null
-                        ? FieldParsers.TryGetValue(i, out var fparse)
-                            ? (int i) => fparse.Invoke(GetValueOrThrow(i).Value.ToString())
-                            : RegisterParser(i, field.Parse)
-                        : TypeParsers.TryGetParser(field.RuntimeType, out var dlg)
-                            ? (int i) => dlg.Invoke(i)!
-                            : RegisterFunction(field);
         try
         {
-            var value = parse!(i);
+            var value = parse.Invoke(GetValueOrThrow(i));
             return value;
         }
         catch (TargetInvocationException ex)
@@ -150,48 +177,28 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         }
     }
 
-    public object GetValue(string name)
-        => GetValue(GetOrdinal(name));
-
-    private Func<int, object>? RegisterParser(int i, ParseFunction parse)
+    private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
     {
-        FieldParsers.Add(i, parse);
-        return (int i) => parse.Invoke(GetValueOrThrow(i).Value.ToString());
-    }
-
-    private Func<int, object>? RegisterFunction(FieldDescriptor field)
-    {
-        var type = typeof(TypeParserLocator<>).MakeGenericType(field.RuntimeType);
-        var locator = (ITypeParserLocator)(Activator.CreateInstance(type) ?? throw new InvalidOperationException());
-        var parameters = GetParameters(field.Format).ToArray();
-
-        IEnumerable<object> GetParameters(object? format)
+        ParseSpan<object>? parse = null;
+        if (field.Parse is not null)
         {
-            switch (format)
-            {
-                case TemporalFormatDescriptor temporalFormat:
-                    yield return temporalFormat.Pattern;
-                    yield return temporalFormat.Culture;
-                    break;
-
-                case NumericFormatDescriptor numericFormat:
-                    yield return numericFormat.Style;
-                    yield return numericFormat.Culture;
-                    break;
-                case CustomFormatDescriptor customFormat:
-                    yield return customFormat.Pattern;
-                    yield return customFormat.Culture;
-                    break;
-                default: break;
-            }
+            parse = (ReadOnlySpan<char> span) => field.Parse.Invoke(span.ToString());
+            Parser.Register(i, parse);
         }
-        var func = locator.Locate(parameters);
-        string getValue(int i) => GetValueOrThrow(i).Value.ToString();
+        else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
+        {
+            Parser.Register(i, field.RuntimeType, CreateParser(field.RuntimeType, field));
+            if (!Parser.TryGetParser(i, out parse))
+                throw new InvalidOperationException($"No parser registered for index '{i}'.");
+        }
+        else
+            throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
 
-        var parse = (int i) => func.Invoke(getValue(i))!;
-        TypeParsers.Register(field!.RuntimeType, parse);
         return parse;
     }
+
+    public object GetValue(string name)
+        => GetValue(GetOrdinal(name));
 
     protected virtual bool IsNullFieldValue<T>(int i)
     {
@@ -207,10 +214,23 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     {
         if (IsNullFieldValue<T>(i))
             return default!;
-        if (TypeParsers.TryGetParser<T>(out var func))
-            return func.Invoke(i);
+        try
+        {
+            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
+                return value;
+            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+            {
+                RegisterFieldParser(i, field);
+                return Parser.Parse<T>(i, GetValueOrThrow(i));
+            }
+            return Parser.Parse<T>(GetValueOrThrow(i));
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
 
-        throw new NotImplementedException($"No function registered for type {typeof(T).Name}");
+        throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
     }
 
     public T GetFieldValue<T>(int i, IFormatProvider format) where T : IParsable<T>
@@ -221,7 +241,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         return T.Parse(GetValueOrThrow(i).Value.ToString(), format);
     }
 
-    public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format=null) where T : IParsable<T>
+    public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format = null) where T : IParsable<T>
     {
         if (IsNullFieldValue<T>(i))
             return default!;
@@ -256,4 +276,142 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
 
     public bool IsDBNull(int i)
         => IsNull(i);
+
+    public T?[] GetArray<T>(int i)
+    {
+        if (i >= FieldCount)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i >= Record!.FieldSpans.Length)
+            return [];
+
+        if (Record!.FieldSpans[i].Children is null)
+            throw new NotImplementedException();
+
+        if (!Parser.TryGetParser<T>(i, out var parse))
+        {
+            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+            {
+                RegisterFieldParser(i, field);
+                parse = Parser.GetParser<T>(i);
+            }
+            else if (!Parser.TryGetParser(out parse))
+                throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+        }
+
+        var array = (T?[])Array.CreateInstance(typeof(T?), Record!.FieldSpans[i].Children!.Length);
+        for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
+        {
+            var child = Record!.FieldSpans[i].Children![j];
+            array[j] = IsNullFieldValue<T>(i)
+                        ? default
+                        : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+        }
+        return array;
+    }
+
+    public object?[] GetArray(int i)
+    {
+        if (i >= FieldCount)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i >= Record!.FieldSpans.Length)
+            return [];
+
+        if (Record!.FieldSpans[i].Children is null)
+            throw new NotImplementedException();
+
+        if (!Parser.TryGetParser(i, out var parse))
+        {
+            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+            {
+                RegisterFieldParser(i, field);
+                Parser.TryGetParser(i, out parse);
+            }
+            else if (!Parser.TryGetParser(out parse))
+                parse = (ReadOnlySpan<char> span) => span.ToString();
+        }
+
+        var array = (object?[])Array.CreateInstance(typeof(object), Record!.FieldSpans[i].Children!.Length);
+        for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
+        {
+            var child = Record!.FieldSpans[i].Children![j];
+            array[j] = IsNullFieldValue<object>(i)
+                ? null
+                : parse!(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+        }
+        return array;
+    }
+
+    public T? GetArrayItem<T>(int i, int j)
+    {
+        if (i >= FieldCount)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i >= Record!.FieldSpans.Length)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' doesn't contain an item at position '{j}'.");
+
+        if (Record!.FieldSpans[i].Children is null)
+            throw new NotImplementedException();
+        if (j >= Record!.FieldSpans[i].Children!.Length)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' doesn't contain an item at position '{j}'.");
+
+        if (!Parser.TryGetParser<T>(i, out var parse))
+        {
+            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+            {
+                RegisterFieldParser(i, field);
+                parse = Parser.GetParser<T>(i);
+            }
+            else if (!Parser.TryGetParser(out parse))
+                throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+        }
+
+        var child = Record!.FieldSpans[i].Children![j];
+        return IsNullFieldValue<T>(i)
+                ? default
+                : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+    }
+
+    private static Delegate CreateParser(Type type, FieldDescriptor field)
+    {
+        var locatorType = typeof(TypeParserLocator<>).MakeGenericType(type);
+        var locator = (ITypeParserLocator)(Activator.CreateInstance(locatorType)
+            ?? throw new InvalidOperationException());
+
+        var parameters = GetParameters(field.Format).ToArray();
+        var func = locator.Locate(parameters); // Func<string, object>
+
+        // Build: (ReadOnlySpan<char> span) => (T)func(span.ToString())
+        var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+        var funcConst = Expression.Constant(func);
+        var toStringCall = Expression.Call(spanParam, typeof(ReadOnlySpan<char>).GetMethod("ToString", Type.EmptyTypes)!);
+        var invokeFunc = Expression.Invoke(funcConst, toStringCall);
+        var castResult = Expression.Convert(invokeFunc, type);
+
+        var delegateType = typeof(ParseSpan<>).MakeGenericType(type);
+        var lambda = Expression.Lambda(delegateType, castResult, spanParam);
+        return lambda.Compile();
+
+        static IEnumerable<object> GetParameters(object? format)
+        {
+            switch (format)
+            {
+                case TemporalFormatDescriptor temporalFormat:
+                    yield return temporalFormat.Pattern;
+                    yield return temporalFormat.Culture;
+                    yield return DateTimeStyles.None;
+                    break;
+
+                case NumericFormatDescriptor numericFormat:
+                    yield return numericFormat.Style;
+                    yield return numericFormat.Culture;
+                    break;
+
+                case CustomFormatDescriptor customFormat:
+                    yield return customFormat.Pattern;
+                    yield return customFormat.Culture;
+                    break;
+
+                default: break;
+            }
+        }
+    }
 }

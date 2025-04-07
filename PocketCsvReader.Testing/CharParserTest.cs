@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using Pidgin;
 
 namespace PocketCsvReader.Testing;
 public class CharParserTest
@@ -277,5 +278,47 @@ public class CharParserTest
             if (parser.Parse(c) == ParserState.Record)
                 recordCount++;
         Assert.That(recordCount, Is.EqualTo(2));
+    }
+
+    [TestCase("[foo,bar];", '[', ']', ',')]
+    [TestCase("<foo\tbar>;", '<', '>', '\t')]
+    [TestCase("{foo|bar};", '{', '}', '|')]
+    [TestCase("(foo^bar);", '(', ')', '^')]
+    public void Parse_Array_PrefixSuffixSkipped(string value, char prefix, char suffix, char delimiter)
+    {
+        var parser = new CharParser(new CsvProfile(
+            new DialectDescriptor() { Header = false, Delimiter = ';', ArrayDelimiter = delimiter, ArrayPrefix = prefix, ArraySuffix = suffix }));
+        var result = string.Empty;
+        foreach (var c in value)
+            if (parser.Parse(c) == ParserState.Field)
+                result = value.Substring(parser.ValueStart, parser.ValueLength);
+        Assert.That(result, Does.StartWith("foo"));
+        Assert.That(result, Does.EndWith("bar"));
+    }
+
+    [TestCase("foo,bar;", ',')]
+    public void Parse_Array_WithoutPrefixSuffix(string value, char delimiter)
+    {
+        var parser = new CharParser(new CsvProfile(
+            new DialectDescriptor() { Header = false, Delimiter = ';', ArrayDelimiter = delimiter}));
+        var result = string.Empty;
+        foreach (var c in value)
+            if (parser.Parse(c) == ParserState.Field)
+                result = value.Substring(parser.ValueStart, parser.ValueLength);
+        Assert.That(result, Does.StartWith("foo"));
+        Assert.That(result, Does.EndWith("bar"));
+    }
+
+    [TestCase("'foo';", "foo")]
+    [TestCase("[foo];", "foo")]
+    public void Parse_SurrounderChars_CorrectField(string value, string expected)
+    {
+        var parser = new CharParser(new CsvProfile(
+            new DialectDescriptor() { QuoteChar = '\'', Delimiter = ';', ArrayDelimiter = ',', ArrayPrefix = '[', ArraySuffix = ']' }));
+        var result = string.Empty;
+        foreach (var c in value)
+            if (parser.Parse(c) == ParserState.Field)
+                result = value.Substring(parser.ValueStart, parser.ValueLength);
+        Assert.That(result, Is.EqualTo("foo"));
     }
 }
