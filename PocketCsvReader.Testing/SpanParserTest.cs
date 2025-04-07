@@ -43,7 +43,7 @@ public class SpanParserTest
         parser.Register(s =>
         {
             var parts = s.ToString().Split(',');
-            return decimal.Parse(parts[0]) + decimal.Parse(parts[1]) / 100;
+            return decimal.Parse(parts[0]) + (decimal.Parse(parts[1]) / 100);
         });
         var result = parser.Parse<decimal>(span);
         Assert.That(result, Is.EqualTo(125.17m));
@@ -57,12 +57,12 @@ public class SpanParserTest
         parser.Register(s =>
         {
             var parts = s.ToString().Split(',');
-            return decimal.Parse(parts[0]) + decimal.Parse(parts[1]) / 100;
+            return decimal.Parse(parts[0]) + (decimal.Parse(parts[1]) / 100);
         });
         parser.Register(1, s =>
         {
             var parts = s.ToString().Split('#');
-            return decimal.Parse(parts[1]) + decimal.Parse(parts[0]) / 1000;
+            return decimal.Parse(parts[1]) + (decimal.Parse(parts[0]) / 1000);
         });
         var result = parser.Parse<decimal>(1, span);
         Assert.That(result, Is.EqualTo(17.125m));

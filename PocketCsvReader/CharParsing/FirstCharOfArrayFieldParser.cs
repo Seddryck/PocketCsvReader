@@ -12,7 +12,8 @@ internal class FirstCharOfArrayFieldParser : IInternalCharParser
     private CharOfArrayFieldParser ArrayParser { get; }
     public FirstCharOfArrayFieldParser(CharParser parser, CharOfArrayFieldParser arrayParser)
         => (Parser, ArrayParser)
-                = (parser, arrayParser);
+                = (parser ?? throw new ArgumentNullException(nameof(parser)),
+                    arrayParser ?? throw new ArgumentNullException(nameof(arrayParser)));
 
     public virtual ParserState Parse(char c)
     {

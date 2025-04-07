@@ -42,7 +42,7 @@ internal class SpanParser
     {
         ArgumentNullException.ThrowIfNull(dlg);
         if (!IsParseSpan(dlg, out var parseType) || type != parseType)
-            throw new ArgumentException(nameof(dlg), "Unexpected delegate");
+            throw new ArgumentException("Unexpected delegate.", nameof(dlg));
         TypeParsers[type] = dlg;
     }
 
@@ -56,7 +56,7 @@ internal class SpanParser
     {
         ArgumentNullException.ThrowIfNull(dlg);
         if (!IsParseSpan(dlg, out var parseType) || type != parseType)
-            throw new ArgumentException(nameof(dlg), "Unexpected delegate");
+            throw new ArgumentException("Unexpected delegate.", nameof(dlg));
         FieldParsers[index] = dlg;
     }
 
@@ -143,9 +143,6 @@ internal class SpanParser
         if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(ParseSpan<>))
             throw new ArgumentException("Delegate must be of type ParseSpan<T>");
 
-        Type returnType = type.GetGenericArguments()[0]; // This is T
-
-        // span => (object)((ParseSpan<T>)del)(span)
         var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
         var delConst = Expression.Constant(parse, type);
 

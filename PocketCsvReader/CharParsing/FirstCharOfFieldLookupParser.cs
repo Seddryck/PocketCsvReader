@@ -72,7 +72,7 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
         }
 
 
-        if (EscapeChar.HasValue && c == EscapeChar)
+        if (EscapeChar.HasValue && c == EscapeChar.Value)
         {
             Parser.Switch(Parser.AfterEscapeChar);
             return ParserState.Continue;
@@ -80,6 +80,7 @@ internal class FirstCharOfFieldLookupParser : IInternalCharParser
 
         if (ArrayPrefix.HasValue && c == ArrayPrefix.Value)
         {
+            Parser.SetArrayField();
             Parser.Switch(Parser.FirstCharOfArrayField);
             return ParserState.Continue;
         }

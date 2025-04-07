@@ -71,7 +71,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor format)
+            if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor)
             {
                 Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
@@ -125,7 +125,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor format)
+            if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor)
             {
                 Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
@@ -370,7 +370,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         return parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
     }
 
-    private Delegate CreateParser(Type type, FieldDescriptor field)
+    private static Delegate CreateParser(Type type, FieldDescriptor field)
     {
         var locatorType = typeof(TypeParserLocator<>).MakeGenericType(type);
         var locator = (ITypeParserLocator)(Activator.CreateInstance(locatorType)

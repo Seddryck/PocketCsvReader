@@ -76,13 +76,6 @@ public abstract class BaseRawRecord<P> where P : IProfile
         throw new NotImplementedException("Schema matching is not defined.");
     }
 
-    protected FieldDescriptor? GetOptionalFieldDescriptor(int i)
-    {
-        if (TryGetFieldDescriptor(i, out var field))
-            return field;
-        return null;
-    }
-
     protected bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
     {
         if (Profile.Schema is null)

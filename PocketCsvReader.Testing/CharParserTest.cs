@@ -130,13 +130,13 @@ public class CharParserTest
         Assert.That(result, Is.EqualTo(count));
     }
 
-    //[TestCase("foo;", "foo")]
+    [TestCase("foo;", "foo")]
     [TestCase("'foo';", "foo")]
-    //[TestCase("'fo;o';", "fo;o")]
-    //[TestCase("'f;o;o';", "f;o;o")]
-    //[TestCase("';foo';", ";foo")]
-    //[TestCase("'f\r\noo';", "f\r\noo")]
-    //[TestCase("'f\ro\no';", "f\ro\no")]
+    [TestCase("'fo;o';", "fo;o")]
+    [TestCase("'f;o;o';", "f;o;o")]
+    [TestCase("';foo';", ";foo")]
+    [TestCase("'f\r\noo';", "f\r\noo")]
+    [TestCase("'f\ro\no';", "f\ro\no")]
     public void Parse_QuotedField_CorrectField(string value, string expected)
     {
         var parser = new CharParser(new CsvProfile(new DialectDescriptor() { QuoteChar = '\'', Delimiter = ';', LineTerminator = "\r\n" }));

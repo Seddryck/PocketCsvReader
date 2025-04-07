@@ -15,9 +15,11 @@ internal class CharOfArrayFieldParser : IInternalCharParser
     {
         Parser = parser;
         ArraySuffix = parser.Profile.Dialect.ArraySuffix;
+        if (!parser.Profile.Dialect.ArrayDelimiter.HasValue)
+            throw new InvalidOperationException("Array delimiter must be specified to parse array fields.");
         var dialect = parser.Profile.Dialect with
         {
-            Delimiter = parser.Profile.Dialect.ArrayDelimiter!.Value,
+            Delimiter = parser.Profile.Dialect.ArrayDelimiter.Value,
             ArrayDelimiter = null,
             ArrayPrefix = null,
             ArraySuffix = null
@@ -38,8 +40,9 @@ internal class CharOfArrayFieldParser : IInternalCharParser
             var childState = ArrayParser.Parse(c);
             if (childState == ParserState.Field)
                 Parser.AddChild(CreateFieldSpan());
+            if (childState == ParserState.Error)
+                return ParserState.Error;
         }
-            
         return ParserState.Continue;
     }
 
