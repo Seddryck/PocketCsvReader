@@ -78,7 +78,7 @@ internal class SpanParser
         if (TypeParsers.TryGetValue(typeof(T), out var dlg))
         {
             if (dlg is not ParseSpan<T>)
-                throw new InvalidOperationException();
+                throw new InvalidOperationException($"Parser for type {typeof(T).Name} is not a ParseSpan<{typeof(T).Name}> but a {dlg.GetType().Name}");
             parse = (ParseSpan<T>)dlg!;
             return true;
         }
@@ -191,26 +191,7 @@ internal class SpanParser
         return false;
     }
 
-    private static readonly Lazy<SpanParser> _defaultParser = new(() =>
-    {
-        var p = new SpanParser();
-        p.Register(s => s.ToString());
-        p.Register(s => s[0]);
-        p.Register(Guid.Parse);
-        p.Register(bool.Parse);
-        p.Register((s) => byte.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => short.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => int.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => long.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => decimal.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => float.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => double.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => DateTime.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => DateOnly.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => TimeOnly.Parse(s, CultureInfo.InvariantCulture));
-        p.Register((s) => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture));
-        return p;
-    });
+    private static readonly Lazy<SpanParser> _defaultParser = new(() => new());
 
     public static SpanParser Default
         => _defaultParser.Value;

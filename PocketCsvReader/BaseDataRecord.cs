@@ -160,8 +160,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         if (!Parser.TryGetParser(i, out parse))
             if (field is not null && IsFormatDescriptor(field))
                 parse = RegisterFieldParser(i, field);
-        else if (field is not null)
-            Parser.TryGetParser(field.RuntimeType, out parse);
+            else if (field is not null)
+                Parser.TryGetParser(field.RuntimeType, out parse);
 
         if (parse is null)
             return GetString(i);
@@ -292,7 +292,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
             {
                 RegisterFieldParser(i, field);
-                parse =  Parser.GetParser<T>(i);
+                parse = Parser.GetParser<T>(i);
             }
             else if (!Parser.TryGetParser(out parse))
                 throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
@@ -302,9 +302,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
         {
             var child = Record!.FieldSpans[i].Children![j];
-            if (IsNullFieldValue<T>(i))
-                array[j] = default;
-            array[j] = parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+            array[j] = IsNullFieldValue<T>(i)
+                        ? default
+                        : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
         }
         return array;
     }
@@ -334,14 +334,14 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
         {
             var child = Record!.FieldSpans[i].Children![j];
-            if (IsNullFieldValue<object>(i))
-                array[j] = null!;
-            array[j] = parse!(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+            array[j] = IsNullFieldValue<object>(i)
+                ? null
+                : parse!(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
         }
         return array;
     }
 
-    public T GetArrayItem<T>(int i, int j)
+    public T? GetArrayItem<T>(int i, int j)
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
@@ -365,9 +365,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         }
 
         var child = Record!.FieldSpans[i].Children![j];
-        if (IsNullFieldValue<T>(i))
-            return default!;
-        return parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+        return IsNullFieldValue<T>(i)
+                ? default
+                : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
     }
 
     private static Delegate CreateParser(Type type, FieldDescriptor field)
