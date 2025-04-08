@@ -36,3 +36,6 @@ updates:
       Microsoft.Extensions:
           patterns:
             - "Microsoft.Extensions*"
+      Chrononuensis:
+          patterns:
+            - "Chrononuensis*"
