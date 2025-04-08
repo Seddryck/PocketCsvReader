@@ -49,7 +49,7 @@ internal class TypeParserLocator<T> : ITypeParserLocator
 
         if (matching.Count == 0)
         {
-            if (expected.Length > 2)
+            if (expected.Length > 0)
                 return FindMethod(expected[0..(expected.Length-1)]);
             throw new InvalidOperationException($"No method found for type {Target.Name}");
         }
