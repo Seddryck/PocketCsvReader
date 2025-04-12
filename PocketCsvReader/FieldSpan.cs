@@ -7,11 +7,16 @@ using System.Threading.Tasks;
 namespace PocketCsvReader;
 public record struct FieldSpan
 (
-    int ValueStart,
-    int ValueLength,
-    bool WasQuoted = false,
-    bool IsEscaped = false,
-    int LabelStart = 0,
-    int LabelLength = 0,
+    SpanInfo Value,
+    SpanInfo Label,
     FieldSpan[]? Children = null
 );
+
+public record struct SpanInfo
+(
+    int Start,
+    int Length,
+    bool WasQuoted = false,
+    bool IsEscaped = false
+)
+{ }

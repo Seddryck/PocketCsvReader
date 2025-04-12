@@ -17,7 +17,7 @@ public readonly ref struct RecordSpan
     }
 
     public ReadOnlySpan<char> Slice(int i)
-        => Span.Length > 0 ? Span.Slice(FieldSpans[i].ValueStart, FieldSpans[i].ValueLength) : throw new InvalidOperationException();
+        => Span.Length > 0 ? Span.Slice(FieldSpans[i].Value.Start, FieldSpans[i].Value.Length) : throw new InvalidOperationException();
 
     public RecordMemory AsMemory()
         => new RecordMemory(Span, FieldSpans);

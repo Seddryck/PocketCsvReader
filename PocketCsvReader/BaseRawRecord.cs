@@ -102,10 +102,10 @@ public abstract class BaseRawRecord<P> where P : IProfile
 
 #if DEBUG
     public bool IsQuotedField(int i)
-        => Record!.FieldSpans[i].WasQuoted;
+        => Record!.FieldSpans[i].Value.WasQuoted;
 
     public bool IsEscapedField(int i)
-        => Record!.FieldSpans[i].IsEscaped;
+        => Record!.FieldSpans[i].Value.IsEscaped;
 #endif
 
     public abstract string GetRawString(int i);

@@ -1,53 +1,37 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-internal class LineTerminatorParser : IInternalCharParser
+struct LineTerminatorParser : IParser
 {
-    public int Index { get; private set; } = 1;
-    private readonly int _length;
+    private readonly IParserContext _ctx;
+    private readonly IParserStateController _controller;
 
-    protected CharParser Parser { get; set; }
+    private readonly char[] _lineTerminators;
+    private int _index = 0;
 
-    public LineTerminatorParser(CharParser parser, int length)
-        => (Parser, _length) = (parser, length);
+    public LineTerminatorParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
+        => (_ctx, _controller, _lineTerminators)
+            = (ctx, controller, lineTerminator.ToCharArray());
 
-    protected void Reset()
-        => Index = 1;
-
-    private bool IsLast()
-        => Index == _length;
-
-    public ParserState Parse(char c)
+    public ParserState Parse(char c, int pos)
     {
-        if (c == Parser.Profile.Dialect.LineTerminator[Index])
+        if (c == _lineTerminators[++_index])
         {
-            Index++;
-            if (IsLast())
-            {
-                if (Parser.Position < 0)
-                    Parser.SetFieldEnd(Parser.Position);
-                Parser.Switch(Parser.FirstCharOfRecord);
-                Reset();
-                return NextState();
-            }
+            if (_index == _lineTerminators.Length - 1)
+                return ParserState.Record;
             return ParserState.Continue;
         }
-
-        return SetBack();
+        else
+        {
+            _controller.SwitchBack();
+            return ParserState.Continue;
+        }
     }
 
-    public virtual ParserState NextState()
-        => Parser.IsHeaderRow ? ParserState.Header : ParserState.Record;
-
-    public virtual ParserState SetBack()
-    {
-        Reset();
-        Parser.Switch(Parser.CharOfField);
-        return ParserState.Continue;
-    }
+    public ParserState ParseEof(int pos)
+        => ParserState.Error;
 }

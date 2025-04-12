@@ -312,7 +312,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = IsNullFieldValue<T>(i)
                         ? default
-                        : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                        : parse(GetValueOrThrow(i).Value.Slice(child.Value.Start, child.Value.Start));
         }
         return array;
     }
@@ -344,7 +344,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = IsNullFieldValue<object>(i)
                 ? null
-                : parse!(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                : parse!(GetValueOrThrow(i).Value.Slice(child.Value.Start, child.Value.Length));
         }
         return array;
     }
@@ -375,7 +375,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         var child = Record!.FieldSpans[i].Children![j];
         return IsNullFieldValue<T>(i)
                 ? default
-                : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                : parse(GetValueOrThrow(i).Value.Slice(child.Value.Start, child.Value.Length));
     }
 
     private static Delegate CreateParser(Type type, FieldDescriptor field)

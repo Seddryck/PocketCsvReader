@@ -24,7 +24,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         => Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
 
     public override string GetRawString(int i)
-        => Record!.FieldSpans[i].WasQuoted
+        => Record!.FieldSpans[i].Value.WasQuoted
             ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
             : Record!.Slice(i).ToString();
 
@@ -39,7 +39,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
                 sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, (Profile.Schema is null ? null : GetFieldDescriptor(i))?.Sequences)
                                             , new FieldEscaper(Profile)
                 ));
-            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].IsEscaped, Record!.FieldSpans[i].WasQuoted);
+            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].Value.IsEscaped, Record!.FieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
             return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);

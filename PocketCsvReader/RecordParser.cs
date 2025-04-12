@@ -33,7 +33,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
             var headers = new string[fieldSpans.Count()];
             var index = 0;
             foreach (var fieldSpan in fieldSpans)
-                headers[index++] = span.Slice(fieldSpan.ValueStart, fieldSpan.ValueLength).ToString();
+                headers[index++] = span.Slice(fieldSpan.Value.Start, fieldSpan.Value.Length).ToString();
             return headers;
         });
 
