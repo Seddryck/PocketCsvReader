@@ -10,7 +10,16 @@ public record struct FieldSpan
     SpanInfo Value,
     SpanInfo Label,
     FieldSpan[]? Children = null
-);
+)
+{
+    public FieldSpan(int startValue, int lengthValue)
+        : this (new SpanInfo(startValue, lengthValue), default, null)
+    { }
+
+    public FieldSpan(int startValue, int lengthValue, bool wasQuoted, bool isEscaped)
+        : this(new SpanInfo(startValue, lengthValue, wasQuoted, isEscaped), default, null)
+    { }
+}
 
 public record struct SpanInfo
 (
