@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using PocketCsvReader.FieldParsing;
 
-namespace PocketCsvReader.Testing.FieldParsing;
+namespace PocketCsvReader.Testing.ValueReader;
 public class TypeParserLocatorTest
 {
     [Test]

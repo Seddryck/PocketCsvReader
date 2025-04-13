@@ -61,7 +61,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         if (RowCount == 0 && !RecordParser!.Profile.Dialect.Header)
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length)], "field_");
 
-        if (rawRecord.FieldSpans.Length == 0)
+        if ((rawRecord.FieldSpans?.Length ?? 0) == 0)
         {
             Record = RecordMemory.Empty;
             return false;

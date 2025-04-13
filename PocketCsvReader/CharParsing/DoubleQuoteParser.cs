@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-internal struct DoubleQuoteParser : IParser
+internal readonly struct DoubleQuoteParser : IParser
 {
     private readonly ParserStateFn _parse;
     private readonly IParserContext _ctx;
@@ -45,5 +45,14 @@ internal struct DoubleQuoteParser : IParser
     }
 
     public ParserState ParseEof(int pos)
-        => ParserState.Error;
+        => _ctx.IsComplete ? ParserState.Record : ParserState.Error;
+
+    public void Reset()
+    {
+        _ctx.Reset();
+        _controller.Reset();
+    }
+
+    public ref FieldSpan Result
+        => ref _ctx.Span;
 }

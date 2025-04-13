@@ -34,4 +34,11 @@ struct LineTerminatorParser : IParser
 
     public ParserState ParseEof(int pos)
         => ParserState.Error;
+    public void Reset()
+    {
+        _index = 0;
+    }
+
+    public ref FieldSpan Result
+        => ref _ctx.Span;
 }

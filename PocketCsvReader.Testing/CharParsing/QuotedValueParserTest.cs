@@ -18,7 +18,7 @@ public class QuotedValueParserTest
         var context = new Mock<IParserContext>(MockBehavior.Loose);
         context.SetupGet(x => x.Escaping).Returns(false);
 
-        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\'');
+        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\'');
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
@@ -35,7 +35,7 @@ public class QuotedValueParserTest
         var escapes = new Queue<bool>([false, false, true, false, false, false]);
         context.SetupGet(x => x.Escaping).Returns(escapes.Dequeue);
 
-        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\'', '\\');
+        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\'', "\r\n", '\\');
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
@@ -54,7 +54,7 @@ public class QuotedValueParserTest
         var escapes = new Queue<bool>([false, false, true, false, false, true, false, false]);
         context.SetupGet(x => x.Escaping).Returns(escapes.Dequeue);
 
-        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\'', '\\');
+        var parser = new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\'', "\r\n", '\\');
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 

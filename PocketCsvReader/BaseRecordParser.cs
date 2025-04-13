@@ -4,20 +4,21 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
+using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
 public abstract class BaseRecordParser<P> : IDisposable
 {
     public P Profile { get; }
-    protected ICharParser CharParser { get; }
+    protected IParser FieldParser { get; }
     protected IBufferReader Reader { get; }
     protected ReadOnlyMemory<char> Buffer { get; private set; }
     protected ArrayPool<char>? Pool { get; }
 
     private int? FieldsCount { get; set; }
 
-    protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, ICharParser> parserFactory)
-        => (Profile, Reader, Pool, CharParser) = (profile, buffer, pool, parserFactory(profile));
+    protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
+        => (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
 
     public virtual bool IsEndOfFile(out RecordSpan record)
     {
@@ -25,6 +26,7 @@ public abstract class BaseRecordParser<P> : IDisposable
         var eof = false;
         var fieldList = new List<FieldSpan>(FieldsCount ?? 20);
         var longSpan = Span<char>.Empty;
+        var longSpanLength = 0;
 
         if (Buffer.Length == 0)
         {
@@ -33,20 +35,26 @@ public abstract class BaseRecordParser<P> : IDisposable
             eof = Buffer.Length == 0;
         }
 
+        if (eof)
+        {
+            record = new();
+            return true;
+        }
+
         var span = Buffer.Span;
         var bufferSize = span.Length;
 
         while (!eof && index < bufferSize)
         {
             char c = span[index];
-            var state = CharParser.Parse(c);
+            var state = FieldParser.Parse(c, index + longSpanLength);
             if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
             {
-                fieldList.Add(CreateFieldSpan());
+                fieldList.Add(FieldParser.Result);
+                FieldParser.Reset();
 
                 if (state == ParserState.Record || state == ParserState.Header)
                 {
-                    CharParser.Reset();
                     Buffer = Buffer.Slice(index + 1);
                     FieldsCount ??= fieldList.Count;
                     record = CreateRecordSpan(
@@ -62,7 +70,10 @@ public abstract class BaseRecordParser<P> : IDisposable
             if (++index == bufferSize)
             {
                 if (state == ParserState.Continue || state == ParserState.Field)
+                {
                     longSpan = longSpan.Concat(span, Pool);
+                    longSpanLength = longSpan.Length;
+                }
 
                 if (!Reader.IsEof)
                 {
@@ -81,11 +92,11 @@ public abstract class BaseRecordParser<P> : IDisposable
             }
         }
 
-        switch (CharParser.ParseEof())
+        switch (FieldParser.ParseEof(longSpan.Length))
         {
             case ParserState.Header:
             case ParserState.Record:
-                fieldList.Add(CreateFieldSpan());
+                fieldList.Add(FieldParser.Result);
                 record = CreateRecordSpan(
                         longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
                         , [.. fieldList]);
@@ -99,9 +110,6 @@ public abstract class BaseRecordParser<P> : IDisposable
                 throw new InvalidOperationException($"Invalid state at end-of-file.");
         }
     }
-
-    protected virtual FieldSpan CreateFieldSpan()
-        => new FieldSpan();
 
     protected virtual RecordSpan CreateRecordSpan(ReadOnlySpan<char> span, FieldSpan[] fields)
         => new(span, fields);
@@ -128,11 +136,11 @@ public abstract class BaseRecordParser<P> : IDisposable
             if (bufferSize == 0)
                 break;
 
-            if (CharParser.Parse(span[index]) == ParserState.Record)
+            if (FieldParser.Parse(span[index], index) == ParserState.Record)
                 count++;
             index++;
         }
-        if (CharParser.ParseEof() == ParserState.Record)
+        if (FieldParser.ParseEof(index) == ParserState.Record)
             count++;
 
         return count;

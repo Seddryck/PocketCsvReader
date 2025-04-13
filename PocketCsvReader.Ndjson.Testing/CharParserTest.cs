@@ -81,7 +81,7 @@ public class CharParserTest
     //[TestCase(@"{""foo"": ""\""bar\""""}")]
     //public void Parse_EscapeQuoteInQuotedField_EscapedSet(string value)
     //{
-    //    var parser = new CharParser(NdjsonProfile.Default);
+    //    var parser = new FieldParser(NdjsonProfile.Default);
     //    foreach (var c in value)
     //        if (parser.Parse(c) == ParserState.Field)
     //        {

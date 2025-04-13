@@ -34,13 +34,18 @@ class FieldContext : IParserContext
 
     public void StartValue(int pos, bool quoted)
     {
-        _span.Value = _span.Value with { Start = quoted ? pos + 1 : pos };
-        _span.Value = _span.Value with { WasQuoted = quoted };
+        _span.Value = _span.Value with { Start = quoted ? pos + 1 : pos, WasQuoted = quoted, IsStarted = true };
     }
 
     public void EndValue(int pos)
     {
         _span.Value = _span.Value with { Length = pos - _span.Value.Start + 1 };
+        _complete = true;
+    }
+
+    public void EmptyValue()
+    {
+        _span.Value = _span.Value with { Length = 0 };
         _complete = true;
     }
 

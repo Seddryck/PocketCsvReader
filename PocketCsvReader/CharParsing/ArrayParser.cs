@@ -69,4 +69,13 @@ struct ArrayParser : IParser
 
     public ParserState ParseEof(int pos)
         => ParserState.Error;
+
+    public void Reset()
+    {
+        _ctx.Reset();
+        _controller.Reset();
+    }
+
+    public ref FieldSpan Result
+        => ref _ctx.Span;
 }

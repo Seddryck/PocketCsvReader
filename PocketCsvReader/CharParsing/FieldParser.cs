@@ -33,4 +33,7 @@ class FieldParser : IParser
         Context.Reset();
         Controller.Reset();
     }
+
+    public ref FieldSpan Result
+        => ref Context.Span;
 }

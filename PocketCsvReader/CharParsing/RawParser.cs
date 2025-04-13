@@ -54,6 +54,14 @@ internal readonly struct RawParser : IParser
     public ParserState ParseEof(int pos)
     {
         _ctx.EndValue(pos - 1);
-        return ParserState.Field;
+        return ParserState.Record;
     }
+    public void Reset()
+    {
+        _ctx.Reset();
+        _controller.Reset();
+    }
+
+    public ref FieldSpan Result
+        => ref _ctx.Span;
 }

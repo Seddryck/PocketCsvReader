@@ -13,6 +13,7 @@ public interface IParserStateController
     void SwitchToQuoted();
     void SwitchToRaw();
     void SwitchToArray();
+    void SwitchToComment();
     void SwitchToLineTerminator();
     void SwitchBack();
     void SwitchUp();

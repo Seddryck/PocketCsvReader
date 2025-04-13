@@ -12,6 +12,7 @@ public interface IParserContext
 
     void StartValue(int pos, bool quoted);
     void EndValue(int pos);
+    void EmptyValue();
     IParserContext? Parent { get; }
     void AddChild(FieldSpan span);
 

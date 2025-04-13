@@ -9,11 +9,12 @@ namespace PocketCsvReader.CharParsing;
 class FieldStateController : IParserStateController
 {
     // Reusable state structs
-    private ValueParser _valueParser;
-    private IParser _quotedParser;
-    private RawParser _rawParser;
-    private LineTerminatorParser _lineTerminatorParser;
-    private ArrayParser? _arrayParser;
+    private readonly IParser _valueParser;
+    private readonly IParser _quotedParser;
+    private readonly IParser _rawParser;
+    private readonly IParser _lineTerminatorParser;
+    private readonly IParser? _arrayParser;
+    private readonly IParser? _commentParser;
 
     private IParser _currentParser;
     private readonly IParserStateController? _parentController;
@@ -22,14 +23,17 @@ class FieldStateController : IParserStateController
 
     public FieldStateController(IParserContext ctx, DialectDescriptor dialect)
     {
-        _valueParser = new ValueParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.QuoteChar, dialect.EscapeChar, dialect.SkipInitialSpace, dialect.DoubleQuote, dialect.ArrayPrefix);
-        _quotedParser = new QuotedParser(ctx, this, dialect.QuoteChar!.Value, dialect.EscapeChar);
+        _valueParser = new ValueParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.QuoteChar,
+            dialect.EscapeChar, dialect.SkipInitialSpace, dialect.DoubleQuote, dialect.CommentChar, dialect.ArrayPrefix);
+        _quotedParser = new QuotedParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar);
         if (dialect.DoubleQuote)
             _quotedParser = new DoubleQuoteParser((QuotedParser)_quotedParser, dialect.Delimiter, dialect.QuoteChar!.Value);
         _rawParser = new RawParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.EscapeChar);
         _lineTerminatorParser = new LineTerminatorParser(ctx, this, dialect.LineTerminator);
         if (dialect.ArrayDelimiter.HasValue)
             _arrayParser = new ArrayParser(this, ctx, dialect);
+        if (dialect.CommentChar.HasValue)
+            _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
 
         _currentParser = _valueParser;
         _currentState = _valueParser.Parse;
@@ -62,6 +66,8 @@ class FieldStateController : IParserStateController
         => SwitchTo(_rawParser);
     public void SwitchToArray()
         => SwitchTo(_arrayParser ?? throw new InvalidOperationException());
+    public void SwitchToComment()
+        => SwitchTo(_commentParser ?? throw new InvalidOperationException());
     public void SwitchToLineTerminator()
     {
         _rollback = _currentParser;
@@ -70,6 +76,7 @@ class FieldStateController : IParserStateController
 
     public void Reset()
     {
+        _lineTerminatorParser.Reset();
         _currentState = _valueParser.Parse;
         _currentParser = _valueParser;
         _rollback = null;

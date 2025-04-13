@@ -50,6 +50,7 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
     }
 
+    [TestCase("a;xyz", "a")]
     [TestCase("'ab'';''c';'xyz'", "ab';'c")]
     [TestCase("'ab'';''''c';'xyz'", "ab';''c")]
     [TestCase("'a''b'';c';'xyz'", "a'b';c")]
@@ -1009,6 +1010,7 @@ public class CsvDataReaderTest
 
     [TestCase(40_000, true)]
     [TestCase(40_000, false)]
+    //[TestCase(1, true)]
     public void Read_TestData_Successful(int lineCount, bool handleSpecialValues)
     {
         var bytes = TestData.PackageAssets.GetBytes(lineCount);
@@ -1029,7 +1031,7 @@ public class CsvDataReaderTest
             while (dataReader.Read())
             {
                 rowCount++;
-                Assert.That(dataReader.FieldCount, Is.EqualTo(25));
+                Assert.That(dataReader.FieldCount, Is.EqualTo(25), $"Row {rowCount}: Expected 25 fields but got {dataReader.FieldCount}");
                 for (var i = 0; i < dataReader.FieldCount; i++)
                     dataReader.GetString(i);
             }
@@ -1072,7 +1074,7 @@ public class CsvDataReaderTest
             while (dataReader.Read())
             {
                 rowCount++;
-                Assert.That(dataReader.FieldCount, Is.EqualTo(25));
+                Assert.That(dataReader.FieldCount, Is.EqualTo(25), $"Row {rowCount}: Expected 25 fields but got {dataReader.FieldCount}");
                 for (var i = 0; i < dataReader.FieldCount; i++)
                     Assert.That(dataReader.GetString(i), Is.EqualTo(reference[rowCount - 1][i]), $"Row {rowCount}, record {i}: {dataReader.GetString(i)}");
             }

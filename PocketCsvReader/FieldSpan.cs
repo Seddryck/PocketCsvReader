@@ -26,6 +26,7 @@ public record struct SpanInfo
     int Start,
     int Length,
     bool WasQuoted = false,
-    bool IsEscaped = false
+    bool IsEscaped = false,
+    bool IsStarted = false
 )
 { }

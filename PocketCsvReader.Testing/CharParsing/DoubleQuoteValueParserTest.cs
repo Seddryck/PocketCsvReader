@@ -19,7 +19,7 @@ public class DoubleQuoteValueParserTest
         context.SetupGet(x => x.Escaping).Returns(false);
 
         var parser = new DoubleQuoteParser(
-                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\''),
+                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\''),
                 ';', '\'');
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
@@ -36,7 +36,7 @@ public class DoubleQuoteValueParserTest
         context.SetupGet(x => x.Escaping).Returns(escapes.Dequeue);
 
         var parser = new DoubleQuoteParser(
-                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), '\''),
+                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\''),
                 ';', '\'');
 
         for (int i = 1; i < buffer.Length; i++)

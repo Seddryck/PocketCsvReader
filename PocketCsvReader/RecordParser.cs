@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
+using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
 public class RecordParser : BaseRecordParser<CsvProfile>
@@ -16,11 +17,11 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         : base(profile, profile.ParserOptimizations.ReadAhead
                     ? new DoubleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
                     : new SingleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
-              , pool, (p) => new CharParser(p))
+              , pool, (p) => new FieldParser(p.Dialect))
     { }
 
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        : base(profile, buffer, pool, (p) => new CharParser(p))
+        : base(profile, buffer, pool, (p) => new FieldParser(p.Dialect))
     { }
 
     public virtual string[][] ReadHeaders()
@@ -60,7 +61,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         var count = CountRecordSeparators();
         count -= Convert.ToInt16(Profile.Dialect.Header);
 
-        CharParser.Reset();
+        FieldParser.Reset();
         Reader.Reset();
         return count;
     }
@@ -89,7 +90,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
             if (bufferSize == 0)
                 break;
 
-            if (CharParser.Parse(span[index]) == ParserState.Record)
+            if (FieldParser.Parse(span[index], index) == ParserState.Record)
             {
                 index -= Profile.Dialect.LineTerminator.Length - 1;
                 break;
@@ -97,7 +98,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
 
             index++;
         }
-        CharParser.Reset();
+        FieldParser.Reset();
 
         if (longSpan.Length == 0)
             return span.Slice(0, index).ToString();
