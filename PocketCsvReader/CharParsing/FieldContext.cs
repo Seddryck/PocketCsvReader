@@ -151,6 +151,7 @@ class FieldContext : IParserContext
         _span = default;
         _escaping = false;
         _escaped = false;
+        _doubling = false;
         _complete = false;
     }
 }

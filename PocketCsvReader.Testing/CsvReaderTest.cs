@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualBasic;
 using NUnit.Framework;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Testing;
 public class CsvReaderTest
@@ -128,5 +129,73 @@ public class CsvReaderTest
         var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
         var arrays = new CsvReader(profile).To<PackageAsset>(stream);
         Assert.That(arrays.Count, Is.EqualTo(1695));
+    }
+
+    [Test]
+    [TestCase(@"Resources\data-journalism-university-courses.csv")]
+    public void ToDataReader_DataJournalismUniversityCoursesStream_Successful(string filename)
+    {
+        using var stream = File.OpenRead(filename);
+        var profile = new CsvProfile(',', '\"', Environment.NewLine, true);
+        using var reader = new CsvReader(profile).ToDataReader(stream);
+        for (int i = 0; i < 50; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            for (var j = 0; j < reader.FieldCount; j++)
+            {
+                var value = reader.GetValue(j);
+                Assert.That(value, Is.Not.Null);
+            }
+        }
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase(@"Resources\natural-gas-monthly.csv")]
+    public void ToDataReader_NaturalGasMonthlyStream_Successful(string filename)
+    {
+        using var stream = File.OpenRead(filename);
+        var profile = new CsvProfile(',', '\"', Environment.NewLine, true);
+        using var reader = new CsvReader(profile).ToDataReader(stream);
+        for (int i = 0; i < 336; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            for (int j = 0; j < reader.FieldCount; j++)
+            {
+                var value = reader.GetValue(j);
+                Assert.That(value, Is.Not.Null);
+            }
+        }
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase(@"Resources\natural-gas-monthly.csv")]
+    public void ToDataReader_NaturalGasMonthlyStreamWithSchema_Successful(string filename)
+    {
+        using var stream = File.OpenRead(filename);
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+            .WithDelimiter(',')
+            .WithQuoteChar('\"')
+            .WithLineTerminator(Environment.NewLine)
+            .WithHeader()
+            .Build(),
+            new SchemaDescriptorBuilder()
+            .Named()
+            .WithTemporalField<string>("Month")
+            .WithNumberField<decimal>("Price")
+            .Build());
+        using var reader = new CsvReader(profile).ToDataReader(stream);
+        for (int i = 0; i < 336; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            for (int j = 0; j < reader.FieldCount; j++)
+            {
+                var value = reader.GetValue(j);
+                Assert.That(value, Is.Not.Null);
+            }
+        }
+        Assert.That(reader.Read(), Is.False);
     }
 }
