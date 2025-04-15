@@ -19,6 +19,8 @@ public record struct FieldSpan
     public FieldSpan(int startValue, int lengthValue, bool wasQuoted, bool isEscaped)
         : this(new SpanInfo(startValue, lengthValue, wasQuoted, isEscaped), default, null)
     { }
+
+    public bool IsEmpty => Value.Length == 0;
 }
 
 public record struct SpanInfo

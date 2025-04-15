@@ -18,7 +18,7 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, true, 4096, string.Empty, string.Empty);
         var spanMapper = new SpanMapper<string>((span, fieldSpans) => span.Slice(fieldSpans.First().Value.Start, fieldSpans.First().Value.Length).ToString());
         using var reader = new RecordParser<string>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
         var eof = reader.IsEndOfFile(out var value);
@@ -33,7 +33,7 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, false, 4096, "(empty)", "(null)");
         var spanMapper = new SpanMapper<Employee>((span, fieldSpans) =>
         {
             return new Employee(
@@ -53,7 +53,7 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, false, 4096, "(empty)", "(null)");
         var spanMapper = new SpanMapper<Employee>((span, fieldSpans) =>
         {
             return new Employee(

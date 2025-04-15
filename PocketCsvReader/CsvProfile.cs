@@ -15,7 +15,6 @@ public class CsvProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; set; }
 
     public virtual string EmptyCell { get; private set; }
-    public virtual string MissingCell { get; private set; }
 
     public CsvProfile(char fieldSeparator, string recordSeparator)
         : this(fieldSeparator, '\"', recordSeparator, false)
@@ -33,6 +32,7 @@ public class CsvProfile : IProfile
                         .WithQuoteChar(textQualifier)
                         .WithEscapeChar(escapeTextQualifier)
                         .WithHeader(firstRowHeader)
+                        .WithMissingCell(missingCell)
                         .Build();
 
         ParserOptimizations = new ParserOptimizationOptions() { RowCountAtStart = rowCountAtStart, BufferSize = bufferSize };
@@ -42,7 +42,6 @@ public class CsvProfile : IProfile
             .WithSequence(string.Empty, emptyCell)
             .Also(r => { if (Dialect.NullSequence is not null) r.WithSequence(missingCell, null); })
             .Build();
-        MissingCell = missingCell;
     }
 
     public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers = null)
@@ -59,7 +58,6 @@ public class CsvProfile : IProfile
         Dialect = dialect;
         ParserOptimizations = new ParserOptimizationOptions();
         EmptyCell = string.Empty;
-        MissingCell = string.Empty;
 
         Schema = schema;
         Resource = resource;

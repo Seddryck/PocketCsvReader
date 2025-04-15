@@ -42,5 +42,6 @@ public enum ParserState
     Field,
     Record,
     Header,
+    Comment,
     Eof,
 }

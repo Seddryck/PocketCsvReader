@@ -19,8 +19,11 @@ public interface IParserContext
     void StartEscaping();
     void EndEscaping();
     void RemoveEscaping();
+    void StartDoubling();
+    void EndDoubling();
+    void RemoveDoubling();
     bool Escaping { get; }
-    bool Escaped { get; }
+    bool Doubling { get; }
 
     ref FieldSpan Span { get; }
     bool IsComplete { get; }

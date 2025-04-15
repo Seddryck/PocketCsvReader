@@ -88,8 +88,9 @@ public class CharParserTest
         var result = Enumerable
                         .Range(0, value.Length)
                         .Aggregate((ParserState?)null, (current, i) => parser.Parse(value[i], i));
-
         Assert.That(result, Is.EqualTo(ParserState.Continue));
+        result = parser.ParseEof(value.Length);
+        Assert.That(result, Is.EqualTo(ParserState.Eof).Or.EqualTo(ParserState.Comment));
         Assert.That(parser.Result.Value.Length, Is.EqualTo(0));
     }
 
@@ -105,7 +106,7 @@ public class CharParserTest
                         .Aggregate((ParserState?)null, (current, i) =>
                         {
                             var state = parser.Parse(value[i], i);
-                            if (state == ParserState.Record)
+                            if (state == ParserState.Record || state == ParserState.Comment)
                                 parser.Reset();
                             return state;
                         }
@@ -299,37 +300,6 @@ public class CharParserTest
         Assert.That(parser.Result.Value.Length, Is.EqualTo(value.Length - 7));
     }
 
-    [TestCase("foo\r\nbar\r\n")]
-    [TestCase("Comment\r\nfoo\r\nbar\r\n", 1)]
-    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\n", 1, 2)]
-    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\nComment 3", 1, 2, 5)]
-    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\nComment 3", 1, 3, 5)]
-    public void Parse_CommentRows_CommentsSkipped(string value, params int[] commentRows)
-    {
-        var parser = new FieldParser(
-            new DialectDescriptor() { Header = false, CommentRows = commentRows, LineTerminator = "\r\n" });
-        var recordCount = 0;
-        for (int i = 0; i < value.Length; i++)
-            if (parser.Parse(value[i], i) == ParserState.Record)
-                recordCount++;
-        Assert.That(recordCount, Is.EqualTo(2));
-    }
-
-    [TestCase("foo\r\nbar\r\n")]
-    [TestCase("Comment\r\nfoo\r\nbar\r\n#Comment", 1)]
-    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n#Comment\r\nbar\r\n#Comment", 1, 2)]
-    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n\r\n#Commentbar\r\nComment 3", 1, 2, 6)]
-    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\n#Comment\r\nComment 3", 1, 3, 6)]
-    public void Parse_CommentRowsAndComments_CommentsSkipped(string value, params int[] commentRows)
-    {
-        var parser = new FieldParser(
-            new DialectDescriptor() { Header = false, CommentChar = '#', CommentRows = commentRows, LineTerminator = "\r\n" });
-        var recordCount = 0;
-        for (int i = 0; i < value.Length; i++)
-            if (parser.Parse(value[i], i) == ParserState.Record)
-                recordCount++;
-        Assert.That(recordCount, Is.EqualTo(2));
-    }
 
     [TestCase("[foo,bar];", '[', ']', ',')]
     [TestCase("<foo\tbar>;", '<', '>', '\t')]

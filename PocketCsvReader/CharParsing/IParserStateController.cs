@@ -14,7 +14,7 @@ public interface IParserStateController
     void SwitchToRaw();
     void SwitchToArray();
     void SwitchToComment();
-    void SwitchToLineTerminator();
+    void SwitchToLineTerminator(ParserState state);
     void SwitchBack();
     void SwitchUp();
     void Reset();

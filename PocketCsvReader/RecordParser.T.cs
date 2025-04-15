@@ -31,8 +31,8 @@ public class RecordParser<T> : RecordParser
 
     public virtual bool IsEndOfFile(out T value)
     {
-        var eof = IsEndOfFile(out RecordSpan rawRecord);
-        value = rawRecord.FieldSpans.Length == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans);
+        var eof = IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
+        value = (rawRecord.FieldSpans?.Length ?? 0) == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans!);
         return eof;
     }
 }

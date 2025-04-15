@@ -25,8 +25,9 @@ internal readonly struct QuotedParser : IParser
     public ParserState Parse(char c, int pos)
     {
         var escaping = _ctx.Escaping;
+        var isComplete = _ctx.IsComplete;
 
-        if (_ctx.IsComplete)
+        if (isComplete)
         {
             if (c == _delimiter)
                 return ParserState.Field;
@@ -34,13 +35,13 @@ internal readonly struct QuotedParser : IParser
             {
                 if (_lineTerminatorLength == 1)
                     return ParserState.Record;
-                _controller.SwitchToLineTerminator();
+                _controller.SwitchToLineTerminator(ParserState.Record);
                 return ParserState.Continue;
             }
             return ParserState.Error;
         }
 
-        if (c == _quote && !escaping )
+        if (c == _quote && !escaping)
         {
             _ctx.EndValue(pos - 1);
             return ParserState.Continue;

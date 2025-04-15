@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Testing;
 public class RecordParserTest
@@ -18,9 +19,17 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithQuoteChar('\'')
+                .WithEscapeChar('\\')
+                .WithLineTerminator("\r\n")
+                .WithoutHeader()
+                .Build());
+
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        var eof = reader.IsEndOfFile(out var values);
+        var eof = reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
         Assert.That(values.Slice(0).ToString(), Is.EqualTo("foo"));
     }
@@ -32,9 +41,17 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithQuoteChar('\'')
+                .WithEscapeChar('\\')
+                .WithLineTerminator("\r\n")
+                .WithoutHeader()
+                .Build());
+
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
             Assert.That(values.Slice(i).ToString(), Is.EqualTo(tokens[i]));
@@ -49,7 +66,7 @@ public class RecordParserTest
 
         var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(tokens.Length));
         for (int i = 0; i < tokens.Length; i++)
             Assert.That(values.Slice(i).ToString(), Is.EqualTo(tokens[i]));
@@ -66,7 +83,7 @@ public class RecordParserTest
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
         Assert.Throws<InvalidDataException>(() =>
         {
-            reader.IsEndOfFile(out var values);
+            reader.IsEndOfFile(out var values, out var state);
         });
     }
 
@@ -88,7 +105,7 @@ public class RecordParserTest
         var profile = new CsvProfile(
             new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = true });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.Slice(0).ToString(), Is.EqualTo(firstToken));
         Assert.That(values.Slice(1).ToString(), Is.EqualTo("xyz"));
     }
@@ -101,9 +118,10 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var profile = new CsvProfile(
+            new DialectDescriptor() { Delimiter = ';', QuoteChar = '\'', DoubleQuote = false });
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
         Assert.That(values.Slice(0).ToString(), Is.EqualTo(expected));
     }
@@ -123,9 +141,16 @@ public class RecordParserTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+                .WithDelimiter(';')
+                .WithQuoteChar('\'')
+                .WithEscapeChar('\\')
+                .WithLineTerminator("\r\n")
+                .WithoutHeader()
+                .Build());
         using var reader = new RecordParser(new StreamReader(buffer), profile, ArrayPool<char>.Create(256, 5));
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var _);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(3));
         Assert.That(values.Slice(2).ToString(), Is.EqualTo(thirdToken));
     }
@@ -160,7 +185,7 @@ public class RecordParserTest
             using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
-                reader.IsEndOfFile(out var values);
+                reader.IsEndOfFile(out var values, out var _);
                 Assert.That(values.FieldSpans, Has.Length.GreaterThan(0));
                 for (int i = 0; i < values.FieldSpans.Length; i++)
                     Assert.That(values.Slice(i).ToString(), Is.EqualTo("abc"));
@@ -183,7 +208,7 @@ public class RecordParserTest
         var profile = new CsvProfile(dialect);
         using var reader = new RecordParser(new StreamReader(stream), profile, ArrayPool<char>.Create(256, 5));
         using var streamReader = new StreamReader(stream);
-        reader.IsEndOfFile(out var values);
+        reader.IsEndOfFile(out var values, out var state);
         Assert.That(values.FieldSpans, Has.Length.EqualTo(2));
         Assert.That(values.Slice(0).ToString(), Is.EqualTo("foo"));
         Assert.That(values.Slice(1).ToString(), Is.EqualTo("bar"));
@@ -261,14 +286,14 @@ public class RecordParserTest
         for (int i = 0; i < result; i++)
         {
             if (i < result - 1)
-                Assert.That(reader.IsEndOfFile(out var _), Is.False);
+                Assert.That(reader.IsEndOfFile(out var _, out var _), Is.False);
             else
             {
-                var eof = reader.IsEndOfFile(out var values);
+                var eof = reader.IsEndOfFile(out var values, out var _);
                 if (values.FieldSpans.Length == 0)
                     Assert.Pass();
                 if (!eof)
-                    Assert.That(reader.IsEndOfFile(out var _), Is.True);
+                    Assert.That(reader.IsEndOfFile(out var _, out var _), Is.True);
             }
         }
     }
@@ -320,20 +345,28 @@ public class RecordParserTest
     {
         using (var stream = new MemoryStream())
         {
-            var writer = new StreamWriter(stream);
-            writer.Write(text);
-            writer.Flush();
-
-            stream.Position = 0;
-
-
-            using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
+            using var writer = new StreamWriter(stream);
             {
-                var reader = new RecordParser(streamReader, new CsvProfile(',', '\"', '\\', recordSeparator, false, false, bufferSize, string.Empty, string.Empty));
-                var value = reader.GetFirstRecord();
-                Assert.That(value, Is.EqualTo("abc+abc"));
+                writer.Write(text);
+                writer.Flush();
+
+                stream.Position = 0;
+                var profile = new CsvProfile(
+                    new DialectDescriptorBuilder()
+                        .WithDelimiter(';')
+                        .WithQuoteChar('\"')
+                        .WithEscapeChar('\\')
+                        .WithLineTerminator(recordSeparator)
+                        .WithoutHeader()
+                        .Build());
+
+                using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
+                {
+                    var reader = new RecordParser(streamReader, profile);
+                    var value = reader.GetFirstRecord();
+                    Assert.That(value, Is.EqualTo("abc+abc"));
+                }
             }
-            writer.Dispose();
         }
     }
 

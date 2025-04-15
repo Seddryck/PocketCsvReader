@@ -48,6 +48,8 @@ public class DialectDescriptorBuilder
         => (Descriptor = Descriptor with { NullSequence = nullSequence}, Builder: this).Builder;
     public DialectDescriptorBuilder WithoutNullSequence()
         => WithNullSequence(null);
+    public DialectDescriptorBuilder WithMissingCell(string value)
+        => (Descriptor = Descriptor with { MissingCell = value }, Builder: this).Builder;
     public DialectDescriptorBuilder WithSkipInitialSpace(bool skipInitialSpace = true)
         => (Descriptor = Descriptor with { SkipInitialSpace = skipInitialSpace}, Builder: this).Builder;
     public DialectDescriptorBuilder WithoutSkipInitialSpace()

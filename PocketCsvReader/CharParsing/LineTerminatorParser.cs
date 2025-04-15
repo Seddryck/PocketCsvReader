@@ -5,13 +5,14 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-struct LineTerminatorParser : IParser
+class LineTerminatorParser : IParser
 {
     private readonly IParserContext _ctx;
     private readonly IParserStateController _controller;
 
     private readonly char[] _lineTerminators;
     private int _index = 0;
+    private ParserState _returnState = ParserState.Record;
 
     public LineTerminatorParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
         => (_ctx, _controller, _lineTerminators)
@@ -22,21 +23,28 @@ struct LineTerminatorParser : IParser
         if (c == _lineTerminators[++_index])
         {
             if (_index == _lineTerminators.Length - 1)
-                return ParserState.Record;
+                return _returnState;
             return ParserState.Continue;
         }
         else
         {
+            Reset();
             _controller.SwitchBack();
             return ParserState.Continue;
         }
     }
 
     public ParserState ParseEof(int pos)
-        => ParserState.Error;
+        => _returnState;
     public void Reset()
     {
         _index = 0;
+        _returnState = ParserState.Record;
+    }
+
+    public void ReturnState(ParserState state)
+    {
+        _returnState = state;
     }
 
     public ref FieldSpan Result

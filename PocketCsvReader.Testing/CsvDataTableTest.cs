@@ -5,6 +5,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Reflection;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Testing;
 
@@ -112,7 +113,19 @@ public class CsvDataTableTest
     public void Read_Csv_CorrectResult(string text, int bufferSize, int fieldCount)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
-        var reader = new CsvReader(new CsvProfile(';', '\"', '\\', "\r\n", false, false, 4096, "(empty)", "(null)"), bufferSize);
+        var profile = new CsvProfile(new DialectDescriptorBuilder()
+            .WithDelimiter(';')
+            .WithQuoteChar('\"')
+            .WithEscapeChar('\\')
+            .WithLineTerminator("\r\n")
+            .WithHeader(false)
+            .WithDoubleQuote(false)
+            .WithMissingCell("(null)")
+            .Build(), null,
+            new ResourceDescriptorBuilder()
+            .WithSequence(string.Empty, "(empty)")
+            .Build());
+        var reader = new CsvReader(profile, bufferSize);
         var dataTable = reader.ToDataTable(stream);
         Assert.That(dataTable.Rows, Has.Count.EqualTo(4));
         Assert.That(dataTable.Columns, Has.Count.EqualTo(fieldCount));

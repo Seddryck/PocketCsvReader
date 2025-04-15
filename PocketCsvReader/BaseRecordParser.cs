@@ -20,7 +20,7 @@ public abstract class BaseRecordParser<P> : IDisposable
     protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
         => (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
 
-    public virtual bool IsEndOfFile(out RecordSpan record)
+    public virtual bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
         var index = 0;
         var eof = false;
@@ -38,6 +38,7 @@ public abstract class BaseRecordParser<P> : IDisposable
         if (eof)
         {
             record = new();
+            recordState = RecordState.Eof;
             return true;
         }
 
@@ -60,8 +61,17 @@ public abstract class BaseRecordParser<P> : IDisposable
                     record = CreateRecordSpan(
                         longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
                         , [.. fieldList]);
+                    recordState = RecordState.Record;
                     return false;
                 }
+            }
+            else if (state == ParserState.Comment)
+            {
+                FieldParser.Reset();
+                Buffer = Buffer.Slice(index + 1);
+                record = new();
+                recordState = RecordState.Comment;
+                return false;
             }
             else if (state == ParserState.Error)
                 throw new InvalidDataException($"Invalid character '{c}' at position {index}.");
@@ -100,9 +110,11 @@ public abstract class BaseRecordParser<P> : IDisposable
                 record = CreateRecordSpan(
                         longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
                         , [.. fieldList]);
+                recordState = RecordState.Record;
                 return true;
             case ParserState.Eof:
                 record = CreateRecordSpan([], []);
+                recordState = RecordState.Eof;
                 return true;
             case ParserState.Error:
                 throw new InvalidDataException($"Invalid character End-of-File.");
@@ -135,12 +147,22 @@ public abstract class BaseRecordParser<P> : IDisposable
 
             if (bufferSize == 0)
                 break;
+            switch (FieldParser.Parse(span[index], index))
+            {
+                case ParserState.Error:
+                    throw new InvalidDataException($"Invalid character '{span[index]}' at position {index}.");
+                case ParserState.Field:
+                    FieldParser.Reset();
+                    break;
+                case ParserState.Record:
+                    FieldParser.Reset();
+                    count++;
+                    break;
+            }
 
-            if (FieldParser.Parse(span[index], index) == ParserState.Record)
-                count++;
             index++;
         }
-        if (FieldParser.ParseEof(index) == ParserState.Record)
+        if (FieldParser.ParseEof(index) == ParserState.Record && !FieldParser.Result.IsEmpty)
             count++;
 
         return count;

@@ -21,7 +21,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         Record?.FieldSpans.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
 
     protected override object GetMissingField()
-        => Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty;
+        => Profile.ParserOptimizations.HandleSpecialValues ? Profile.Dialect.MissingCell ?? string.Empty : string.Empty;
 
     public override string GetRawString(int i)
         => Record!.FieldSpans[i].Value.WasQuoted
@@ -42,7 +42,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].Value.IsEscaped, Record!.FieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.MissingCell : string.Empty);
+            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.Dialect.MissingCell ?? string.Empty : string.Empty);
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
@@ -53,26 +53,36 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         if (IsEof)
             return false;
 
-        if (RowCount == 0 && (Fields?.Length ?? 0) == 0)
-            if (RecordParser!.Profile.Dialect.Header)
-                RegisterHeader(RecordParser!.ReadHeaders(), "field_");
+        return ReadRow();
+    }
 
-        IsEof = RecordParser!.IsEndOfFile(out RecordSpan rawRecord);
-        if (RowCount == 0 && !RecordParser!.Profile.Dialect.Header)
-            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans.Length)], "field_");
+    protected virtual bool ReadRow()
+    {
+        var firstRow = RowCount == 0;
+        if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
+            RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-        if ((rawRecord.FieldSpans?.Length ?? 0) == 0)
+        RecordSpan rawRecord;
+        RecordState state;
+        do
         {
-            Record = RecordMemory.Empty;
-            return false;
-        }
-        else
-            Record = rawRecord.AsMemory();
+            if (IsEof)
+                return false;
 
-        RowCount++;
+            IsEof = RecordParser!.IsEndOfFile(out rawRecord, out state);
+            if (IsEof && (rawRecord.FieldSpans?.Length ?? 0) == 0)
+            {
+                Record = RecordMemory.Empty;
+                return false;
+            }
+            RowCount++;
+        } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || state == RecordState.Comment);
 
+        if (firstRow && (Fields?.Length ?? 0) == 0)
+            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans!.Length)], "field_");
+
+        Record = rawRecord.AsMemory();
         HandleUnexpectedFields(Fields!.Length);
-
         return true;
     }
 
@@ -106,15 +116,21 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     {
         var length = Record!.FieldSpans.Length;
         if (expectedLength < length)
+        {
+            var rowNumber = RowCount + (
+                RecordParser!.Profile.Dialect.Header
+                ? Math.Max(RecordParser!.Profile.Dialect.HeaderRows.Length, 1)
+                : 0);
             throw new InvalidDataException
             (
                 string.Format
                 (
                     "The record {0} contains {1} more field{2} than expected."
-                    , RowCount + Convert.ToInt32(RecordParser!.Profile.Dialect.Header)
+                    , rowNumber
                     , length - expectedLength
                     , length - expectedLength > 1 ? "s" : string.Empty
                 )
             );
+        }
     }
 }

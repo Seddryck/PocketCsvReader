@@ -49,7 +49,7 @@ public class CsvArrayString : IDisposable
     {
         var stringMapper = new SpanMapper<string?[]?>((span, fieldSpans) =>
         {
-            if (!fieldSpans.Any())
+            if (!(fieldSpans?.Any() ?? false))
                 return null;
             var values = new string[fieldSpans.Count()];
             var index = 0;
@@ -66,7 +66,7 @@ public class CsvArrayString : IDisposable
             if (RowCount == 0 && Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan);
+            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan, out RecordState state);
             var values = stringMapper.Invoke(recordSpan.Span, recordSpan.FieldSpans);
             if (values is null)
                 yield break;

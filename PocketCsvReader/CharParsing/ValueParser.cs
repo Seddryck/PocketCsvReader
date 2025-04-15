@@ -67,7 +67,7 @@ internal readonly struct ValueParser : IParser
                 _ctx.EndValue(pos);
             else
                 _ctx.EmptyValue();
-            _controller.SwitchToLineTerminator();
+            _controller.SwitchToLineTerminator(ParserState.Record);
             return ParserState.Continue;
         }
 

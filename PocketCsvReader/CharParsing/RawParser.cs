@@ -38,7 +38,7 @@ internal readonly struct RawParser : IParser
             _ctx.EndValue(pos - 1);
             if (_lineTerminatorLength == 1)
                 return ParserState.Record;
-            _controller.SwitchToLineTerminator();
+            _controller.SwitchToLineTerminator(ParserState.Record);
             return ParserState.Continue;
         }
 

@@ -10,6 +10,7 @@ class FieldContext : IParserContext
 {
     private FieldSpan _span;
     private bool _escaping;
+    private bool _doubling;
     private bool _escaped;
     private bool _complete;
 
@@ -59,6 +60,7 @@ class FieldContext : IParserContext
         _escaped = true;
         _span.Value = _span.Value with { IsEscaped = true };
         _escaping = false;
+        _complete = false;
     }
 
     public void RemoveEscaping()
@@ -66,7 +68,26 @@ class FieldContext : IParserContext
         _escaping = false;
     }
 
+    public void StartDoubling()
+    {
+        _doubling = true;
+    }
+
+    public void EndDoubling()
+    {
+        _escaped = true;
+        _span.Value = _span.Value with { IsEscaped = true };
+        _doubling = false;
+        _complete = false;
+    }
+
+    public void RemoveDoubling()
+    {
+        _doubling = false;
+    }
+
     public bool Escaping => _escaping;
+    public bool Doubling => _doubling;
     public bool Escaped => _escaped;
 
     public void AddChild(FieldSpan child)

@@ -42,7 +42,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         var rowCount = 1;
         while (rowCount <= Profile.Dialect.HeaderRows.Max())
         {
-            IsEndOfFile(out RecordSpan rawRecord);
+            IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
             if (Profile.Dialect.HeaderRows.Contains(rowCount))
             {
                 var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
@@ -89,8 +89,10 @@ public class RecordParser : BaseRecordParser<CsvProfile>
 
             if (bufferSize == 0)
                 break;
-
-            if (FieldParser.Parse(span[index], index) == ParserState.Record)
+            var state = FieldParser.Parse(span[index], index);
+            if (state == ParserState.Field)
+                FieldParser.Reset();
+            if (state == ParserState.Record)
             {
                 index -= Profile.Dialect.LineTerminator.Length - 1;
                 break;

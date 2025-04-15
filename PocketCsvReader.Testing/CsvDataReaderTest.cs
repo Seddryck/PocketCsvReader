@@ -1190,4 +1190,44 @@ public class CsvDataReaderTest
         Assert.That(dataReader.Read(), Is.True);
         Assert.Throws<ArgumentNullException>(() => dataReader.GetValues(values!));
     }
+
+
+    [TestCase("foo\r\nbar\r\n")]
+    [TestCase("Comment\r\nfoo\r\nbar\r\n", 1)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\n", 1, 2)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\nbar\r\nComment 3", 1, 2, 5)]
+    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\nComment 3", 1, 3, 5)]
+    public void Parse_CommentRows_CommentsSkipped(string value, params int[] commentRows)
+    {
+        var profile = new CsvProfile(new DialectDescriptorBuilder()
+            .WithoutHeader()
+            .WithCommentRows(commentRows)
+            .WithLineTerminator("\r\n")
+            .Build());
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(value));
+        using var dataReader = new CsvDataReader(buffer, profile);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.Read(), Is.False);
+    }
+
+    [TestCase("foo\r\nbar\r\n")]
+    [TestCase("Comment\r\nfoo\r\nbar\r\n#Comment", 1)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n#Comment\r\nbar\r\n#Comment", 1, 2)]
+    [TestCase("Comment 1\r\nComment 2\r\nfoo\r\n\r\n#Commentbar\r\nComment 3", 1, 2, 6)]
+    [TestCase("Comment 1\r\n\r\nfooComment 2\r\nbar\r\n#Comment\r\nComment 3", 1, 3, 6)]
+    public void Parse_CommentRowsAndComments_CommentsSkipped(string value, params int[] commentRows)
+    {
+        var profile = new CsvProfile(new DialectDescriptorBuilder()
+            .WithoutHeader()
+            .WithCommentChar('#')
+            .WithCommentRows(commentRows)
+            .WithLineTerminator("\r\n")
+            .Build());
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(value));
+        using var dataReader = new CsvDataReader(buffer, profile);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.Read(), Is.True);
+        Assert.That(dataReader.Read(), Is.False);
+    }
 }

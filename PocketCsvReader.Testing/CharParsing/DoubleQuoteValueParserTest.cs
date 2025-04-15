@@ -19,8 +19,7 @@ public class DoubleQuoteValueParserTest
         context.SetupGet(x => x.Escaping).Returns(false);
 
         var parser = new DoubleQuoteParser(
-                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\''),
-                ';', '\'');
+                context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\'');
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
@@ -32,19 +31,20 @@ public class DoubleQuoteValueParserTest
     public void Parse_FieldWithEscaper_EscapeSessionStarted(string buffer)
     {
         var context = new Mock<IParserContext>(MockBehavior.Loose);
-        var escapes = new Queue<bool>([false, false, false, true, false, false, false, true, false]);
-        context.SetupGet(x => x.Escaping).Returns(escapes.Dequeue);
+        var doublings = new Queue<bool>([false, false, true, false, false, true]);
+        var completes = new Queue<bool>([false, false, true, false, false, true]);
+        context.SetupGet(x => x.Doubling).Returns(doublings.Dequeue);
+        context.SetupGet(x => x.IsComplete).Returns(completes.Dequeue);
 
         var parser = new DoubleQuoteParser(
-                new QuotedParser(context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\''),
-                ';', '\'');
+                context.Object, Mock.Of<IParserStateController>(), ';', "\r\n", '\'');
 
         for (int i = 1; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
-        context.Verify(x => x.StartEscaping(), Times.Exactly(2));
-        context.Verify(x => x.EndEscaping(), Times.Exactly(1));
-        context.Verify(x => x.RemoveEscaping(), Times.Exactly(1));
+        context.Verify(x => x.StartDoubling(), Times.Exactly(2));
+        context.Verify(x => x.EndDoubling(), Times.Exactly(1));
+        context.Verify(x => x.RemoveDoubling(), Times.Exactly(1));
         context.Verify(x => x.EndValue(It.IsAny<int>()), Times.Exactly(2));
         context.Verify(x => x.EndValue(buffer.Length - 3), Times.Once);
     }
