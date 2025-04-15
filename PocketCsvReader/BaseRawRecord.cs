@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -101,14 +101,29 @@ public abstract class BaseRawRecord<P> where P : IProfile
     }
 
 #if DEBUG
-    public bool IsQuotedField(int i)
-        => Record!.FieldSpans[i].WasQuoted;
+    /// <summary>
+        /// Determines whether the field at the specified index was quoted in the raw CSV record.
+        /// </summary>
+        /// <param name="i">The zero-based index of the field.</param>
+        /// <returns>True if the field was quoted; otherwise, false.</returns>
+        public bool IsQuotedField(int i)
+        => Record!.FieldSpans[i].Value.WasQuoted;
 
-    public bool IsEscapedField(int i)
-        => Record!.FieldSpans[i].IsEscaped;
+    /// <summary>
+        /// Determines whether the field at the specified index contains escaped characters in the raw record.
+        /// </summary>
+        /// <param name="i">The zero-based index of the field.</param>
+        /// <returns>True if the field contains escaped characters; otherwise, false.</returns>
+        public bool IsEscapedField(int i)
+        => Record!.FieldSpans[i].Value.IsEscaped;
 #endif
 
-    public abstract string GetRawString(int i);
+    /// <summary>
+/// Returns the raw string value of the field at the specified index.
+/// </summary>
+/// <param name="i">The zero-based index of the field.</param>
+/// <returns>The raw string representation of the field value.</returns>
+public abstract string GetRawString(int i);
 
     protected bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;

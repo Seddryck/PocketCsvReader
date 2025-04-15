@@ -11,7 +11,6 @@ using NUnit.Framework;
 namespace PocketCsvReader.Testing;
 public class SpanObjectBuilderTests
 {
-
     private record struct StringBox(string value);
     private record struct IntBox(int value);
     private record struct FloatBox(float value);
@@ -31,12 +30,12 @@ public class SpanObjectBuilderTests
     [TestCase("10", 10, typeof(IntBox))]
     [TestCase("10.15", 10.15f, typeof(FloatBox))]
     public void Instantiate_SingleField_Valid(string input, object output, Type type)
-    {       
+    {
         var builderType = typeof(SpanObjectBuilderProxy<>).MakeGenericType(type);
         var builder = Activator.CreateInstance(builderType);
         var instantiateMethod = builderType.GetMethod("Instantiate", [typeof(char[]), typeof(FieldSpan[])])!;
         var fieldSpans = new[] { new FieldSpan(0, input.Length, false, false) };
-        var result = instantiateMethod.Invoke(builder, [input.ToCharArray(), fieldSpans ])!;
+        var result = instantiateMethod.Invoke(builder, [input.ToCharArray(), fieldSpans])!;
         Assert.That(type.GetProperty("value")!.GetValue(result), Is.EqualTo(output));
     }
 

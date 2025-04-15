@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Text;
@@ -285,6 +285,14 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public bool IsDBNull(int i)
         => IsNull(i);
 
+    /// <summary>
+    /// Parses the field at the specified index as an array of nullable values of type <typeparamref name="T"/>.
+    /// </summary>
+    /// <param name="i">The zero-based index of the field to parse as an array.</param>
+    /// <returns>An array of nullable <typeparamref name="T"/> values parsed from the field's child spans.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the field index is out of range.</exception>
+    /// <exception cref="NotImplementedException">Thrown if the field does not have child spans.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if no suitable parser is registered or can be created for the specified type.</exception>
     public T?[] GetArray<T>(int i)
     {
         if (i >= FieldCount)
@@ -312,11 +320,18 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = IsNullFieldValue<T>(i)
                         ? default
-                        : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                        : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
         }
         return array;
     }
 
+    /// <summary>
+    /// Returns an array of objects parsed from the child spans of the field at the specified index.
+    /// </summary>
+    /// <param name="i">The zero-based index of the field containing the array.</param>
+    /// <returns>An array of objects representing the parsed values of the field's children, or an empty array if the field has no children.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the field index is out of range.</exception>
+    /// <exception cref="NotImplementedException">Thrown if the field does not support child spans.</exception>
     public object?[] GetArray(int i)
     {
         if (i >= FieldCount)
@@ -344,11 +359,26 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = IsNullFieldValue<object>(i)
                 ? null
-                : parse!(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                : parse!(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
         }
         return array;
     }
 
+    /// <summary>
+    /// Retrieves the parsed value of type <typeparamref name="T"/> from the <paramref name="j"/>th child element of the field at index <paramref name="i"/>.
+    /// </summary>
+    /// <param name="i">The zero-based index of the field containing the array.</param>
+    /// <param name="j">The zero-based index of the array element within the field.</param>
+    /// <returns>The parsed value of type <typeparamref name="T"/>, or <c>default</c> if the element is null.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown if <paramref name="i"/> is out of range, or if the field does not contain an item at position <paramref name="j"/>.
+    /// </exception>
+    /// <exception cref="NotImplementedException">
+    /// Thrown if the field at index <paramref name="i"/> does not support child elements.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if no suitable parser is registered or can be created for type <typeparamref name="T"/>.
+    /// </exception>
     public T? GetArrayItem<T>(int i, int j)
     {
         if (i >= FieldCount)
@@ -375,9 +405,16 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         var child = Record!.FieldSpans[i].Children![j];
         return IsNullFieldValue<T>(i)
                 ? default
-                : parse(GetValueOrThrow(i).Value.Slice(child.ValueStart, child.ValueLength));
+                : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
     }
 
+    /// <summary>
+    /// Creates a delegate that parses a <see cref="ReadOnlySpan{char}"/> into the specified type using the field's format descriptor.
+    /// </summary>
+    /// <param name="type">The target type to parse to.</param>
+    /// <param name="field">The field descriptor containing format information.</param>
+    /// <returns>A delegate that parses a span into the specified type.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the parser locator cannot be instantiated.</exception>
     private static Delegate CreateParser(Type type, FieldDescriptor field)
     {
         var locatorType = typeof(TypeParserLocator<>).MakeGenericType(type);

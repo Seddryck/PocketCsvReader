@@ -29,10 +29,15 @@ public class RecordParser<T> : RecordParser
         SpanMapper = spanMapper;
     }
 
+    /// <summary>
+    /// Determines if the end of the CSV file has been reached and maps the next record to an instance of <typeparamref name="T"/>.
+    /// </summary>
+    /// <param name="value">The mapped record of type <typeparamref name="T"/>, or the default value if no fields are present.</param>
+    /// <returns><c>true</c> if the end of the file has been reached; otherwise, <c>false</c>.</returns>
     public virtual bool IsEndOfFile(out T value)
     {
-        var eof = IsEndOfFile(out RecordSpan rawRecord);
-        value = rawRecord.FieldSpans.Length == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans);
+        var eof = IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
+        value = (rawRecord.FieldSpans?.Length ?? 0) == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans!);
         return eof;
     }
 }

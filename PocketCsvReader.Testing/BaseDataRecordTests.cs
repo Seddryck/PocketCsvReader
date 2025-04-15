@@ -209,7 +209,7 @@ public class BaseDataRecordTests
                 ).Build()
         );
 
-        var record = new StubDataRecord(new RecordMemory(input, [new FieldSpan(0, 3), new FieldSpan(4,3)]), profile);
+        var record = new StubDataRecord(new RecordMemory(input, [new FieldSpan(0, 3), new FieldSpan(4, 3)]), profile);
         Assert.That(record.GetValue(0), Is.EqualTo(new YearMonth(2025, 1)));
         Assert.That(record.GetValue(1), Is.EqualTo(new YearMonth(2025, 2)));
     }

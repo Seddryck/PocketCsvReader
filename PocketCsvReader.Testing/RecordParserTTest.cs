@@ -18,8 +18,8 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, true, 4096, string.Empty, string.Empty);
-        var spanMapper = new SpanMapper<string>((span, fieldSpans) => span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString());
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, true, 4096, string.Empty, string.Empty);
+        var spanMapper = new SpanMapper<string>((span, fieldSpans) => span.Slice(fieldSpans.First().Value.Start, fieldSpans.First().Value.Length).ToString());
         using var reader = new RecordParser<string>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
         var eof = reader.IsEndOfFile(out var value);
         Assert.That(value, Is.EqualTo("foo"));
@@ -33,12 +33,12 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, false, 4096, "(empty)", "(null)");
         var spanMapper = new SpanMapper<Employee>((span, fieldSpans) =>
         {
             return new Employee(
-                span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString(),
-                int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString()));
+                span.Slice(fieldSpans.First().Value.Start, fieldSpans.First().Value.Length).ToString(),
+                int.Parse(span.Slice(fieldSpans.Last().Value.Start, fieldSpans.Last().Value.Length).ToString()));
         });
         using var reader = new RecordParser<Employee>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
         reader.IsEndOfFile(out var value);
@@ -53,12 +53,12 @@ public class RecordParserTTest
     {
         var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
 
-        var profile = new CsvProfile(';', '\'', '\'', "\r\n", false, false, 4096, "(empty)", "(null)");
+        var profile = new CsvProfile(';', '\'', '\\', "\r\n", false, false, 4096, "(empty)", "(null)");
         var spanMapper = new SpanMapper<Employee>((span, fieldSpans) =>
         {
             return new Employee(
-                span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString(),
-                int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString()));
+                span.Slice(fieldSpans.First().Value.Start, fieldSpans.First().Value.Length).ToString(),
+                int.Parse(span.Slice(fieldSpans.Last().Value.Start, fieldSpans.Last().Value.Length).ToString()));
         });
         using var reader = new RecordParser<Employee>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
         reader.IsEndOfFile(out var value);
@@ -82,8 +82,8 @@ public class RecordParserTTest
         var spanMapper = new SpanMapper<Human>((span, fieldSpans) =>
         {
             return new Human(
-                span.Slice(fieldSpans.First().ValueStart, fieldSpans.First().ValueLength).ToString(),
-                int.Parse(span.Slice(fieldSpans.Last().ValueStart, fieldSpans.Last().ValueLength).ToString())>18);
+                span.Slice(fieldSpans.First().Value.Start, fieldSpans.First().Value.Length).ToString(),
+                int.Parse(span.Slice(fieldSpans.Last().Value.Start, fieldSpans.Last().Value.Length).ToString()) > 18);
         });
         using var reader = new RecordParser<Human>(new StreamReader(buffer), profile, spanMapper, ArrayPool<char>.Create(256, 5));
         reader.IsEndOfFile(out var value);

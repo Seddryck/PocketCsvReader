@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -45,16 +45,20 @@ public class CsvArrayString : IDisposable
         RecordParser = new RecordParser(StreamReader, Profile);
     }
 
+    /// <summary>
+    /// Reads CSV records from the stream and returns each row as an array of strings.
+    /// </summary>
+    /// <returns>An enumerable of string arrays, where each array represents a row of CSV fields. Returns <c>null</c> if no fields are present in a row.</returns>
     public IEnumerable<string?[]> Read()
     {
         var stringMapper = new SpanMapper<string?[]?>((span, fieldSpans) =>
         {
-            if (!fieldSpans.Any())
+            if (!(fieldSpans?.Any() ?? false))
                 return null;
             var values = new string[fieldSpans.Count()];
             var index = 0;
             foreach (var fieldSpan in fieldSpans)
-                values[index++] = span.Slice(fieldSpan.ValueStart, fieldSpan.ValueLength).ToString();
+                values[index++] = span.Slice(fieldSpan.Value.Start, fieldSpan.Value.Length).ToString();
             return values;
         });
 
@@ -66,7 +70,7 @@ public class CsvArrayString : IDisposable
             if (RowCount == 0 && Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan);
+            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan, out _);
             var values = stringMapper.Invoke(recordSpan.Span, recordSpan.FieldSpans);
             if (values is null)
                 yield break;

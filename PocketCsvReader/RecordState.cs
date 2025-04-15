@@ -5,7 +5,10 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader;
-public interface IInternalCharParser
+public enum RecordState
 {
-    ParserState Parse(char c);
+    Record = 0,
+    Comment = 1,
+    Header = 2,
+    Eof = 3,
 }

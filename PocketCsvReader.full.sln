@@ -45,6 +45,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PocketCsvReader.Benchmark",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Profiler", "PocketCsvReader.Profiler\PocketCsvReader.Profiler.csproj", "{AF5684EA-625E-4AE4-B355-E906590506BB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Ndjson", "PocketCsvReader.Ndjson\PocketCsvReader.Ndjson.csproj", "{FE2C93BB-0E30-F60C-112B-156A3EFACA87}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Ndjson.Testing", "PocketCsvReader.Ndjson.Testing\PocketCsvReader.Ndjson.Testing.csproj", "{7837DA74-CC82-1D50-6539-52E23163E3BC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +71,14 @@ Global
 		{AF5684EA-625E-4AE4-B355-E906590506BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AF5684EA-625E-4AE4-B355-E906590506BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AF5684EA-625E-4AE4-B355-E906590506BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FE2C93BB-0E30-F60C-112B-156A3EFACA87}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE2C93BB-0E30-F60C-112B-156A3EFACA87}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE2C93BB-0E30-F60C-112B-156A3EFACA87}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE2C93BB-0E30-F60C-112B-156A3EFACA87}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
@@ -44,13 +44,38 @@ public class DialectDescriptorBuilder
         => WithEscapeChar((char)escapeChar);
     public DialectDescriptorBuilder WithoutEscapeChar()
         => (Descriptor = Descriptor with { EscapeChar = null }, Builder: this).Builder;
-    public DialectDescriptorBuilder WithNullSequence(string? nullSequence)
+    /// <summary>
+        /// Sets the string used to represent null values in the CSV dialect.
+        /// </summary>
+        /// <param name="nullSequence">The string to use for null values, or null to clear the setting.</param>
+        /// <returns>The current builder instance for chaining.</returns>
+        public DialectDescriptorBuilder WithNullSequence(string? nullSequence)
         => (Descriptor = Descriptor with { NullSequence = nullSequence}, Builder: this).Builder;
-    public DialectDescriptorBuilder WithoutNullSequence()
+    /// <summary>
+        /// Removes the null sequence setting from the dialect configuration.
+        /// </summary>
+        /// <returns>The current builder instance for chaining.</returns>
+        public DialectDescriptorBuilder WithoutNullSequence()
         => WithNullSequence(null);
-    public DialectDescriptorBuilder WithSkipInitialSpace(bool skipInitialSpace = true)
+    /// <summary>
+        /// Sets the string used to represent missing cells in the CSV dialect configuration.
+        /// </summary>
+        /// <param name="value">The string to use for missing cells.</param>
+        /// <returns>The current builder instance for method chaining.</returns>
+        public DialectDescriptorBuilder WithMissingCell(string value)
+        => (Descriptor = Descriptor with { MissingCell = value }, Builder: this).Builder;
+    /// <summary>
+        /// Sets whether to skip initial whitespace after delimiters when parsing fields.
+        /// </summary>
+        /// <param name="skipInitialSpace">If true, leading spaces after delimiters are ignored; otherwise, they are preserved.</param>
+        /// <returns>The current builder instance for chaining.</returns>
+        public DialectDescriptorBuilder WithSkipInitialSpace(bool skipInitialSpace = true)
         => (Descriptor = Descriptor with { SkipInitialSpace = skipInitialSpace}, Builder: this).Builder;
-    public DialectDescriptorBuilder WithoutSkipInitialSpace()
+    /// <summary>
+        /// Disables skipping of initial spaces in fields during CSV parsing.
+        /// </summary>
+        /// <returns>The current builder instance for chaining.</returns>
+        public DialectDescriptorBuilder WithoutSkipInitialSpace()
         => WithSkipInitialSpace(false);
     public DialectDescriptorBuilder WithHeader(bool header = true)
     {

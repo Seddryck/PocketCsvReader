@@ -7,7 +7,7 @@ using NUnit.Framework;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
 
-namespace PocketCsvReader.Testing.FieldParsing;
+namespace PocketCsvReader.Testing.ValueReader;
 public class SanitizerTest
 {
     private static CsvProfile GetProfile()

@@ -20,6 +20,7 @@ public record DialectDescriptor
     bool DoubleQuote = true,
     char? EscapeChar = null,
     string? NullSequence = null,
+    string? MissingCell = null,
     bool SkipInitialSpace = false,
     char? ArrayDelimiter = null,
     char? ArrayPrefix = null,
