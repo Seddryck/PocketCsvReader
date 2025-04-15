@@ -26,7 +26,7 @@ public class CsvProfile : IProfile
     { }
 
     public CsvProfile(char fieldSeparator, char textQualifier, string recordSeparator, bool firstRowHeader)
-        : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, false, 4096, string.Empty, string.Empty)
+        : this(fieldSeparator, textQualifier, '\\', recordSeparator, firstRowHeader, false, 4096, string.Empty, string.Empty)
     { }
 
     /// <summary>
