@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,6 +15,11 @@ struct ArrayParser : IParser
     private IParserStateController _controller
         => _internalController ??= new FieldStateController(_parent, _ctx, CreateInnerDialect(_dialect));
 
+    /// <summary>
+    /// Creates a new dialect descriptor for parsing array elements by replacing the delimiter with the array delimiter and disabling array nesting.
+    /// </summary>
+    /// <param name="outer">The outer dialect descriptor to base the new dialect on.</param>
+    /// <returns>A dialect descriptor configured for array element parsing.</returns>
     private DialectDescriptor CreateInnerDialect(DialectDescriptor outer)
     {
         return outer with
@@ -33,6 +38,9 @@ struct ArrayParser : IParser
     private readonly char? _suffixArray;
     private readonly DialectDescriptor _dialect;
 
+    /// <summary>
+    /// Initializes a new ArrayParser for parsing array-like CSV fields using the specified parent controller, context, and dialect settings.
+    /// </summary>
     public ArrayParser(IParserStateController parent, IParserContext ctx, DialectDescriptor dialect)
     {
         _parent = parent;
@@ -42,6 +50,12 @@ struct ArrayParser : IParser
                 dialect.EscapeChar, dialect.SkipInitialSpace);
     }
 
+    /// <summary>
+    /// Parses a character within an array field, handling array suffix detection and delegating element parsing to the internal controller.
+    /// </summary>
+    /// <param name="c">The character to parse.</param>
+    /// <param name="pos">The position of the character in the input.</param>
+    /// <returns>The resulting parser state after processing the character.</returns>
     public ParserState Parse(char c, int pos)
     {
         var escaping = _ctx.Escaping;
@@ -67,9 +81,15 @@ struct ArrayParser : IParser
         return inner;
     }
 
-    public ParserState ParseEof(int pos)
+    /// <summary>
+        /// Returns an error state when end-of-file is reached, indicating incomplete array parsing.
+        /// </summary>
+        public ParserState ParseEof(int pos)
         => ParserState.Error;
 
+    /// <summary>
+    /// Resets the parser context and internal controller to their initial states.
+    /// </summary>
     public void Reset()
     {
         _ctx.Reset();

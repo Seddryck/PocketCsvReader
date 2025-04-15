@@ -17,9 +17,26 @@ public abstract class BaseRecordParser<P> : IDisposable
 
     private int? FieldsCount { get; set; }
 
-    protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
+    /// <summary>
+        /// Initializes a new instance of the <see cref="BaseRecordParser{P}"/> class with the specified parsing profile, buffer reader, optional character pool, and parser factory.
+        /// </summary>
+        /// <param name="profile">The parsing profile used to configure parsing behavior.</param>
+        /// <param name="buffer">The buffer reader supplying character data for parsing.</param>
+        /// <param name="pool">An optional array pool for efficient character buffer management.</param>
+        /// <param name="parserFactory">A factory function that creates an <see cref="IParser"/> instance based on the provided profile.</param>
+        protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
         => (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
 
+    /// <summary>
+    /// Attempts to parse the next record from the buffer, indicating whether the end of the file has been reached.
+    /// </summary>
+    /// <param name="record">When this method returns, contains the parsed record if available, or an empty record if at EOF or a comment line.</param>
+    /// <param name="recordState">When this method returns, indicates the type of record parsed: data record, comment, or end-of-file.</param>
+    /// <returns>
+    /// <c>true</c> if the end of the file has been reached after this call; otherwise, <c>false</c>.
+    /// </returns>
+    /// <exception cref="InvalidDataException">Thrown if an invalid character or parse error is encountered.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if an unexpected parser state occurs at end-of-file.</exception>
     public virtual bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
         var index = 0;
@@ -123,9 +140,20 @@ public abstract class BaseRecordParser<P> : IDisposable
         }
     }
 
-    protected virtual RecordSpan CreateRecordSpan(ReadOnlySpan<char> span, FieldSpan[] fields)
+    /// <summary>
+        /// Creates a <see cref="RecordSpan"/> from the specified character span and array of field spans.
+        /// </summary>
+        /// <param name="span">The span of characters representing the entire record.</param>
+        /// <param name="fields">The array of parsed field spans within the record.</param>
+        /// <returns>A <see cref="RecordSpan"/> containing the provided span and fields.</returns>
+        protected virtual RecordSpan CreateRecordSpan(ReadOnlySpan<char> span, FieldSpan[] fields)
         => new(span, fields);
 
+    /// <summary>
+    /// Counts the number of record separators in the input stream.
+    /// </summary>
+    /// <returns>The total number of records detected in the input.</returns>
+    /// <exception cref="InvalidDataException">Thrown if an invalid character is encountered during parsing.</exception>
     protected virtual int CountRecordSeparators()
     {
         var span = ReadOnlySpan<char>.Empty;

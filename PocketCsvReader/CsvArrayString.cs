@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -45,6 +45,10 @@ public class CsvArrayString : IDisposable
         RecordParser = new RecordParser(StreamReader, Profile);
     }
 
+    /// <summary>
+    /// Reads CSV records from the stream and returns each row as an array of strings.
+    /// </summary>
+    /// <returns>An enumerable of string arrays, where each array represents a row of CSV fields. Returns <c>null</c> if no fields are present in a row.</returns>
     public IEnumerable<string?[]> Read()
     {
         var stringMapper = new SpanMapper<string?[]?>((span, fieldSpans) =>
