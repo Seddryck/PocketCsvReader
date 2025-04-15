@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Immutable;
 using System.Reflection;
 using PocketCsvReader.Configuration;
@@ -16,6 +16,11 @@ public class CsvProfile : IProfile
 
     public virtual string EmptyCell { get; private set; }
 
+    /// <summary>
+    /// Initializes a new CsvProfile with the specified field separator and record separator, using double quotes as the text qualifier and no header row.
+    /// </summary>
+    /// <param name="fieldSeparator">The character used to separate fields.</param>
+    /// <param name="recordSeparator">The string used to separate records (rows).</param>
     public CsvProfile(char fieldSeparator, string recordSeparator)
         : this(fieldSeparator, '\"', recordSeparator, false)
     { }
@@ -24,6 +29,18 @@ public class CsvProfile : IProfile
         : this(fieldSeparator, textQualifier, textQualifier, recordSeparator, firstRowHeader, false, 4096, string.Empty, string.Empty)
     { }
 
+    /// <summary>
+    /// Initializes a new <see cref="CsvProfile"/> with custom CSV dialect, parser optimization options, and resource sequences for empty and missing cells.
+    /// </summary>
+    /// <param name="fieldSeparator">The character used to separate fields in the CSV.</param>
+    /// <param name="textQualifier">The character used to quote fields.</param>
+    /// <param name="escapeTextQualifier">The character used to escape the text qualifier within quoted fields.</param>
+    /// <param name="recordSeparator">The string used to separate records (rows).</param>
+    /// <param name="firstRowHeader">Indicates whether the first row contains column headers.</param>
+    /// <param name="rowCountAtStart">If true, expects the row count at the start of the CSV.</param>
+    /// <param name="bufferSize">The buffer size for parsing operations.</param>
+    /// <param name="emptyCell">The string representing an empty cell in the CSV.</param>
+    /// <param name="missingCell">The string representing a missing cell in the CSV.</param>
     public CsvProfile(char fieldSeparator, char textQualifier, char escapeTextQualifier, string recordSeparator, bool firstRowHeader, bool rowCountAtStart, int bufferSize, string emptyCell, string missingCell)
     {
         Dialect = new DialectDescriptorBuilder()
@@ -44,6 +61,13 @@ public class CsvProfile : IProfile
             .Build();
     }
 
+    /// <summary>
+    /// Initializes a new CsvProfile using the specified dialect, schema, resource, and parsers.
+    /// </summary>
+    /// <param name="dialect">The CSV dialect descriptor to use for parsing configuration.</param>
+    /// <param name="schema">Optional schema descriptor for column definitions.</param>
+    /// <param name="resource">Optional resource descriptor for cell value sequences; if the dialect defines a null sequence, it is added to the resource.</param>
+    /// <param name="parsers">Optional runtime parsers descriptor.</param>
     public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers = null)
     {
         if (dialect.NullSequence is not null)

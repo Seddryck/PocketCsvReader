@@ -13,6 +13,12 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         : this(reader, profile, ArrayPool<char>.Shared)
     { }
 
+    /// <summary>
+    /// Initializes a new RecordParser for reading CSV data from a stream using the specified profile and character array pool.
+    /// </summary>
+    /// <param name="reader">The StreamReader providing CSV input.</param>
+    /// <param name="profile">The CsvProfile defining parsing rules and optimizations.</param>
+    /// <param name="pool">An optional ArrayPool&lt;char&gt; for buffer management.</param>
     public RecordParser(StreamReader reader, CsvProfile profile, ArrayPool<char>? pool)
         : base(profile, profile.ParserOptimizations.ReadAhead
                     ? new DoubleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
@@ -20,10 +26,20 @@ public class RecordParser : BaseRecordParser<CsvProfile>
               , pool, (p) => new FieldParser(p.Dialect))
     { }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RecordParser"/> class with the specified CSV profile, buffer reader, and optional character array pool.
+    /// </summary>
+    /// <param name="profile">The CSV profile that defines parsing rules and dialect.</param>
+    /// <param name="buffer">The buffer reader used for reading CSV data.</param>
+    /// <param name="pool">An optional character array pool for buffer management.</param>
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
         : base(profile, buffer, pool, (p) => new FieldParser(p.Dialect))
     { }
 
+    /// <summary>
+    /// Reads and returns the CSV header rows as a jagged array of strings based on the profile's dialect settings.
+    /// </summary>
+    /// <returns>An array of string arrays, each representing a header row. Returns an empty array if headers are not defined in the profile.</returns>
     public virtual string[][] ReadHeaders()
     {
         if (!Profile.Dialect.Header)
@@ -53,6 +69,10 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         return [.. headerList];
     }
 
+    /// <summary>
+    /// Returns the total number of CSV records, or null if row counting is not supported by the profile.
+    /// </summary>
+    /// <returns>The number of records, excluding headers, or null if counting is not enabled.</returns>
     public int? CountRecords()
     {
         if (!Profile.ParserOptimizations.RowCountAtStart)
@@ -66,6 +86,10 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         return count;
     }
 
+    /// <summary>
+    /// Reads and returns the first CSV record as a string, handling records that may span multiple buffer reads.
+    /// </summary>
+    /// <returns>The first record from the CSV input as a string, or an empty string if no record is found.</returns>
     public virtual string GetFirstRecord()
     {
         var longSpan = Span<char>.Empty;

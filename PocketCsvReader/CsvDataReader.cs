@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Text;
@@ -20,16 +20,30 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     public override int FieldCount =>
         Record?.FieldSpans.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
 
-    protected override object GetMissingField()
+    /// <summary>
+        /// Returns the default value for a missing CSV field, using the profile's configured missing cell value if special value handling is enabled; otherwise, returns an empty string.
+        /// </summary>
+        protected override object GetMissingField()
         => Profile.ParserOptimizations.HandleSpecialValues ? Profile.Dialect.MissingCell ?? string.Empty : string.Empty;
 
-    public override string GetRawString(int i)
+    /// <summary>
+            /// Returns the raw string representation of the field at the specified index, including surrounding quotes if the field was quoted in the original CSV.
+            /// </summary>
+            /// <param name="i">The zero-based index of the field.</param>
+            /// <returns>The raw field string, wrapped in quote characters if originally quoted; otherwise, the field value as a string.</returns>
+            public override string GetRawString(int i)
         => Record!.FieldSpans[i].Value.WasQuoted
             ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
             : Record!.Slice(i).ToString();
 
     private SanitizerFactory? sanitizerFactory;
     private Dictionary<int, ISanitizer> CacheSanitizers { get; } = [];
+    /// <summary>
+    /// Returns the sanitized value of the field at the specified index, applying field-specific sanitization and handling missing or incomplete fields according to the CSV profile.
+    /// </summary>
+    /// <param name="i">The zero-based index of the field to retrieve.</param>
+    /// <returns>A <see cref="NullableSpan"/> containing the sanitized field value, or a missing field value if the index is within the expected range and incomplete record extension is enabled.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the field index is outside the range of available and expected fields.</exception>
     protected override NullableSpan GetValueOrThrow(int i)
     {
         if (i < Record!.FieldSpans.Length)
@@ -46,6 +60,10 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 
+    /// <summary>
+    /// Advances the reader to the next CSV record.
+    /// </summary>
+    /// <returns><c>true</c> if a new record was read; <c>false</c> if the end of the file has been reached.</returns>
     public override bool Read()
     {
         if (FileEncoding is null)
@@ -56,6 +74,10 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         return ReadRow();
     }
 
+    /// <summary>
+    /// Reads the next non-comment CSV row, handling headers and end-of-file conditions as needed.
+    /// </summary>
+    /// <returns>True if a data row was successfully read; false if end-of-file is reached.</returns>
     protected virtual bool ReadRow()
     {
         var firstRow = RowCount == 0;
@@ -112,6 +134,13 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     internal void SetHeaders(string[] headers)
         => Fields = headers;
 
+    /// <summary>
+    /// Throws an exception if the current record contains more fields than the expected count.
+    /// </summary>
+    /// <param name="expectedLength">The expected number of fields for the current record.</param>
+    /// <exception cref="InvalidDataException">
+    /// Thrown when the record has more fields than expected, indicating the row number and the number of extra fields.
+    /// </exception>
     private void HandleUnexpectedFields(int expectedLength)
     {
         var length = Record!.FieldSpans.Length;

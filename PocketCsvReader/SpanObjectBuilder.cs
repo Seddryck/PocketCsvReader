@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Globalization;
@@ -41,6 +41,14 @@ public class SpanObjectBuilder<T>
             ParserMapping.Add(typeof(TField), parse);
     }
 
+    /// <summary>
+    /// Instantiates an object of type <typeparamref name="T"/> by parsing fields from the specified character span using the provided field spans.
+    /// </summary>
+    /// <param name="span">The input character span containing the serialized field values.</param>
+    /// <param name="fieldSpans">A sequence of <see cref="FieldSpan"/> objects defining the positions and lengths of each field within <paramref name="span"/>.</param>
+    /// <returns>An instance of <typeparamref name="T"/> with constructor parameters populated from the parsed fields.</returns>
+    /// <exception cref="Exception">Thrown if no parser is registered for a required field type.</exception>
+    /// <exception cref="FormatException">Thrown if a field cannot be parsed into the expected type, with details about the field index and value.</exception>
     public T Instantiate(ReadOnlySpan<char> span, IEnumerable<FieldSpan> fieldSpans)
     {
         var ctors = typeof(T).GetConstructors(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
