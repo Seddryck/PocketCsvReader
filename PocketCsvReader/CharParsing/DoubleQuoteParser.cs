@@ -46,7 +46,7 @@ internal readonly struct DoubleQuoteParser : IParser
             return ParserState.Continue;
         }
 
-        if (_escape.HasValue && c == _escape.Value && !escaping)
+        if (_escape.HasValue && c == _escape.Value)
         {
             if (doubling)
                 return ParserState.Error;
@@ -56,11 +56,6 @@ internal readonly struct DoubleQuoteParser : IParser
 
         if (c == _quote && !doubling)
         {
-            if (escaping)
-            {
-                _ctx.EndEscaping();
-                return ParserState.Continue;
-            }
             _ctx.StartDoubling();
             _ctx.EndValue(pos - 1);
             return ParserState.Continue;
