@@ -42,7 +42,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].Value.IsEscaped, Record!.FieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return new NullableSpan(Profile.ParserOptimizations.HandleSpecialValues ? Profile.Dialect.MissingCell ?? string.Empty : string.Empty);
+            return new NullableSpan(GetMissingField().ToString().AsSpan());
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
     }
 

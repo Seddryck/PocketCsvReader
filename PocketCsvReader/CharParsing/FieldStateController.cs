@@ -19,7 +19,7 @@ class FieldStateController : IParserStateController
     private IParser _currentParser;
     private readonly IParserStateController? _parentController;
     private ParserStateFn _currentState;
-    private IParser? _rollback;
+    private IParser? _previousParser;
 
     public FieldStateController(IParserContext ctx, DialectDescriptor dialect)
     {
@@ -39,7 +39,7 @@ class FieldStateController : IParserStateController
 
         _currentParser = _valueParser;
         _currentState = _valueParser.Parse;
-        _rollback = null;
+        _previousParser = null;
     }
 
     public FieldStateController(IParserStateController parent, IParserContext ctx, DialectDescriptor dialect)
@@ -72,7 +72,7 @@ class FieldStateController : IParserStateController
         => SwitchTo(_commentParser ?? throw new InvalidOperationException());
     public void SwitchToLineTerminator(ParserState state)
     {
-        _rollback = _currentParser;
+        _previousParser = _currentParser;
         _lineTerminatorParser.ReturnState(state);
         SwitchTo(_lineTerminatorParser);
     }
@@ -83,15 +83,15 @@ class FieldStateController : IParserStateController
         _arrayParser?.Reset();
         _currentState = _valueParser.Parse;
         _currentParser = _valueParser;
-        _rollback = null;
+        _previousParser = null;
     }
 
     public void SwitchBack()
     {
-        if (_rollback is not null)
+        if (_previousParser is not null)
         {
-            _currentState = _rollback.Parse;
-            _rollback = null;
+            _currentState = _previousParser.Parse;
+            _previousParser = null;
         }
     }
 

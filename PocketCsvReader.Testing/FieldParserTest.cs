@@ -9,7 +9,7 @@ using Pidgin;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader.Testing;
-public class CharParserTest
+public class FieldParserTest
 {
     [TestCase("foo", 0, 3)]
     [TestCase("foobar", 0, 6)]

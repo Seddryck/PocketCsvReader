@@ -1010,7 +1010,7 @@ public class CsvDataReaderTest
 
     [TestCase(40_000, true)]
     [TestCase(40_000, false)]
-    //[TestCase(1, true)]
+    [TestCase(1, true)]
     public void Read_TestData_Successful(int lineCount, bool handleSpecialValues)
     {
         var bytes = TestData.PackageAssets.GetBytes(lineCount);
