@@ -97,7 +97,7 @@ public class NdjsonDataReaderTests
                     Assembly.GetExecutingAssembly()
                         .GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.Resources.metrics.ndjson")
                     ?? throw new FileNotFoundException();
-        var dataReader = new NdjsonDataReader(stream, new NdjsonProfile(new DialectDescriptor(), schema));
+        var dataReader = new NdjsonDataReader(stream, new NdjsonProfile(new NdjsonDialectDescriptor(), schema));
         Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.GetValue("metric"), Is.EqualTo("RAMP_UP_SCORE"));
         Assert.That(dataReader.GetValue("line"), Is.EqualTo(335));
@@ -111,7 +111,7 @@ public class NdjsonDataReaderTests
                         .GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.Resources.metrics.ndjson")
                     ?? throw new FileNotFoundException();
         var dataReader = new NdjsonDataReader(stream, NdjsonProfile.Default);
-        for (int i = 0; i <= 6; i++)
+        for (int i = 0; i < 7; i++)
             Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.Read(), Is.False);
     }

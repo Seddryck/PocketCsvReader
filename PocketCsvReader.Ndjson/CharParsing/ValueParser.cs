@@ -3,20 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
 using PocketCsvReader.Configuration;
 
-namespace PocketCsvReader.CharParsing;
+namespace PocketCsvReader.Ndjson.CharParsing;
 public readonly struct ValueParser : IParser
 {
     private readonly IParserContext _ctx;
-    private readonly IParserStateController _controller;
+    private readonly INdjsonStateController _controller;
 
     private readonly char _lineTerminator;
     private readonly char _delimiter;
     private readonly char? _quote;
     private readonly char? _escape;
     private readonly bool _skipInitialSpace;
-    private readonly bool _doubleQuote;
     private readonly char? _comment;
     private readonly char? _prefixArray;
 
@@ -33,10 +33,10 @@ public readonly struct ValueParser : IParser
     /// <param name="doubleQuote">Indicates whether double quotes are used to escape quotes within quoted fields.</param>
     /// <param name="comment">Optional character indicating the start of a comment.</param>
     /// <param name="prefixArray">Optional character indicating the start of an array value.</param>
-    public ValueParser(IParserContext ctx, IParserStateController controller, string lineTerminator, char delimiter,
-char? quote = null, char? escape = null, bool skipInitialSpace = false, bool doubleQuote = false, char? comment = null, char? prefixArray = null)
-=> (_ctx, _controller, _lineTerminator, _delimiter, _quote, _escape, _skipInitialSpace, _doubleQuote, _comment, _prefixArray)
-    = (ctx, controller, lineTerminator[0], delimiter, quote, escape, skipInitialSpace, doubleQuote, comment, prefixArray);
+    public ValueParser(IParserContext ctx, INdjsonStateController controller, string lineTerminator, char delimiter,
+        char? quote = null, char? escape = null, bool skipInitialSpace = false, char? comment = null, char? prefixArray = null)
+        => (_ctx, _controller, _lineTerminator, _delimiter, _quote, _escape, _skipInitialSpace, _comment, _prefixArray)
+            = (ctx, controller, lineTerminator[0], delimiter, quote, escape, skipInitialSpace, comment, prefixArray);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
@@ -49,7 +49,7 @@ char? quote = null, char? escape = null, bool skipInitialSpace = false, bool dou
         if (_quote.HasValue && c == _quote.Value)
         {
             _ctx.StartValue(pos, true);
-            _controller.SwitchToQuoted();
+            _controller.SwitchToValueQuoted();
             return ParserState.Continue;
         }
 
@@ -81,20 +81,13 @@ char? quote = null, char? escape = null, bool skipInitialSpace = false, bool dou
         }
 
         if (c == _lineTerminator)
-        {
-            if (_ctx.Span.Value.IsStarted)
-                _ctx.EndValue(pos);
-            else
-                _ctx.EmptyValue();
-            _controller.SwitchToLineTerminator(ParserState.Record);
-            return ParserState.Continue;
-        }
+            return ParserState.Error;
 
         if (_escape.HasValue && c == _escape.Value)
             _ctx.StartEscaping();
 
         _ctx.StartValue(pos, false);
-        _controller.SwitchToRaw();
+        _controller.SwitchToValueRaw();
         return ParserState.Continue;
     }
 

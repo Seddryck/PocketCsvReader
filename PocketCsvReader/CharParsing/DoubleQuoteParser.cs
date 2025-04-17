@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-internal readonly struct DoubleQuoteParser : IParser
+public readonly struct DoubleQuoteParser : IParser
 {
     private readonly IParserContext _ctx;
     private readonly IParserStateController _controller;
@@ -17,17 +17,17 @@ internal readonly struct DoubleQuoteParser : IParser
     private readonly int _lineTerminatorLength;
 
     /// <summary>
-            /// Initializes a new instance of the <see cref="DoubleQuoteParser"/> for parsing CSV fields enclosed in double quotes, with configurable delimiter, quote, escape character, and line terminator.
-            /// </summary>
-            /// <param name="ctx">The parser context used to track parsing state and field spans.</param>
-            /// <param name="controller">The state controller managing multi-character line terminators and parsing transitions.</param>
-            /// <param name="delimiter">The character used to separate fields.</param>
-            /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
-            /// <param name="quote">The character used to enclose quoted fields.</param>
-            /// <param name="escape">An optional character used for escaping within quoted fields.</param>
-            public DoubleQuoteParser(IParserContext ctx, IParserStateController controller, char delimiter, string lineTerminator, char quote, char? escape = null)
-        => (_ctx, _controller, _delimiter, _lineTerminatorChar, _lineTerminatorLength, _quote, _escape) =
-            (ctx, controller, delimiter, lineTerminator[0], lineTerminator.Length, quote, escape);
+    /// Initializes a new instance of the <see cref="DoubleQuoteParser"/> for parsing CSV fields enclosed in double quotes, with configurable delimiter, quote, escape character, and line terminator.
+    /// </summary>
+    /// <param name="ctx">The parser context used to track parsing state and field spans.</param>
+    /// <param name="controller">The state controller managing multi-character line terminators and parsing transitions.</param>
+    /// <param name="delimiter">The character used to separate fields.</param>
+    /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
+    /// <param name="quote">The character used to enclose quoted fields.</param>
+    /// <param name="escape">An optional character used for escaping within quoted fields.</param>
+    public DoubleQuoteParser(IParserContext ctx, IParserStateController controller, char delimiter, string lineTerminator, char quote, char? escape = null)
+    => (_ctx, _controller, _delimiter, _lineTerminatorChar, _lineTerminatorLength, _quote, _escape) =
+        (ctx, controller, delimiter, lineTerminator[0], lineTerminator.Length, quote, escape);
 
     /// <summary>
     /// Processes a single character in a quoted CSV field, updating the parsing state based on escaping, quote doubling, delimiters, and line terminators.
@@ -39,6 +39,7 @@ internal readonly struct DoubleQuoteParser : IParser
     {
         var doubling = _ctx.Doubling;
         var escaping = _ctx.Escaping;
+        var complete = _ctx.IsComplete;
 
         if (escaping)
         {
@@ -61,7 +62,7 @@ internal readonly struct DoubleQuoteParser : IParser
             return ParserState.Continue;
         }
 
-        if (_ctx.IsComplete || doubling)
+        if (complete || doubling)
         {
             if (c == _quote)
             {
@@ -74,7 +75,7 @@ internal readonly struct DoubleQuoteParser : IParser
                 _ctx.RemoveDoubling();
                 return ParserState.Field;
             }
-                
+
             if (c == _lineTerminatorChar)
             {
                 if (_lineTerminatorLength == 1)
@@ -88,12 +89,12 @@ internal readonly struct DoubleQuoteParser : IParser
     }
 
     /// <summary>
-        /// Determines the parser state at end-of-file, returning <c>Record</c> if the quoted field is complete, or <c>Error</c> otherwise.
-        /// </summary>
-        /// <param name="pos">The current character position in the input.</param>
-        /// <returns><c>ParserState.Record</c> if the field is complete; otherwise, <c>ParserState.Error</c>.</returns>
-        public ParserState ParseEof(int pos)
-        => _ctx.IsComplete ? ParserState.Record : ParserState.Error;
+    /// Determines the parser state at end-of-file, returning <c>Record</c> if the quoted field is complete, or <c>Error</c> otherwise.
+    /// </summary>
+    /// <param name="pos">The current character position in the input.</param>
+    /// <returns><c>ParserState.Record</c> if the field is complete; otherwise, <c>ParserState.Error</c>.</returns>
+    public ParserState ParseEof(int pos)
+    => _ctx.Span.Value.IsComplete ? ParserState.Record : ParserState.Error;
 
     /// <summary>
     /// Resets the parser context and state controller to their initial states.

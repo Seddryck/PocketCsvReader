@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-internal readonly struct CommentParser : IParser
+public readonly struct CommentParser : IParser
 {
     private readonly IParserContext _ctx;
     private readonly IParserStateController _controller;

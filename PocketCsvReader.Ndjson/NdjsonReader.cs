@@ -21,7 +21,7 @@ namespace PocketCsvReader.Ndjson
         protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
 
         protected internal NdjsonProfile Profile { get; private set; }
-        public DialectDescriptor Dialect { get => Profile.Dialect; }
+        public NdjsonDialectDescriptor Dialect { get => Profile.Dialect; }
 
         protected int BufferSize { get; private set; }
 

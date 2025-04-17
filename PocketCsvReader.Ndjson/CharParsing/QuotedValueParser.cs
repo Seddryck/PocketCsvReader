@@ -3,24 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
 
-namespace PocketCsvReader.CharParsing;
-public readonly struct QuotedParser : IParser
+namespace PocketCsvReader.Ndjson.CharParsing;
+public readonly struct QuotedValueParser : IParser
 {
     private readonly IParserContext _ctx;
-    private readonly IParserStateController _controller;
+    private readonly INdjsonStateController _controller;
 
     internal IParserContext Context => _ctx;
-    internal IParserStateController Controller => _controller;
+    internal INdjsonStateController Controller => _controller;
 
     private readonly char _delimiter;
-    private readonly char _lineTerminatorChar;
-    private readonly int _lineTerminatorLength;
+    private readonly char _objectSuffix;
     private readonly char _quote;
     private readonly char? _escape;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="QuotedParser"/> struct for parsing quoted fields with the specified context, controller, delimiter, line terminator, quote, and optional escape character.
+    /// Initializes a new instance of the <see cref="QuotedValueParser"/> struct for parsing quoted fields with the specified context, controller, delimiter, line terminator, quote, and optional escape character.
     /// </summary>
     /// <param name="ctx">The parser context managing field state and span.</param>
     /// <param name="controller">The state controller for managing parser transitions.</param>
@@ -28,9 +28,9 @@ public readonly struct QuotedParser : IParser
     /// <param name="lineTerminator">The string representing the line terminator.</param>
     /// <param name="quote">The character used for quoting fields.</param>
     /// <param name="escape">An optional character used for escaping within quoted fields.</param>
-    public QuotedParser(IParserContext ctx, IParserStateController controller, char delimiter, string lineTerminator, char quote, char? escape = null)
-        => (_ctx, _controller, _delimiter, _lineTerminatorChar, _lineTerminatorLength, _quote, _escape)
-        = (ctx, controller, delimiter, lineTerminator[0], lineTerminator.Length, quote, escape);
+    public QuotedValueParser(IParserContext ctx, INdjsonStateController controller, char delimiter, string lineTerminator, char quote, char? escape, char objectSuffix)
+        => (_ctx, _controller, _delimiter, _quote, _escape, _objectSuffix)
+        = (ctx, controller, delimiter, quote, escape, objectSuffix);
 
     /// <summary>
     /// Processes a single character within a quoted CSV field, updating the parsing state based on quotes, delimiters, line terminators, and escape sequences.
@@ -45,14 +45,14 @@ public readonly struct QuotedParser : IParser
 
         if (isComplete)
         {
+            if (c == ' ')
+                return ParserState.Continue;
             if (c == _delimiter)
                 return ParserState.Field;
-            if (c == _lineTerminatorChar)
+            if (c == _objectSuffix)
             {
-                if (_lineTerminatorLength == 1)
-                    return ParserState.Record;
-                _controller.SwitchToLineTerminator(ParserState.Record);
-                return ParserState.Continue;
+                _controller.SwitchToLineTerminator(ParserState.Continue);
+                return ParserState.Record;
             }
             return ParserState.Error;
         }
@@ -84,7 +84,7 @@ public readonly struct QuotedParser : IParser
     /// <param name="pos">The current character position in the input.</param>
     /// <returns><c>ParserState.Record</c> if the field is complete; otherwise, <c>ParserState.Error</c>.</returns>
     public ParserState ParseEof(int pos)
-    => _ctx.Span.Value.IsComplete ? ParserState.Record : ParserState.Error;
+    => _ctx.IsComplete ? ParserState.Record : ParserState.Error;
     /// <summary>
     /// Resets the parser context and state controller to their initial states.
     /// </summary>

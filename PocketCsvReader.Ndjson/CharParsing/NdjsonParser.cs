@@ -3,33 +3,35 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
+using PocketCsvReader.Ndjson;
+using PocketCsvReader.Ndjson.Configuration;
 
-namespace PocketCsvReader.CharParsing;
+namespace PocketCsvReader.Ndjson.CharParsing;
 
-public delegate ParserState ParserStateFn(char c, int pos);
-public class FieldParser : IParser
+class NdjsonParser : IParser
 {
     public IParserContext Context { get; }
-    public IParserStateController Controller { get; }
+    public NdjsonStateController Controller { get; }
 
     /// <summary>
-    /// Initializes a new <see cref="FieldParser"/> using the specified CSV dialect with default context and controller.
+    /// Initializes a new <see cref="NdjsonParser"/> using the specified CSV dialect with default context and controller.
     /// </summary>
     /// <param name="dialect">The CSV dialect descriptor to configure parsing behavior.</param>
-    public FieldParser(DialectDescriptor dialect)
+    public NdjsonParser(NdjsonDialectDescriptor dialect)
         : this(null, null, dialect)
     { }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="FieldParser"/> class with optional custom context and controller, using the specified CSV dialect.
+    /// Initializes a new instance of the <see cref="NdjsonParser"/> class with optional custom context and controller, using the specified CSV dialect.
     /// </summary>
     /// <param name="ctx">Optional parser context. If null, a default <see cref="FieldContext"/> is used.</param>
-    /// <param name="controller">Optional parser state controller. If null, a default <see cref="FieldStateController"/> is created with the provided context and dialect.</param>
+    /// <param name="controller">Optional parser state controller. If null, a default <see cref="NdjsonStateController"/> is created with the provided context and dialect.</param>
     /// <param name="dialect">The CSV dialect descriptor used for parsing configuration.</param>
-    protected internal FieldParser(IParserContext? ctx, IParserStateController? controller, DialectDescriptor dialect)
+    protected internal NdjsonParser(IParserContext? ctx, NdjsonStateController? controller, NdjsonDialectDescriptor dialect)
     {
         Context = ctx ?? new FieldContext();
-        Controller = controller ?? new FieldStateController(Context, dialect);
+        Controller = controller ?? new NdjsonStateController(Context, dialect);
     }
 
     /// <summary>

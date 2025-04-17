@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
-class LineTerminatorParser : IParser
+public class LineTerminatorParser : IParser
 {
     private readonly IParserContext _ctx;
     private readonly IParserStateController _controller;
@@ -15,12 +15,12 @@ class LineTerminatorParser : IParser
     private ParserState _returnState = ParserState.Record;
 
     /// <summary>
-            /// Initializes a new instance of the <see cref="LineTerminatorParser"/> with the specified parser context, state controller, and line terminator sequence.
-            /// </summary>
-            /// <param name="ctx">The parser context providing access to parsing state and results.</param>
-            /// <param name="controller">The state controller used to manage parser transitions.</param>
-            /// <param name="lineTerminator">The line terminator sequence to match during parsing.</param>
-            public LineTerminatorParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
+    /// Initializes a new instance of the <see cref="LineTerminatorParser"/> with the specified parser context, state controller, and line terminator sequence.
+    /// </summary>
+    /// <param name="ctx">The parser context providing access to parsing state and results.</param>
+    /// <param name="controller">The state controller used to manage parser transitions.</param>
+    /// <param name="lineTerminator">The line terminator sequence to match during parsing.</param>
+    public LineTerminatorParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
         => (_ctx, _controller, _lineTerminators)
             = (ctx, controller, lineTerminator.ToCharArray());
 
@@ -47,12 +47,12 @@ class LineTerminatorParser : IParser
     }
 
     /// <summary>
-        /// Returns the parser's current return state when the end of input is reached.
-        /// </summary>
-        /// <param name="pos">The position in the input where EOF was encountered.</param>
-        /// <returns>The parser state to transition to at EOF.</returns>
-        public ParserState ParseEof(int pos)
-        => _returnState;
+    /// Returns the parser's current return state when the end of input is reached.
+    /// </summary>
+    /// <param name="pos">The position in the input where EOF was encountered.</param>
+    /// <returns>The parser state to transition to at EOF.</returns>
+    public ParserState ParseEof(int pos)
+    => _returnState;
     /// <summary>
     /// Resets the parser to its initial state, clearing progress through the line terminator sequence and setting the return state to <c>ParserState.Record</c>.
     /// </summary>

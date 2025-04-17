@@ -41,6 +41,7 @@ public record struct SpanInfo
     int Length,
     bool WasQuoted = false,
     bool IsEscaped = false,
-    bool IsStarted = false
+    bool IsStarted = false,
+    bool IsComplete = false
 )
 { }
