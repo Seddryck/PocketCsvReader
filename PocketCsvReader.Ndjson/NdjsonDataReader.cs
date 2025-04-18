@@ -40,8 +40,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
 
     public override string GetRawString(int i)
     {
-        var addChar = Record!.FieldSpans[i].WasQuoted ? 1 : 0;
-        return Record!.Span.Slice(Record!.FieldSpans[i].LabelStart, Record!.FieldSpans[i].ValueLength + addChar).ToString();
+        var addChar = Record!.FieldSpans[i].Label.WasQuoted ? 1 : 0;
+        return Record!.Span.Slice(Record!.FieldSpans[i].Label.Start, Record!.FieldSpans[i].Value.Length + addChar).ToString();
     }
 
     public override bool Read()
@@ -53,7 +53,7 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         if (IsEof)
             return false;
 
-        IsEof = RecordParser!.IsEndOfFile(out var recordSpan);
+        IsEof = RecordParser!.IsEndOfFile(out var recordSpan, out _);
 
         if (recordSpan.FieldSpans.Length == 0)
         {

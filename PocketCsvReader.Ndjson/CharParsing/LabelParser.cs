@@ -3,26 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
 
-namespace PocketCsvReader.CharParsing;
-public readonly struct LabelParser
+namespace PocketCsvReader.Ndjson.CharParsing;
+public readonly struct LabelParser : IParser
 {
     private readonly IParserContext _ctx;
-    private readonly IParserStateController _controller;
+    private readonly INdjsonStateController _controller;
 
     private readonly char _separator;
     private readonly char? _quote;
     private readonly char? _escape;
     private readonly bool _skipInitialSpace;
-    private readonly char? _comment;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LabelParser"/> struct with the specified field parser context.
     /// </summary>
-    public LabelParser(IParserContext ctx, IParserStateController controller, char separator, char? quote,
-            char? escape, bool skipInitialSpace, char? comment)
-        => (_ctx, _controller, _separator, _quote, _escape, _skipInitialSpace, _comment) =
-            (ctx, controller, separator, quote, escape, skipInitialSpace, comment);
+    public LabelParser(IParserContext ctx, INdjsonStateController controller, char separator, char? quote,
+            char? escape, bool skipInitialSpace)
+        => (_ctx, _controller, _separator, _quote, _escape, _skipInitialSpace) =
+            (ctx, controller, separator, quote, escape, skipInitialSpace);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
@@ -34,8 +34,8 @@ public readonly struct LabelParser
     {
         if (_quote.HasValue && c == _quote.Value)
         {
-            _ctx.StartValue(pos, true);
-            _controller.SwitchToQuoted();
+            _ctx.StartLabel(pos, true);
+            _controller.SwitchToLabelQuoted();
             return ParserState.Continue;
         }
 
@@ -47,17 +47,11 @@ public readonly struct LabelParser
         if (c == _separator)
             return ParserState.Error;
 
-        if (_comment.HasValue && c == _comment.Value)
-        {
-            _controller.SwitchToComment();
-            return ParserState.Continue;
-        }
-
         if (_escape.HasValue && c == _escape.Value)
             _ctx.StartEscaping();
 
         _ctx.StartValue(pos, false);
-        _controller.SwitchToRaw();
+        _controller.SwitchToLabelRaw();
         return ParserState.Continue;
     }
 
@@ -67,14 +61,8 @@ public readonly struct LabelParser
     /// <param name="pos">The position in the input where end-of-file is detected.</param>
     /// <returns>A parser state indicating the end of a record.</returns>
     public ParserState ParseEof(int pos)
-    {
-        if (_ctx.Span.Value.IsStarted)
-            _ctx.EndValue(pos - (_ctx.Span.Value.WasQuoted ? 2 : 0)); //for arrays
-        else
-            _ctx.EmptyValue();
+        => ParserState.Error;
 
-        return ParserState.Record;
-    }
     /// <summary>
     /// Resets the parser context and state controller to their initial states.
     /// </summary>

@@ -7,17 +7,17 @@ namespace PocketCsvReader.Ndjson.Configuration;
 
 public class NdjsonProfile : IProfile
 {
-    public DialectDescriptor Dialect { get; }
+    public NdjsonDialectDescriptor Dialect { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }
     public RuntimeParsersDescriptor? Parsers { get; }
 
-    public NdjsonProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers= null)
+    public NdjsonProfile(NdjsonDialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers= null)
         => (Dialect, Schema, Resource, Parsers) = (dialect, schema, resource, parsers);
 
     public NdjsonProfile(string recordSeparator)
     {
-        Dialect = new DialectDescriptorBuilder()
+        Dialect = new NdjsonDialectDescriptorBuilder()
             .WithLineTerminator(recordSeparator)
             .Build();
     }
@@ -25,6 +25,6 @@ public class NdjsonProfile : IProfile
     private static NdjsonProfile? _default;
     public static NdjsonProfile Default
     {
-        get => _default ??= new NdjsonProfile(new DialectDescriptor());
+        get => _default ??= new NdjsonProfile(new NdjsonDialectDescriptor());
     }
 }

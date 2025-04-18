@@ -3,28 +3,28 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
 
-namespace PocketCsvReader.CharParsing;
-public readonly struct RawParser : IParser
+namespace PocketCsvReader.Ndjson.CharParsing;
+public readonly struct RawValueParser : IParser
 {
     private readonly IParserContext _ctx;
-    private readonly IParserStateController _controller;
+    private readonly INdjsonStateController _controller;
 
     private readonly char _delimiter;
     private readonly char? _escape;
-    private readonly char _lineTerminatorChar;
-    private readonly int _lineTerminatorLength;
+    private readonly char _objectSuffix;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RawParser"/> struct with the specified parsing context, state controller, line terminator, delimiter, and optional escape character.
+    /// Initializes a new instance of the <see cref="RawValueParser"/> struct with the specified parsing context, state controller, line terminator, delimiter, and optional escape character.
     /// </summary>
     /// <param name="ctx">The parser context managing field and record state.</param>
     /// <param name="controller">The state controller for handling parser state transitions.</param>
     /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
     /// <param name="delimiter">The character used to separate fields.</param>
     /// <param name="escape">An optional character used for escaping delimiters and line terminators within fields.</param>
-    public RawParser(IParserContext ctx, IParserStateController controller, string lineTerminator, char delimiter, char? escape = null)
-    => (_ctx, _controller, _lineTerminatorLength, _lineTerminatorChar, _delimiter, _escape) = (ctx, controller, lineTerminator.Length, lineTerminator[0], delimiter, escape);
+    public RawValueParser(IParserContext ctx, INdjsonStateController controller, char delimiter, char? escape, char objectSuffix)
+    => (_ctx, _controller, _delimiter, _escape, _objectSuffix) = (ctx, controller, delimiter, escape, objectSuffix);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, escape characters, and line terminators.
@@ -35,32 +35,29 @@ public readonly struct RawParser : IParser
     public ParserState Parse(char c, int pos)
     {
         var escaping = _ctx.Escaping;
-        if (c == _delimiter && !escaping)
+        var complete = _ctx.Span.Value.IsComplete;
+
+        if (c == _delimiter  && !escaping)
         {
-            _ctx.EndValue(pos - 1);
+            if (!complete)
+                _ctx.EndValue(pos - 1);
             return ParserState.Field;
         }
 
-        if (_escape.HasValue && c == _escape.Value && !escaping)
+        if (c == _objectSuffix && !escaping)
         {
-            _ctx.StartEscaping();
-            return ParserState.Continue;
+            if (!complete)
+                _ctx.EndValue(pos - 1);
+            _controller.SwitchToLineTerminator(ParserState.Continue);
+            return ParserState.Record;
         }
 
-        if (c == _lineTerminatorChar && !escaping)
-        {
+        if (c == ' ' && !complete)
             _ctx.EndValue(pos - 1);
-            if (_lineTerminatorLength == 1)
-                return ParserState.Record;
-            _controller.SwitchToLineTerminator(ParserState.Record);
-            return ParserState.Continue;
-        }
-
-        if (escaping)
-        {
+        else if (_escape.HasValue && c == _escape.Value && !escaping)
+            _ctx.StartEscaping();
+        else if (escaping)
             _ctx.EndEscaping();
-            return ParserState.Continue;
-        }
 
         return ParserState.Continue;
     }
@@ -71,10 +68,8 @@ public readonly struct RawParser : IParser
     /// <param name="pos">The position immediately after the last character in the input.</param>
     /// <returns>The parser state indicating the end of a record.</returns>
     public ParserState ParseEof(int pos)
-    {
-        _ctx.EndValue(pos - 1);
-        return ParserState.Record;
-    }
+        => ParserState.Eof;
+
     /// <summary>
     /// Resets the parser context and state controller to their initial states.
     /// </summary>

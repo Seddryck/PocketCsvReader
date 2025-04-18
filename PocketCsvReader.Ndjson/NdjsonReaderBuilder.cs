@@ -8,17 +8,17 @@ using PocketCsvReader.Configuration;
 namespace PocketCsvReader.Ndjson.Configuration;
 public class NdjsonReaderBuilder
 {
-    private DialectDescriptorBuilder _dialectBuilder = new();
+    private NdjsonDialectDescriptorBuilder _dialectBuilder = new();
     private ISchemaDescriptorBuilder? _schemaBuilder;
     private ResourceDescriptorBuilder? _resourceBuilder;
     private RuntimeParsersDescriptorBuilder? _parserBuilder;
 
-    public NdjsonReaderBuilder WithDialect(Func<DialectDescriptorBuilder, DialectDescriptorBuilder> func)
+    public NdjsonReaderBuilder WithDialect(Func<NdjsonDialectDescriptorBuilder, NdjsonDialectDescriptorBuilder> func)
     {
         _dialectBuilder = func(_dialectBuilder);
         return this;
     }
-    public NdjsonReaderBuilder WithDialect(DialectDescriptorBuilder dialectBuilder)
+    public NdjsonReaderBuilder WithDialect(NdjsonDialectDescriptorBuilder dialectBuilder)
     {
         _dialectBuilder = dialectBuilder;
         return this;

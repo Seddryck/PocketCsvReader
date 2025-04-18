@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.CharParsing;
-struct ArrayParser : IParser
+public struct ArrayParser : IParser
 {
     private readonly IParserContext _ctx;
     private IParserStateController? _internalController;

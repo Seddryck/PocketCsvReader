@@ -22,7 +22,7 @@ public class FieldParserTest
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
-        Assert.That(parser.Context.IsComplete, Is.True);
+        Assert.That(parser.Context.Span.Value.IsComplete, Is.True);
         Assert.That(parser.Context.Span.Value.Start, Is.EqualTo(0));
         Assert.That(parser.Context.Span.Value.Length, Is.EqualTo(buffer.Length - 1));
         Assert.That(parser.Context.Span.Value.WasQuoted, Is.False);
@@ -43,7 +43,7 @@ public class FieldParserTest
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
-        Assert.That(parser.Context.IsComplete, Is.True);
+        Assert.That(parser.Context.Span.Value.IsComplete, Is.True);
         Assert.That(parser.Context.Span.Value.Start, Is.EqualTo(1));
         Assert.That(parser.Context.Span.Value.Length, Is.EqualTo(buffer.Length - 3));
         Assert.That(parser.Context.Span.Value.WasQuoted, Is.True);
@@ -64,7 +64,7 @@ public class FieldParserTest
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
-        Assert.That(parser.Context.IsComplete, Is.True);
+        Assert.That(parser.Context.Span.Value.IsComplete, Is.True);
         Assert.That(parser.Context.Span.Value.Start, Is.EqualTo(1));
         Assert.That(parser.Context.Span.Value.Length, Is.EqualTo(buffer.Length - 3));
         Assert.That(parser.Context.Span.Value.WasQuoted, Is.True);
@@ -90,7 +90,7 @@ public class FieldParserTest
         for (int i = 0; i < buffer.Length; i++)
             parser.Parse(buffer[i], i);
 
-        Assert.That(parser.Context.IsComplete, Is.True);
+        Assert.That(parser.Context.Span.Value.IsComplete, Is.True);
         Assert.That(parser.Context.Span.Value.IsEscaped, Is.EqualTo(expected));
     }
 

@@ -7,17 +7,21 @@ using System.Threading.Tasks;
 using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Ndjson.Configuration;
-public class DialectDescriptorBuilder
+public class NdjsonDialectDescriptorBuilder
 {
-    private DialectDescriptor Descriptor { get; set; } = new();
+    private NdjsonDialectDescriptor Descriptor { get; set; } = new();
 
-    public DialectDescriptorBuilder WithDelimiter(char delimiter)
+    public NdjsonDialectDescriptorBuilder WithDelimiter(char delimiter)
         => (Descriptor = Descriptor with { Delimiter = delimiter }, Builder: this).Builder;
-    public DialectDescriptorBuilder WithDelimiter(Delimiter delimiter)
+    public NdjsonDialectDescriptorBuilder WithDelimiter(Delimiter delimiter)
         => WithDelimiter((char)delimiter);
-    public DialectDescriptorBuilder WithLineTerminator(string lineTerminator)
+    public NdjsonDialectDescriptorBuilder WithSeparator(char separator)
+        => (Descriptor = Descriptor with { Separator = separator }, Builder: this).Builder;
+    public NdjsonDialectDescriptorBuilder WithSeparator(Delimiter separator)
+        => WithSeparator((char)separator);
+    public NdjsonDialectDescriptorBuilder WithLineTerminator(string lineTerminator)
         => (Descriptor = Descriptor with { LineTerminator = lineTerminator }, Builder: this).Builder;
-    public DialectDescriptorBuilder WithLineTerminator(LineTerminator lineTerminator)
+    public NdjsonDialectDescriptorBuilder WithLineTerminator(LineTerminator lineTerminator)
     {
         var terminator = lineTerminator switch
         {
@@ -28,19 +32,19 @@ public class DialectDescriptorBuilder
         };
         return WithLineTerminator(terminator);
     }
-    public DialectDescriptorBuilder WithQuoteChar(char? quoteChar)
+    public NdjsonDialectDescriptorBuilder WithQuoteChar(char? quoteChar)
         => (Descriptor = Descriptor with { QuoteChar = quoteChar }, Builder: this).Builder;
-    public DialectDescriptorBuilder WithQuoteChar(QuoteChar quoteChar)
+    public NdjsonDialectDescriptorBuilder WithQuoteChar(QuoteChar quoteChar)
         => WithQuoteChar((char)quoteChar);
-    public DialectDescriptorBuilder WithoutQuoteChar()
+    public NdjsonDialectDescriptorBuilder WithoutQuoteChar()
         => (Descriptor = Descriptor with { QuoteChar = null }, Builder: this).Builder;
-    public DialectDescriptorBuilder WithEscapeChar(char? escapeChar)
+    public NdjsonDialectDescriptorBuilder WithEscapeChar(char? escapeChar)
         => (Descriptor = Descriptor with { EscapeChar = escapeChar}, Builder: this).Builder;
-    public DialectDescriptorBuilder WithEscapeChar(EscapeChar escapeChar)
+    public NdjsonDialectDescriptorBuilder WithEscapeChar(EscapeChar escapeChar)
         => WithEscapeChar((char)escapeChar);
-    public DialectDescriptorBuilder WithoutEscapeChar()
+    public NdjsonDialectDescriptorBuilder WithoutEscapeChar()
         => (Descriptor = Descriptor with { EscapeChar = null }, Builder: this).Builder;
 
-    public DialectDescriptor Build()
+    public NdjsonDialectDescriptor Build()
         => Descriptor;
 }

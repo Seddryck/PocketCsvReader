@@ -3,57 +3,73 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PocketCsvReader.CharParsing;
+using PocketCsvReader.Ndjson.Configuration;
 
-namespace PocketCsvReader.CharParsing;
+namespace PocketCsvReader.Ndjson.CharParsing;
 
-public class FieldStateController : IParserStateController
+class NdjsonStateController : INdjsonStateController
 {
     // Reusable state structs
+    private readonly IParser _objectPrefixParser;
+    private readonly IParser _objectSuffixParser;
+    private readonly IParser _labelParser;
+    private readonly IParser _separatorParser;
     private readonly IParser _valueParser;
-    private readonly IParser _quotedParser;
-    private readonly IParser _rawParser;
+    private readonly IParser _labelQuotedParser;
+    private readonly IParser _labelRawParser;
+    private readonly IParser _valueQuotedParser;
+    private readonly IParser _valueRawParser;
     private readonly LineTerminatorParser _lineTerminatorParser;
     private readonly IParser? _arrayParser;
     private readonly IParser? _commentParser;
 
     private IParser _currentParser;
-    private readonly IParserStateController? _parentController;
+    private readonly INdjsonStateController? _parentController;
     private ParserStateFn _currentState;
     private IParser? _previousParser;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="FieldStateController"/> class, configuring internal parsers based on the specified CSV dialect.
+    /// Initializes a new instance of the <see cref="NdjsonStateController"/> class, configuring internal parsers based on the specified CSV dialect.
     /// </summary>
     /// <param name="ctx">The parser context providing state and callbacks for parsing operations.</param>
     /// <param name="dialect">The dialect descriptor specifying CSV parsing rules such as delimiters, quote characters, and line terminators.</param>
-    public FieldStateController(IParserContext ctx, DialectDescriptor dialect)
+    public NdjsonStateController(IParserContext ctx, NdjsonDialectDescriptor dialect)
     {
+        _objectPrefixParser = new ObjectPrefixParser(ctx, this, dialect.LineTerminator, dialect.ObjectPrefix, dialect.SkipInitialSpace);
+        _objectSuffixParser = new ObjectSuffixParser(ctx, this, dialect.ObjectSuffix, dialect.SkipInitialSpace);
+
+        _labelParser = new LabelParser(ctx, this, dialect.Separator, dialect.QuoteChar,
+            dialect.EscapeChar, dialect.SkipInitialSpace);
+
         _valueParser = new ValueParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.QuoteChar,
-            dialect.EscapeChar, dialect.SkipInitialSpace, dialect.DoubleQuote, dialect.CommentChar, dialect.ArrayPrefix);
+            dialect.EscapeChar, dialect.SkipInitialSpace, dialect.ArrayPrefix);
 
-        _quotedParser = dialect.DoubleQuote
-            ? new DoubleQuoteParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar)
-            : new QuotedParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar);
+        _labelQuotedParser = new QuotedLabelParser(ctx, this, dialect.QuoteChar!.Value, dialect.EscapeChar);
+        _labelRawParser = new RawLabelParser(ctx, this, dialect.Separator);
 
-        _rawParser = new RawParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.EscapeChar);
+        _valueQuotedParser = new QuotedValueParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar, dialect.ObjectSuffix);
+        _valueRawParser = new RawValueParser(ctx, this, dialect.Delimiter, dialect.EscapeChar, dialect.ObjectSuffix);
+
+        _separatorParser = new SeparatorParser(ctx, this, dialect.Separator, dialect.SkipInitialSpace);
         _lineTerminatorParser = new LineTerminatorParser(ctx, this, dialect.LineTerminator);
-        if (dialect.ArrayDelimiter.HasValue)
-            _arrayParser = new ArrayParser(this, ctx, dialect);
-        if (dialect.CommentChar.HasValue)
-            _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
+        //if (dialect.ArrayDelimiter.HasValue)
+        //    _arrayParser = new ArrayParser(this, ctx, dialect);
+        //if (dialect.CommentChar.HasValue)
+        //    _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
 
-        _currentParser = _valueParser;
-        _currentState = _valueParser.Parse;
+        _currentParser = _objectPrefixParser;
+        _currentState = _objectPrefixParser.Parse;
         _previousParser = null;
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="FieldStateController"/> class with a parent controller, parser context, and dialect descriptor.
+    /// Initializes a new instance of the <see cref="NdjsonStateController"/> class with a parent controller, parser context, and dialect descriptor.
     /// </summary>
     /// <param name="parent">The parent state controller to which control can be delegated.</param>
     /// <param name="ctx">The parser context providing parsing state and utilities.</param>
     /// <param name="dialect">The dialect descriptor specifying CSV parsing rules.</param>
-    public FieldStateController(IParserStateController parent, IParserContext ctx, DialectDescriptor dialect)
+    public NdjsonStateController(INdjsonStateController parent, IParserContext ctx, NdjsonDialectDescriptor dialect)
         : this(ctx, dialect)
     {
         _parentController = parent;
@@ -86,6 +102,36 @@ public class FieldStateController : IParserStateController
     }
 
     /// <summary>
+    /// Switches the active parser to the value parser for standard CSV field label.
+    /// </summary>
+    public void SwitchToObjectPrefix()
+        => SwitchTo(_objectPrefixParser);
+
+    /// <summary>
+    /// Switches the active parser to the value parser for standard CSV field label.
+    /// </summary>
+    public void SwitchToLabel()
+        => SwitchTo(_labelParser);
+
+    /// <summary>
+    /// Switches the active parser to the quoted field label parser.
+    /// </summary>
+    public void SwitchToLabelQuoted()
+        => SwitchTo(_labelQuotedParser);
+
+    /// <summary>
+    /// Switches the active parser to the raw field parser for handling unquoted field label.
+    /// </summary>
+    public void SwitchToLabelRaw()
+        => SwitchTo(_labelRawParser);
+
+    /// <summary>
+    /// Switches the active parser to the value parser for standard CSV field content.
+    /// </summary>
+    public void SwitchToSeparator()
+        => SwitchTo(_separatorParser);
+
+    /// <summary>
     /// Switches the active parser to the value parser for standard CSV field content.
     /// </summary>
     public void SwitchToValue()
@@ -94,14 +140,14 @@ public class FieldStateController : IParserStateController
     /// <summary>
     /// Switches the active parser to the quoted field parser.
     /// </summary>
-    public void SwitchToQuoted()
-        => SwitchTo(_quotedParser);
+    public void SwitchToValueQuoted()
+        => SwitchTo(_valueQuotedParser);
 
     /// <summary>
     /// Switches the active parser to the raw field parser for handling unquoted field content.
     /// </summary>
-    public void SwitchToRaw()
-        => SwitchTo(_rawParser);
+    public void SwitchToValueRaw()
+        => SwitchTo(_valueRawParser);
 
     /// <summary>
     /// Switches the active parser to the array parser.
@@ -110,12 +156,14 @@ public class FieldStateController : IParserStateController
     /// Thrown if the array parser is not available for the current dialect.
     /// </exception>
     public void SwitchToArray()
-    => SwitchTo(_arrayParser ?? throw new InvalidOperationException());
+        => SwitchTo(_arrayParser ?? throw new InvalidOperationException());
+
     /// <summary>
     /// Switches the active parser to the comment parser. Throws an InvalidOperationException if comment parsing is not supported by the current dialect.
     /// </summary>
     public void SwitchToComment()
-    => SwitchTo(_commentParser ?? throw new InvalidOperationException());
+        => SwitchTo(_commentParser ?? throw new InvalidOperationException());
+
     /// <summary>
     /// Switches parsing to the line terminator parser, saving the current parser for later restoration and setting the return state after line termination.
     /// </summary>
@@ -130,14 +178,20 @@ public class FieldStateController : IParserStateController
     /// <summary>
     /// Resets the controller and its parsers to the initial value parsing state.
     /// </summary>
-    public void Reset()
-    {
-        _lineTerminatorParser.Reset();
-        _arrayParser?.Reset();
-        _currentState = _valueParser.Parse;
-        _currentParser = _valueParser;
-        _previousParser = null;
-    }
+public void Reset()
+{
+    _lineTerminatorParser.Reset();
+    if (_currentParser == _lineTerminatorParser || _currentParser == _objectPrefixParser)
+        return;
+    _arrayParser?.Reset();
+    // Reset must put *both* delegates back to the same parser.  The object prefix
+    // parser is the canonical entry point for a new record; it will internally
+    // switch to the right sub‑parser for a subsequent field if we are still
+    // inside the same object.
+    _currentParser = _labelParser;
+    _currentState  = _currentParser.Parse;
+    _previousParser = null;
+}
 
     /// <summary>
     /// Restores the previous parser state if a rollback parser is set, reverting any temporary parser switch.
@@ -146,7 +200,8 @@ public class FieldStateController : IParserStateController
     {
         if (_previousParser is not null)
         {
-            _currentState = _previousParser.Parse;
+            _currentParser = _previousParser;
+            _currentState  = _previousParser.Parse;
             _previousParser = null;
         }
     }

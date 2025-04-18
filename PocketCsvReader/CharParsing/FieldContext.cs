@@ -6,15 +6,18 @@ using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
 
-class FieldContext : IParserContext
+/// <summary>
+/// Represents the context for a field during parsing, managing the state and metadata of the current field.
+/// This class is part of the public API as of version X.Y.
+/// </summary>
+public class FieldContext : IParserContext
 {
     private FieldSpan _span;
     private bool _escaping;
     private bool _doubling;
     private bool _escaped;
-    private bool _complete;
 
-    public IParserContext? Parent { get; } 
+    public IParserContext? Parent { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FieldContext"/> class with default parsing state.
@@ -32,22 +35,21 @@ class FieldContext : IParserContext
     }
 
     public ref FieldSpan Span => ref _span;
-    public bool IsComplete => _complete;
 
     /// <summary>
-        /// Marks the start position of the label segment within the field span.
-        /// </summary>
-        /// <param name="pos">The character index where the label starts.</param>
-        /// <param name="quoted">Indicates whether the label is quoted. (This parameter is currently unused.)</param>
-        public void StartLabel(int pos, bool quoted)
-        => _span.Label = _span.Label with { Start = pos };
+    /// Marks the start position of the label segment within the field span.
+    /// </summary>
+    /// <param name="pos">The character index where the label starts.</param>
+    /// <param name="quoted">Indicates whether the label is quoted, affecting both the start position and the WasQuoted flag.</param>
+    public void StartLabel(int pos, bool quoted)
+    => _span.Label = _span.Label with { Start = quoted ? pos + 1 : pos, WasQuoted = quoted, IsStarted = true };
 
     /// <summary>
-        /// Marks the end of the label segment by setting its length based on the specified position.
-        /// </summary>
-        /// <param name="pos">The position indicating the end of the label segment.</param>
-        public void EndLabel(int pos)
-        => _span.Label = _span.Label with { Length = pos - _span.Label.Start };
+    /// Marks the end of the label segment by setting its length based on the specified position.
+    /// </summary>
+    /// <param name="pos">The position indicating the end of the label segment.</param>
+    public void EndLabel(int pos)
+    => _span.Label = _span.Label with { Length = pos - _span.Label.Start + 1, IsComplete = true };
 
     /// <summary>
     /// Marks the start position of the field value, adjusting for quoted values.
@@ -64,18 +66,14 @@ class FieldContext : IParserContext
     /// </summary>
     /// <param name="pos">The position where the value segment ends.</param>
     public void EndValue(int pos)
-    {
-        _span.Value = _span.Value with { Length = pos - _span.Value.Start + 1 };
-        _complete = true;
-    }
+        => _span.Value = _span.Value with { Length = pos - _span.Value.Start + 1, IsComplete = true };
 
     /// <summary>
     /// Marks the field as having an empty value and sets its parsing state to complete.
     /// </summary>
     public void EmptyValue()
     {
-        _span.Value = _span.Value with { Length = 0 };
-        _complete = true;
+        _span.Value = _span.Value with { Length = 0, IsComplete = true };
     }
 
     /// <summary>
@@ -92,9 +90,8 @@ class FieldContext : IParserContext
     public void EndEscaping()
     {
         _escaped = true;
-        _span.Value = _span.Value with { IsEscaped = true };
+        _span.Value = _span.Value with { IsEscaped = true, IsComplete = false };
         _escaping = false;
-        _complete = false;
     }
 
     /// <summary>
@@ -119,9 +116,8 @@ class FieldContext : IParserContext
     public void EndDoubling()
     {
         _escaped = true;
-        _span.Value = _span.Value with { IsEscaped = true };
+        _span.Value = _span.Value with { IsEscaped = true, IsComplete = false };
         _doubling = false;
-        _complete = false;
     }
 
     /// <summary>
@@ -135,13 +131,14 @@ class FieldContext : IParserContext
     public bool Escaping => _escaping;
     public bool Doubling => _doubling;
     public bool Escaped => _escaped;
+    public bool IsComplete => _span.Value.IsComplete;
 
     /// <summary>
-        /// Adds a child <see cref="FieldSpan"/> to the current field's collection of child spans.
-        /// </summary>
-        /// <param name="child">The child span to add.</param>
-        public void AddChild(FieldSpan child)
-        => Span.Children = Span.Children?.Append(child).ToArray() ?? [child];
+    /// Adds a child <see cref="FieldSpan"/> to the current field's collection of child spans.
+    /// </summary>
+    /// <param name="child">The child span to add.</param>
+    public void AddChild(FieldSpan child)
+    => Span.Children = Span.Children is null ? [child] : [.. Span.Children, child];
 
     /// <summary>
     /// Resets the field context to its initial state, clearing all parsing state and metadata.
@@ -152,6 +149,5 @@ class FieldContext : IParserContext
         _escaping = false;
         _escaped = false;
         _doubling = false;
-        _complete = false;
     }
 }
