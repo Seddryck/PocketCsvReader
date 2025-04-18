@@ -185,6 +185,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             parse = (ReadOnlySpan<char> span) => field.Parse.Invoke(span.ToString());
             Parser.Register(i, parse);
         }
+        else if (field.RuntimeType == typeof(string))
+        {
+            parse = (ReadOnlySpan<char> span) => span.ToString();
+            Parser.Register(i, parse);
+        }
         else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
         {
             Parser.Register(i, field.RuntimeType, CreateParser(field.RuntimeType, field));
