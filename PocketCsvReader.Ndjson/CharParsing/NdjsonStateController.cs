@@ -188,7 +188,7 @@ public void Reset()
     // parser is the canonical entry point for a new record; it will internally
     // switch to the right sub‑parser for a subsequent field if we are still
     // inside the same object.
-    _currentParser = _objectPrefixParser;
+    _currentParser = _labelParser;
     _currentState  = _currentParser.Parse;
     _previousParser = null;
 }

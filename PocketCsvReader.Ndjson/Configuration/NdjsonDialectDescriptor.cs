@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 
 namespace PocketCsvReader.Ndjson.Configuration;
 
-namespace PocketCsvReader.Ndjson.Configuration;
-
 /// <summary>
 /// Defines the dialect configuration for NDJSON (Newline-Delimited JSON) data parsing.
 /// </summary>
