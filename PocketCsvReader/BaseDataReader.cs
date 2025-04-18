@@ -87,6 +87,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
             _isClosed = true;
             StreamReader?.Dispose();
             ProcessedStream?.Dispose();
+            if (ProcessedStream != RawStream)
+                RawStream?.Dispose();
             RecordParser?.Dispose();
         }
     }

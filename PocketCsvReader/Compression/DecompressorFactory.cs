@@ -18,8 +18,10 @@ public class DecompressorFactory
 
     protected virtual string NormalizeKey(string key)
     {
+        if (string.IsNullOrEmpty(key))
+            throw new ArgumentException("Key cannot be null or empty", nameof(key));
         key = key.ToLowerInvariant();
-        if (key[0] == '.')
+        if (key.Length > 0 && key[0] == '.')
             key = key.Substring(1);
         return key;
     }
