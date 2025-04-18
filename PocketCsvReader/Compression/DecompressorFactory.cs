@@ -24,10 +24,8 @@ public class DecompressorFactory
         return key;
     }
 
-    public DecompressorFactory()
-    {
-        Initialize();
-    }
+    public DecompressorFactory(Action<DecompressorFactory> initialize)
+        => initialize.Invoke(this);
 
     public void AddOrReplace(string key, IDecompressor decompressor)
     {
@@ -53,13 +51,24 @@ public class DecompressorFactory
     public void Clear()
         => Decompressors.Clear();
 
-    protected virtual void Initialize()
-    {
-        AddOrReplace("gz", GZipDecompressor.Buffered());
-        AddAlias("gz", "gzip");
-        AddOrReplace("deflate", DeflateDecompressor.Buffered());
-        AddAlias("deflate", "zz", "def");
-        AddOrReplace("zip", ZipDecompressor.Buffered());
-        AddAlias("zip", "zipfile");
-    }
+    public static DecompressorFactory Streaming()
+        => new DecompressorFactory((factory) =>
+            {
+                factory.AddOrReplace("gz", GZipDecompressor.Streaming());
+                factory.AddAlias("gz", "gzip");
+                factory.AddOrReplace("deflate", DeflateDecompressor.Streaming());
+                factory.AddAlias("deflate", "zz", "def");
+                factory.AddOrReplace("zip", ZipDecompressor.Streaming());
+                factory.AddAlias("zip", "zipfile");
+            });
+    public static DecompressorFactory Buffered()
+        => new DecompressorFactory((factory) =>
+            {
+                factory.AddOrReplace("gz", GZipDecompressor.Buffered());
+                factory.AddAlias("gz", "gzip");
+                factory.AddOrReplace("deflate", DeflateDecompressor.Buffered());
+                factory.AddAlias("deflate", "zz", "def");
+                factory.AddOrReplace("zip", ZipDecompressor.Buffered());
+                factory.AddAlias("zip", "zipfile");
+            });
 }

@@ -212,6 +212,7 @@ public class CsvReaderTest
             .Build(),
             null,
             new ResourceDescriptorBuilder()
+            .WithEncoding("utf-8")
             .WithCompression("gz")
             .Build());
         using var reader = new CsvReader(profile).ToDataReader(stream);

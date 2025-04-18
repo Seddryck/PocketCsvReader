@@ -32,22 +32,34 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
 
     public void Initialize()
     {
+        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+        {
+            var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
+            FileEncoding = new(encoding, -1);
+        }
+
         if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
         {
-            var decompressor = new DecompressorFactory().GetDecompressor(Profile.Resource.Compression);
+            var factory = ((FileEncoding?.BomBytesCount ?? 0) < 0)
+                ? DecompressorFactory.Streaming()
+                : DecompressorFactory.Buffered();
+            var decompressor = factory.GetDecompressor(Profile.Resource.Compression);
             ProcessedStream = decompressor.Decompress(RawStream);
         }
         else
             ProcessedStream = RawStream;
 
         FileEncoding ??= new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding);
-        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, false);
-        var bufferBOM = new char[1];
-        StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-        StreamReader.Rewind();
+        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0);
+        if (FileEncoding.BomBytesCount >= 0)
+        {
+            var bufferBOM = new char[1];
+            StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
+            StreamReader.Rewind();
 
-        if (FileEncoding!.BomBytesCount > 0)
-            StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
+            if (FileEncoding!.BomBytesCount > 0)
+                StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
+        }
 
         IsEof = false;
         RowCount = 0;
