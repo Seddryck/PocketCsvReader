@@ -5,7 +5,9 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Resources\Ansi.csv" />
+    <None Remove="Resources\cars-2018.csv.zip" />
     <None Remove="Resources\data-journalism-university-courses.csv" />
+    <None Remove="Resources\language.csv.gz" />
     <None Remove="Resources\natural-gas-monthly.csv" />
     <None Remove="Resources\Utf16-BE.csv" />
     <None Remove="Resources\Utf16-LE.csv" />
@@ -14,7 +16,13 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\Ansi.csv" />
+    <EmbeddedResource Include="Resources\cars-2018.csv.zip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\data-journalism-university-courses.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\language.csv.gz">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\natural-gas-monthly.csv">

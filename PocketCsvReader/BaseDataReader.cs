@@ -11,13 +11,15 @@ using PocketCsvReader.Configuration;
 using System.Reflection;
 using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
+using PocketCsvReader.Compression;
 
 namespace PocketCsvReader;
 public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P : IProfile
 {
     private bool _isClosed = false;
     protected BaseRecordParser<P>? RecordParser { get; private set; }
-    private Stream Stream { get; }
+    private Stream RawStream { get; }
+    private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
@@ -25,13 +27,21 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
     protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
-        Stream = stream;
+        RawStream = stream;
     }
 
     public void Initialize()
     {
-        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream, Profile.Resource?.Encoding);
-        StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
+        if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
+        {
+            var decompressor = new DecompressorFactory().GetDecompressor(Profile.Resource.Compression);
+            ProcessedStream = decompressor.Decompress(RawStream);
+        }
+        else
+            ProcessedStream = RawStream;
+
+        FileEncoding ??= new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding);
+        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, false);
         var bufferBOM = new char[1];
         StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
         StreamReader.Rewind();
@@ -64,7 +74,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         {
             _isClosed = true;
             StreamReader?.Dispose();
-            Stream?.Dispose();
+            ProcessedStream?.Dispose();
             RecordParser?.Dispose();
         }
     }
@@ -85,7 +95,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         {
             // free managed resources
             StreamReader?.Dispose();
-            Stream?.Dispose();
+            RawStream?.Dispose();
+            ProcessedStream?.Dispose();
             RecordParser?.Dispose();
         }
     }
