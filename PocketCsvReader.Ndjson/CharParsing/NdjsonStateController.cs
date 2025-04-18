@@ -200,7 +200,7 @@ public void Reset()
     {
         if (_previousParser is not null)
         {
-+            _currentParser = _previousParser;
+            _currentParser = _previousParser;
             _currentState  = _previousParser.Parse;
             _previousParser = null;
         }
