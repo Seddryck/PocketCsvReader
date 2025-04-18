@@ -178,16 +178,20 @@ class NdjsonStateController : INdjsonStateController
     /// <summary>
     /// Resets the controller and its parsers to the initial value parsing state.
     /// </summary>
-    public void Reset()
-    {
-        _lineTerminatorParser.Reset();
-        if (_currentParser == _lineTerminatorParser || _currentParser == _objectPrefixParser)
-            return;
-        _arrayParser?.Reset();
-        _currentState = _labelParser.Parse;
-        _currentParser = _valueParser;
-        _previousParser = null;
-    }
+public void Reset()
+{
+    _lineTerminatorParser.Reset();
+    if (_currentParser == _lineTerminatorParser || _currentParser == _objectPrefixParser)
+        return;
+    _arrayParser?.Reset();
+    // Reset must put *both* delegates back to the same parser.  The object prefix
+    // parser is the canonical entry point for a new record; it will internally
+    // switch to the right sub‑parser for a subsequent field if we are still
+    // inside the same object.
+    _currentParser = _objectPrefixParser;
+    _currentState  = _currentParser.Parse;
+    _previousParser = null;
+}
 
     /// <summary>
     /// Restores the previous parser state if a rollback parser is set, reverting any temporary parser switch.
