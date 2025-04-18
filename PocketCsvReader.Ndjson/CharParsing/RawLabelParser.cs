@@ -55,10 +55,8 @@ public readonly struct RawLabelParser : IParser
     /// <param name="pos">The position immediately after the last character in the input.</param>
     /// <returns>The parser state indicating the end of a record.</returns>
     public ParserState ParseEof(int pos)
-    {
-        _ctx.EndValue(pos - 1);
-        return ParserState.Record;
-    }
+        => ParserState.Error;
+
     /// <summary>
     /// Resets the parser context and state controller to their initial states.
     /// </summary>
