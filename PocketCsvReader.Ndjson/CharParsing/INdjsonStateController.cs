@@ -96,5 +96,4 @@ public interface INdjsonStateController
     /// Thrown if there is no parent controller to switch to.
     /// </exception>
     public void SwitchUp();
-    
 }

@@ -39,7 +39,6 @@ public class LineTerminatorParser : IParser
                 return ParserState.Continue;
             _controller.SwitchToObjectPrefix();
             return _returnState;
-
         }
         else
         {

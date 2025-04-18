@@ -54,10 +54,8 @@ public readonly struct RawValueParser : IParser
 
         if (c == ' ' && !complete)
             _ctx.EndValue(pos - 1);
-
         else if (_escape.HasValue && c == _escape.Value && !escaping)
             _ctx.StartEscaping();
-
         else if (escaping)
             _ctx.EndEscaping();
 
