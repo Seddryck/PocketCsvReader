@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
@@ -15,14 +16,14 @@ public readonly struct ObjectSuffixParser : IParser
     private readonly bool _skipInitialSpace;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="LabelParser"/> struct with the specified field parser context.
+    /// Initializes a new instance of the<see cref = "ObjectSuffixParser" /> struct with the specified field parser context.
     /// </summary>
     public ObjectSuffixParser(IParserContext ctx, INdjsonStateController controller, char objectSuffix, bool skipInitialSpace)
         => (_ctx, _controller, _objectSuffix, _skipInitialSpace) =
             (ctx, controller, objectSuffix, skipInitialSpace);
 
     /// <summary>
-    /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
+    /// Processes a single character during NDJSON parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
     /// </summary>
     /// <param name="c">The character to parse.</param>
     /// <param name="pos">The position of the character in the input.</param>
@@ -44,10 +45,10 @@ public readonly struct ObjectSuffixParser : IParser
     }
 
     /// <summary>
-    /// Finalizes the current value at end-of-file, marking it as complete or empty as appropriate, and returns a record boundary state.
+    /// Handles end-of-file condition, always returning an error state since object suffix is required.
     /// </summary>
     /// <param name="pos">The position in the input where end-of-file is detected.</param>
-    /// <returns>A parser state indicating the end of a record.</returns>
+    /// <returns>Always returns ParserState.Error since finding EOF before the object suffix is an error condition.</returns>
     public ParserState ParseEof(int pos)
         => ParserState.Error;
 

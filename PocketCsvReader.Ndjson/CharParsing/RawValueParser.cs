@@ -16,7 +16,7 @@ public readonly struct RawValueParser : IParser
     private readonly char _objectSuffix;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RawParser"/> struct with the specified parsing context, state controller, line terminator, delimiter, and optional escape character.
+    /// Initializes a new instance of the <see cref="RawValueParser"/> struct with the specified parsing context, state controller, line terminator, delimiter, and optional escape character.
     /// </summary>
     /// <param name="ctx">The parser context managing field and record state.</param>
     /// <param name="controller">The state controller for handling parser state transitions.</param>

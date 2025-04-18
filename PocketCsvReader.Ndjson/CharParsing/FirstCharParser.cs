@@ -8,7 +8,6 @@ using PocketCsvReader.CharParsing;
 namespace PocketCsvReader.Ndjson.CharParsing;
 public readonly struct FirstCharParser
 {
-    private readonly IParserContext _ctx;
     private readonly INdjsonStateController _controller;
 
     private readonly char _objectPrefix;
@@ -16,11 +15,11 @@ public readonly struct FirstCharParser
     private readonly char? _comment;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="LabelParser"/> struct with the specified field parser context.
+    /// Initializes a new instance of the <see cref="FirstCharParser"/> struct with the specified field parser context.
     /// </summary>
     public FirstCharParser(IParserContext ctx, INdjsonStateController controller, char objectPrefix, bool skipInitialSpace, char? comment)
-        => (_ctx, _controller, _objectPrefix, _skipInitialSpace, _comment) =
-            (ctx, controller, objectPrefix, skipInitialSpace, comment);
+        => (_controller, _objectPrefix, _skipInitialSpace, _comment) =
+            (controller, objectPrefix, skipInitialSpace, comment);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
@@ -63,10 +62,9 @@ public readonly struct FirstCharParser
     /// </summary>
     public void Reset()
     {
-        _ctx.Reset();
         _controller.Reset();
     }
 
     public ref FieldSpan Result
-        => ref _ctx.Span;
+        => throw new InvalidOperationException();
 }

@@ -23,10 +23,13 @@ public interface INdjsonStateController
     /// <returns>The resulting parser state after processing EOF.</returns>
     public ParserState ParseEof(int pos);
 
+    /// <summary>
+    /// Switches the active parser to the object prefix parser.
+    /// </summary>
     public void SwitchToObjectPrefix();
 
     /// <summary>
-    /// Switches the active parser to the value parser for standard CSV field content.
+    /// Switches the active parser to the value parser for standard NDJSON field content.
     /// </summary>
     public void SwitchToLabel();
 
@@ -41,12 +44,12 @@ public interface INdjsonStateController
     public void SwitchToLabelRaw();
 
     /// <summary>
-    /// Switches the active parser to the value parser for standard CSV field content.
+    /// Switches the active parser to the separator parser.
     /// </summary>
     public void SwitchToSeparator();
 
     /// <summary>
-    /// Switches the active parser to the value parser for standard CSV field content.
+    /// Switches the active parser to the value parser for standard field content.
     /// </summary>
     public void SwitchToValue();
 

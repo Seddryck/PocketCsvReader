@@ -9,10 +9,10 @@ using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson.CharParsing;
 
-class NdjsonParser : IParser
+internal class NdjsonParser : IParser
 {
-    public IParserContext Context { get; }
-    public NdjsonStateController Controller { get; }
+    private IParserContext Context { get; }
+    private NdjsonStateController Controller { get; }
 
     /// <summary>
     /// Initializes a new <see cref="NdjsonParser"/> using the specified CSV dialect with default context and controller.

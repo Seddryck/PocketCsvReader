@@ -15,14 +15,14 @@ public readonly struct SeparatorParser : IParser
     private readonly bool _skipInitialSpace;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="LabelParser"/> struct with the specified field parser context.
+    /// Initializes a new instance of the <see cref="SeparatorParser"/> struct with the specified field parser context.
     /// </summary>
     public SeparatorParser(IParserContext ctx, INdjsonStateController controller, char separator, bool skipInitialSpace)
         => (_ctx, _controller, _separator, _skipInitialSpace) =
             (ctx, controller, separator, skipInitialSpace);
 
     /// <summary>
-    /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
+    /// Processes a single character during NDJSON parsing, looking for the separator character and updating parser state accordingly.
     /// </summary>
     /// <param name="c">The character to parse.</param>
     /// <param name="pos">The position of the character in the input.</param>
@@ -44,10 +44,10 @@ public readonly struct SeparatorParser : IParser
     }
 
     /// <summary>
-    /// Finalizes the current value at end-of-file, marking it as complete or empty as appropriate, and returns a record boundary state.
+    /// Handles end-of-file condition, always returning an error state since a separator is required.
     /// </summary>
     /// <param name="pos">The position in the input where end-of-file is detected.</param>
-    /// <returns>A parser state indicating the end of a record.</returns>
+    /// <returns>Always returns ParserState.Error since finding EOF before the separator is an error condition.</returns>
     public ParserState ParseEof(int pos)
         => ParserState.Error;
 

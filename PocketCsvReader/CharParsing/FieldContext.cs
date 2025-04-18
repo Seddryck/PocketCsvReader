@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 
 namespace PocketCsvReader.CharParsing;
 
+/// <summary>
+/// Represents the context for a field during parsing, managing the state and metadata of the current field.
+/// This class is part of the public API as of version X.Y.
+/// </summary>
 public class FieldContext : IParserContext
 {
     private FieldSpan _span;
@@ -36,7 +40,7 @@ public class FieldContext : IParserContext
     /// Marks the start position of the label segment within the field span.
     /// </summary>
     /// <param name="pos">The character index where the label starts.</param>
-    /// <param name="quoted">Indicates whether the label is quoted. (This parameter is currently unused.)</param>
+    /// <param name="quoted">Indicates whether the label is quoted, affecting both the start position and the WasQuoted flag.</param>
     public void StartLabel(int pos, bool quoted)
     => _span.Label = _span.Label with { Start = quoted ? pos + 1 : pos, WasQuoted = quoted, IsStarted = true };
 
@@ -134,7 +138,7 @@ public class FieldContext : IParserContext
     /// </summary>
     /// <param name="child">The child span to add.</param>
     public void AddChild(FieldSpan child)
-    => Span.Children = Span.Children?.Append(child).ToArray() ?? [child];
+    => Span.Children = Span.Children is null ? [child] : [.. Span.Children, child];
 
     /// <summary>
     /// Resets the field context to its initial state, clearing all parsing state and metadata.
