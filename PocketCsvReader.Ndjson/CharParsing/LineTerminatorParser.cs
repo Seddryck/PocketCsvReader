@@ -53,7 +53,7 @@ public class LineTerminatorParser : IParser
     /// <param name="pos">The position in the input where EOF was encountered.</param>
     /// <returns>The parser state to transition to at EOF.</returns>
     public ParserState ParseEof(int pos)
-        => (_index == 0 || _index == _lineTerminators.Length - 1) ? ParserState.Eof : ParserState.Error;
+        => (_index == 0 || _index >= _lineTerminators.Length) ? ParserState.Eof : ParserState.Error;
 
     /// <summary>
     /// Resets the parser to its initial state, clearing progress through the line terminator sequence and setting the return state to <c>ParserState.Record</c>.
