@@ -72,4 +72,15 @@ public class DecompressorFactoryTest
         Assert.That(ex.Message, Does.Contain("xyz"));
         Assert.That(ex.ParamName, Is.EqualTo("key"));
     }
+
+    [Test]
+    public void GetSupportedCompressions_Empty_Empty()
+    {
+        var factory = DecompressorFactory.Buffered();
+        var compressions = factory.GetSupportedCompressions();
+        Assert.That(compressions, Has.Length.EqualTo(3));
+        Assert.That(compressions, Does.Contain("gz"));
+        Assert.That(compressions, Does.Contain("deflate"));
+        Assert.That(compressions, Does.Contain("zip"));
+    }
 }
