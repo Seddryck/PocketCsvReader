@@ -65,9 +65,11 @@ public class DecompressorFactoryTest
     }
 
     [Test]
-    public void GetDecompressor_Unknown_Exists()
+    public void GetDecompressor_Unknown_ThrowsArgumentOutOfRangeException()
     {
         var factory = DecompressorFactory.Streaming();
-        Assert.Throws<ArgumentOutOfRangeException>(() => factory.GetDecompressor("xyz"));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => factory.GetDecompressor("xyz"));
+        Assert.That(ex.Message, Does.Contain("xyz"));
+        Assert.That(ex.ParamName, Is.EqualTo("key"));
     }
 }
