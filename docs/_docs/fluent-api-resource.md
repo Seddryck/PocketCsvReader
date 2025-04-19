@@ -46,6 +46,21 @@ Examples:
 - `WithEncoding("ISO-8859-2")`
 - `WithEncoding("utf-8")`
 
+## Configuring Compression
+
+PocketCsvReader can automatically decompress delimited-files compressed with a classical compression format.
+
+```csharp
+var builder = new CsvReaderBuilder().WithResource
+(
+    new ResourceDescriptorBuilder()
+                .WithCompression(CompressionFormat.Gzip)
+);
+var reader = builder.Build();
+```
+
+More info on [compression](../compressed-files).
+
 ### Registering Sequences
 
 A sequence substitution allows you to replace specific values in the CSV data before parsing. The concept of sequences is explained in detail [here](/docs/sequences).

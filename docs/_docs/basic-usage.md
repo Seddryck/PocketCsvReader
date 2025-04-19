@@ -6,8 +6,8 @@ The `CsvReader` class is a flexible and efficient tool for reading and parsing C
 
 ## Features
 
-- Read CSV files or streams into a `DataTable`.
 - Access CSV data in a forward-only, read-only manner using `IDataReader`.
+- Read CSV files or streams into a `DataTable`.
 - Map CSV records to strongly-typed objects.
 - Map CSV records to array of strings.
 - Customizable CSV parsing profiles for delimiters, quote handling, and more.
@@ -37,26 +37,7 @@ var csvReaderCustom = new CsvReader(CsvProfile.SemiColumnDoubleQuote, bufferSize
 
 ## Reading CSV Data
 
-### 1. Reading Into a `DataTable`
-
-The `ToDataTable` method reads CSV data and returns a `DataTable` containing all rows and fields.
-
-#### From a File to a DataTable
-
-```csharp
-DataTable dataTable = csvReader.ToDataTable("example.csv");
-```
-
-#### From a Stream to a DataTable
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-DataTable dataTable = csvReader.ToDataTable(stream);
-```
-
----
-
-### 2. Accessing Data with `IDataReader`
+### 1. Accessing Data with `IDataReader`
 
 The `ToDataReader` method provides a forward-only, read-only `IDataReader` for processing large files efficiently.
 
@@ -79,6 +60,23 @@ while (reader.Read())
 {
     Console.WriteLine(reader[0]); // Access the first column of the current row.
 }
+```
+
+### 2. Reading Into a `DataTable`
+
+The `ToDataTable` method reads CSV data and returns a `DataTable` containing all rows and fields.
+
+#### From a File to a DataTable
+
+```csharp
+DataTable dataTable = csvReader.ToDataTable("example.csv");
+```
+
+#### From a Stream to a DataTable
+
+```csharp
+using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
+DataTable dataTable = csvReader.ToDataTable(stream);
 ```
 
 ---

@@ -13,9 +13,11 @@
   docs:
   - installation
   - basic-usage
+  - datareader-api
   - fluent-api-profile-configuration
   - fluent-api-runtime-parsers
   - fluent-api-resource
   - fluent-api-schema
   - mapper-object-builder
+  - compressed-files
 
