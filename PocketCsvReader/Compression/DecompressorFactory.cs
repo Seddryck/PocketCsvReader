@@ -74,6 +74,6 @@ public class DecompressorFactory
                 factory.AddAlias("zip", "zipfile");
             });
 
-    public string[] SupportedKeys
+    public string[] GetSupportedKeys()
         => Decompressors.Keys.Order().ToArray();
 }

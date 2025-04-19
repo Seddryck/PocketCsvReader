@@ -13,7 +13,7 @@ public class DecompressorFactoryTest
     public void SupportedKeys_Contains_Success()
     {
         var factory = DecompressorFactory.Buffered();
-        var keys = factory.SupportedKeys;
+        var keys = factory.GetSupportedKeys();
         Assert.That(keys, Does.Contain("gz"));
         Assert.That(keys, Does.Contain("gzip"));
         Assert.That(keys, Does.Contain("zz"));
@@ -28,16 +28,16 @@ public class DecompressorFactoryTest
     public void AddAlias_Contains_Success(string alias)
     {
         var factory = DecompressorFactory.Buffered();
-        Assert.That(factory.SupportedKeys, Does.Not.Contain("xyz"));
+        Assert.That(factory.GetSupportedKeys(), Does.Not.Contain("xyz"));
         factory.AddAlias("zip", alias);
-        Assert.That(factory.SupportedKeys, Does.Contain("xyz"));
+        Assert.That(factory.GetSupportedKeys(), Does.Contain("xyz"));
     }
 
     [Test]
     public void AddAlias_Unknown_ThrowsArgumentException()
     {
         var factory = DecompressorFactory.Buffered();
-        Assert.That(factory.SupportedKeys, Does.Not.Contain("xyz"));
+        Assert.That(factory.GetSupportedKeys(), Does.Not.Contain("xyz"));
         Assert.Throws<ArgumentException>(() => factory.AddAlias("xyz", "zip"));
     }
 
@@ -46,7 +46,7 @@ public class DecompressorFactoryTest
     {
         var factory = DecompressorFactory.Buffered();
         factory.Clear();
-        Assert.That(factory.SupportedKeys, Is.Empty);
+        Assert.That(factory.GetSupportedKeys(), Is.Empty);
     }
 
     [Test]
@@ -54,7 +54,7 @@ public class DecompressorFactoryTest
     {
         var factory = DecompressorFactory.Streaming();
         factory.Clear();
-        Assert.That(factory.SupportedKeys, Is.Empty);
+        Assert.That(factory.GetSupportedKeys(), Is.Empty);
     }
 
     [Test]
