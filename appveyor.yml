@@ -55,6 +55,8 @@ test_script:
     $ErrorActionPreference = "Stop"
     dotnet test PocketCsvReader.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult = $LastExitCode
+    dotnet test PocketCsvReader.Ndjson.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.Ndjson.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
+    $globalTestResult += $LastExitCode
     if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
 
 - pwsh: |
@@ -63,7 +65,8 @@ test_script:
     .\codecov.exe --dir "./.coverage/"
 
 after_test:
-- dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
+- dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
+- dotnet pack PocketCsvReader.Ndjson -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
 
 artifacts:
 - path: '**\*.nupkg'
