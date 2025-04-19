@@ -11,13 +11,15 @@ using PocketCsvReader.Configuration;
 using System.Reflection;
 using System.Xml.Linq;
 using PocketCsvReader.FieldParsing;
+using PocketCsvReader.Compression;
 
 namespace PocketCsvReader;
 public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P : IProfile
 {
     private bool _isClosed = false;
     protected BaseRecordParser<P>? RecordParser { get; private set; }
-    private Stream Stream { get; }
+    private Stream RawStream { get; }
+    private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
@@ -25,19 +27,39 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
     protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
-        Stream = stream;
+        RawStream = stream;
     }
 
     public void Initialize()
     {
-        FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream, Profile.Resource?.Encoding);
-        StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
-        var bufferBOM = new char[1];
-        StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-        StreamReader.Rewind();
+        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+        {
+            var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
+            FileEncoding = new(encoding, -1);
+        }
 
-        if (FileEncoding!.BomBytesCount > 0)
-            StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
+        if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
+        {
+            var factory = ((FileEncoding?.BomBytesCount ?? 0) < 0)
+                ? DecompressorFactory.Streaming()
+                : DecompressorFactory.Buffered();
+            var decompressor = factory.GetDecompressor(Profile.Resource.Compression);
+            ProcessedStream = decompressor.Decompress(RawStream);
+        }
+        else
+            ProcessedStream = RawStream;
+
+        FileEncoding ??= new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding);
+        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0);
+        if (FileEncoding.BomBytesCount >= 0)
+        {
+            var bufferBOM = new char[1];
+            StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
+            StreamReader.Rewind();
+
+            if (FileEncoding!.BomBytesCount > 0)
+                StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
+        }
 
         IsEof = false;
         RowCount = 0;
@@ -64,7 +86,9 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         {
             _isClosed = true;
             StreamReader?.Dispose();
-            Stream?.Dispose();
+            ProcessedStream?.Dispose();
+            if (ProcessedStream != RawStream)
+                RawStream?.Dispose();
             RecordParser?.Dispose();
         }
     }
@@ -85,7 +109,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         {
             // free managed resources
             StreamReader?.Dispose();
-            Stream?.Dispose();
+            RawStream?.Dispose();
+            ProcessedStream?.Dispose();
             RecordParser?.Dispose();
         }
     }

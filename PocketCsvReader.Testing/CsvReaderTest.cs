@@ -198,4 +198,55 @@ public class CsvReaderTest
         }
         Assert.That(reader.Read(), Is.False);
     }
+
+    [Test]
+    [TestCase(@"Resources\language.csv.gz")]
+    public void ToDataReader_LanguageWithCompression_Successful(string filename)
+    {
+        using var stream = File.OpenRead(filename);
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+            .WithDelimiter(',')
+            .WithLineTerminator("\n")
+            .WithHeader()
+            .Build(),
+            null,
+            new ResourceDescriptorBuilder()
+            .WithEncoding("utf-8")
+            .WithCompression("gz")
+            .Build());
+        using var reader = new CsvReader(profile).ToDataReader(stream);
+        for (int i = 0; i < 2; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            Assert.That(reader.GetInt32(0), Is.EqualTo(i+1));
+            Assert.That(reader.GetString(1), Is.EqualTo("english").Or.EqualTo("中国人"));
+        }
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    [TestCase(@"Resources\cars-2018.csv.zip")]
+    public void ToDataReader_CarsWithCompression_Successful(string filename)
+    {
+        using var stream = File.OpenRead(filename);
+        var profile = new CsvProfile(
+            new DialectDescriptorBuilder()
+            .WithDelimiter(',')
+            .WithLineTerminator("\n")
+            .WithHeader()
+            .Build(),
+            null,
+            new ResourceDescriptorBuilder()
+            .WithCompression(CompressionFormat.Zip)
+            .Build());
+        using var reader = new CsvReader(profile).ToDataReader(stream);
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            Assert.That(reader.GetString(0), Is.Not.Null.Or.Empty);
+            Assert.That(reader.GetInt32(1), Is.EqualTo(2018));
+        }
+        Assert.That(reader.Read(), Is.False);
+    }
 }

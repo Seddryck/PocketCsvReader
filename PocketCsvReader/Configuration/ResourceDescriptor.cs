@@ -11,6 +11,7 @@ namespace PocketCsvReader;
 public record ResourceDescriptor
 (
     string? Encoding = null,
+    string? Compression = null,
     ImmutableSequenceCollection? Sequences = null
 )
 { }
