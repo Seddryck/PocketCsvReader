@@ -1,0 +1,73 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using PocketCsvReader.Compression;
+
+namespace PocketCsvReader.Testing.Compression;
+public class DecompressorFactoryTest
+{
+    [Test]
+    public void SupportedKeys_Contains_Success()
+    {
+        var factory = DecompressorFactory.Buffered();
+        var keys = factory.SupportedKeys;
+        Assert.That(keys, Does.Contain("gz"));
+        Assert.That(keys, Does.Contain("gzip"));
+        Assert.That(keys, Does.Contain("zz"));
+        Assert.That(keys, Does.Contain("deflate"));
+        Assert.That(keys, Does.Contain("zip"));
+    }
+
+    [Test]
+    [TestCase("xyz")]
+    [TestCase(".xyz")]
+    [TestCase("XYZ")]
+    public void AddAlias_Contains_Success(string alias)
+    {
+        var factory = DecompressorFactory.Buffered();
+        Assert.That(factory.SupportedKeys, Does.Not.Contain("xyz"));
+        factory.AddAlias("zip", alias);
+        Assert.That(factory.SupportedKeys, Does.Contain("xyz"));
+    }
+
+    [Test]
+    public void AddAlias_Unknown_Success()
+    {
+        var factory = DecompressorFactory.Buffered();
+        Assert.That(factory.SupportedKeys, Does.Not.Contain("xyz"));
+        Assert.Throws<ArgumentException>(() => factory.AddAlias("xyz", "zip"));
+    }
+
+    [Test]
+    public void Clear_Buffered_NoSupportedKeys()
+    {
+        var factory = DecompressorFactory.Buffered();
+        factory.Clear();
+        Assert.That(factory.SupportedKeys, Is.Empty);
+    }
+
+    [Test]
+    public void Clear_Streaming_NoSupportedKeys()
+    {
+        var factory = DecompressorFactory.Streaming();
+        factory.Clear();
+        Assert.That(factory.SupportedKeys, Is.Empty);
+    }
+
+    [Test]
+    public void GetDecompressor_Existing_Exists()
+    {
+        var factory = DecompressorFactory.Streaming();
+        Assert.That(factory.GetDecompressor("gz"), Is.Not.Null);
+    }
+
+    [Test]
+    public void GetDecompressor_Unknown_Exists()
+    {
+        var factory = DecompressorFactory.Streaming();
+        Assert.Throws<ArgumentOutOfRangeException>(() => factory.GetDecompressor("xyz"));
+    }
+}

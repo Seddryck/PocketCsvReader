@@ -13,7 +13,7 @@ public class DecompressorFactory
     {
         if (Decompressors.TryGetValue(NormalizeKey(key), out var decompressor))
             return decompressor;
-        throw new KeyNotFoundException();
+        throw new ArgumentOutOfRangeException(nameof(key), $"The compression '{key}' is not registered.");
     }
 
     protected virtual string NormalizeKey(string key)
@@ -73,4 +73,7 @@ public class DecompressorFactory
                 factory.AddOrReplace("zip", ZipDecompressor.Buffered());
                 factory.AddAlias("zip", "zipfile");
             });
+
+    public string[] SupportedKeys
+        => Decompressors.Keys.Order().ToArray();
 }
