@@ -74,7 +74,7 @@ public class DecompressorFactoryTest
     }
 
     [Test]
-    public void GetSupportedCompressions_Empty_Empty()
+    public void GetSupportedCompressions_Buffered_All()
     {
         var factory = DecompressorFactory.Buffered();
         var compressions = factory.GetSupportedCompressions();
@@ -82,5 +82,14 @@ public class DecompressorFactoryTest
         Assert.That(compressions, Does.Contain("gz"));
         Assert.That(compressions, Does.Contain("deflate"));
         Assert.That(compressions, Does.Contain("zip"));
+    }
+
+    [Test]
+    [TestCase("gzip")]
+    [TestCase("gz")]
+    public void GetCompression_Existing_Main(string alias)
+    {
+        var factory = DecompressorFactory.Buffered();
+        Assert.That(factory.GetCompression(alias), Is.EqualTo("gz"));
     }
 }

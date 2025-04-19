@@ -93,5 +93,17 @@ public class DecompressorFactory
         }
         return result.ToArray();
     }
-
+    public string GetCompression(string alias)
+    {
+        if (!Decompressors.TryGetValue(NormalizeKey(alias), out var result))
+            throw new ArgumentOutOfRangeException(nameof(alias), $"The compression '{alias}' is not registered.");
+        if (result.Kind == Kind.Main)
+            return alias;
+        foreach (var kvp in Decompressors)
+        {
+            if (kvp.Value.Kind == Kind.Main && kvp.Value.Decompressor == result.Decompressor)
+                return kvp.Key;
+        }
+        throw new ArgumentOutOfRangeException(nameof(alias), $"The compression '{alias}' is not registered.");
+    }
 }
