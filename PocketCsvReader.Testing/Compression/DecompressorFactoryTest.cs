@@ -34,7 +34,7 @@ public class DecompressorFactoryTest
     }
 
     [Test]
-    public void AddAlias_Unknown_Success()
+    public void AddAlias_Unknown_ThrowsArgumentException()
     {
         var factory = DecompressorFactory.Buffered();
         Assert.That(factory.SupportedKeys, Does.Not.Contain("xyz"));
