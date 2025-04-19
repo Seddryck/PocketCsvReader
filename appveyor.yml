@@ -65,7 +65,8 @@ test_script:
     .\codecov.exe --dir "./.coverage/"
 
 after_test:
-- dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
+- dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
+- dotnet pack PocketCsvReader.Ndjson -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
 
 artifacts:
 - path: '**\*.nupkg'
