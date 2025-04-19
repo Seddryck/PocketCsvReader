@@ -7,13 +7,19 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.Compression;
 public class DecompressorFactory
 {
-    private Dictionary<string, IDecompressor> Decompressors { get; } = [];
+    private enum Kind
+    {
+        Main,
+        Alias
+    }
+
+    private Dictionary<string, (IDecompressor Decompressor, Kind Kind)> Decompressors { get; } = [];
 
     public IDecompressor GetDecompressor(string key)
     {
-        if (Decompressors.TryGetValue(NormalizeKey(key), out var decompressor))
-            return decompressor;
-        throw new KeyNotFoundException();
+        if (Decompressors.TryGetValue(NormalizeKey(key), out var result))
+            return result.Decompressor;
+        throw new ArgumentOutOfRangeException(nameof(key), $"The compression '{key}' is not registered.");
     }
 
     protected virtual string NormalizeKey(string key)
@@ -32,21 +38,21 @@ public class DecompressorFactory
     public void AddOrReplace(string key, IDecompressor decompressor)
     {
         key = NormalizeKey(key);
-        if (!Decompressors.TryAdd(key, decompressor))
-            Decompressors[key] = decompressor;
+        if (!Decompressors.TryAdd(key, (decompressor, Kind.Main)))
+            Decompressors[key] = (decompressor, Decompressors[key].Kind);
     }
 
     public void AddAlias(string targetKey, params string[] aliasKeys)
     {
         targetKey = NormalizeKey(targetKey);
 
-        if (!Decompressors.TryGetValue(targetKey, out var targetDecompressor))
+        if (!Decompressors.TryGetValue(targetKey, out var target))
             throw new ArgumentException($"Target decompressor for key '{targetKey}' not found.");
 
         foreach (var alias in aliasKeys)
         {
             var aliasKey = NormalizeKey(alias);
-            Decompressors[aliasKey] = targetDecompressor;
+            Decompressors[aliasKey] = (target.Decompressor, Kind.Alias);
         }
     }
 
@@ -54,7 +60,7 @@ public class DecompressorFactory
         => Decompressors.Clear();
 
     public static DecompressorFactory Streaming()
-        => new DecompressorFactory((factory) =>
+        => new ((factory) =>
             {
                 factory.AddOrReplace("gz", GZipDecompressor.Streaming());
                 factory.AddAlias("gz", "gzip");
@@ -64,7 +70,7 @@ public class DecompressorFactory
                 factory.AddAlias("zip", "zipfile");
             });
     public static DecompressorFactory Buffered()
-        => new DecompressorFactory((factory) =>
+        => new ((factory) =>
             {
                 factory.AddOrReplace("gz", GZipDecompressor.Buffered());
                 factory.AddAlias("gz", "gzip");
@@ -73,4 +79,31 @@ public class DecompressorFactory
                 factory.AddOrReplace("zip", ZipDecompressor.Buffered());
                 factory.AddAlias("zip", "zipfile");
             });
+
+    public string[] GetSupportedKeys()
+        => Decompressors.Keys.Order().ToArray();
+
+    public string[] GetSupportedCompressions()
+    {
+        var result = new List<string>();
+        foreach (var kvp in Decompressors)
+        {
+            if (kvp.Value.Kind == Kind.Main)
+                result.Add(kvp.Key);
+        }
+        return result.ToArray();
+    }
+    public string GetCompression(string alias)
+    {
+        if (!Decompressors.TryGetValue(NormalizeKey(alias), out var result))
+            throw new ArgumentOutOfRangeException(nameof(alias), $"The compression '{alias}' is not registered.");
+        if (result.Kind == Kind.Main)
+            return alias;
+        foreach (var kvp in Decompressors)
+        {
+            if (kvp.Value.Kind == Kind.Main && kvp.Value.Decompressor == result.Decompressor)
+                return kvp.Key;
+        }
+        throw new ArgumentOutOfRangeException(nameof(alias), $"The compression '{alias}' is not registered.");
+    }
 }
