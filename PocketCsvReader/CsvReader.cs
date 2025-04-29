@@ -208,6 +208,31 @@ namespace PocketCsvReader
         }
 
         /// <summary>
+        /// Reads CSV data from a set of streams and provides an <see cref="IDataReader"/> for record-by-record access.
+        /// </summary>
+        /// <param name="streams">
+        /// The enumerable of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
+        /// at the start of the content.
+        /// </param>
+        /// <returns>
+        /// An <see cref="CsvBatchDataReader"/> instance for sequential, read-only access to the CSV records and fields.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">Thrown if the streams contain no element.</exception>
+        /// <remarks>
+        /// This method does not manage the lifecycle of the stream; the caller is responsible for closing it.
+        /// </remarks>
+        public CsvBatchDataReader ToDataReader(IEnumerable<Func<Stream>> openers)
+        {
+            if (openers == null)
+                throw new ArgumentNullException(nameof(openers), "Stream openers collection cannot be null.");
+
+            if (!openers.Any())
+                throw new ArgumentException("Stream openers collection cannot be empty.", nameof(openers));
+
+            return new CsvBatchDataReader(openers, Profile);
+        }
+
+        /// <summary>
         /// Reads a CSV file and returns an enumerable of arrays representing records as fields.
         /// </summary>
         /// <param name="filename">The full path of the CSV file to read.</param>

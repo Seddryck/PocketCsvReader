@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Reflection;
 using PocketCsvReader.Configuration;
+using Moq;
+using Moq.Protected;
 
 namespace PocketCsvReader.Testing;
 
@@ -147,6 +149,44 @@ public class CsvBatchDataReaderTest
         dataReader.Close();
 
         Assert.That(stream1.CanRead, Is.False);
+        Assert.That(stream2.CanRead, Is.False);
+    }
+
+    [Test]
+    public void Close_FuncStreamsOpenedDisposed_Successful()
+    {
+        var profile = new CsvProfile(',', '\"', "\r\n", false);
+        var stream = new MemoryStream();
+        var open1 = false;
+        var streamFunc1 = () => { open1 = true; return stream; };
+        var open2 = false;
+        var streamFunc2 = () => { open2 = true; return new MemoryStream(); };
+        using var dataReader = new CsvBatchDataReader([streamFunc1, streamFunc2], profile);
+        dataReader.Close();
+
+        Assert.That(open1, Is.True);
+        Assert.That(stream.CanRead, Is.False);
+        Assert.That(open2, Is.False);
+    }
+
+    [Test]
+    public void Close_FuncStreamsReadDisposed_Successful()
+    {
+        var profile = new CsvProfile(',', '\"', "\r\n", false);
+        var stream1 = new MemoryStream();
+        var open1 = false;
+        var streamFunc1 = () => { open1 = true; return stream1; };
+        var stream2 = new MemoryStream();
+        var open2 = false;
+        var streamFunc2 = () => { open2 = true; return stream2; };
+        using var dataReader = new CsvBatchDataReader([streamFunc1, streamFunc2], profile);
+        while (dataReader.Read())
+        { }
+        dataReader.Close();
+
+        Assert.That(open1, Is.True);
+        Assert.That(stream1.CanRead, Is.False);
+        Assert.That(open2, Is.True);
         Assert.That(stream2.CanRead, Is.False);
     }
 }
