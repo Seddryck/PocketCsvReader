@@ -208,10 +208,11 @@ namespace PocketCsvReader
         }
 
         /// <summary>
-        /// Reads CSV data from a set of streams and provides an <see cref="IDataReader"/> for record-by-record access.
+        /// Reads CSV data from a set of stream openers (lazy - evaluated) and provides an
+        /// <see cref="IDataReader"/> for record-by-record access.
         /// </summary>
-        /// <param name="streams">
-        /// The enumerable of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
+        /// <param name="openers">
+        /// Functions returning a <see cref="Stream"/> positioned at the start of the CSV content. Streams are opened lazily
         /// at the start of the content.
         /// </param>
         /// <returns>
