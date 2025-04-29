@@ -34,7 +34,7 @@
     <EmbeddedResource Include="Resources\Utf8.csv" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Chrononuensis" Version="0.23.5" />
+    <PackageReference Include="Chrononuensis" Version="0.23.6" />
     <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="NUnit" Version="4.3.2" />
