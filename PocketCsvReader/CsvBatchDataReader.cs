@@ -5,7 +5,9 @@ using System.Data;
 namespace PocketCsvReader;
 public class CsvBatchDataReader : IDataReader
 {
-    private IEnumerator<Stream> Streams { get; }
+    private readonly bool _allStreamsOpen = false;
+    private IEnumerator<Func<Stream>> Streams { get; }
+    private Stream? _currentStream;
     private CsvProfile Profile { get; }
 
     private CsvDataReader? Current { get; set; }
@@ -13,6 +15,12 @@ public class CsvBatchDataReader : IDataReader
     private int fileCount = 0;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
+        : this(streams.Select<Stream, Func<Stream>>(x => () => x), profile)
+    {
+        _allStreamsOpen = true;
+    }
+
+    public CsvBatchDataReader(IEnumerable<Func<Stream>> streams, CsvProfile profile)
     {
         (Streams, Profile) = (streams.GetEnumerator(), profile);
         MoveNext();
@@ -24,8 +32,18 @@ public class CsvBatchDataReader : IDataReader
         var fields = Current?.Fields;
 
         Current?.Dispose();
+        _currentStream?.Dispose();
 
-        Current = Streams.MoveNext() ? new CsvDataReader(Streams.Current, Profile) : null;
+        if (Streams.MoveNext())
+        {
+            _currentStream = Streams.Current.Invoke();
+            Current = new CsvDataReader(_currentStream, Profile);
+        }
+        else
+        {
+            Current = null;
+            _currentStream?.Close();
+        }
 
         if (Current is not null && fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
             Current!.SetHeaders(fields);
@@ -87,9 +105,13 @@ public class CsvBatchDataReader : IDataReader
         if (!_isClosed)
         {
             _isClosed = true;
+            _currentStream?.Dispose();
             Current?.Dispose();
-            while (Streams.MoveNext())
-                Streams.Current?.Dispose();
+            if (_allStreamsOpen)
+            {
+                while (Streams.MoveNext())
+                    Streams.Current.Invoke().Dispose();
+            }
             (Streams as IDisposable)?.Dispose();
         }
     }
