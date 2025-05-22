@@ -6,8 +6,7 @@
 version: 2
 updates:
   - package-ecosystem: "nuget" 
-    directories:
-      - "/PocketCsvReader*/" 
+    directory: "/" 
     schedule:
       interval: "daily"
     labels:
