@@ -81,5 +81,34 @@ public class RecordParserTest
         Assert.That(details.Children[1].Children, Has.Length.EqualTo(2));
         Assert.That(values.Span.Slice(user.Children[2].Value.Start, user.Children[2].Value.Length).ToString(), Is.EqualTo("null"));
     }
+
+    [TestCase("42", "42")]
+    [TestCase("true", "true")]
+    [TestCase("null", "null")]
+    [TestCase("\"Ada\"", "Ada")]
+    public void ReadNextRecord_PrimitiveRoot_ExposesSingleField(string record, string expected)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
+        Assert.That(values.Slice(0).ToString(), Is.EqualTo(expected));
+        Assert.That(values.FieldSpans[0].Label.Length, Is.Zero);
+    }
+
+    [Test]
+    public void ReadNextRecord_ArrayRoot_ExposesSingleArrayField()
+    {
+        const string record = "[10,20,30]";
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
+        Assert.That(values.FieldSpans[0].Children, Has.Length.EqualTo(3));
+    }
 }
 

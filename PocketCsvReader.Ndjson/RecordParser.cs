@@ -43,7 +43,7 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
             return true;
         }
 
-        var fields = new JsonRecordParser(line).ParseObjectRoot();
+        var fields = new JsonRecordParser(line).ParseRoot();
         record = new RecordSpan(line.AsSpan(), fields);
         recordState = RecordState.Record;
         return _reader.Peek() < 0;

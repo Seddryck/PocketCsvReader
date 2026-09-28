@@ -13,13 +13,12 @@ internal sealed class JsonRecordParser
         JsonDocument.Parse(json).Dispose();
     }
 
-    public FieldSpan[] ParseObjectRoot()
+    public FieldSpan[] ParseRoot()
     {
         SkipSpaces();
-        if (Current != '{')
-            throw new InvalidDataException("An NDJSON record must have an object root.");
-
-        var fields = ParseObject();
+        var fields = Current == '{'
+            ? ParseObject()
+            : [ParseValue(allowObject: false, allowCompositeArrayItems: false)];
         SkipSpaces();
         if (!IsEnd)
             throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
