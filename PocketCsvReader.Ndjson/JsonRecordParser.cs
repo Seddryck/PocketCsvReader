@@ -18,7 +18,7 @@ internal sealed class JsonRecordParser
         SkipSpaces();
         var fields = Current == '{'
             ? ParseObject()
-            : [ParseValue(allowObject: false, allowCompositeArrayItems: false)];
+            : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
         SkipSpaces();
         if (!IsEnd)
             throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
@@ -40,7 +40,7 @@ internal sealed class JsonRecordParser
             Expect(':');
             SkipSpaces();
 
-            var value = ParseValue(allowObject: true, allowCompositeArrayItems: false);
+            var value = ParseValue(allowObject: true, allowCompositeArrayItems: true);
             fields.Add(value with { Label = label });
 
             SkipSpaces();
