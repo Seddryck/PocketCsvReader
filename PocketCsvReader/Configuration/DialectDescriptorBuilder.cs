@@ -130,6 +130,34 @@ public class DialectDescriptorBuilder
                 ArraySuffix = suffix
             };
         }
+        Validate(Descriptor);
         return Descriptor;
+    }
+
+    private static void Validate(DialectDescriptor descriptor)
+    {
+        if (string.IsNullOrEmpty(descriptor.LineTerminator))
+            throw new InvalidOperationException("Line terminator cannot be empty.");
+        if (descriptor.HeaderRows.Any(row => row <= 0))
+            throw new InvalidOperationException("Header row numbers must be positive.");
+        if (!descriptor.Header && descriptor.HeaderRows.Length != 0)
+            throw new InvalidOperationException("Header rows cannot be configured when headers are disabled.");
+        if (descriptor.Header && descriptor.HeaderRows.Length == 0)
+            throw new InvalidOperationException("At least one header row is required when headers are enabled.");
+
+        var reserved = new List<(char? Value, string Name)>
+        {
+            (descriptor.Delimiter, "delimiter"),
+            (descriptor.QuoteChar, "quote character"),
+            (descriptor.CommentChar, "comment character")
+        };
+        for (var i = 0; i < reserved.Count; i++)
+        for (var j = i + 1; j < reserved.Count; j++)
+            if (reserved[i].Value.HasValue && reserved[i].Value == reserved[j].Value)
+                throw new InvalidOperationException($"The {reserved[i].Name} and {reserved[j].Name} cannot use the same character.");
+
+        foreach (var item in reserved.Where(item => item.Value.HasValue))
+            if (descriptor.LineTerminator.Contains(item.Value!.Value))
+                throw new InvalidOperationException($"The {item.Name} cannot be part of the line terminator.");
     }
 }
