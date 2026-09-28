@@ -45,9 +45,15 @@ public class NdjsonDialectDescriptorBuilder
     public NdjsonDialectDescriptorBuilder WithoutEscapeChar()
         => (Descriptor = Descriptor with { EscapeChar = null }, Builder: this).Builder;
     public NdjsonDialectDescriptorBuilder WithCommentChar(char commentChar)
-        => (Descriptor = Descriptor with { CommentChar = commentChar }, Builder: this).Builder;
+    {
+        Descriptor = Descriptor with { CommentChar = commentChar };
+        return this;
+    }
     public NdjsonDialectDescriptorBuilder WithoutCommentChar()
-        => (Descriptor = Descriptor with { CommentChar = null }, Builder: this).Builder;
+    {
+        Descriptor = Descriptor with { CommentChar = null };
+        return this;
+    }
 
     public NdjsonDialectDescriptor Build()
         => Descriptor;

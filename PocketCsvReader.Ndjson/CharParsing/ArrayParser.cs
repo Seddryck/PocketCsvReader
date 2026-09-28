@@ -27,16 +27,19 @@ internal struct ArrayParser : IParser
 
     public ArrayParser(IParserStateController parentController, IParserContext context, NdjsonDialectDescriptor dialect)
     {
+        if (dialect.ArrayDelimiter is not char delimiter || dialect.ArraySuffix is not char suffix)
+            throw new ArgumentException("The NDJSON dialect must define an array delimiter and suffix.", nameof(dialect));
+
         _parentController = parentController;
         _context = new FieldContext(context);
-        _delimiter = dialect.ArrayDelimiter!.Value;
-        _suffix = dialect.ArraySuffix!.Value;
+        _delimiter = delimiter;
+        _suffix = suffix;
         _whitespaces = dialect.Whitespaces;
         _lastNonWhitespacePosition = -1;
         _internalController = null;
         _dialect = new DialectDescriptor(
             Header: false,
-            Delimiter: dialect.ArrayDelimiter!.Value,
+            Delimiter: delimiter,
             LineTerminator: dialect.LineTerminator,
             QuoteChar: dialect.QuoteChar,
             DoubleQuote: false,
@@ -52,8 +55,9 @@ internal struct ArrayParser : IParser
         if (suffixClosesArray)
         {
             AddCurrentItem();
-            _context.Parent!.Span.Children ??= [];
-            _context.Parent!.EndValue(pos - 1);
+            var parent = _context.Parent ?? throw new InvalidOperationException("Array context has no parent.");
+            parent.Span.Children ??= [];
+            parent.EndValue(pos - 1);
             _context.Reset();
 
             // A completed array follows the same outer transitions as a completed
@@ -89,7 +93,8 @@ internal struct ArrayParser : IParser
         if (!_context.Span.Value.WasQuoted)
             _context.EndValue(_lastNonWhitespacePosition);
 
-        _context.Parent!.AddChild(_context.Span);
+        var parent = _context.Parent ?? throw new InvalidOperationException("Array context has no parent.");
+        parent.AddChild(_context.Span);
     }
 
     public ParserState ParseEof(int pos)

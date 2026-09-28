@@ -18,14 +18,15 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
 
     public override int GetOrdinal(string name)
     {
-        int index = Fields is null ? -1 : Array.IndexOf(Fields!, name);
+        int index = Fields is null ? -1 : Array.IndexOf(Fields, name);
         if (index >= 0)
             return index;
         index = Fields?.Length ?? 0;
         var list = new List<string>(Fields ?? Array.Empty<string>());
+        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
         do
         {
-            var fieldName = Record!.FieldSpans[index].DecodedLabel ?? Record.SliceLabel(index).ToString();
+            var fieldName = record.FieldSpans[index].DecodedLabel ?? record.SliceLabel(index).ToString();
             list.Add(fieldName);
             if (fieldName == name)
             {
@@ -33,7 +34,7 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
                 return index;
             }
             index += 1;
-        } while (index < Record!.FieldSpans.Length);
+        } while (index < record.FieldSpans.Length);
         Fields = [.. list];
         throw new ArgumentOutOfRangeException($"Field '{name}' not found.");
     }
@@ -43,9 +44,10 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         if (i < 0 || i >= FieldCount)
             throw new ArgumentOutOfRangeException(nameof(i));
 
-        var value = Record!.FieldSpans[i].Value;
+        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
+        var value = record.FieldSpans[i].Value;
         var quoteLength = value.WasQuoted ? 1 : 0;
-        return Record.Span.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
+        return record.Span.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
     }
 
     public override object GetValue(int i)
@@ -69,7 +71,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         if (IsEof)
             return false;
 
-        IsEof = RecordParser!.IsEndOfFile(out var recordSpan, out var recordState);
+        var parser = RecordParser ?? throw new InvalidOperationException("Record parser is not initialized.");
+        IsEof = parser.IsEndOfFile(out var recordSpan, out var recordState);
 
         if (recordState == RecordState.Eof)
         {
@@ -89,14 +92,15 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
 
     protected override NullableSpan GetValueOrThrow(int i)
     {
-        if (i < Record!.FieldSpans.Length)
+        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
+        if (i < record.FieldSpans.Length)
         {
-            if (Record.FieldSpans[i].Value.IsNull)
+            if (record.FieldSpans[i].Value.IsNull)
                 return default;
-            if (Record.FieldSpans[i].DecodedValue is not null)
-                return Record.FieldSpans[i].DecodedValue.AsMemory();
-            return Record!.Slice(i).Span;
+            if (record.FieldSpans[i].DecodedValue is not null)
+                return record.FieldSpans[i].DecodedValue.AsMemory();
+            return record.Slice(i).Span;
         }
-        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {record.FieldSpans.Length} defined fields.");
     }
 }
