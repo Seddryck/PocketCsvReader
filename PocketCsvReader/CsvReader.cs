@@ -31,7 +31,7 @@ namespace PocketCsvReader
         /// with a Buffer size of 4 KB.
         /// </remarks>
         public CsvReader()
-            : this(CsvProfile.CommaDoubleQuote, 4 * 1024)
+            : this(CsvProfile.CommaDoubleQuote)
         { }
 
         /// <summary>
@@ -41,8 +41,12 @@ namespace PocketCsvReader
         /// The <see cref="CsvProfile"/> that defines the delimiter, quote handling, and other parsing rules.
         /// </param>
         public CsvReader(CsvProfile profile)
-            : this(profile, 4 * 1024)
-        { }
+            : base(profile ?? throw new ArgumentNullException(nameof(profile)))
+        {
+            if (profile.ParserOptimizations.BufferSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(profile), "The profile buffer size must be positive.");
+            BufferSize = profile.ParserOptimizations.BufferSize;
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CsvReader"/> class with the specified Buffer size.
@@ -52,7 +56,7 @@ namespace PocketCsvReader
         /// A Buffer size of at least 4 KB is recommended for optimal performance.
         /// </remarks>
         public CsvReader(int bufferSize)
-            : this(CsvProfile.SemiColumnDoubleQuote, bufferSize)
+            : this(CsvProfile.CommaDoubleQuote, bufferSize)
         { }
 
         /// <summary>
@@ -63,12 +67,25 @@ namespace PocketCsvReader
         /// </param>
         /// <param name="bufferSize">The size of the Buffer used for reading CSV data.</param>
         public CsvReader(CsvProfile profile, int bufferSize)
-            : base(profile)
+            : base(WithBufferSize(profile, bufferSize))
         {
             BufferSize = bufferSize;
         }
 
-        protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
+        private static CsvProfile WithBufferSize(CsvProfile profile, int bufferSize)
+        {
+            ArgumentNullException.ThrowIfNull(profile);
+            if (bufferSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(bufferSize), bufferSize, "Buffer size must be positive.");
+
+            return new CsvProfile(profile.Dialect, profile.Schema, profile.Resource, profile.Parsers)
+            {
+                StreamInitialization = profile.StreamInitialization,
+                ParserOptimizations = profile.ParserOptimizations with { BufferSize = bufferSize }
+            };
+        }
+
+        protected override int StreamBufferSize => BufferSize;
 
         protected override CsvDataReader CreateDataReader(Stream stream)
             => new(stream, Profile);
