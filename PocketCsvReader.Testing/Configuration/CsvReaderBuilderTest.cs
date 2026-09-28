@@ -10,6 +10,20 @@ namespace PocketCsvReader.Testing.Configuration;
 public class CsvReaderBuilderTest
 {
     [Test]
+    public void WithParserOptimizations_ShouldApplyOptions()
+    {
+        var reader = new CsvReaderBuilder()
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 8192, ReadAhead: false))
+            .Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.Profile.ParserOptimizations.BufferSize, Is.EqualTo(8192));
+            Assert.That(reader.Profile.ParserOptimizations.ReadAhead, Is.False);
+        });
+    }
+
+    [Test]
     public void WithDialectFunc_ShouldSetDialect()
     {
         var builder = new CsvReaderBuilder().WithDialect
