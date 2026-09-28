@@ -169,7 +169,7 @@ public class NdjsonReaderTest
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
         using var reader = new NdjsonReader(new NdjsonProfile("\r\n")).ToDataReader(stream);
 
-        Assert.Catch<System.Text.Json.JsonException>(() => reader.Read());
+        Assert.Throws<InvalidDataException>(() => reader.Read());
     }
 
     [Test]
@@ -237,7 +237,21 @@ public class NdjsonReaderTest
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# comment"));
         using var reader = new NdjsonReader().ToDataReader(stream);
 
-        Assert.Catch<System.Text.Json.JsonException>(() => reader.Read());
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
+    public void ToDataReader_InvalidPrefixBeforeFirstCommentMarker_IsRejected()
+    {
+        const string content = "{\"value\":# first # second}";
+        var profile = new NdjsonProfile(
+            new NdjsonDialectDescriptorBuilder()
+                .WithCommentChar('#')
+                .Build());
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(profile).ToDataReader(stream);
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
     }
 
     [Test]

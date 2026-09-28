@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
 using PocketCsvReader.Ndjson.CharParsing;
 using PocketCsvReader.Ndjson.Configuration;
-using System.Text.Json;
 
 namespace PocketCsvReader.Ndjson;
 public class RecordParser : BaseRecordParser<NdjsonProfile>
@@ -40,7 +39,7 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
             if (string.IsNullOrWhiteSpace(candidate))
                 continue;
 
-            line = RemoveComment(candidate, Profile.Dialect.CommentChar);
+            line = RemoveComment(candidate, Profile.Dialect.CommentChar, Profile.Dialect.Whitespaces);
             if (string.IsNullOrWhiteSpace(line))
                 line = null;
         }
@@ -107,7 +106,7 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         return true;
     }
 
-    private static string? RemoveComment(string line, char? commentChar)
+    private static string? RemoveComment(string line, char? commentChar, char[] whitespaces)
     {
         if (!commentChar.HasValue)
             return line;
@@ -124,8 +123,9 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
                 continue;
 
             var content = line[..i].TrimEnd();
-            if (content.Length == 0 || IsCompleteJson(content))
+            if (content.Length == 0 || IsCompleteJson(content, whitespaces))
                 return content;
+            return line;
         }
 
         return line;
@@ -150,14 +150,14 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         return true;
     }
 
-    private static bool IsCompleteJson(string content)
+    private static bool IsCompleteJson(string content, char[] whitespaces)
     {
         try
         {
-            JsonDocument.Parse(content).Dispose();
+            _ = new JsonRecordParser(content, whitespaces).ParseRoot();
             return true;
         }
-        catch (JsonException)
+        catch (InvalidDataException)
         {
             return false;
         }
