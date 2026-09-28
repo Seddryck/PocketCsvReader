@@ -12,14 +12,13 @@ namespace PocketCsvReader
     /// <remarks>
     /// The <see cref="CsvReader"/> class is designed for flexibility and performance when working with CSV data.
     /// It supports customizable profiles for parsing and encoding detection. Use this class to load CSV data
-    /// into memory or stream it efficiently, depending on your application’s requirements.
+    /// into memory or stream it efficiently, depending on your application's requirements.
     /// </remarks>
-    public class CsvReader
+    public class CsvReader : FlatFileReader<CsvProfile, CsvDataReader>
     {
         public event ProgressStatusHandler? ProgressStatusChanged;
         protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
 
-        protected internal CsvProfile Profile { get; private set; }
         public DialectDescriptor Dialect { get => Profile.Dialect; }
 
         protected int BufferSize { get; private set; }
@@ -64,10 +63,15 @@ namespace PocketCsvReader
         /// </param>
         /// <param name="bufferSize">The size of the Buffer used for reading CSV data.</param>
         public CsvReader(CsvProfile profile, int bufferSize)
+            : base(profile)
         {
-            Profile = profile;
             BufferSize = bufferSize;
         }
+
+        protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
+
+        protected override CsvDataReader CreateDataReader(Stream stream)
+            => new(stream, Profile);
 
         protected void RaiseProgressStatus(string status)
             => ProgressStatusChanged?.Invoke(this, new ProgressStatusEventArgs(status));
@@ -126,25 +130,6 @@ namespace PocketCsvReader
         /// This method is designed for scenarios where loading the entire file into memory is impractical,
         /// such as processing large datasets. The caller must dispose of the <see cref="CsvDataReader"/> after use.
         /// </remarks>
-        public CsvDataReader ToDataReader(string filename)
-        {
-            CheckFileExists(filename);
-            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-            return new CsvDataReader(stream, Profile);
-        }
-
-        /// <summary>
-        /// Opens a CSV file and provides an <see cref="IDataReader"/> for efficient record-by-record access.
-        /// </summary>
-        /// <param name="filename">The full path of the CSV file to read.</param>
-        /// <returns>
-        /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
-        /// </returns>
-        /// <exception cref="FileNotFoundException">Thrown if the specified file does not exist.</exception>
-        /// <remarks>
-        /// This method is designed for scenarios where loading the entire file into memory is impractical,
-        /// such as processing large datasets. The caller must dispose of the <see cref="CsvDataReader"/> after use.
-        /// </remarks>
         public CsvBatchDataReader ToDataReader(string[] filenames)
         {
             if (filenames == null || filenames.Length == 0)
@@ -154,32 +139,11 @@ namespace PocketCsvReader
             {
                 foreach (var filename in filenames)
                 {
-                    CheckFileExists(filename);
-                    var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-                    yield return stream;
+                    yield return OpenRead(filename);
                 }
             }
 
             return new CsvBatchDataReader(fileToStream(filenames), Profile);
-        }
-
-        /// <summary>
-        /// Reads CSV data from a stream and provides an <see cref="IDataReader"/> for record-by-record access.
-        /// </summary>
-        /// <param name="stream">
-        /// The <see cref="Stream"/> containing the CSV data. The stream must be readable and positioned
-        /// at the start of the content.
-        /// </param>
-        /// <returns>
-        /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
-        /// </returns>
-        /// <exception cref="ArgumentNullException">Thrown if the stream is null.</exception>
-        /// <remarks>
-        /// This method does not manage the lifecycle of the stream; the caller is responsible for closing it.
-        /// </remarks>
-        public CsvDataReader ToDataReader(Stream stream)
-        {
-            return new CsvDataReader(stream, Profile);
         }
 
         /// <summary>
@@ -319,15 +283,5 @@ namespace PocketCsvReader
             return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
         }
 
-        /// <summary>
-        /// Checks whether the specified file exists and throws an exception if it does not.
-        /// </summary>
-        /// <param name="filename">The name of the file to check.</param>
-        /// <exception cref="FileNotFoundException">Thrown if the file does not exist.</exception>
-        protected virtual void CheckFileExists(string filename)
-        {
-            if (!File.Exists(filename))
-                throw new FileNotFoundException($"The file {filename} was not found.", filename);
-        }
     }
 }
