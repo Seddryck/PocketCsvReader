@@ -6,7 +6,6 @@ using System.Text;
 using NUnit.Framework;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.Ndjson.Configuration;
-using System.Text.Json;
 
 namespace PocketCsvReader.Ndjson.Testing;
 public class NdjsonDataReaderTests
@@ -281,14 +280,66 @@ public class NdjsonDataReaderTests
         Assert.That(reader.GetRawString(0), Is.EqualTo("[{\"id\":1},[2,3],{},[],null,\"line\\nfeed\"]"));
     }
 
-    [TestCase("\"\\x\"")]
-    [TestCase("\"\\u12\"")]
-    [TestCase("\"unterminated")]
-    public void Read_InvalidEscape_ThrowsJsonException(string content)
+    [TestCase("true")]
+    [TestCase("false")]
+    [TestCase("0")]
+    [TestCase("-0")]
+    [TestCase("123")]
+    [TestCase("-12.34")]
+    [TestCase("1e10")]
+    [TestCase("1E-10")]
+    [TestCase("1.2e+3")]
+    public void Read_ValidLiteralOrNumber_PreservesValue(string content)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
         using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
 
-        Assert.Catch<JsonException>(() => reader.Read());
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetRawString(0), Is.EqualTo(content));
+    }
+
+    [TestCase("tru")]
+    [TestCase("falsee")]
+    [TestCase("nul")]
+    [TestCase("undefined")]
+    [TestCase("+1")]
+    [TestCase("01")]
+    [TestCase("-")]
+    [TestCase("1.")]
+    [TestCase(".1")]
+    [TestCase("1e")]
+    [TestCase("1e+")]
+    [TestCase("--1")]
+    [TestCase("NaN")]
+    [TestCase("Infinity")]
+    [TestCase("{\"value\":}")]
+    [TestCase("{\"value\":1")]
+    [TestCase("{\"value\":1} trailing")]
+    [TestCase("{\"value\":1,}")]
+    [TestCase("[1,]")]
+    [TestCase("[1,2")]
+    public void Read_InvalidJson_ThrowsInvalidDataException(string content)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [TestCase("\"\\x\"")]
+    [TestCase("\"\\u12\"")]
+    [TestCase("\"\\uZZZZ\"")]
+    [TestCase("\"\\uD83D\"")]
+    [TestCase("\"\\uDE00\"")]
+    [TestCase("\"\\uD83D\\u0041\"")]
+    [TestCase("\"unterminated")]
+    [TestCase("\"line\nbreak\"")]
+    [TestCase("\"control \u0001\"")]
+    public void Read_InvalidString_ThrowsInvalidDataException(string content)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
     }
 }
