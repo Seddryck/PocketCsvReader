@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
@@ -16,6 +15,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     protected ArrayPool<char>? Pool { get; }
 
     private int? FieldsCount { get; set; }
+    private FieldSpan[] _fieldBuffer = new FieldSpan[20];
 
     /// <summary>
         /// Initializes a new instance of the <see cref="BaseRecordParser{P}"/> class with the specified parsing profile, buffer reader, optional character pool, and parser factory.
@@ -41,7 +41,8 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     {
         var index = 0;
         var eof = false;
-        var fieldList = new List<FieldSpan>(FieldsCount ?? 20);
+        var fieldCount = 0;
+        EnsureFieldCapacity(FieldsCount ?? 20);
         var longMemory = ReadOnlyMemory<char>.Empty;
         var longSpanLength = 0;
 
@@ -68,17 +69,17 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             var state = FieldParser.Parse(c, index + longSpanLength);
             if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
             {
-                fieldList.Add(FieldParser.Result);
+                AddField(ref fieldCount, FieldParser.Result);
                 FieldParser.Reset();
 
                 if (state == ParserState.Record || state == ParserState.Header)
                 {
                     var recordBuffer = Buffer;
                     Buffer = Buffer.Slice(index + 1);
-                    FieldsCount ??= fieldList.Count;
+                    FieldsCount ??= fieldCount;
                     record = CreateRecordSpan(
                         longMemory.Length > 0 ? Concat(longMemory, recordBuffer) : recordBuffer
-                        , [.. fieldList]);
+                        , CopyFields(fieldCount));
                     recordState = RecordState.Record;
                     return false;
                 }
@@ -124,10 +125,10 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         {
             case ParserState.Header:
             case ParserState.Record:
-                fieldList.Add(FieldParser.Result);
+                AddField(ref fieldCount, FieldParser.Result);
                 record = CreateRecordSpan(
                         longMemory.Length > 0 ? Concat(longMemory, Buffer) : Buffer
-                        , [.. fieldList]);
+                        , CopyFields(fieldCount));
                 recordState = RecordState.Record;
                 return true;
             case ParserState.Eof:
@@ -156,6 +157,26 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         left.Span.CopyTo(result);
         right.Span.CopyTo(result.AsSpan(left.Length));
         return result;
+    }
+
+    private void AddField(ref int count, FieldSpan field)
+    {
+        EnsureFieldCapacity(count + 1);
+        _fieldBuffer[count++] = field;
+    }
+
+    private void EnsureFieldCapacity(int capacity)
+    {
+        if (_fieldBuffer.Length >= capacity)
+            return;
+        Array.Resize(ref _fieldBuffer, Math.Max(capacity, _fieldBuffer.Length * 2));
+    }
+
+    private FieldSpan[] CopyFields(int count)
+    {
+        var fields = new FieldSpan[count];
+        _fieldBuffer.AsSpan(0, count).CopyTo(fields);
+        return fields;
     }
 
     /// <summary>
