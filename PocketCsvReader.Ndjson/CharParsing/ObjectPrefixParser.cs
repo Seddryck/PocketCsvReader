@@ -15,13 +15,14 @@ public readonly struct ObjectPrefixParser : IParser
     private readonly char _lineTerminatorChar;
     private readonly int _lineTerminatorLength;
     private readonly bool _skipInitialSpace;
+    private readonly char? _comment;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LabelParser"/> struct with the specified field parser context.
     /// </summary>
-    public ObjectPrefixParser(IParserContext ctx, INdjsonStateController controller, string lineTerminator, char objectPrefix, bool skipInitialSpace)
-        => (_ctx, _controller, _lineTerminatorChar, _lineTerminatorLength, _objectPrefix, _skipInitialSpace) =
-            (ctx, controller, lineTerminator[0], lineTerminator.Length, objectPrefix, skipInitialSpace);
+    public ObjectPrefixParser(IParserContext ctx, INdjsonStateController controller, string lineTerminator, char objectPrefix, bool skipInitialSpace, char? comment = null)
+        => (_ctx, _controller, _lineTerminatorChar, _lineTerminatorLength, _objectPrefix, _skipInitialSpace, _comment) =
+            (ctx, controller, lineTerminator[0], lineTerminator.Length, objectPrefix, skipInitialSpace, comment);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
@@ -39,6 +40,12 @@ public readonly struct ObjectPrefixParser : IParser
         if (c == _objectPrefix)
         {
             _controller.SwitchToLabel();
+            return ParserState.Continue;
+        }
+
+        if (_comment.HasValue && c == _comment.Value)
+        {
+            _controller.SwitchToComment();
             return ParserState.Continue;
         }
 

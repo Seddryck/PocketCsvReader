@@ -36,7 +36,7 @@ class NdjsonStateController : INdjsonStateController, IParserStateController
     /// <param name="dialect">The dialect descriptor specifying CSV parsing rules such as delimiters, quote characters, and line terminators.</param>
     public NdjsonStateController(IParserContext ctx, NdjsonDialectDescriptor dialect)
     {
-        _objectPrefixParser = new ObjectPrefixParser(ctx, this, dialect.LineTerminator, dialect.ObjectPrefix, dialect.SkipInitialSpace);
+        _objectPrefixParser = new ObjectPrefixParser(ctx, this, dialect.LineTerminator, dialect.ObjectPrefix, dialect.SkipInitialSpace, dialect.CommentChar);
         _objectSuffixParser = new ObjectSuffixParser(ctx, this, dialect.ObjectSuffix, dialect.SkipInitialSpace);
 
         _labelParser = new LabelParser(ctx, this, dialect.Separator, dialect.QuoteChar,
@@ -55,8 +55,8 @@ class NdjsonStateController : INdjsonStateController, IParserStateController
         _lineTerminatorParser = new LineTerminatorParser(ctx, this, dialect.LineTerminator);
         if (dialect.ArrayPrefix.HasValue && dialect.ArraySuffix.HasValue && dialect.ArrayDelimiter.HasValue)
             _arrayParser = new ArrayParser(this, ctx, dialect);
-        //if (dialect.CommentChar.HasValue)
-        //    _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
+        if (dialect.CommentChar.HasValue)
+            _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
 
         _currentParser = _objectPrefixParser;
         _currentState = _objectPrefixParser.Parse;

@@ -116,6 +116,21 @@ public class NdjsonParserTest
         Assert.That(parser.Result.Children, Has.Length.EqualTo(expected));
     }
 
+    [Test]
+    public void Parse_ConfiguredFullLineComment_ReturnsCommentState()
+    {
+        var dialect = new NdjsonDialectDescriptorBuilder()
+            .WithLineTerminator("\n")
+            .WithCommentChar('#')
+            .Build();
+        var parser = new NdjsonParser(dialect);
+        const string value = "# comment\n";
+
+        var states = value.Select((character, index) => parser.Parse(character, index)).ToArray();
+
+        Assert.That(states[^1], Is.EqualTo(ParserState.Comment));
+    }
+
     //[TestCase(@"{""foo"": ""\""bar\""""}")]
     //public void Parse_EscapeQuoteInQuotedField_EscapedSet(string value)
     //{

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using PocketCsvReader.CharParsing;
 using PocketCsvReader.Ndjson.CharParsing;
 using PocketCsvReader.Ndjson.Configuration;
+using System.Text.Json;
 
 namespace PocketCsvReader.Ndjson;
 public class RecordParser : BaseRecordParser<NdjsonProfile>
@@ -30,11 +31,19 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         if (_reader is null)
             return base.IsEndOfFile(out record, out recordState);
 
-        string? line;
-        do
+        string? line = null;
+        while (line is null)
         {
-            line = _reader.ReadLine();
-        } while (line is not null && string.IsNullOrWhiteSpace(line));
+            var candidate = _reader.ReadLine();
+            if (candidate is null)
+                break;
+            if (string.IsNullOrWhiteSpace(candidate))
+                continue;
+
+            line = RemoveComment(candidate, Profile.Dialect.CommentChar);
+            if (string.IsNullOrWhiteSpace(line))
+                line = null;
+        }
 
         if (line is null)
         {
@@ -47,5 +56,56 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         record = new RecordSpan(line.AsSpan(), fields);
         recordState = RecordState.Record;
         return _reader.Peek() < 0;
+    }
+
+    private static string? RemoveComment(string line, char? commentChar)
+    {
+        if (!commentChar.HasValue)
+            return line;
+
+        var inString = false;
+        var escaping = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var current = line[i];
+            if (inString)
+            {
+                if (escaping)
+                    escaping = false;
+                else if (current == '\\')
+                    escaping = true;
+                else if (current == '"')
+                    inString = false;
+                continue;
+            }
+
+            if (current == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (current != commentChar.Value)
+                continue;
+
+            var content = line[..i].TrimEnd();
+            if (content.Length == 0 || IsCompleteJson(content))
+                return content;
+        }
+
+        return line;
+    }
+
+    private static bool IsCompleteJson(string content)
+    {
+        try
+        {
+            JsonDocument.Parse(content).Dispose();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

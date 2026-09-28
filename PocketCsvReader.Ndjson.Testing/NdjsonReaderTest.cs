@@ -115,4 +115,50 @@ public class NdjsonReaderTest
         Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(42));
         Assert.That(reader.GetArray<bool>(reader.GetOrdinal("items")), Is.EqualTo(new[] { true, false }));
     }
+
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    public void ToDataReader_ConfiguredComments_SkipsFullLineAndTrailingComments(string lineTerminator)
+    {
+        var content = string.Join(lineTerminator,
+            "# before",
+            "{\"value\":1,\"text\":\"# retained\"} # trailing",
+            "# between",
+            "42# trailing primitive",
+            "# after");
+        var profile = new NdjsonProfile(
+            new NdjsonDialectDescriptorBuilder()
+                .WithLineTerminator(lineTerminator)
+                .WithCommentChar('#')
+                .Build());
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(profile).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(1));
+        Assert.That(reader.GetString(reader.GetOrdinal("text")), Is.EqualTo("# retained"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(42));
+        Assert.That(reader.Read(), Is.False);
+        Assert.That(reader.RowCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ToDataReader_CommentWithoutConfiguration_IsRejected()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# comment"));
+        using var reader = new NdjsonReader().ToDataReader(stream);
+
+        Assert.Catch<System.Text.Json.JsonException>(() => reader.Read());
+    }
+
+    [Test]
+    public void ReaderBuilder_CommentConfiguration_IsApplied()
+    {
+        var reader = new NdjsonReaderBuilder()
+            .WithDialect(dialect => dialect.WithCommentChar('#'))
+            .Build();
+
+        Assert.That(reader.Dialect.CommentChar, Is.EqualTo('#'));
+    }
 }
