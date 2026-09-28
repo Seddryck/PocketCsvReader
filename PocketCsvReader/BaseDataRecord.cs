@@ -325,7 +325,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = child.Value.IsNull
                         ? default
-                        : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
+                        : parse(GetFieldSpan(child));
         }
         return array;
     }
@@ -364,7 +364,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             var child = Record!.FieldSpans[i].Children![j];
             array[j] = child.Value.IsNull
                 ? null
-                : parse!(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
+                : parse!(GetFieldSpan(child));
         }
         return array;
     }
@@ -410,8 +410,13 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         var child = Record!.FieldSpans[i].Children![j];
         return child.Value.IsNull
                 ? default
-                : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
+                : parse(GetFieldSpan(child));
     }
+
+    private ReadOnlySpan<char> GetFieldSpan(FieldSpan field)
+        => field.DecodedValue is not null
+            ? field.DecodedValue.AsSpan()
+            : Record!.Span.Slice(field.Value.Start, field.Value.Length).Span;
 
     /// <summary>
     /// Creates a delegate that parses a <see cref="ReadOnlySpan{char}"/> into the specified type using the field's format descriptor.

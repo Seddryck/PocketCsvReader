@@ -25,7 +25,7 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         var list = new List<string>(Fields ?? Array.Empty<string>());
         do
         {
-            var fieldName = Record!.SliceLabel(index).ToString();
+            var fieldName = Record!.FieldSpans[index].DecodedLabel ?? Record.SliceLabel(index).ToString();
             list.Add(fieldName);
             if (fieldName == name)
             {
@@ -40,8 +40,12 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
 
     public override string GetRawString(int i)
     {
-        var addChar = Record!.FieldSpans[i].Label.WasQuoted ? 1 : 0;
-        return Record!.Span.Slice(Record!.FieldSpans[i].Label.Start, Record!.FieldSpans[i].Value.Length + addChar).ToString();
+        if (i < 0 || i >= FieldCount)
+            throw new ArgumentOutOfRangeException(nameof(i));
+
+        var value = Record!.FieldSpans[i].Value;
+        var quoteLength = value.WasQuoted ? 1 : 0;
+        return Record.Span.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
     }
 
     public override object GetValue(int i)
@@ -89,6 +93,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         {
             if (Record.FieldSpans[i].Value.IsNull)
                 return default;
+            if (Record.FieldSpans[i].DecodedValue is not null)
+                return Record.FieldSpans[i].DecodedValue.AsMemory();
             return Record!.Slice(i).Span;
         }
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");
