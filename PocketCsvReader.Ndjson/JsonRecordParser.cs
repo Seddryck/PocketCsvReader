@@ -5,21 +5,23 @@ namespace PocketCsvReader.Ndjson;
 internal sealed class JsonRecordParser
 {
     private readonly string _json;
+    private readonly char[] _whitespaces;
     private int _position;
 
-    public JsonRecordParser(string json)
+    public JsonRecordParser(string json, char[] whitespaces)
     {
         _json = json;
+        _whitespaces = whitespaces;
         JsonDocument.Parse(json).Dispose();
     }
 
     public FieldSpan[] ParseRoot()
     {
-        SkipSpaces();
+        SkipWhitespace();
         var fields = Current == '{'
             ? ParseObject()
             : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
-        SkipSpaces();
+        SkipWhitespace();
         if (!IsEnd)
             throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
         return fields;
@@ -28,7 +30,7 @@ internal sealed class JsonRecordParser
     private FieldSpan[] ParseObject()
     {
         Expect('{');
-        SkipSpaces();
+        SkipWhitespace();
         if (Current == '}')
         {
             _position++;
@@ -39,14 +41,14 @@ internal sealed class JsonRecordParser
         while (true)
         {
             var label = ParseString();
-            SkipSpaces();
+            SkipWhitespace();
             Expect(':');
-            SkipSpaces();
+            SkipWhitespace();
 
             var value = ParseValue(allowObject: true, allowCompositeArrayItems: true);
             fields.Add(value with { Label = label.Span, DecodedLabel = label.Decoded });
 
-            SkipSpaces();
+            SkipWhitespace();
             if (Current == '}')
             {
                 _position++;
@@ -54,7 +56,7 @@ internal sealed class JsonRecordParser
             }
 
             Expect(',');
-            SkipSpaces();
+            SkipWhitespace();
         }
     }
 
@@ -80,7 +82,7 @@ internal sealed class JsonRecordParser
             return ParseArray(allowCompositeArrayItems);
 
         var scalarStart = _position;
-        while (!IsEnd && Current != ',' && Current != '}' && Current != ']' && Current != ' ')
+        while (!IsEnd && Current != ',' && Current != '}' && Current != ']' && !IsJsonWhitespace(Current))
             _position++;
 
         if (scalarStart == _position)
@@ -95,7 +97,7 @@ internal sealed class JsonRecordParser
     {
         Expect('[');
         var start = _position;
-        SkipSpaces();
+        SkipWhitespace();
         var children = new List<FieldSpan>();
 
         if (Current == ']')
@@ -110,7 +112,7 @@ internal sealed class JsonRecordParser
                 throw new InvalidDataException("Nested arrays and object array elements are not supported.");
 
             children.Add(ParseValue(allowObject: allowCompositeItems, allowCompositeArrayItems: allowCompositeItems));
-            SkipSpaces();
+            SkipWhitespace();
             if (Current == ']')
             {
                 var end = _position;
@@ -119,7 +121,7 @@ internal sealed class JsonRecordParser
             }
 
             Expect(',');
-            SkipSpaces();
+            SkipWhitespace();
         }
     }
 
@@ -156,11 +158,14 @@ internal sealed class JsonRecordParser
         throw new InvalidDataException("Unterminated JSON string.");
     }
 
-    private void SkipSpaces()
+    private void SkipWhitespace()
     {
-        while (!IsEnd && Current == ' ')
+        while (!IsEnd && IsJsonWhitespace(Current))
             _position++;
     }
+
+    private bool IsJsonWhitespace(char value)
+        => Array.IndexOf(_whitespaces, value) >= 0;
 
     private void Expect(char expected)
     {

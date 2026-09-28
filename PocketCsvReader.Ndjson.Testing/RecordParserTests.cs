@@ -177,5 +177,20 @@ public class RecordParserTest
         Assert.That(items![0].Children, Is.Empty);
         Assert.That(items[1].Children, Is.Empty);
     }
+
+    [Test]
+    public void ReadNextRecord_TabsAroundTokens_ParsesAllValues()
+    {
+        const string record = "\t{\t\"first\"\t:\t1\t,\t\"array\"\t:\t[\t2\t,\t3\t]\t,\t\"empty\"\t:\t{\t}\t}\t";
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        Assert.That(values.FieldSpans, Has.Length.EqualTo(3));
+        Assert.That(values.Slice(0).ToString(), Is.EqualTo("1"));
+        Assert.That(values.FieldSpans[1].Children, Has.Length.EqualTo(2));
+        Assert.That(values.FieldSpans[2].Children, Is.Empty);
+    }
 }
 
