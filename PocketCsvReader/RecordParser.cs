@@ -114,6 +114,8 @@ public class RecordParser : BaseRecordParser<CsvProfile>
             if (bufferSize == 0)
                 break;
             var state = FieldParser.Parse(span[index], index);
+            if (state == ParserState.Reprocess)
+                continue;
             if (state == ParserState.Field)
                 FieldParser.Reset();
             if (state == ParserState.Record)

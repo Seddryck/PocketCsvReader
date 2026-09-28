@@ -67,6 +67,8 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         {
             char c = span[index];
             var state = FieldParser.Parse(c, index + longSpanLength);
+            if (state == ParserState.Reprocess)
+                continue;
             if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
             {
                 AddField(ref fieldCount, FieldParser.Result);
@@ -205,7 +207,10 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
 
             if (bufferSize == 0)
                 break;
-            switch (FieldParser.Parse(span[index], index))
+            var state = FieldParser.Parse(span[index], index);
+            if (state == ParserState.Reprocess)
+                continue;
+            switch (state)
             {
                 case ParserState.Error:
                     throw new InvalidDataException($"Invalid character '{span[index]}' at position {index}.");
