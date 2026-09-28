@@ -263,4 +263,57 @@ public class NdjsonReaderTest
 
         Assert.That(reader.Dialect.CommentChar, Is.EqualTo('#'));
     }
+
+    [Test]
+    public void ReaderBuilder_CommonConfiguration_PreservesFluentTypeAndBuffering()
+    {
+        var builder = new NdjsonReaderBuilder()
+            .WithSchema(schema => schema.Named())
+            .WithResource(resource => resource)
+            .WithParsers(parsers => parsers)
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 8, ReadAhead: false))
+            .WithDialect(dialect => dialect.WithLineTerminator("\n"));
+
+        using var reader = builder.Build().ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"value\":\"across-buffer\"}\n")));
+
+        Assert.That(builder, Is.TypeOf<NdjsonReaderBuilder>());
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("value")), Is.EqualTo("across-buffer"));
+    }
+
+    [Test]
+    public void SharedMaterializers_ReturnExpectedValues()
+    {
+        const string content = "{\"id\":1,\"name\":\"Ada\"}\n{\"id\":2,\"name\":\"Grace\"}";
+        var ndjson = new NdjsonReader(new NdjsonProfile("\n"));
+
+        var arrays = ndjson.ToArrayString(new MemoryStream(Encoding.UTF8.GetBytes(content))).ToArray();
+        var table = ndjson.ToDataTable(new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(arrays, Is.EqualTo(new[]
+            {
+                new string?[] { "1", "Ada" },
+                new string?[] { "2", "Grace" }
+            }));
+            Assert.That(table.Rows.Count, Is.EqualTo(2));
+            Assert.That(table.Rows[1]["name"], Is.EqualTo("Grace"));
+        });
+    }
+
+    [Test]
+    public void DataReader_DoesNotAllocateUnusedSanitizerCache()
+    {
+        using var reader = new NdjsonReader(new NdjsonProfile("\n")).ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"value\":1}")));
+        var cache = typeof(BaseDataRecord<NdjsonProfile>)
+            .GetField("_sanitizers", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        Assert.That(cache.GetValue(reader), Is.Null);
+        Assert.That(reader.Read(), Is.True);
+        _ = reader.GetString(0);
+        Assert.That(cache.GetValue(reader), Is.Null);
+    }
 }
