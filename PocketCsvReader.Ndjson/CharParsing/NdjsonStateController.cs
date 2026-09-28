@@ -8,7 +8,7 @@ using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson.CharParsing;
 
-class NdjsonStateController : INdjsonStateController
+class NdjsonStateController : INdjsonStateController, IParserStateController
 {
     // Reusable state structs
     private readonly IParser _objectPrefixParser;
@@ -43,7 +43,7 @@ class NdjsonStateController : INdjsonStateController
             dialect.EscapeChar, dialect.SkipInitialSpace);
 
         _valueParser = new ValueParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.QuoteChar,
-            dialect.EscapeChar, dialect.SkipInitialSpace, dialect.ArrayPrefix);
+            dialect.EscapeChar, dialect.SkipInitialSpace, dialect.CommentChar, dialect.ArrayPrefix);
 
         _labelQuotedParser = new QuotedLabelParser(ctx, this, dialect.QuoteChar!.Value, dialect.EscapeChar);
         _labelRawParser = new RawLabelParser(ctx, this, dialect.Separator);
@@ -53,8 +53,8 @@ class NdjsonStateController : INdjsonStateController
 
         _separatorParser = new SeparatorParser(ctx, this, dialect.Separator, dialect.SkipInitialSpace);
         _lineTerminatorParser = new LineTerminatorParser(ctx, this, dialect.LineTerminator);
-        //if (dialect.ArrayDelimiter.HasValue)
-        //    _arrayParser = new ArrayParser(this, ctx, dialect);
+        if (dialect.ArrayPrefix.HasValue && dialect.ArraySuffix.HasValue && dialect.ArrayDelimiter.HasValue)
+            _arrayParser = new ArrayParser(this, ctx, dialect);
         //if (dialect.CommentChar.HasValue)
         //    _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
 
@@ -148,6 +148,12 @@ class NdjsonStateController : INdjsonStateController
     /// </summary>
     public void SwitchToValueRaw()
         => SwitchTo(_valueRawParser);
+
+    void IParserStateController.SwitchToQuoted()
+        => SwitchToValueQuoted();
+
+    void IParserStateController.SwitchToRaw()
+        => SwitchToValueRaw();
 
     /// <summary>
     /// Switches the active parser to the array parser.

@@ -32,11 +32,11 @@ public record NdjsonDialectDescriptor
     /// <summary>The collection of characters considered as whitespace, defaulting to space and tab if null.</summary>
     char[] Whitespaces = null!,
     /// <summary>The character that marks the beginning of an array, or null if arrays are not supported.</summary>
-    char? ArrayPrefix = null,
+    char? ArrayPrefix = '[',
     /// <summary>The character that marks the end of an array, or null if arrays are not supported.</summary>
-    char? ArraySuffix = null,
+    char? ArraySuffix = ']',
     /// <summary>The character used to separate array elements, or null if arrays are not supported.</summary>
-    char? ArrayDelimiter = null
+    char? ArrayDelimiter = ','
 )
 {
     public char[] Whitespaces { get; init; } = Whitespaces ?? [' ', '\t'];

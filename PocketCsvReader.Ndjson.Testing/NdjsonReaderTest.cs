@@ -46,4 +46,25 @@ public class NdjsonReaderTest
         }
         Assert.That(rowCount, Is.EqualTo(7));
     }
+
+    [Test]
+    public void ToDataReader_ArrayField_ReturnsTypedArray()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"values\": [10, 25, 36]}"));
+        using var reader = new NdjsonReader().ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetArray<int>(0), Is.EqualTo(new[] { 10, 25, 36 }));
+    }
+
+    [Test]
+    public void ToDataReader_QuotedAndEmptyArrays_ReturnsArrays()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"values\": [\"a]b\", \"qrz\"], \"empty\": []}"));
+        using var reader = new NdjsonReader().ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetArray<string>(0), Is.EqualTo(new[] { "a]b", "qrz" }));
+        Assert.That(reader.GetArray<string>(1), Is.Empty);
+    }
 }
