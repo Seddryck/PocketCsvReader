@@ -35,8 +35,11 @@ public class RecordParser<T> : RecordParser
     /// <param name="value">The mapped record of type <typeparamref name="T"/>, or the default value if no fields are present.</param>
     /// <returns><c>true</c> if the end of the file has been reached; otherwise, <c>false</c>.</returns>
     public virtual bool IsEndOfFile(out T value)
+        => IsEndOfFile(out value, out _);
+
+    public virtual bool IsEndOfFile(out T value, out RecordState state)
     {
-        var eof = IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
+        var eof = IsEndOfFile(out RecordSpan rawRecord, out state);
         value = (rawRecord.FieldSpans?.Length ?? 0) == 0 ? default! : SpanMapper(rawRecord.Span, rawRecord.FieldSpans!);
         return eof;
     }

@@ -70,7 +70,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
             {
                 AddField(ref fieldCount, FieldParser.Result);
-                FieldParser.Reset();
+                FieldParser.Reset(state != ParserState.Field);
 
                 if (state == ParserState.Record || state == ParserState.Header)
                 {
@@ -86,7 +86,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             }
             else if (state == ParserState.Comment)
             {
-                FieldParser.Reset();
+                FieldParser.Reset(true);
                 Buffer = Buffer.Slice(index + 1);
                 record = new();
                 recordState = RecordState.Comment;

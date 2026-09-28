@@ -24,5 +24,6 @@ public interface IParser
     /// Resets the parser to its initial state, clearing any accumulated parsing data.
     /// </summary>
     void Reset();
+    void Reset(bool recordStart) => Reset();
     ref FieldSpan Result { get; }
 }
