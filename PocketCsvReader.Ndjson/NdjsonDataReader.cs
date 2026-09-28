@@ -46,14 +46,9 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
     protected override object GetNullValue(int i)
         => DBNull.Value;
 
-    public override bool Read()
+    protected override bool ReadCore()
     {
         Fields = [];
-
-        if (FileEncoding is null)
-            Initialize();
-        if (IsEof)
-            return false;
 
         var parser = RecordParser ?? throw new InvalidOperationException("Record parser is not initialized.");
         IsEof = parser.IsEndOfFile(out var recordSpan, out var recordState);

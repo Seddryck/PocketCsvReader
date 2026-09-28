@@ -64,15 +64,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     /// Advances the reader to the next CSV record.
     /// </summary>
     /// <returns><c>true</c> if a new record was read; <c>false</c> if the end of the file has been reached.</returns>
-    public override bool Read()
-    {
-        if (FileEncoding is null)
-            Initialize();
-        if (IsEof)
-            return false;
-
-        return ReadRow();
-    }
+    protected override bool ReadCore() => ReadRow();
 
     /// <summary>
     /// Reads the next non-comment CSV row, handling headers and end-of-file conditions as needed.

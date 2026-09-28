@@ -14,6 +14,8 @@ public class RecordSourceTest
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetString(0), Is.EqualTo("value"));
         Assert.That(reader.Read(), Is.False);
+        Assert.That(reader.Read(), Is.False);
+        Assert.That(reader.RecordSourceCreationCount, Is.EqualTo(1));
     }
 
     private sealed class StubProfile : IProfile
@@ -26,6 +28,8 @@ public class RecordSourceTest
 
     private sealed class StubDataReader : BaseDataReader<StubProfile>
     {
+        public int RecordSourceCreationCount { get; private set; }
+
         public StubDataReader(Stream stream, StubProfile profile)
             : base(stream, profile, new StringMapper())
         { }
@@ -35,15 +39,13 @@ public class RecordSourceTest
         protected override NullableSpan GetValueOrThrow(int i) => Record!.Slice(i).Span;
 
         protected override IRecordSource<StubProfile> CreateRecordSource(StreamReader reader, StubProfile profile)
-            => new StubRecordSource(profile);
-
-        public override bool Read()
         {
-            if (FileEncoding is null)
-                Initialize();
-            if (IsEof)
-                return false;
+            RecordSourceCreationCount++;
+            return new StubRecordSource(profile);
+        }
 
+        protected override bool ReadCore()
+        {
             IsEof = RecordSource!.IsEndOfFile(out var record, out var state);
             if (state == RecordState.Eof)
                 return false;
