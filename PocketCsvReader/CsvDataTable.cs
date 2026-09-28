@@ -28,26 +28,7 @@ public class CsvDataTable
 
     public DataTable Read()
     {
-        int i = 0;
-        var table = new DataTable();
-
-        using (var dataReader = new CsvDataReader(Stream, Profile))
-        {
-            while (dataReader.Read())
-            {
-                if (i == 0)
-                    table = CreateTable(dataReader.Fields!);
-
-                i++;
-                var row = table.NewRow();
-
-                for (int j = 0; j < dataReader.Fields!.Length; j++)
-                    row[j] = dataReader.GetString(j);
-
-                table.Rows.Add(row);
-            }
-
-            return table;
-        }
+        using var dataReader = new CsvDataReader(Stream, Profile);
+        return DataReaderMaterializer.ToDataTable(dataReader);
     }
 }

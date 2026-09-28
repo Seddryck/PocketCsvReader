@@ -11,13 +11,14 @@ internal static class DataReaderMaterializer
         if (!reader.Read())
             return table;
 
-        for (var index = 0; index < reader.FieldCount; index++)
+        var fieldCount = reader.FieldCount;
+        for (var index = 0; index < fieldCount; index++)
             table.Columns.Add(reader.GetName(index));
 
         do
         {
             var row = table.NewRow();
-            for (var index = 0; index < reader.FieldCount; index++)
+            for (var index = 0; index < fieldCount; index++)
                 row[index] = reader.IsDBNull(index) ? DBNull.Value : reader.GetString(index);
             table.Rows.Add(row);
         } while (reader.Read());
