@@ -168,16 +168,17 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         if (i >= Record!.FieldSpans.Length)
             return GetMissingField();
 
-        if (IsNull(i))
+        var value = GetValueOrThrow(i);
+        if (!value.HasValue)
             return GetNullValue(i);
 
         var parse = ResolveValueParser(i);
         if (parse is null)
-            return GetString(i);
+            return StringMapper.Map(value.Value);
 
         try
         {
-            return parse.Invoke(GetValueOrThrow(i));
+            return parse.Invoke(value.Value);
         }
         catch (TargetInvocationException ex)
         {
