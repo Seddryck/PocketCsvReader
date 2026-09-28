@@ -49,6 +49,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Ndjson", "P
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Ndjson.Testing", "PocketCsvReader.Ndjson.Testing\PocketCsvReader.Ndjson.Testing.csproj", "{7837DA74-CC82-1D50-6539-52E23163E3BC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.FixedWidth", "PocketCsvReader.FixedWidth\PocketCsvReader.FixedWidth.csproj", "{876A1B6E-03FC-472F-8B18-92E68E04B56E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.FixedWidth.Testing", "PocketCsvReader.FixedWidth.Testing\PocketCsvReader.FixedWidth.Testing.csproj", "{01FB4024-44CE-4848-8676-ADB9BCF37572}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -79,6 +83,14 @@ Global
 		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7837DA74-CC82-1D50-6539-52E23163E3BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{876A1B6E-03FC-472F-8B18-92E68E04B56E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{876A1B6E-03FC-472F-8B18-92E68E04B56E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{876A1B6E-03FC-472F-8B18-92E68E04B56E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{876A1B6E-03FC-472F-8B18-92E68E04B56E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{01FB4024-44CE-4848-8676-ADB9BCF37572}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{01FB4024-44CE-4848-8676-ADB9BCF37572}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{01FB4024-44CE-4848-8676-ADB9BCF37572}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{01FB4024-44CE-4848-8676-ADB9BCF37572}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

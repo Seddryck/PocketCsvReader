@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.FixedWidth</PackageId>
+    <PackageTags>FixedWidth FlatFile DataReader DataTable Parser</PackageTags>
+    <Description>PocketCsvReader.FixedWidth extends PocketCsvReader with single-pass, lazy field parsing for fixed-width text files.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>
