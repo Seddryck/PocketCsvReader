@@ -110,5 +110,42 @@ public class RecordParserTest
         Assert.That(values.FieldSpans, Has.Length.EqualTo(1));
         Assert.That(values.FieldSpans[0].Children, Has.Length.EqualTo(3));
     }
+
+    [Test]
+    public void ReadNextRecord_NestedArrays_PreservesRecursiveChildren()
+    {
+        const string record = "{\"matrix\":[[1,2],[],[3,[4,5]]]}";
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        var matrix = values.FieldSpans[0];
+        Assert.That(matrix.Children, Has.Length.EqualTo(3));
+        Assert.That(matrix.Children![0].Children, Has.Length.EqualTo(2));
+        Assert.That(matrix.Children[1].Children, Is.Empty);
+        Assert.That(matrix.Children[2].Children, Has.Length.EqualTo(2));
+        Assert.That(matrix.Children[2].Children![1].Children, Has.Length.EqualTo(2));
+    }
+
+    [Test]
+    public void ReadNextRecord_ArrayOfObjects_PreservesObjectFields()
+    {
+        const string record = "{\"users\":[{\"name\":\"Ada\",\"roles\":[\"admin\"]},{\"name\":\"Grace\"}]}";
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        var users = values.FieldSpans[0].Children;
+        Assert.That(users, Has.Length.EqualTo(2));
+        Assert.That(users![0].Children, Has.Length.EqualTo(2));
+        Assert.That(users[1].Children, Has.Length.EqualTo(1));
+        var ada = users[0].Children!;
+        var grace = users[1].Children!;
+        Assert.That(values.Span.Slice(ada[0].Value.Start, ada[0].Value.Length).ToString(), Is.EqualTo("Ada"));
+        Assert.That(ada[1].Children, Has.Length.EqualTo(1));
+        Assert.That(values.Span.Slice(grace[0].Value.Start, grace[0].Value.Length).ToString(), Is.EqualTo("Grace"));
+    }
 }
 
