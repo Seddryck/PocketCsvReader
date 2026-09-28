@@ -99,6 +99,23 @@ public class NdjsonParserTest
         Assert.That(result, Is.EqualTo(expected));
     }
 
+    [TestCase("{\"foo\": [1, 2, 3]}", 3)]
+    [TestCase("{\"foo\": [\"bar\", \"qrz\"]}", 2)]
+    [TestCase("{\"foo\": [\t1,\t2\t]}", 2)]
+    [TestCase("{\"foo\": []}", 0)]
+    public void Parse_Array_CreatesChildSpans(string value, int expected)
+    {
+        var parser = new NdjsonParser(NdjsonProfile.Default.Dialect);
+
+        for (var i = 0; i < value.Length; i++)
+        {
+            var state = parser.Parse(value[i], i);
+            Assert.That(state, Is.Not.EqualTo(ParserState.Error));
+        }
+
+        Assert.That(parser.Result.Children, Has.Length.EqualTo(expected));
+    }
+
     //[TestCase(@"{""foo"": ""\""bar\""""}")]
     //public void Parse_EscapeQuoteInQuotedField_EscapedSet(string value)
     //{
