@@ -7,7 +7,9 @@ using System.Threading.Tasks;
 namespace PocketCsvReader;
 public readonly ref struct RecordSpan
 {
-    public ReadOnlySpan<char> Span { get; }
+    private readonly ReadOnlyMemory<char> _memory;
+    public ReadOnlySpan<char> Span => _memory.Span;
+    internal ReadOnlyMemory<char> Memory => _memory;
     public FieldSpan[] FieldSpans { get; }
 
     /// <summary>
@@ -16,10 +18,17 @@ public readonly ref struct RecordSpan
     /// <param name="span">The span of characters representing the entire CSV record.</param>
     /// <param name="fieldSpans">An array of <see cref="FieldSpan"/> structs indicating the positions and lengths of each field within the record.</param>
     public RecordSpan(ReadOnlySpan<char> span, FieldSpan[] fieldSpans)
+        : this(new ReadOnlyMemory<char>(span.ToArray()), fieldSpans)
+    { }
+
+    private RecordSpan(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
     {
-        Span = span;
+        _memory = memory;
         FieldSpans = fieldSpans;
     }
+
+    internal static RecordSpan FromMemory(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
+        => new(memory, fieldSpans);
 
     /// <summary>
         /// Returns a span representing the characters of the specified field within the record.
@@ -34,6 +43,6 @@ public readonly ref struct RecordSpan
         /// Converts the current record span to a <see cref="RecordMemory"/> instance representing the same data.
         /// </summary>
         /// <returns>A <see cref="RecordMemory"/> containing the record's character span and field spans.</returns>
-        public RecordMemory AsMemory()
-        => new RecordMemory(Span, FieldSpans);
+    public RecordMemory AsMemory()
+        => new RecordMemory(_memory, FieldSpans);
 }

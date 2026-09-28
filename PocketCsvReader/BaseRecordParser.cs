@@ -42,7 +42,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         var index = 0;
         var eof = false;
         var fieldList = new List<FieldSpan>(FieldsCount ?? 20);
-        var longSpan = Span<char>.Empty;
+        var longMemory = ReadOnlyMemory<char>.Empty;
         var longSpanLength = 0;
 
         if (Buffer.Length == 0)
@@ -73,10 +73,11 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
 
                 if (state == ParserState.Record || state == ParserState.Header)
                 {
+                    var recordBuffer = Buffer;
                     Buffer = Buffer.Slice(index + 1);
                     FieldsCount ??= fieldList.Count;
                     record = CreateRecordSpan(
-                        longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
+                        longMemory.Length > 0 ? Concat(longMemory, recordBuffer) : recordBuffer
                         , [.. fieldList]);
                     recordState = RecordState.Record;
                     return false;
@@ -98,8 +99,8 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             {
                 if (state == ParserState.Continue || state == ParserState.Field)
                 {
-                    longSpan = longSpan.Concat(span, Pool);
-                    longSpanLength = longSpan.Length;
+                    longMemory = Concat(longMemory, Buffer);
+                    longSpanLength = longMemory.Length;
                 }
 
                 if (!Reader.IsEof)
@@ -119,18 +120,18 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             }
         }
 
-        switch (FieldParser.ParseEof(longSpan.Length))
+        switch (FieldParser.ParseEof(longMemory.Length))
         {
             case ParserState.Header:
             case ParserState.Record:
                 fieldList.Add(FieldParser.Result);
                 record = CreateRecordSpan(
-                        longSpan.Length > 0 ? (ReadOnlySpan<char>)(longSpan.Concat(span)) : span
+                        longMemory.Length > 0 ? Concat(longMemory, Buffer) : Buffer
                         , [.. fieldList]);
                 recordState = RecordState.Record;
                 return true;
             case ParserState.Eof:
-                record = CreateRecordSpan([], []);
+                record = CreateRecordSpan(ReadOnlyMemory<char>.Empty, []);
                 recordState = RecordState.Eof;
                 return true;
             case ParserState.Error:
@@ -146,8 +147,16 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         /// <param name="span">The span of characters representing the entire record.</param>
         /// <param name="fields">The array of parsed field spans within the record.</param>
         /// <returns>A <see cref="RecordSpan"/> containing the provided span and fields.</returns>
-        protected virtual RecordSpan CreateRecordSpan(ReadOnlySpan<char> span, FieldSpan[] fields)
-        => new(span, fields);
+        protected virtual RecordSpan CreateRecordSpan(ReadOnlyMemory<char> memory, FieldSpan[] fields)
+        => RecordSpan.FromMemory(memory, fields);
+
+    private static ReadOnlyMemory<char> Concat(ReadOnlyMemory<char> left, ReadOnlyMemory<char> right)
+    {
+        var result = new char[left.Length + right.Length];
+        left.Span.CopyTo(result);
+        right.Span.CopyTo(result.AsSpan(left.Length));
+        return result;
+    }
 
     /// <summary>
     /// Counts the number of record separators in the input stream.
