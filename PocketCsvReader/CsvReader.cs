@@ -204,6 +204,5 @@ namespace PocketCsvReader
         {
             return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
         }
-
     }
 }

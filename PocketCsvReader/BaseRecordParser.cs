@@ -7,7 +7,7 @@ using System.Text;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
-public abstract class BaseRecordParser<P> : IDisposable
+public abstract class BaseRecordParser<P> : IRecordSource<P>
 {
     public P Profile { get; }
     protected IParser FieldParser { get; }

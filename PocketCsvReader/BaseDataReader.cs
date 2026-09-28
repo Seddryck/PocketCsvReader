@@ -17,7 +17,8 @@ namespace PocketCsvReader;
 public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P : IProfile
 {
     private bool _isClosed = false;
-    protected BaseRecordParser<P>? RecordParser { get; private set; }
+    protected IRecordSource<P>? RecordSource { get; private set; }
+    protected BaseRecordParser<P>? RecordParser => RecordSource as BaseRecordParser<P>;
     private Stream RawStream { get; }
     private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
@@ -65,10 +66,14 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
 
         IsEof = false;
         RowCount = 0;
-        RecordParser = CreateRecordParser(StreamReader, Profile);
+        RecordSource = CreateRecordSource(StreamReader, Profile);
     }
 
-    protected abstract BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile);
+    protected virtual IRecordSource<P> CreateRecordSource(StreamReader reader, P profile)
+        => CreateRecordParser(reader, profile);
+
+    protected virtual BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile)
+        => throw new NotSupportedException("Override CreateRecordSource or CreateRecordParser to provide records.");
 
     public abstract bool Read();
 
@@ -91,7 +96,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
             ProcessedStream?.Dispose();
             if (ProcessedStream != RawStream)
                 RawStream?.Dispose();
-            RecordParser?.Dispose();
+            RecordSource?.Dispose();
         }
     }
 
@@ -113,7 +118,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
             StreamReader?.Dispose();
             RawStream?.Dispose();
             ProcessedStream?.Dispose();
-            RecordParser?.Dispose();
+            RecordSource?.Dispose();
         }
     }
     ~BaseDataReader()
