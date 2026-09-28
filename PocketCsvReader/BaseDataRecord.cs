@@ -171,21 +171,23 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
 
     private ParseSpan<object>? ResolveValueParser(int i)
     {
-        static bool IsFormatDescriptor(FieldDescriptor field)
-            => field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
-
-        TryGetFieldDescriptor(i, out var field);
-        ParseSpan<object>? parse = null;
-        if (!Parser.TryGetParser(i, out parse))
-            if (field is not null && IsFormatDescriptor(field))
-                parse = RegisterFieldParser(i, field);
-            else if (field is not null)
-                Parser.TryGetParser(field.RuntimeType, out parse);
-
-        if (parse is null)
+        if (Parser.TryGetParser(i, out var parse))
+            return parse;
+        if (!TryGetFieldDescriptor(i, out var field))
             return null;
+        return ResolveFieldParser(i, field);
+    }
+
+    private ParseSpan<object>? ResolveFieldParser(int i, FieldDescriptor field)
+    {
+        if (HasCustomParser(field))
+            return RegisterFieldParser(i, field);
+        Parser.TryGetParser(field.RuntimeType, out ParseSpan<object>? parse);
         return parse;
     }
+
+    private static bool HasCustomParser(FieldDescriptor field)
+        => field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
     private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
     {
