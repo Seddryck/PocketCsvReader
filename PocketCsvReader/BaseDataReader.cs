@@ -17,6 +17,7 @@ namespace PocketCsvReader;
 public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P : IProfile
 {
     private bool _isClosed = false;
+    private bool _initialized;
     protected IRecordSource<P>? RecordSource { get; private set; }
     protected BaseRecordParser<P>? RecordParser => RecordSource as BaseRecordParser<P>;
     private Stream RawStream { get; }
@@ -33,6 +34,9 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
 
     public void Initialize()
     {
+        if (_initialized)
+            return;
+
         if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
         {
             var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
@@ -67,6 +71,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         IsEof = false;
         RowCount = 0;
         RecordSource = CreateRecordSource(StreamReader, Profile);
+        _initialized = true;
     }
 
     protected virtual IRecordSource<P> CreateRecordSource(StreamReader reader, P profile)
@@ -75,7 +80,13 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
     protected virtual BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile)
         => throw new NotSupportedException("Override CreateRecordSource or CreateRecordParser to provide records.");
 
-    public abstract bool Read();
+    public bool Read()
+    {
+        Initialize();
+        return !IsEof && ReadCore();
+    }
+
+    protected abstract bool ReadCore();
 
     public int Depth => 1;
 
