@@ -11,4 +11,5 @@ public interface IProfile
     SchemaDescriptor? Schema { get; }
     ResourceDescriptor? Resource { get; }
     RuntimeParsersDescriptor? Parsers { get; }
+    StreamInitializationOptions StreamInitialization => StreamInitializationOptions.Default;
 }

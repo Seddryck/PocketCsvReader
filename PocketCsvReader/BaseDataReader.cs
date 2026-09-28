@@ -49,7 +49,9 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         else
             ProcessedStream = RawStream;
 
-        FileEncoding ??= new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding);
+        FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
+            ? new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding)
+            : new EncodingInfo(Encoding.UTF8, -1);
         StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0);
         if (FileEncoding.BomBytesCount >= 0)
         {
