@@ -14,6 +14,7 @@ public class CsvProfile : IProfile
     public StreamInitializationOptions StreamInitialization { get; set; } = StreamInitializationOptions.Default;
 
     public ParserOptimizationOptions ParserOptimizations { get; set; }
+    public BadDataPolicy? BadDataPolicy { get; set; }
 
     public virtual string EmptyCell { get; private set; }
 

@@ -16,6 +16,8 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
 
     private int? FieldsCount { get; set; }
     private FieldSpan[] _fieldBuffer = new FieldSpan[20];
+    private long _recordNumber;
+    private int _errorCount;
 
     /// <summary>
         /// Initializes a new instance of the <see cref="BaseRecordParser{P}"/> class with the specified parsing profile, buffer reader, optional character pool, and parser factory.
@@ -83,6 +85,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
                         longMemory.Length > 0 ? Concat(longMemory, recordBuffer) : recordBuffer
                         , CopyFields(fieldCount));
                     recordState = RecordState.Record;
+                    _recordNumber++;
                     return false;
                 }
             }
@@ -95,7 +98,27 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
                 return false;
             }
             else if (state == ParserState.Error)
-                throw new InvalidDataException($"Invalid character '{c}' at position {index}.");
+            {
+                var exception = new InvalidDataException($"Invalid character '{c}' at position {index}.");
+                var action = GetBadDataAction(exception, c.ToString(), index + longSpanLength, fieldCount);
+                if (action == BadDataAction.Stop)
+                {
+                    Buffer = ReadOnlyMemory<char>.Empty;
+                    record = new();
+                    recordState = RecordState.Eof;
+                    return true;
+                }
+                if (action == BadDataAction.SkipRecord)
+                {
+                    var reachedEof = SkipMalformedRecord(index + 1);
+                    FieldParser.Reset(true);
+                    record = new();
+                    recordState = reachedEof ? RecordState.Eof : RecordState.Comment;
+                    return reachedEof;
+                }
+                if (action != BadDataAction.ReturnPartialRecord)
+                    throw exception;
+            }
 
             // Handle continuation for value spanning multiple buffers
             if (++index == bufferSize)
@@ -132,6 +155,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
                         longMemory.Length > 0 ? Concat(longMemory, Buffer) : Buffer
                         , CopyFields(fieldCount));
                 recordState = RecordState.Record;
+                _recordNumber++;
                 return true;
             case ParserState.Eof:
                 record = CreateRecordSpan(ReadOnlyMemory<char>.Empty, []);
@@ -179,6 +203,48 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         var fields = new FieldSpan[count];
         _fieldBuffer.AsSpan(0, count).CopyTo(fields);
         return fields;
+    }
+
+    private BadDataAction GetBadDataAction(Exception exception, string offendingInput, long offset, int fieldIndex)
+    {
+        var policy = (Profile as CsvProfile)?.BadDataPolicy;
+        if (policy is null)
+            return BadDataAction.Throw;
+        if (++_errorCount > policy.MaximumErrors)
+            throw new InvalidDataException($"The maximum bad-data count of {policy.MaximumErrors} was exceeded.", exception);
+        return policy.Handler(new BadDataContext(_recordNumber + 1, _recordNumber + 1, fieldIndex,
+            offset, ParserState.Error, offendingInput, exception));
+    }
+
+    private bool SkipMalformedRecord(int startIndex)
+    {
+        var terminator = (Profile as CsvProfile)!.Dialect.LineTerminator;
+        var candidate = Buffer;
+        var index = startIndex;
+        var matched = 0;
+        while (true)
+        {
+            while (index < candidate.Length)
+            {
+                var c = candidate.Span[index++];
+                matched = c == terminator[matched] ? matched + 1 : c == terminator[0] ? 1 : 0;
+                if (matched == terminator.Length)
+                {
+                    Buffer = candidate.Slice(index);
+                    _recordNumber++;
+                    return false;
+                }
+            }
+            if (Reader.IsEof)
+            {
+                Buffer = ReadOnlyMemory<char>.Empty;
+                _recordNumber++;
+                return true;
+            }
+            candidate = Reader.Read();
+            Buffer = candidate;
+            index = 0;
+        }
     }
 
     /// <summary>
