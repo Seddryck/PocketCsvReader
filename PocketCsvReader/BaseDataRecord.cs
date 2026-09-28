@@ -142,7 +142,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     protected virtual object GetMissingField()
         => string.Empty;
 
-    public virtual object GetValue(int i)
+    public object GetValue(int i)
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
@@ -150,8 +150,27 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             return GetMissingField();
 
         if (IsNull(i))
-            throw new InvalidCastException($"Field index '{i}' is null.");
+            return GetNullValue(i);
 
+        var parse = ResolveValueParser(i);
+        if (parse is null)
+            return GetString(i);
+
+        try
+        {
+            return parse.Invoke(GetValueOrThrow(i));
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException!;
+        }
+    }
+
+    protected virtual object GetNullValue(int i)
+        => throw new InvalidCastException($"Field index '{i}' is null.");
+
+    private ParseSpan<object>? ResolveValueParser(int i)
+    {
         static bool IsFormatDescriptor(FieldDescriptor field)
             => field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
@@ -164,17 +183,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
                 Parser.TryGetParser(field.RuntimeType, out parse);
 
         if (parse is null)
-            return GetString(i);
-
-        try
-        {
-            var value = parse.Invoke(GetValueOrThrow(i));
-            return value;
-        }
-        catch (TargetInvocationException ex)
-        {
-            throw ex.InnerException!;
-        }
+            return null;
+        return parse;
     }
 
     private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
@@ -277,13 +287,13 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public T GetFieldValue<T>(string name, Func<string, T> parse)
         => GetFieldValue(GetOrdinal(name), parse);
 
-    public virtual int GetValues(object[] values)
+    public int GetValues(object[] values)
     {
         ArgumentNullException.ThrowIfNull(values);
         var length = Math.Min(values.Length, FieldCount);
 
         for (int i = 0; i < length; i++)
-            values[i] = IsNull(i) ? null! : GetValue(i);
+            values[i] = GetValue(i);
         return length;
     }
 
@@ -300,29 +310,16 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     /// <exception cref="InvalidOperationException">Thrown if no suitable parser is registered or can be created for the specified type.</exception>
     public T?[] GetArray<T>(int i)
     {
-        if (i >= FieldCount)
-            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= Record!.FieldSpans.Length)
+        var field = GetArrayField(i);
+        if (!field.HasValue)
             return [];
 
-        if (Record!.FieldSpans[i].Children is null)
-            throw new NotImplementedException();
-
-        if (!Parser.TryGetParser<T>(i, out var parse))
+        var children = field.Value.Children!;
+        var parse = ResolveArrayParser<T>(i);
+        var array = (T?[])Array.CreateInstance(typeof(T?), children.Length);
+        for (int j = 0; j < children.Length; j++)
         {
-            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
-            {
-                RegisterFieldParser(i, field);
-                parse = Parser.GetParser<T>(i);
-            }
-            else if (!Parser.TryGetParser(out parse))
-                throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
-        }
-
-        var array = (T?[])Array.CreateInstance(typeof(T?), Record!.FieldSpans[i].Children!.Length);
-        for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
-        {
-            var child = Record!.FieldSpans[i].Children![j];
+            var child = children[j];
             array[j] = child.Value.IsNull
                         ? default
                         : parse(GetFieldSpan(child));
@@ -339,32 +336,19 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     /// <exception cref="NotImplementedException">Thrown if the field does not support child spans.</exception>
     public object?[] GetArray(int i)
     {
-        if (i >= FieldCount)
-            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= Record!.FieldSpans.Length)
+        var field = GetArrayField(i);
+        if (!field.HasValue)
             return [];
 
-        if (Record!.FieldSpans[i].Children is null)
-            throw new NotImplementedException();
-
-        if (!Parser.TryGetParser(i, out var parse))
+        var children = field.Value.Children!;
+        var parse = ResolveArrayParser(i);
+        var array = (object?[])Array.CreateInstance(typeof(object), children.Length);
+        for (int j = 0; j < children.Length; j++)
         {
-            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
-            {
-                RegisterFieldParser(i, field);
-                Parser.TryGetParser(i, out parse);
-            }
-            else if (!Parser.TryGetParser(out parse))
-                parse = (ReadOnlySpan<char> span) => span.ToString();
-        }
-
-        var array = (object?[])Array.CreateInstance(typeof(object), Record!.FieldSpans[i].Children!.Length);
-        for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
-        {
-            var child = Record!.FieldSpans[i].Children![j];
+            var child = children[j];
             array[j] = child.Value.IsNull
                 ? null
-                : parse!(GetFieldSpan(child));
+                : parse(GetFieldSpan(child));
         }
         return array;
     }
@@ -386,31 +370,61 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     /// </exception>
     public T? GetArrayItem<T>(int i, int j)
     {
-        if (i >= FieldCount)
-            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= Record!.FieldSpans.Length)
+        var field = GetArrayField(i);
+        if (!field.HasValue)
             throw new ArgumentOutOfRangeException($"Field index '{i}' doesn't contain an item at position '{j}'.");
 
-        if (Record!.FieldSpans[i].Children is null)
-            throw new NotImplementedException();
-        if (j >= Record!.FieldSpans[i].Children!.Length)
+        var children = field.Value.Children!;
+        if (j >= children.Length)
             throw new ArgumentOutOfRangeException($"Field index '{i}' doesn't contain an item at position '{j}'.");
 
-        if (!Parser.TryGetParser<T>(i, out var parse))
-        {
-            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
-            {
-                RegisterFieldParser(i, field);
-                parse = Parser.GetParser<T>(i);
-            }
-            else if (!Parser.TryGetParser(out parse))
-                throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
-        }
-
-        var child = Record!.FieldSpans[i].Children![j];
+        var parse = ResolveArrayParser<T>(i);
+        var child = children[j];
         return child.Value.IsNull
                 ? default
                 : parse(GetFieldSpan(child));
+    }
+
+    private FieldSpan? GetArrayField(int i)
+    {
+        if (i >= FieldCount)
+            throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (i >= Record!.FieldSpans.Length)
+            return null;
+
+        var field = Record.FieldSpans[i];
+        if (field.Children is null)
+            throw new NotImplementedException();
+        return field;
+    }
+
+    private ParseSpan<T> ResolveArrayParser<T>(int i)
+    {
+        if (Parser.TryGetParser<T>(i, out var parse))
+            return parse;
+        if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+        {
+            RegisterFieldParser(i, field);
+            return Parser.GetParser<T>(i);
+        }
+        if (Parser.TryGetParser(out parse))
+            return parse;
+        throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+    }
+
+    private ParseSpan<object> ResolveArrayParser(int i)
+    {
+        if (Parser.TryGetParser(i, out var parse))
+            return parse;
+        if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+        {
+            RegisterFieldParser(i, field);
+            if (Parser.TryGetParser(i, out parse))
+                return parse;
+        }
+        if (Parser.TryGetParser(out parse))
+            return parse;
+        return (ReadOnlySpan<char> span) => span.ToString();
     }
 
     private ReadOnlySpan<char> GetFieldSpan(FieldSpan field)
