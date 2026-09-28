@@ -10,6 +10,18 @@ namespace PocketCsvReader.Testing.Configuration;
 public class CsvReaderBuilderTest
 {
     [Test]
+    public void CommonConfiguration_ShouldPreserveCsvFluentType()
+    {
+        var builder = new CsvReaderBuilder()
+            .WithSchema(schema => schema.Indexed())
+            .WithResource(resource => resource)
+            .WithParsers(parsers => parsers)
+            .WithParserOptimizations(new ParserOptimizationOptions());
+
+        Assert.That(builder, Is.TypeOf<CsvReaderBuilder>());
+    }
+
+    [Test]
     public void WithParserOptimizations_ShouldApplyOptions()
     {
         var reader = new CsvReaderBuilder()
