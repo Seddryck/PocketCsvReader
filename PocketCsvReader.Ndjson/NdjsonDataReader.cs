@@ -44,6 +44,18 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         return Record!.Span.Slice(Record!.FieldSpans[i].Label.Start, Record!.FieldSpans[i].Value.Length + addChar).ToString();
     }
 
+    public override object GetValue(int i)
+        => IsDBNull(i) ? DBNull.Value : base.GetValue(i);
+
+    public override int GetValues(object[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var length = Math.Min(values.Length, FieldCount);
+        for (var i = 0; i < length; i++)
+            values[i] = GetValue(i);
+        return length;
+    }
+
     public override bool Read()
     {
         Fields = [];
@@ -75,6 +87,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
     {
         if (i < Record!.FieldSpans.Length)
         {
+            if (Record.FieldSpans[i].Value.IsNull)
+                return default;
             return Record!.Slice(i).Span;
         }
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.FieldSpans.Length} defined fields.");

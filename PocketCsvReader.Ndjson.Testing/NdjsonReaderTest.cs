@@ -83,7 +83,8 @@ public class NdjsonReaderTest
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetBoolean(0), Is.True);
         Assert.That(reader.Read(), Is.True);
-        Assert.That(reader.GetString(0), Is.EqualTo("null"));
+        Assert.That(reader.IsDBNull(0), Is.True);
+        Assert.That(reader.GetValue(0), Is.SameAs(DBNull.Value));
         Assert.That(reader.Read(), Is.False);
     }
 

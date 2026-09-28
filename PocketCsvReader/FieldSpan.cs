@@ -42,6 +42,7 @@ public record struct SpanInfo
     bool WasQuoted = false,
     bool IsEscaped = false,
     bool IsStarted = false,
-    bool IsComplete = false
+    bool IsComplete = false,
+    bool IsNull = false
 )
 { }
