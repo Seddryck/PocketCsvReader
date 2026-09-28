@@ -24,6 +24,30 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return CreateDataReader(stream);
     }
 
+    public DataTable ToDataTable(string filename)
+    {
+        using var reader = ToDataReader(filename);
+        return DataReaderMaterializer.ToDataTable(reader);
+    }
+
+    public DataTable ToDataTable(Stream stream)
+    {
+        using var reader = ToDataReader(stream);
+        return DataReaderMaterializer.ToDataTable(reader);
+    }
+
+    public IEnumerable<string?[]> ToArrayString(string filename)
+    {
+        CheckFileExists(filename);
+        return MaterializeStringArrays(() => ToDataReader(filename));
+    }
+
+    public IEnumerable<string?[]> ToArrayString(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return MaterializeStringArrays(() => ToDataReader(stream));
+    }
+
     protected Stream OpenRead(string filename)
     {
         CheckFileExists(filename);
@@ -34,5 +58,12 @@ public abstract class FlatFileReader<TProfile, TDataReader>
     {
         if (!File.Exists(filename))
             throw new FileNotFoundException($"The file {filename} was not found.", filename);
+    }
+
+    private static IEnumerable<string?[]> MaterializeStringArrays(Func<TDataReader> createReader)
+    {
+        using var reader = createReader();
+        foreach (var values in DataReaderMaterializer.ToStringArrays(reader))
+            yield return values;
     }
 }

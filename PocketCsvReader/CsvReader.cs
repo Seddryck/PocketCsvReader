@@ -80,45 +80,6 @@ namespace PocketCsvReader
             => ProgressStatusChanged?.Invoke(this, new ProgressStatusEventArgs(string.Format(status, current, total), current, total));
 
         /// <summary>
-        /// Reads a CSV file and converts its contents into a <see cref="DataTable"/>.
-        /// </summary>
-        /// <param name="filename">The full path of the CSV file to read.</param>
-        /// <returns>
-        /// A <see cref="DataTable"/> containing all records (rows) and fields (columns) parsed from the CSV file.
-        /// </returns>
-        /// <exception cref="FileNotFoundException">Thrown if the specified file does not exist.</exception>
-        /// <remarks>
-        /// This method reads the entire CSV content into memory. Ensure sufficient memory is available
-        /// for processing large files. Encoding is detected automatically using the <see cref="IEncodingDetector"/> implementation.
-        /// </remarks>
-        public DataTable ToDataTable(string filename)
-        {
-            CheckFileExists(filename);
-            using var stream = new FileStream(filename, FileMode.Open, FileAccess.Read);
-            return new CsvDataTable(stream, Profile).Read();
-        }
-
-        /// <summary>
-        /// Reads CSV data from a stream and converts it into a <see cref="DataTable"/>.
-        /// </summary>
-        /// <param name="stream">
-        /// The <see cref="Stream"/> containing the CSV data. The stream must be readable and positioned
-        /// at the start of the CSV content.
-        /// </param>
-        /// <returns>
-        /// A <see cref="DataTable"/> populated with records and fields parsed from the stream.
-        /// </returns>
-        /// <exception cref="ArgumentNullException">Thrown if the stream is null.</exception>
-        /// <remarks>
-        /// This method does not close the provided stream. It assumes all rows and fields follow the
-        /// configured CSV profile.
-        /// </remarks>
-        public DataTable ToDataTable(Stream stream)
-        {
-            return new CsvDataTable(stream, Profile).Read();
-        }
-
-        /// <summary>
         /// Opens a CSV file and provides an <see cref="IDataReader"/> for efficient record-by-record access.
         /// </summary>
         /// <param name="filename">The full path of the CSV file to read.</param>
@@ -195,45 +156,6 @@ namespace PocketCsvReader
                 throw new ArgumentException("Stream openers collection cannot be empty.", nameof(openers));
 
             return new CsvBatchDataReader(openers, Profile);
-        }
-
-        /// <summary>
-        /// Reads a CSV file and returns an enumerable of arrays representing records as fields.
-        /// </summary>
-        /// <param name="filename">The full path of the CSV file to read.</param>
-        /// <returns>
-        /// An enumerable of string arrays, where each array represents the fields of a single record.
-        /// </returns>
-        /// <exception cref="FileNotFoundException">Thrown if the specified file does not exist.</exception>
-        /// <remarks>
-        /// This method provides a lightweight approach to accessing CSV data without materializing it into
-        /// a <see cref="DataTable"/> or <see cref="IDataReader"/>.
-        /// </remarks>
-        public IEnumerable<string?[]> ToArrayString(string filename)
-        {
-            CheckFileExists(filename);
-            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-            return new CsvArrayString(stream, Profile).Read();
-        }
-
-        /// <summary>
-        /// Reads CSV data from a stream and returns an enumerable of arrays representing records as fields.
-        /// </summary>
-        /// <param name="stream">
-        /// The <see cref="Stream"/> containing CSV data. The stream must be readable and positioned
-        /// at the start of the content.
-        /// </param>
-        /// <returns>
-        /// An enumerable of string arrays, where each array represents the fields of a single record.
-        /// </returns>
-        /// <exception cref="ArgumentNullException">Thrown if the stream is null.</exception>
-        /// <remarks>
-        /// This method does not close the provided stream and assumes that the CSV content adheres to the
-        /// configured profile.
-        /// </remarks>
-        public IEnumerable<string?[]> ToArrayString(Stream stream)
-        {
-            return new CsvArrayString(stream, Profile).Read();
         }
 
         /// <summary>
