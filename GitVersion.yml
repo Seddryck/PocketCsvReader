@@ -1,20 +1,30 @@
-mode: Mainline
+mode: ContinuousDeployment
+tag-prefix: 'v'
+continuous-delivery-fallback-tag: ''
+
 major-version-bump-message: "^(feat|fix|perf|revert)(\\([\\w\\s-]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
-minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:"
-patch-version-bump-message: "^(chore|fix|perf|refactor|revert|test)(\\([\\w\\s-]*\\))?:"
-no-bump-message: "^(.*)(\\([\\w\\s-]*\\))?:"
-commit-message-incrementing: MergeMessageOnly
+minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:|\\+semver:\\s?(feature|minor)"
+patch-version-bump-message: "^(chore|fix|perf|refactor|revert|build|ci|style)(\\([\\w\\s-]*\\))?:"
+no-bump-message: "\\+semver:\\s?(none|skip)"
+commit-message-incrementing: Enabled
+
 branches:
   feat:
     tag: beta.{BranchName}
-    regex: feat?[/-]
+    regex: ^(feat(ure)?s?)[/-](?<BranchName>.+)
+    increment: Minor
     source-branches:
-    - main
-    - feat 
+      - main
+      - feat
+
   main:
     regex: ^main$
+    tag: ''
     is-mainline: true
     increment: Patch
+    mode: ContinuousDeployment
+
 ignore:
   sha: []
+
 merge-message-formats: {}
