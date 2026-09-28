@@ -15,6 +15,8 @@ namespace PocketCsvReader;
 public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P : IProfile
 {
     private SpanParser Parser { get; } = new();
+    private readonly Dictionary<int, ISanitizer> _sanitizers = [];
+    private SanitizerFactory? _sanitizerFactory;
 
     protected BaseDataRecord(P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
@@ -39,6 +41,23 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
             Parser.Register(parser.Key, parse);
         }
     }
+
+    protected ISanitizer GetSanitizer(int ordinal, ParserOptimizationOptions parserOptimizations)
+    {
+        if (_sanitizers.TryGetValue(ordinal, out var sanitizer))
+            return sanitizer;
+
+        _sanitizerFactory ??= new SanitizerFactory(parserOptimizations);
+        sanitizer = _sanitizerFactory.Create(
+            SequenceCollection.Concat(
+                Profile.Resource?.Sequences,
+                (Profile.Schema is null ? null : GetFieldDescriptor(ordinal))?.Sequences),
+            CreateFieldEscaper());
+        _sanitizers.Add(ordinal, sanitizer);
+        return sanitizer;
+    }
+
+    private protected virtual FieldEscaper? CreateFieldEscaper() => null;
 
     public object this[int i]
         => GetValue(i);
