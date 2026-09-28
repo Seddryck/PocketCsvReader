@@ -6,6 +6,7 @@ using System.Text;
 using NUnit.Framework;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.Ndjson.Configuration;
+using System.Text.Json;
 
 namespace PocketCsvReader.Ndjson.Testing;
 public class NdjsonDataReaderTests
@@ -151,5 +152,44 @@ public class NdjsonDataReaderTests
         Assert.That(reader.FieldCount, Is.EqualTo(1));
         Assert.That(reader.IsDBNull(0), Is.True);
         Assert.That(reader.GetValue(0), Is.SameAs(DBNull.Value));
+    }
+
+    [TestCase("\"quote: \\\"\"", "quote: \"")]
+    [TestCase("\"backslash: \\\\\"", "backslash: \\")]
+    [TestCase("\"solidus: \\/\"", "solidus: /")]
+    [TestCase("\"controls: \\b\\f\\n\\r\\t\"", "controls: \b\f\n\r\t")]
+    [TestCase("\"unicode: \\u00E9\"", "unicode: é")]
+    [TestCase("\"pair: \\uD83D\\uDE00\"", "pair: 😀")]
+    public void Read_EscapedRootString_ReturnsDecodedValue(string content, string expected)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo(expected));
+        Assert.That(reader.GetRawString(0), Is.EqualTo(content));
+    }
+
+    [Test]
+    public void Read_EscapedPropertyAndArrayStrings_ReturnsDecodedValues()
+    {
+        const string content = "{\"na\\u006De\":[\"line\\nfeed\",\"\\u0041\"]}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetOrdinal("name"), Is.Zero);
+        Assert.That(reader.GetArray<string>(0), Is.EqualTo(new[] { "line\nfeed", "A" }));
+    }
+
+    [TestCase("\"\\x\"")]
+    [TestCase("\"\\u12\"")]
+    [TestCase("\"unterminated")]
+    public void Read_InvalidEscape_ThrowsJsonException(string content)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.Catch<JsonException>(() => reader.Read());
     }
 }

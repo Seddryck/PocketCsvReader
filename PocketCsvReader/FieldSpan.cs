@@ -9,7 +9,9 @@ public record struct FieldSpan
 (
     SpanInfo Value,
     SpanInfo Label,
-    FieldSpan[]? Children = null
+    FieldSpan[]? Children = null,
+    string? DecodedValue = null,
+    string? DecodedLabel = null
 )
 {
     /// <summary>

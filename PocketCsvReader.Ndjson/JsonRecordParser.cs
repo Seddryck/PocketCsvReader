@@ -44,7 +44,7 @@ internal sealed class JsonRecordParser
             SkipSpaces();
 
             var value = ParseValue(allowObject: true, allowCompositeArrayItems: true);
-            fields.Add(value with { Label = label });
+            fields.Add(value with { Label = label.Span, DecodedLabel = label.Decoded });
 
             SkipSpaces();
             if (Current == '}')
@@ -61,7 +61,10 @@ internal sealed class JsonRecordParser
     private FieldSpan ParseValue(bool allowObject, bool allowCompositeArrayItems)
     {
         if (Current == '"')
-            return new FieldSpan(ParseString(), default);
+        {
+            var value = ParseString();
+            return new FieldSpan(value.Span, default, DecodedValue: value.Decoded);
+        }
 
         if (Current == '{')
         {
@@ -120,8 +123,9 @@ internal sealed class JsonRecordParser
         }
     }
 
-    private SpanInfo ParseString()
+    private ParsedString ParseString()
     {
+        var tokenStart = _position;
         Expect('"');
         var start = _position;
         var escaped = false;
@@ -139,7 +143,11 @@ internal sealed class JsonRecordParser
             {
                 var length = _position - start;
                 _position++;
-                return CompletedSpan(start, length, wasQuoted: true, isEscaped: escaped);
+                var span = CompletedSpan(start, length, wasQuoted: true, isEscaped: escaped);
+                var decoded = escaped
+                    ? JsonSerializer.Deserialize<string>(_json.Substring(tokenStart, _position - tokenStart))
+                    : null;
+                return new ParsedString(span, decoded);
             }
 
             _position++;
@@ -166,4 +174,6 @@ internal sealed class JsonRecordParser
 
     private static SpanInfo CompletedSpan(int start, int length, bool wasQuoted = false, bool isEscaped = false, bool isNull = false)
         => new(start, length, wasQuoted, isEscaped, IsStarted: true, IsComplete: true, IsNull: isNull);
+
+    private readonly record struct ParsedString(SpanInfo Span, string? Decoded);
 }
