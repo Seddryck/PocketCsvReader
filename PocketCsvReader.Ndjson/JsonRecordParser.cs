@@ -30,7 +30,10 @@ internal sealed class JsonRecordParser
         Expect('{');
         SkipSpaces();
         if (Current == '}')
-            throw new InvalidDataException("Empty JSON objects are not supported.");
+        {
+            _position++;
+            return [];
+        }
 
         var fields = new List<FieldSpan>();
         while (true)

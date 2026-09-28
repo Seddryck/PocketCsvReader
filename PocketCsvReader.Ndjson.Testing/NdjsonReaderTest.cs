@@ -86,4 +86,20 @@ public class NdjsonReaderTest
         Assert.That(reader.GetString(0), Is.EqualTo("null"));
         Assert.That(reader.Read(), Is.False);
     }
+
+    [Test]
+    public void ToDataReader_EmptyObjects_ReturnsZeroFieldRecords()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{}\n{ }\n{}"));
+        using var reader = new NdjsonReader(new NdjsonProfile("\n")).ToDataReader(stream);
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            Assert.That(reader.FieldCount, Is.Zero);
+        }
+
+        Assert.That(reader.Read(), Is.False);
+        Assert.That(reader.RowCount, Is.EqualTo(3));
+    }
 }

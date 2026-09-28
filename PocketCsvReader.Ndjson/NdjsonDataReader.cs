@@ -53,15 +53,15 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         if (IsEof)
             return false;
 
-        IsEof = RecordParser!.IsEndOfFile(out var recordSpan, out _);
+        IsEof = RecordParser!.IsEndOfFile(out var recordSpan, out var recordState);
 
-        if (recordSpan.FieldSpans.Length == 0)
+        if (recordState == RecordState.Eof)
         {
             Record = RecordMemory.Empty;
             return false;
         }
-        else
-            Record = recordSpan.AsMemory();
+
+        Record = recordSpan.AsMemory();
 
         RowCount++;
 
