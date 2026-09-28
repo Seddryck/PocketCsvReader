@@ -81,7 +81,8 @@ namespace PocketCsvReader
             return new CsvProfile(profile.Dialect, profile.Schema, profile.Resource, profile.Parsers)
             {
                 StreamInitialization = profile.StreamInitialization,
-                ParserOptimizations = profile.ParserOptimizations with { BufferSize = bufferSize }
+                ParserOptimizations = profile.ParserOptimizations with { BufferSize = bufferSize },
+                BadDataPolicy = profile.BadDataPolicy
             };
         }
 
