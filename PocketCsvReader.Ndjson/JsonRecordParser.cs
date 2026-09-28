@@ -73,9 +73,9 @@ internal sealed class JsonRecordParser
             if (!allowObject)
                 throw new InvalidDataException("Objects are not supported in this array.");
 
-            var start = _position + 1;
+            var start = _position;
             var children = ParseObject();
-            return new FieldSpan(CompletedSpan(start, _position - start - 1), default, children);
+            return new FieldSpan(CompletedSpan(start, _position - start), default, children);
         }
 
         if (Current == '[')
@@ -95,15 +95,15 @@ internal sealed class JsonRecordParser
 
     private FieldSpan ParseArray(bool allowCompositeItems)
     {
-        Expect('[');
         var start = _position;
+        Expect('[');
         SkipWhitespace();
         var children = new List<FieldSpan>();
 
         if (Current == ']')
         {
             _position++;
-            return new FieldSpan(CompletedSpan(start, 0), default, []);
+            return new FieldSpan(CompletedSpan(start, _position - start), default, []);
         }
 
         while (true)
@@ -115,9 +115,8 @@ internal sealed class JsonRecordParser
             SkipWhitespace();
             if (Current == ']')
             {
-                var end = _position;
                 _position++;
-                return new FieldSpan(CompletedSpan(start, end - start), default, [.. children]);
+                return new FieldSpan(CompletedSpan(start, _position - start), default, [.. children]);
             }
 
             Expect(',');
