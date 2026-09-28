@@ -7,8 +7,11 @@ using PocketCsvReader.Ndjson.Configuration;
 namespace PocketCsvReader.Ndjson;
 public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
 {
+    private NdjsonRecordSource NdjsonRecordSource
+        => (NdjsonRecordSource)RecordSource!;
+
     public NdjsonDataReader(Stream stream, NdjsonProfile profile)
-        : base(stream, profile, new StringMapper())
+        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString))
     { }
 
     public override int FieldCount =>
@@ -50,8 +53,7 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
     {
         Fields = [];
 
-        var parser = RecordParser ?? throw new InvalidOperationException("Record parser is not initialized.");
-        IsEof = parser.IsEndOfFile(out var recordSpan, out var recordState);
+        IsEof = NdjsonRecordSource.IsEndOfFile(out var recordSpan, out var recordState);
 
         if (recordState == RecordState.Eof)
         {
@@ -73,8 +75,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         return true;
     }
 
-    protected override BaseRecordParser<NdjsonProfile> CreateRecordParser(StreamReader reader, NdjsonProfile profile)
-        => new RecordParser(reader, profile);
+    protected override IRecordSource<NdjsonProfile> CreateRecordSource(StreamReader reader, NdjsonProfile profile)
+        => new NdjsonRecordSource(reader, profile);
 
     protected override NullableSpan GetValueOrThrow(int i)
     {

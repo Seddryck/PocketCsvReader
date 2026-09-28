@@ -5,6 +5,12 @@ public abstract class ReaderBuilder<TBuilder>
 {
     private readonly ProfileBuilderComponents _components = new();
 
+    protected ReaderBuilder(ParserOptimizationOptions? defaultParserOptimizations = null)
+    {
+        if (defaultParserOptimizations is not null)
+            _components.ConfigureParserOptimizations(defaultParserOptimizations);
+    }
+
     public TBuilder WithSchema(Func<SchemaDescriptorBuilder, ISchemaDescriptorBuilder> configure)
     {
         _components.ConfigureSchema(configure);
