@@ -34,7 +34,7 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         string? line = null;
         while (line is null)
         {
-            var candidate = _reader.ReadLine();
+            var candidate = ReadRecord();
             if (candidate is null)
                 break;
             if (string.IsNullOrWhiteSpace(candidate))
@@ -56,6 +56,55 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         record = new RecordSpan(line.AsSpan(), fields);
         recordState = RecordState.Record;
         return _reader.Peek() < 0;
+    }
+
+    private string? ReadRecord()
+    {
+        var terminator = Profile.Dialect.LineTerminator;
+        if (string.IsNullOrEmpty(terminator))
+            throw new InvalidOperationException("The line terminator cannot be empty.");
+
+        var builder = new StringBuilder();
+        var inString = false;
+        var escaping = false;
+        var inComment = false;
+        while (true)
+        {
+            var next = _reader!.Read();
+            if (next < 0)
+                return builder.Length == 0 ? null : builder.ToString();
+
+            var current = (char)next;
+            var wasInString = inString;
+            if (!inComment)
+            {
+                UpdateStringState(current, ref inString, ref escaping);
+                inComment = !wasInString
+                    && !inString
+                    && current == Profile.Dialect.CommentChar;
+            }
+            builder.Append(current);
+
+            if ((inComment || (!wasInString && !inString)) && EndsWith(builder, terminator))
+            {
+                builder.Length -= terminator.Length;
+                return builder.ToString();
+            }
+        }
+    }
+
+    private static bool EndsWith(StringBuilder builder, string value)
+    {
+        if (builder.Length < value.Length)
+            return false;
+
+        var offset = builder.Length - value.Length;
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (builder[offset + index] != value[index])
+                return false;
+        }
+        return true;
     }
 
     private static string? RemoveComment(string line, char? commentChar)

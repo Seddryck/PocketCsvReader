@@ -117,12 +117,100 @@ public class NdjsonReaderTest
     }
 
     [TestCase("\n")]
+    [TestCase("\r")]
     [TestCase("\r\n")]
+    [TestCase("|")]
+    [TestCase("<END>")]
+    public void ToDataReader_ConfiguredLineTerminator_SplitsRecords(string lineTerminator)
+    {
+        var content = $"{{\"value\":1}}{lineTerminator}{{\"value\":2}}{lineTerminator}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile(lineTerminator)).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(1));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(2));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void ToDataReader_CustomTerminatorInsideString_PreservesStringContent()
+    {
+        const string content = "{\"value\":\"left|quoted \\\"| right\"}|{\"value\":\"next\"}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile("|")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("value")), Is.EqualTo("left|quoted \"| right"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("value")), Is.EqualTo("next"));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void ToDataReader_CustomTerminator_PreservesJsonNewlineWhitespace()
+    {
+        const string content = "{\n\"value\": 1\n}<END>\r\n{\n\"value\": 2\n}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile("<END>")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(1));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(2));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void ToDataReader_CrLfTerminator_DoesNotAcceptLoneLineFeed()
+    {
+        const string content = "{\"value\":1}\n{\"value\":2}\r\n";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile("\r\n")).ToDataReader(stream);
+
+        Assert.Catch<System.Text.Json.JsonException>(() => reader.Read());
+    }
+
+    [Test]
+    public void ToDataReader_MultiCharacterTerminatorAcrossBufferBoundary_SplitsRecords()
+    {
+        var value = new string('x', 70 * 1024);
+        var content = $"{{\"value\":\"{value}\"}}<END>{{\"value\":\"done\"}}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile("<END>")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("value")), Has.Length.EqualTo(value.Length));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("value")), Is.EqualTo("done"));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void ToDataReader_CustomTerminator_SkipsBlankRecordsAndReturnsFinalUnterminatedRecord()
+    {
+        const string content = "|  |{\"value\":1}||{\"value\":2}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader(new NdjsonProfile("|")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(1));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(2));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [TestCase("\n")]
+    [TestCase("\r")]
+    [TestCase("\r\n")]
+    [TestCase("|")]
+    [TestCase("<END>")]
     public void ToDataReader_ConfiguredComments_SkipsFullLineAndTrailingComments(string lineTerminator)
     {
         var content = string.Join(lineTerminator,
-            "# before",
-            "{\"value\":1,\"text\":\"# retained\"} # trailing",
+            "# before \"unterminated quote",
+            "{\"value\":1,\"text\":\"# retained\"} # trailing \"unterminated quote",
             "# between",
             "42# trailing primitive",
             "# after");
