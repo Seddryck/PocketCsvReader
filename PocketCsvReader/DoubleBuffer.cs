@@ -47,6 +47,7 @@ internal class DoubleBuffer : IBufferReader
 
     public void Reset()
     {
+        ReadAhead?.GetAwaiter().GetResult();
         _first.Reset();
         _second.Reset();
         CurrentBuffer = _first;
@@ -56,6 +57,7 @@ internal class DoubleBuffer : IBufferReader
 
     public void Dispose()
     {
+        ReadAhead?.GetAwaiter().GetResult();
         _first.Dispose();
         _second.Dispose();
     }
