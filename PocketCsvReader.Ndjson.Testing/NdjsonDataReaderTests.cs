@@ -182,6 +182,40 @@ public class NdjsonDataReaderTests
         Assert.That(reader.GetArray<string>(0), Is.EqualTo(new[] { "line\nfeed", "A" }));
     }
 
+    [Test]
+    public void GetRawString_CompositeFields_PreservesDelimitersAndWhitespace()
+    {
+        const string content = "{\"object\":{ \"name\": \"Ada\" },\"array\":[1, 2],\"emptyObject\":{},\"emptyArray\":[]}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetRawString(0), Is.EqualTo("{ \"name\": \"Ada\" }"));
+        Assert.That(reader.GetRawString(1), Is.EqualTo("[1, 2]"));
+        Assert.That(reader.GetRawString(2), Is.EqualTo("{}"));
+        Assert.That(reader.GetRawString(3), Is.EqualTo("[]"));
+    }
+
+    [Test]
+    public void GetArray_CompositeElements_ReturnsStandaloneJsonValues()
+    {
+        const string content = "{\"items\":[{\"id\":1},[2,3],{},[],null,\"line\\nfeed\"]}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetArray(0), Is.EqualTo(new object?[]
+        {
+            "{\"id\":1}",
+            "[2,3]",
+            "{}",
+            "[]",
+            null,
+            "line\nfeed"
+        }));
+        Assert.That(reader.GetRawString(0), Is.EqualTo("[{\"id\":1},[2,3],{},[],null,\"line\\nfeed\"]"));
+    }
+
     [TestCase("\"\\x\"")]
     [TestCase("\"\\u12\"")]
     [TestCase("\"unterminated")]

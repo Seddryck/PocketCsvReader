@@ -56,7 +56,7 @@ public class RecordParserTest
 
         Assert.That(values.FieldSpans, Has.Length.EqualTo(2));
         Assert.That(values.FieldSpans[0].Children, Has.Length.EqualTo(3));
-        Assert.That(values.Slice(0).ToString(), Is.EqualTo("10, 25, 36"));
+        Assert.That(values.Slice(0).ToString(), Is.EqualTo("[10, 25, 36]"));
         Assert.That(values.Slice(1).ToString(), Is.EqualTo("true"));
     }
 
@@ -139,7 +139,11 @@ public class RecordParserTest
 
         var users = values.FieldSpans[0].Children;
         Assert.That(users, Has.Length.EqualTo(2));
-        Assert.That(users![0].Children, Has.Length.EqualTo(2));
+        Assert.That(values.Span.Slice(users![0].Value.Start, users[0].Value.Length).ToString(),
+            Is.EqualTo("{\"name\":\"Ada\",\"roles\":[\"admin\"]}"));
+        Assert.That(values.Span.Slice(users[1].Value.Start, users[1].Value.Length).ToString(),
+            Is.EqualTo("{\"name\":\"Grace\"}"));
+        Assert.That(users[0].Children, Has.Length.EqualTo(2));
         Assert.That(users[1].Children, Has.Length.EqualTo(1));
         var ada = users[0].Children!;
         var grace = users[1].Children!;
