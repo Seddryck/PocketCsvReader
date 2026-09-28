@@ -39,5 +39,5 @@ public record NdjsonDialectDescriptor
     char? ArrayDelimiter = ','
 )
 {
-    public char[] Whitespaces { get; init; } = Whitespaces ?? [' ', '\t'];
+    public char[] Whitespaces { get; init; } = Whitespaces ?? [' ', '\t', '\r', '\n'];
 }

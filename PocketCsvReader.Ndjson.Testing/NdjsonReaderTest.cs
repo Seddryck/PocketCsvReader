@@ -103,4 +103,16 @@ public class NdjsonReaderTest
         Assert.That(reader.Read(), Is.False);
         Assert.That(reader.RowCount, Is.EqualTo(3));
     }
+
+    [Test]
+    public void ToDataReader_JsonWhitespaceAroundTokens_ReturnsValues()
+    {
+        const string content = "\t{\t\"value\"\t:\t42\t,\t\"items\"\t:\t[\ttrue\t,\tfalse\t]\t}\t";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonReader().ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(42));
+        Assert.That(reader.GetArray<bool>(reader.GetOrdinal("items")), Is.EqualTo(new[] { true, false }));
+    }
 }
