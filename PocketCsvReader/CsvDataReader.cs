@@ -36,8 +36,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
             : Record!.Slice(i).ToString();
 
-    private SanitizerFactory? sanitizerFactory;
-    private Dictionary<int, ISanitizer> CacheSanitizers { get; } = [];
+    private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
+
     /// <summary>
     /// Returns the sanitized value of the field at the specified index, applying field-specific sanitization and handling missing or incomplete fields according to the CSV profile.
     /// </summary>
@@ -48,11 +48,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     {
         if (i < Record!.FieldSpans.Length)
         {
-            sanitizerFactory ??= new SanitizerFactory(Profile);
-            var sanitizer = CacheSanitizers.GetOrAdd(i,
-                sanitizerFactory.Create(SequenceCollection.Concat(Profile.Resource?.Sequences, (Profile.Schema is null ? null : GetFieldDescriptor(i))?.Sequences)
-                                            , new FieldEscaper(Profile)
-                ));
+            var sanitizer = GetSanitizer(i, Profile.ParserOptimizations);
             return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.FieldSpans[i].Value.IsEscaped, Record!.FieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
