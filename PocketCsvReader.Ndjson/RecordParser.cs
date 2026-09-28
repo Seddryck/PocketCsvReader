@@ -12,7 +12,7 @@ using System.Text.Json;
 namespace PocketCsvReader.Ndjson;
 public class RecordParser : BaseRecordParser<NdjsonProfile>
 {
-    private readonly StreamReader _reader;
+    private readonly StreamReader? _reader;
 
     public RecordParser(StreamReader reader, NdjsonProfile profile)
         : this(reader, profile, ArrayPool<char>.Shared)
@@ -24,7 +24,7 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
 
     protected RecordParser(NdjsonProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
         : base(profile, buffer, pool, (p) => new NdjsonParser(p.Dialect))
-        => _reader = null!;
+        => _reader = null;
 
     public override bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
@@ -68,22 +68,8 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         for (var i = 0; i < line.Length; i++)
         {
             var current = line[i];
-            if (inString)
-            {
-                if (escaping)
-                    escaping = false;
-                else if (current == '\\')
-                    escaping = true;
-                else if (current == '"')
-                    inString = false;
+            if (UpdateStringState(current, ref inString, ref escaping))
                 continue;
-            }
-
-            if (current == '"')
-            {
-                inString = true;
-                continue;
-            }
 
             if (current != commentChar.Value)
                 continue;
@@ -94,6 +80,25 @@ public class RecordParser : BaseRecordParser<NdjsonProfile>
         }
 
         return line;
+    }
+
+    private static bool UpdateStringState(char current, ref bool inString, ref bool escaping)
+    {
+        if (!inString)
+        {
+            if (current != '"')
+                return false;
+            inString = true;
+            return true;
+        }
+
+        if (escaping)
+            escaping = false;
+        else if (current == '\\')
+            escaping = true;
+        else if (current == '"')
+            inString = false;
+        return true;
     }
 
     private static bool IsCompleteJson(string content)

@@ -414,9 +414,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     }
 
     private ReadOnlySpan<char> GetFieldSpan(FieldSpan field)
-        => field.DecodedValue is not null
-            ? field.DecodedValue.AsSpan()
-            : Record!.Span.Slice(field.Value.Start, field.Value.Length).Span;
+    {
+        if (field.DecodedValue is not null)
+            return field.DecodedValue.AsSpan();
+        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
+        return record.Span.Slice(field.Value.Start, field.Value.Length).Span;
+    }
 
     /// <summary>
     /// Creates a delegate that parses a <see cref="ReadOnlySpan{char}"/> into the specified type using the field's format descriptor.
