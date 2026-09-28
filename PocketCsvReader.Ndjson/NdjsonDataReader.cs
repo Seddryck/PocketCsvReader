@@ -50,17 +50,8 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         return record.Span.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
     }
 
-    public override object GetValue(int i)
-        => IsDBNull(i) ? DBNull.Value : base.GetValue(i);
-
-    public override int GetValues(object[] values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        var length = Math.Min(values.Length, FieldCount);
-        for (var i = 0; i < length; i++)
-            values[i] = GetValue(i);
-        return length;
-    }
+    protected override object GetNullValue(int i)
+        => DBNull.Value;
 
     public override bool Read()
     {
