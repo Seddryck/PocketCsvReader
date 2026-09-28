@@ -83,7 +83,9 @@ internal sealed class JsonRecordParser
         if (scalarStart == _position)
             throw new InvalidDataException($"A JSON value was expected at position {_position}.");
 
-        return new FieldSpan(CompletedSpan(scalarStart, _position - scalarStart), default);
+        var scalarLength = _position - scalarStart;
+        var isNull = _json.AsSpan(scalarStart, scalarLength).SequenceEqual("null");
+        return new FieldSpan(CompletedSpan(scalarStart, scalarLength, isNull: isNull), default);
     }
 
     private FieldSpan ParseArray(bool allowCompositeItems)
@@ -162,6 +164,6 @@ internal sealed class JsonRecordParser
     private char Current => IsEnd ? '\0' : _json[_position];
     private bool IsEnd => _position >= _json.Length;
 
-    private static SpanInfo CompletedSpan(int start, int length, bool wasQuoted = false, bool isEscaped = false)
-        => new(start, length, wasQuoted, isEscaped, IsStarted: true, IsComplete: true);
+    private static SpanInfo CompletedSpan(int start, int length, bool wasQuoted = false, bool isEscaped = false, bool isNull = false)
+        => new(start, length, wasQuoted, isEscaped, IsStarted: true, IsComplete: true, IsNull: isNull);
 }

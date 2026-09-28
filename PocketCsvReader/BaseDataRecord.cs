@@ -142,7 +142,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     protected virtual object GetMissingField()
         => string.Empty;
 
-    public object GetValue(int i)
+    public virtual object GetValue(int i)
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
@@ -277,7 +277,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
     public T GetFieldValue<T>(string name, Func<string, T> parse)
         => GetFieldValue(GetOrdinal(name), parse);
 
-    public int GetValues(object[] values)
+    public virtual int GetValues(object[] values)
     {
         ArgumentNullException.ThrowIfNull(values);
         var length = Math.Min(values.Length, FieldCount);
@@ -323,7 +323,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
         {
             var child = Record!.FieldSpans[i].Children![j];
-            array[j] = IsNullFieldValue<T>(i)
+            array[j] = child.Value.IsNull
                         ? default
                         : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
         }
@@ -362,7 +362,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         for (int j = 0; j < Record!.FieldSpans[i].Children!.Length; j++)
         {
             var child = Record!.FieldSpans[i].Children![j];
-            array[j] = IsNullFieldValue<object>(i)
+            array[j] = child.Value.IsNull
                 ? null
                 : parse!(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
         }
@@ -408,7 +408,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         }
 
         var child = Record!.FieldSpans[i].Children![j];
-        return IsNullFieldValue<T>(i)
+        return child.Value.IsNull
                 ? default
                 : parse(Record!.Span.Slice(child.Value.Start, child.Value.Length).Span);
     }

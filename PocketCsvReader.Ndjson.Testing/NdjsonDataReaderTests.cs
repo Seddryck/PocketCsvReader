@@ -115,4 +115,41 @@ public class NdjsonDataReaderTests
             Assert.That(dataReader.Read(), Is.True);
         Assert.That(dataReader.Read(), Is.False);
     }
+
+    [Test]
+    public void Read_NullValues_UsesDatabaseNullSemantics()
+    {
+        const string content = "{\"actual\":null,\"text\":\"null\",\"items\":[null,\"null\",1]}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsDBNull(0), Is.True);
+        Assert.That(reader.GetValue(0), Is.SameAs(DBNull.Value));
+        Assert.That(reader.GetFieldValue<string>(0), Is.Null);
+        Assert.That(reader.GetFieldValue<int?>(0), Is.Null);
+        Assert.Throws<InvalidCastException>(() => reader.GetString(0));
+
+        Assert.That(reader.IsDBNull(1), Is.False);
+        Assert.That(reader.GetString(1), Is.EqualTo("null"));
+        Assert.That(reader.GetArray<string>(2), Is.EqualTo(new string?[] { null, "null", "1" }));
+        Assert.That(reader.GetArray(2), Is.EqualTo(new object?[] { null, "null", "1" }));
+
+        var values = new object[3];
+        Assert.That(reader.GetValues(values), Is.EqualTo(3));
+        Assert.That(values[0], Is.SameAs(DBNull.Value));
+        Assert.That(values[1], Is.EqualTo("null"));
+    }
+
+    [Test]
+    public void Read_NullRoot_IsDatabaseNull()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("null"));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.FieldCount, Is.EqualTo(1));
+        Assert.That(reader.IsDBNull(0), Is.True);
+        Assert.That(reader.GetValue(0), Is.SameAs(DBNull.Value));
+    }
 }
