@@ -67,4 +67,23 @@ public class NdjsonReaderTest
         Assert.That(reader.GetArray<string>(0), Is.EqualTo(new[] { "a]b", "qrz" }));
         Assert.That(reader.GetArray<string>(1), Is.Empty);
     }
+
+    [Test]
+    public void ToDataReader_RootValues_ExposesOrdinalZero()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("[1,2,3]\n\"Ada\"\n42\ntrue\nnull"));
+        using var reader = new NdjsonReader(new NdjsonProfile("\n")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetArray<int>(0), Is.EqualTo(new[] { 1, 2, 3 }));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(42));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetBoolean(0), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("null"));
+        Assert.That(reader.Read(), Is.False);
+    }
 }
