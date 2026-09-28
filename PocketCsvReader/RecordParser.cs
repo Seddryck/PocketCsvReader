@@ -23,7 +23,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
         : base(profile, profile.ParserOptimizations.ReadAhead
                     ? new DoubleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
                     : new SingleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
-              , pool, (p) => new FieldParser(p.Dialect))
+              , pool, (p) => FieldParserFactory.Create(p.Dialect))
     { }
 
     /// <summary>
@@ -33,7 +33,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     /// <param name="buffer">The buffer reader used for reading CSV data.</param>
     /// <param name="pool">An optional character array pool for buffer management.</param>
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
-        : base(profile, buffer, pool, (p) => new FieldParser(p.Dialect))
+        : base(profile, buffer, pool, (p) => FieldParserFactory.Create(p.Dialect))
     { }
 
     /// <summary>
