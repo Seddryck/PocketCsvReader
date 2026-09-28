@@ -147,5 +147,35 @@ public class RecordParserTest
         Assert.That(ada[1].Children, Has.Length.EqualTo(1));
         Assert.That(values.Span.Slice(grace[0].Value.Start, grace[0].Value.Length).ToString(), Is.EqualTo("Grace"));
     }
+
+    [TestCase("{}")]
+    [TestCase("{   }")]
+    public void ReadNextRecord_EmptyObject_ReturnsRecordWithNoFields(string record)
+    {
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        var isEof = reader.IsEndOfFile(out var values, out var state);
+
+        Assert.That(isEof, Is.True);
+        Assert.That(state, Is.EqualTo(RecordState.Record));
+        Assert.That(values.FieldSpans, Is.Empty);
+    }
+
+    [Test]
+    public void ReadNextRecord_NestedEmptyObject_PreservesEmptyChildren()
+    {
+        const string record = "{\"value\":{},\"items\":[{},{}]}";
+        var buffer = new MemoryStream(Encoding.UTF8.GetBytes(record));
+
+        using var reader = new RecordParser(new StreamReader(buffer), NdjsonProfile.Default, ArrayPool<char>.Create(256, 5));
+        reader.IsEndOfFile(out var values, out _);
+
+        Assert.That(values.FieldSpans[0].Children, Is.Empty);
+        var items = values.FieldSpans[1].Children;
+        Assert.That(items, Has.Length.EqualTo(2));
+        Assert.That(items![0].Children, Is.Empty);
+        Assert.That(items[1].Children, Is.Empty);
+    }
 }
 
