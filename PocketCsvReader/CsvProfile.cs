@@ -11,6 +11,7 @@ public class CsvProfile : IProfile
     public SchemaDescriptor? Schema { get; private set; }
     public ResourceDescriptor? Resource { get; private set; }
     public RuntimeParsersDescriptor? Parsers { get; private set; }
+    public StreamInitializationOptions StreamInitialization { get; set; } = StreamInitializationOptions.Default;
 
     public ParserOptimizationOptions ParserOptimizations { get; set; }
 
