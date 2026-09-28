@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Text;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
 using PocketCsvReader.Ndjson.Configuration;
@@ -16,26 +14,21 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
     public override int FieldCount =>
         Record?.FieldSpans.Length ?? throw new InvalidOperationException("Current record is not set.");
 
+    public override string GetName(int i)
+    {
+        if (i < 0 || i >= FieldCount)
+            throw new ArgumentOutOfRangeException(nameof(i), i, "Field index is out of range.");
+        return base.GetName(i);
+    }
+
     public override int GetOrdinal(string name)
     {
-        int index = Fields is null ? -1 : Array.IndexOf(Fields, name);
+        if (Fields is null)
+            throw new InvalidOperationException("Fields are not defined yet.");
+
+        var index = Array.IndexOf(Fields, name);
         if (index >= 0)
             return index;
-        index = Fields?.Length ?? 0;
-        var list = new List<string>(Fields ?? Array.Empty<string>());
-        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
-        do
-        {
-            var fieldName = record.FieldSpans[index].DecodedLabel ?? record.SliceLabel(index).ToString();
-            list.Add(fieldName);
-            if (fieldName == name)
-            {
-                Fields = [.. list];
-                return index;
-            }
-            index += 1;
-        } while (index < record.FieldSpans.Length);
-        Fields = [.. list];
         throw new ArgumentOutOfRangeException($"Field '{name}' not found.");
     }
 
@@ -72,6 +65,13 @@ public class NdjsonDataReader : BaseDataReader<NdjsonProfile>
         }
 
         Record = recordSpan.AsMemory();
+        Fields = new string[recordSpan.FieldSpans.Length];
+        for (var index = 0; index < recordSpan.FieldSpans.Length; index++)
+        {
+            var field = recordSpan.FieldSpans[index];
+            Fields[index] = field.DecodedLabel
+                ?? recordSpan.Span.Slice(field.Label.Start, field.Label.Length).ToString();
+        }
 
         RowCount++;
 

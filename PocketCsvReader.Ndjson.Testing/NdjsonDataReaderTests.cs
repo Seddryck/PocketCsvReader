@@ -55,6 +55,71 @@ public class NdjsonDataReaderTests
     }
 
     [Test]
+    public void GetName_BeforeGetOrdinal_ReturnsDecodedNames()
+    {
+        const string content = "{\"first\":1,\"na\\u006De\":2}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetName(0), Is.EqualTo("first"));
+        Assert.That(reader.GetName(1), Is.EqualTo("name"));
+        Assert.That(reader.GetOrdinal(reader.GetName(0)), Is.Zero);
+        Assert.That(reader.GetOrdinal(reader.GetName(1)), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void GetName_HeterogeneousRecords_RefreshesCurrentNames()
+    {
+        const string content = "{\"first\":1,\"second\":2}\n{\"second\":3}\n{\"third\":4,\"first\":5}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, new NdjsonProfile("\n"));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(Enumerable.Range(0, reader.FieldCount).Select(reader.GetName),
+            Is.EqualTo(new[] { "first", "second" }));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(Enumerable.Range(0, reader.FieldCount).Select(reader.GetName),
+            Is.EqualTo(new[] { "second" }));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(Enumerable.Range(0, reader.FieldCount).Select(reader.GetName),
+            Is.EqualTo(new[] { "third", "first" }));
+    }
+
+    [Test]
+    public void GetName_InvalidIndex_ThrowsArgumentOutOfRangeException()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"value\":1}"));
+        using var reader = new NdjsonDataReader(stream, NdjsonProfile.Default);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Throws<ArgumentOutOfRangeException>(() => reader.GetName(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => reader.GetName(1));
+    }
+
+    [Test]
+    public void GetName_NonObjectRoots_ReturnsEmptyName()
+    {
+        const string content = "[1,2]\n42\n\"Ada\"\n{}";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var reader = new NdjsonDataReader(stream, new NdjsonProfile("\n"));
+
+        for (var row = 0; row < 3; row++)
+        {
+            Assert.That(reader.Read(), Is.True);
+            Assert.That(reader.FieldCount, Is.EqualTo(1));
+            Assert.That(reader.GetName(0), Is.Empty);
+            Assert.That(reader.GetOrdinal(string.Empty), Is.Zero);
+        }
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.FieldCount, Is.Zero);
+        Assert.Throws<ArgumentOutOfRangeException>(() => reader.GetName(0));
+    }
+
+    [Test]
     public void GetOrdinal_ChangingNames_Success()
     {
         var content = "{\"foo\":123,\"bar\":true}\r\n{\"bar\":true}\r\n{\"bar\":true,\"foo\":123}\r\n";

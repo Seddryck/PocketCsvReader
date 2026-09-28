@@ -23,7 +23,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
 
     public abstract int FieldCount { get; }
     
-    public string GetName(int i)
+    public virtual string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
 
     public virtual int GetOrdinal(string name)
