@@ -2,7 +2,7 @@
 
 ![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/assets/PocketCsvReader-icon-256.png)
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files like CSV and TSV. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface. Designed for projects requiring rapid data ingestion with minimal configuration, PocketCsvReader is a dependable solution for handling structured flat-file data effortlessly.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width and NDJSON. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
 [About][] | [Install][] | [Quick-start][]
 
@@ -62,6 +62,12 @@ Replace `<VersionNumber>` with the desired version in each of the following solu
    ```bash
    dotnet add package PocketCsvReader --version <VersionNumber>
    ```
+
+   For fixed-width files, install the extension package as well:
+
+   ```bash
+   dotnet add package PocketCsvReader.FixedWidth --version <VersionNumber>
+   ```
 ## Quick-start
 
 The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
@@ -74,6 +80,9 @@ The `CsvReader` class is a flexible and efficient tool for reading and parsing C
 - Map CSV records to array of strings.
 - Customizable CSV parsing profiles for delimiters, quote handling, and more.
 - Supports encoding detection through the `IEncodingDetector` interface.
+- Read fixed-width files in one forward-only pass with field conversion deferred until a `Get*` accessor requests that field.
+
+Fixed-width support is distributed separately as `PocketCsvReader.FixedWidth`.
 
 ### Initialization
 
