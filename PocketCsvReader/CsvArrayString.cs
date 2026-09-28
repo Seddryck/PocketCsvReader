@@ -104,13 +104,8 @@ public class CsvArrayString : IDisposable
 
     public void Dispose()
     {
+        RecordParser?.Dispose();
         StreamReader?.Dispose();
         Stream?.Dispose();
-        GC.SuppressFinalize(this); // Prevents finalizer from running
-    }
-
-    ~CsvArrayString()
-    {
-        Dispose();
     }
 }

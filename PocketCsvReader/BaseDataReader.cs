@@ -103,11 +103,11 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         if (!_isClosed)
         {
             _isClosed = true;
+            RecordSource?.Dispose();
             StreamReader?.Dispose();
             ProcessedStream?.Dispose();
             if (ProcessedStream != RawStream)
                 RawStream?.Dispose();
-            RecordSource?.Dispose();
         }
     }
 
@@ -126,10 +126,10 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         if (disposing)
         {
             // free managed resources
+            RecordSource?.Dispose();
             StreamReader?.Dispose();
             RawStream?.Dispose();
             ProcessedStream?.Dispose();
-            RecordSource?.Dispose();
         }
     }
     ~BaseDataReader()

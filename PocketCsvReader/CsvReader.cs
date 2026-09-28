@@ -177,8 +177,15 @@ namespace PocketCsvReader
         public IEnumerable<T> To<T>(string filename, SpanMapper<T>? spanMapper = null)
         {
             CheckFileExists(filename);
-            var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, Profile.ParserOptimizations.BufferSize);
-            return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
+            return ReadObjects(filename, spanMapper);
+
+            IEnumerable<T> ReadObjects(string path, SpanMapper<T>? mapper)
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize);
+                using var reader = new CsvObjectReader<T>(stream, Profile, mapper);
+                foreach (var value in reader.Read())
+                    yield return value;
+            }
         }
 
         /// <summary>
@@ -202,7 +209,15 @@ namespace PocketCsvReader
         /// </remarks>
         public IEnumerable<T> To<T>(Stream stream, SpanMapper<T>? spanMapper = null)
         {
-            return new CsvObjectReader<T>(stream, Profile, spanMapper).Read();
+            ArgumentNullException.ThrowIfNull(stream);
+            return ReadObjects(stream, spanMapper);
+
+            IEnumerable<T> ReadObjects(Stream source, SpanMapper<T>? mapper)
+            {
+                using var reader = new CsvObjectReader<T>(source, Profile, mapper, leaveOpen: true);
+                foreach (var value in reader.Read())
+                    yield return value;
+            }
         }
     }
 }
