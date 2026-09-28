@@ -5,10 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace PocketCsvReader.Configuration;
-public class CsvReaderBuilder
+public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
-    private readonly ProfileBuilderComponents _components = new();
 
     public CsvReaderBuilder WithDialect(Func<DialectDescriptorBuilder, DialectDescriptorBuilder> func)
     {
@@ -21,57 +20,15 @@ public class CsvReaderBuilder
         return this;
     }
 
-    public CsvReaderBuilder WithSchema(Func<SchemaDescriptorBuilder, ISchemaDescriptorBuilder> func)
-    {
-        _components.ConfigureSchema(func);
-        return this;
-    }
-
-    public CsvReaderBuilder WithSchema(ISchemaDescriptorBuilder schemaBuilder)
-    {
-        _components.ConfigureSchema(schemaBuilder);
-        return this;
-    }
-
-    public CsvReaderBuilder WithResource(Func<ResourceDescriptorBuilder, ResourceDescriptorBuilder> func)
-    {
-        _components.ConfigureResource(func);
-        return this;
-    }
-
-    public CsvReaderBuilder WithResource(ResourceDescriptorBuilder resourceBuilder)
-    {
-        _components.ConfigureResource(resourceBuilder);
-        return this;
-    }
-
-    public CsvReaderBuilder WithParsers(Func<RuntimeParsersDescriptorBuilder, RuntimeParsersDescriptorBuilder> func)
-    {
-        _components.ConfigureParsers(func);
-        return this;
-    }
-
-    public CsvReaderBuilder WithParsers(RuntimeParsersDescriptorBuilder parserBuilder)
-    {
-        _components.ConfigureParsers(parserBuilder);
-        return this;
-    }
-
-    public CsvReaderBuilder WithParserOptimizations(ParserOptimizationOptions options)
-    {
-        _components.ConfigureParserOptimizations(options);
-        return this;
-    }
-
     public CsvReader Build()
     {
         var profile = new CsvProfile(
             _dialectBuilder.Build(),
-            _components.BuildSchema(),
-            _components.BuildResource(),
-            _components.BuildParsers())
+            BuildSchema(),
+            BuildResource(),
+            BuildParsers())
         {
-            ParserOptimizations = _components.ParserOptimizations
+            ParserOptimizations = BuildParserOptimizations()
         };
         return new CsvReader(profile);
     }
