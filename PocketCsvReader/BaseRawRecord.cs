@@ -10,7 +10,7 @@ namespace PocketCsvReader;
 public abstract class BaseRawRecord<P> where P : IProfile
 {
     protected P Profile { get; }
-    private StringMapper StringMapper { get; }
+    protected StringMapper StringMapper { get; }
     public int RowCount { get; protected set; } = 0;
     public string[]? Fields { get; protected set; } = null;
     protected RecordMemory? Record { get; set; } = null;
