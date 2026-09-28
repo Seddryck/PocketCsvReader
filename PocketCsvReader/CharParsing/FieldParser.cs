@@ -53,9 +53,13 @@ public class FieldParser : IParser
     /// Resets the parser context and controller to their initial states.
     /// </summary>
     public void Reset()
+        => Reset(true);
+
+    public void Reset(bool recordStart)
     {
         Context.Reset();
         Controller.Reset();
+        Controller.SetRecordStart(recordStart);
     }
 
     public ref FieldSpan Result

@@ -63,7 +63,9 @@ public class CsvObjectReader<T> : IDisposable
             {
                 var _ = RecordParser!.ReadHeaders();
             }
-            IsEof = RecordParser!.IsEndOfFile(out var value);
+            IsEof = RecordParser!.IsEndOfFile(out var value, out var state);
+            if (state == RecordState.Comment)
+                continue;
             if (IsEof && EqualityComparer<T>.Default.Equals(value, default))
                 yield break;
             RowCount++;
