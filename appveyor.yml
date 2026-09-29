@@ -48,7 +48,7 @@ before_build:
 
 build_script:
   #- dotnet --info
-  - dotnet build PocketCsvReader.sln -p:version="%GitVersion_SemVer%" -c Release /p:ContinuousIntegrationBuild=true --nologo
+  - dotnet build PocketCsvReader.full.sln -p:version="%GitVersion_SemVer%" -c Release /p:ContinuousIntegrationBuild=true --nologo
 
 test_script:
 - pwsh: |
@@ -58,6 +58,8 @@ test_script:
     dotnet test PocketCsvReader.Ndjson.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader*]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.Ndjson.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult += $LastExitCode
     dotnet test PocketCsvReader.FixedWidth.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader.FixedWidth]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.FixedWidth.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
+    $globalTestResult += $LastExitCode
+    dotnet test PocketCsvReader.KeyValue.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader.KeyValue]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.KeyValue.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult += $LastExitCode
     if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
 
@@ -70,6 +72,7 @@ after_test:
 - dotnet pack PocketCsvReader -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
 - dotnet pack PocketCsvReader.Ndjson -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
 - dotnet pack PocketCsvReader.FixedWidth -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
+- dotnet pack PocketCsvReader.KeyValue -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
 
 artifacts:
 - path: '**\*.nupkg'

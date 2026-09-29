@@ -2,7 +2,7 @@
 
 ![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/assets/PocketCsvReader-icon-256.png)
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width and NDJSON. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width, NDJSON, LTSV, and logfmt. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
 [About][] | [Install][] | [Quick-start][]
 
@@ -68,6 +68,12 @@ Replace `<VersionNumber>` with the desired version in each of the following solu
    ```bash
    dotnet add package PocketCsvReader.FixedWidth --version <VersionNumber>
    ```
+
+   For LTSV and logfmt records, install the key-value extension package:
+
+   ```bash
+   dotnet add package PocketCsvReader.KeyValue --version <VersionNumber>
+   ```
 ## Quick-start
 
 The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
@@ -81,8 +87,25 @@ The `CsvReader` class is a flexible and efficient tool for reading and parsing C
 - Customizable CSV parsing profiles for delimiters, quote handling, and more.
 - Supports encoding detection through the `IEncodingDetector` interface.
 - Read fixed-width files in one forward-only pass with field conversion deferred until a `Get*` accessor requests that field.
+- Read labeled LTSV and logfmt records through one shared reader and format-specific builders.
 
 Fixed-width support is distributed separately as `PocketCsvReader.FixedWidth`.
+
+LTSV and logfmt support is distributed separately as `PocketCsvReader.KeyValue`:
+
+```csharp
+using PocketCsvReader.KeyValue.Configuration;
+
+var ltsvReader = new LtsvReaderBuilder().Build();
+var logfmtReader = new LogfmtReaderBuilder().Build();
+
+using var dataReader = logfmtReader.ToDataReader("application.log");
+while (dataReader.Read())
+{
+    var level = dataReader.GetString(dataReader.GetOrdinal("level"));
+    var message = dataReader.GetString(dataReader.GetOrdinal("message"));
+}
+```
 
 ### Initialization
 
