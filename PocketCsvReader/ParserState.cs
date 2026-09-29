@@ -17,4 +17,5 @@ public enum ParserState
     Header,
     Comment,
     Eof,
+    Reprocess,
 }

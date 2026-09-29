@@ -11,24 +11,24 @@ public static class SpanExtensions
     public static Span<T> Concat<T>(this Span<T> prefix, ReadOnlySpan<T> suffix, ArrayPool<T>? pool = null)
     {
         var newLength = prefix.Length + suffix.Length;
-        var newArray = pool?.Rent(newLength) ?? new T[newLength];
+        // Returned spans cannot safely be backed by an array that has already
+        // been returned to a pool. Allocate storage owned by the caller.
+        var newArray = new T[newLength];
         var newSpan = newArray.AsSpan().Slice(0, newLength);
         prefix.CopyTo(newSpan);
         suffix.CopyTo(newSpan.Slice(prefix.Length));
         newSpan = newSpan.Slice(0, newLength);
-        pool?.Return(newArray);
         return newSpan;
     }
 
     public static Span<T> Concat<T>(this ReadOnlySpan<T> prefix, ReadOnlySpan<T> suffix, ArrayPool<T>? pool = null)
     {
         var newLength = prefix.Length + suffix.Length;
-        var newArray = pool?.Rent(newLength) ?? new T[newLength];
+        var newArray = new T[newLength];
         var newSpan = newArray.AsSpan().Slice(0, newLength);
         prefix.CopyTo(newSpan);
         suffix.CopyTo(newSpan.Slice(prefix.Length));
         newSpan = newSpan.Slice(0, newLength);
-        pool?.Return(newArray);
         return newSpan;
     }
 }

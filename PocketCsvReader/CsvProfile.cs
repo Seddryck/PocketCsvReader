@@ -14,6 +14,7 @@ public class CsvProfile : IProfile
     public StreamInitializationOptions StreamInitialization { get; set; } = StreamInitializationOptions.Default;
 
     public ParserOptimizationOptions ParserOptimizations { get; set; }
+    public BadDataPolicy? BadDataPolicy { get; set; }
 
     public virtual string EmptyCell { get; private set; }
 
@@ -95,7 +96,7 @@ public class CsvProfile : IProfile
         get => _commaDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
                                         .WithDelimiter(Delimiter.Comma)
                                         .WithLineTerminator(Environment.NewLine)
-                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithQuoteChar(QuoteChar.DoubleQuote)
                                         .WithEscapeChar(EscapeChar.BackSlash)
                                         .WithDoubleQuote(true)
                                         .WithoutHeader()
@@ -108,7 +109,7 @@ public class CsvProfile : IProfile
         get => _semiColumnDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
                                         .WithDelimiter(Delimiter.Semicolon)
                                         .WithLineTerminator(Environment.NewLine)
-                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithQuoteChar(QuoteChar.DoubleQuote)
                                         .WithEscapeChar(EscapeChar.BackSlash)
                                         .WithDoubleQuote(true)
                                         .WithoutHeader()
@@ -121,7 +122,7 @@ public class CsvProfile : IProfile
         get => _tabDoubleQuote ??= new CsvProfile(new DialectDescriptorBuilder()
                                         .WithDelimiter(Delimiter.Tab)
                                         .WithLineTerminator(Environment.NewLine)
-                                        .WithQuoteChar(QuoteChar.SingleQuote)
+                                        .WithQuoteChar(QuoteChar.DoubleQuote)
                                         .WithEscapeChar(EscapeChar.BackSlash)
                                         .WithDoubleQuote(true)
                                         .WithoutHeader()

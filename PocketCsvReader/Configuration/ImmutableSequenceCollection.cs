@@ -14,7 +14,12 @@ public class ImmutableSequenceCollection : IEnumerable<KeyValuePair<ReadOnlyMemo
             => x.Span.SequenceEqual(y.Span);
 
         public int GetHashCode(ReadOnlyMemory<char> obj)
-            => obj.Length;
+        {
+            var hash = new HashCode();
+            foreach (var c in obj.Span)
+                hash.Add(c);
+            return hash.ToHashCode();
+        }
     }
 
     protected internal readonly Dictionary<ReadOnlyMemory<char>, ReadOnlyMemory<char>?> sequences = [];
@@ -26,7 +31,18 @@ public class ImmutableSequenceCollection : IEnumerable<KeyValuePair<ReadOnlyMemo
         => this.sequences = new(sequences, new ReadOnlyMemoryComparer());
 
     public bool TryGetValue(ReadOnlySpan<char> key, out ReadOnlyMemory<char>? value)
-        => sequences.TryGetValue(key.ToArray().AsMemory(), out value);
+    {
+        foreach (var sequence in sequences)
+        {
+            if (sequence.Key.Length == key.Length && sequence.Key.Span.SequenceEqual(key))
+            {
+                value = sequence.Value;
+                return true;
+            }
+        }
+        value = null;
+        return false;
+    }
 
     public IEnumerator<KeyValuePair<ReadOnlyMemory<char>, ReadOnlyMemory<char>?>> GetEnumerator()
         => sequences.GetEnumerator();

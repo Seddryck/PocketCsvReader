@@ -70,10 +70,16 @@ public class CsvArrayString : IDisposable
             if (RowCount == 0 && Profile.Dialect.Header)
                 RegisterHeader(RecordParser!.ReadHeaders(), "field_");
 
-            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan, out _);
+            IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan, out var state);
+            if (state == RecordState.Comment)
+                continue;
             var values = stringMapper.Invoke(recordSpan.Span, recordSpan.FieldSpans);
             if (values is null)
-                yield break;
+            {
+                if (IsEof)
+                    yield break;
+                continue;
+            }
             RowCount++;
             yield return values;
         }
@@ -104,13 +110,8 @@ public class CsvArrayString : IDisposable
 
     public void Dispose()
     {
+        RecordParser?.Dispose();
         StreamReader?.Dispose();
         Stream?.Dispose();
-        GC.SuppressFinalize(this); // Prevents finalizer from running
-    }
-
-    ~CsvArrayString()
-    {
-        Dispose();
     }
 }

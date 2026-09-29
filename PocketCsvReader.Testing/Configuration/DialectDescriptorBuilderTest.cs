@@ -11,6 +11,30 @@ namespace PocketCsvReader.Testing.Configuration;
 public class DialectDescriptorBuilderTest
 {
     [Test]
+    public void Build_EmptyLineTerminator_Throws()
+        => Assert.Throws<InvalidOperationException>(() => new DialectDescriptorBuilder().WithLineTerminator(string.Empty).Build());
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void Build_InvalidHeaderRow_Throws(int row)
+        => Assert.Throws<InvalidOperationException>(() => new DialectDescriptorBuilder().WithHeaderRows([row]).Build());
+
+    [Test]
+    public void Build_ConflictingDelimiterAndQuote_Throws()
+        => Assert.Throws<InvalidOperationException>(() => new DialectDescriptorBuilder().WithDelimiter(';').WithQuoteChar(';').Build());
+
+    [Test]
+    public void WithoutQuoteChar_ParsesUnquotedData()
+    {
+        var dialect = new DialectDescriptorBuilder().WithoutQuoteChar().WithoutHeader().Build();
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,b\r\nc,d"));
+
+        var rows = new CsvReader(new CsvProfile(dialect)).ToArrayString(stream).ToArray();
+
+        Assert.That(rows, Is.EqualTo(new[] { new[] { "a", "b" }, new[] { "c", "d" } }));
+    }
+
+    [Test]
     [TestCase(';')]
     [TestCase(',')]
     [TestCase("\t")]

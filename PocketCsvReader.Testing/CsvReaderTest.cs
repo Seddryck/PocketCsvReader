@@ -11,6 +11,12 @@ using PocketCsvReader.Configuration;
 namespace PocketCsvReader.Testing;
 public class CsvReaderTest
 {
+    private static readonly SpanMapper<string> FirstFieldMapper = new((span, fields) =>
+    {
+        var field = fields.First()!.Value;
+        return span.Slice(field.Start, field.Length).ToString();
+    });
+
     [Test]
     [TestCase(@"Resources\PackageAssets.csv")]
     public void ToDataReader_PackageAssetFile_Successful(string filename)
@@ -129,6 +135,39 @@ public class CsvReaderTest
         var profile = new CsvProfile(',', '\"', Environment.NewLine, false);
         var arrays = new CsvReader(profile).To<PackageAsset>(stream);
         Assert.That(arrays.Count, Is.EqualTo(1695));
+    }
+
+    [Test]
+    public void ToObject_StreamEnumerationDisposed_StreamRemainsOpen()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("first,second\r\nthird,fourth"));
+        var profile = new CsvProfile(',', '\"', "\r\n", false);
+
+        using (var enumerator = new CsvReader(profile).To(stream, FirstFieldMapper).GetEnumerator())
+            Assert.That(enumerator.MoveNext(), Is.True);
+
+        Assert.That(stream.CanRead, Is.True);
+    }
+
+    [Test]
+    public void ToObject_FileEnumerationDisposed_FileIsClosed()
+    {
+        var filename = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(filename, "first,second\r\nthird,fourth");
+            var profile = new CsvProfile(',', '\"', "\r\n", false);
+
+            using (var enumerator = new CsvReader(profile).To(filename, FirstFieldMapper).GetEnumerator())
+                Assert.That(enumerator.MoveNext(), Is.True);
+
+            using var stream = new FileStream(filename, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            Assert.That(stream.CanRead, Is.True);
+        }
+        finally
+        {
+            File.Delete(filename);
+        }
     }
 
     [Test]

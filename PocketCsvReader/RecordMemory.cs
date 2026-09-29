@@ -25,6 +25,16 @@ public class RecordMemory
     }
 
     /// <summary>
+    /// Creates a view over parser-owned memory. The view is valid until the next
+    /// read operation on the owning reader.
+    /// </summary>
+    internal RecordMemory(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
+    {
+        Span = memory;
+        FieldSpans = fieldSpans;
+    }
+
+    /// <summary>
         /// Returns the value portion of the field at the specified index as a slice of the record's character data.
         /// </summary>
         /// <param name="i">The zero-based index of the field.</param>

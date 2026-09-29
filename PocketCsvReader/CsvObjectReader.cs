@@ -14,6 +14,8 @@ public class CsvObjectReader<T> : IDisposable
     protected CsvProfile Profile { get; }
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
+    private bool LeaveOpen { get; }
+    private bool _disposed;
     protected Memory<char> buffer;
     public int RowCount { get; private set; } = 0;
 
@@ -24,18 +26,19 @@ public class CsvObjectReader<T> : IDisposable
 
     protected SpanMapper<T> SpanMapper { get; }
 
-    public CsvObjectReader(Stream stream, CsvProfile profile, SpanMapper<T>? spanMapper = null)
+    public CsvObjectReader(Stream stream, CsvProfile profile, SpanMapper<T>? spanMapper = null, bool leaveOpen = false)
     {
         Stream = stream;
         buffer = new Memory<char>(new char[BufferSize]);
         Profile = profile;
         SpanMapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
+        LeaveOpen = leaveOpen;
     }
 
     public void Initialize()
     {
         FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream);
-        StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false);
+        StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false, bufferSize: 1024, leaveOpen: true);
         var bufferBOM = new char[1];
         StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
         StreamReader.Rewind();
@@ -60,7 +63,9 @@ public class CsvObjectReader<T> : IDisposable
             {
                 var _ = RecordParser!.ReadHeaders();
             }
-            IsEof = RecordParser!.IsEndOfFile(out var value);
+            IsEof = RecordParser!.IsEndOfFile(out var value, out var state);
+            if (state == RecordState.Comment)
+                continue;
             if (IsEof && EqualityComparer<T>.Default.Equals(value, default))
                 yield break;
             RowCount++;
@@ -71,14 +76,13 @@ public class CsvObjectReader<T> : IDisposable
 
     public void Dispose()
     {
-        StreamReader?.Dispose();
-        Stream?.Dispose();
-        RecordParser?.Dispose();
-        GC.SuppressFinalize(this); // Prevents finalizer from running
-    }
+        if (_disposed)
+            return;
 
-    ~CsvObjectReader()
-    {
-        Dispose();
+        RecordParser?.Dispose();
+        StreamReader?.Dispose();
+        if (!LeaveOpen)
+            Stream.Dispose();
+        _disposed = true;
     }
 }

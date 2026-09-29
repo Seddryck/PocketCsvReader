@@ -74,7 +74,7 @@ char? quote = null, char? escape = null, bool skipInitialSpace = false, bool dou
             return ParserState.Field;
         }
 
-        if (_comment.HasValue && c == _comment.Value)
+        if (_controller.IsRecordStart && _comment.HasValue && c == _comment.Value)
         {
             _controller.SwitchToComment();
             return ParserState.Continue;

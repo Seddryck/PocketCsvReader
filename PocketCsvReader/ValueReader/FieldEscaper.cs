@@ -26,7 +26,9 @@ internal class FieldEscaper
         if (value.Length == 0)
             return Span<char>.Empty;
 
-        var array = Pool?.Rent(value.Length) ?? new char[value.Length];
+        // The returned span escapes this method, so its backing storage must
+        // remain owned by the caller instead of being returned to a pool.
+        var array = new char[value.Length];
         var result = new Span<char>(array);
         int i = 0, j = 0;
         while (i < value.Length)
@@ -53,7 +55,6 @@ internal class FieldEscaper
             i++;
         }
 
-        Pool?.Return(array);
         return result.Slice(0, j);
     }
 }

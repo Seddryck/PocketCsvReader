@@ -1,39 +1,39 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace PocketCsvReader.CharParsing;
 
 public class FieldStateController : IParserStateController
 {
-    // Reusable state structs
+    public bool IsRecordStart { get; private set; } = true;
+    public void SetRecordStart(bool value) => IsRecordStart = value;
+
     private readonly IParser _valueParser;
     private readonly IParser _quotedParser;
     private readonly IParser _rawParser;
     private readonly LineTerminatorParser _lineTerminatorParser;
     private readonly IParser? _arrayParser;
     private readonly IParser? _commentParser;
+    private readonly ParserStateFn _valueState;
+    private readonly ParserStateFn _quotedState;
+    private readonly ParserStateFn _rawState;
+    private readonly ParserStateFn _lineTerminatorState;
+    private readonly ParserStateFn? _arrayState;
+    private readonly ParserStateFn? _commentState;
 
-    private IParser _currentParser;
     private readonly IParserStateController? _parentController;
+    private IParser _currentParser;
     private ParserStateFn _currentState;
     private IParser? _previousParser;
+    private ParserStateFn? _previousState;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FieldStateController"/> class, configuring internal parsers based on the specified CSV dialect.
-    /// </summary>
-    /// <param name="ctx">The parser context providing state and callbacks for parsing operations.</param>
-    /// <param name="dialect">The dialect descriptor specifying CSV parsing rules such as delimiters, quote characters, and line terminators.</param>
     public FieldStateController(IParserContext ctx, DialectDescriptor dialect)
     {
         _valueParser = new ValueParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.QuoteChar,
             dialect.EscapeChar, dialect.SkipInitialSpace, dialect.DoubleQuote, dialect.CommentChar, dialect.ArrayPrefix);
 
         _quotedParser = dialect.DoubleQuote
-            ? new DoubleQuoteParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar)
-            : new QuotedParser(ctx, this, dialect.Delimiter, dialect.LineTerminator, dialect.QuoteChar!.Value, dialect.EscapeChar);
+            ? new DoubleQuoteParser(ctx, this, dialect.Delimiter, dialect.LineTerminator,
+                dialect.QuoteChar.GetValueOrDefault(), dialect.EscapeChar)
+            : new QuotedParser(ctx, this, dialect.Delimiter, dialect.LineTerminator,
+                dialect.QuoteChar.GetValueOrDefault(), dialect.EscapeChar);
 
         _rawParser = new RawParser(ctx, this, dialect.LineTerminator, dialect.Delimiter, dialect.EscapeChar);
         _lineTerminatorParser = new LineTerminatorParser(ctx, this, dialect.LineTerminator);
@@ -42,121 +42,71 @@ public class FieldStateController : IParserStateController
         if (dialect.CommentChar.HasValue)
             _commentParser = new CommentParser(ctx, this, dialect.LineTerminator);
 
+        _valueState = _valueParser.Parse;
+        _quotedState = _quotedParser.Parse;
+        _rawState = _rawParser.Parse;
+        _lineTerminatorState = _lineTerminatorParser.Parse;
+        if (_arrayParser is not null)
+            _arrayState = _arrayParser.Parse;
+        if (_commentParser is not null)
+            _commentState = _commentParser.Parse;
         _currentParser = _valueParser;
-        _currentState = _valueParser.Parse;
-        _previousParser = null;
+        _currentState = _valueState;
     }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FieldStateController"/> class with a parent controller, parser context, and dialect descriptor.
-    /// </summary>
-    /// <param name="parent">The parent state controller to which control can be delegated.</param>
-    /// <param name="ctx">The parser context providing parsing state and utilities.</param>
-    /// <param name="dialect">The dialect descriptor specifying CSV parsing rules.</param>
     public FieldStateController(IParserStateController parent, IParserContext ctx, DialectDescriptor dialect)
         : this(ctx, dialect)
     {
         _parentController = parent;
     }
 
-    /// <summary>
-    /// Parses a single character at the specified position using the current parser state.
-    /// </summary>
-    /// <param name="c">The character to parse.</param>
-    /// <param name="pos">The position of the character in the input.</param>
-    /// <returns>The resulting parser state after processing the character.</returns>
     public ParserState Parse(char c, int pos)
-    => _currentState(c, pos);
+        => _currentState(c, pos);
 
-    /// <summary>
-    /// Handles end-of-file parsing by delegating to the current parser.
-    /// </summary>
-    /// <param name="pos">The position in the input where EOF is encountered.</param>
-    /// <returns>The resulting parser state after processing EOF.</returns>
     public ParserState ParseEof(int pos)
-    => _currentParser.ParseEof(pos);
+        => _currentParser.ParseEof(pos);
 
-    /// <summary>
-    /// Sets the specified parser as the active parser and updates the current parsing state delegate.
-    /// </summary>
-    protected void SwitchTo(IParser next)
+    private void SwitchTo(IParser next, ParserStateFn nextState)
     {
         _currentParser = next;
-        _currentState = next.Parse;
+        _currentState = nextState;
     }
 
-    /// <summary>
-    /// Switches the active parser to the value parser for standard CSV field content.
-    /// </summary>
-    public void SwitchToValue()
-        => SwitchTo(_valueParser);
+    public void SwitchToValue() => SwitchTo(_valueParser, _valueState);
+    public void SwitchToQuoted() => SwitchTo(_quotedParser, _quotedState);
+    public void SwitchToRaw() => SwitchTo(_rawParser, _rawState);
+    public void SwitchToArray() => SwitchTo(_arrayParser ?? throw new InvalidOperationException(),
+        _arrayState ?? throw new InvalidOperationException());
+    public void SwitchToComment() => SwitchTo(_commentParser ?? throw new InvalidOperationException(),
+        _commentState ?? throw new InvalidOperationException());
 
-    /// <summary>
-    /// Switches the active parser to the quoted field parser.
-    /// </summary>
-    public void SwitchToQuoted()
-        => SwitchTo(_quotedParser);
-
-    /// <summary>
-    /// Switches the active parser to the raw field parser for handling unquoted field content.
-    /// </summary>
-    public void SwitchToRaw()
-        => SwitchTo(_rawParser);
-
-    /// <summary>
-    /// Switches the active parser to the array parser.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the array parser is not available for the current dialect.
-    /// </exception>
-    public void SwitchToArray()
-    => SwitchTo(_arrayParser ?? throw new InvalidOperationException());
-    /// <summary>
-    /// Switches the active parser to the comment parser. Throws an InvalidOperationException if comment parsing is not supported by the current dialect.
-    /// </summary>
-    public void SwitchToComment()
-    => SwitchTo(_commentParser ?? throw new InvalidOperationException());
-    /// <summary>
-    /// Switches parsing to the line terminator parser, saving the current parser for later restoration and setting the return state after line termination.
-    /// </summary>
-    /// <param name="state">The parser state to return to after processing the line terminator.</param>
     public void SwitchToLineTerminator(ParserState state)
     {
         _previousParser = _currentParser;
+        _previousState = _currentState;
         _lineTerminatorParser.ReturnState(state);
-        SwitchTo(_lineTerminatorParser);
+        SwitchTo(_lineTerminatorParser, _lineTerminatorState);
     }
 
-    /// <summary>
-    /// Resets the controller and its parsers to the initial value parsing state.
-    /// </summary>
     public void Reset()
     {
         _lineTerminatorParser.Reset();
         _arrayParser?.Reset();
-        _currentState = _valueParser.Parse;
-        _currentParser = _valueParser;
+        SwitchTo(_valueParser, _valueState);
         _previousParser = null;
+        _previousState = null;
     }
 
-    /// <summary>
-    /// Restores the previous parser state if a rollback parser is set, reverting any temporary parser switch.
-    /// </summary>
     public void SwitchBack()
     {
-        if (_previousParser is not null)
+        if (_previousParser is not null && _previousState is not null)
         {
-            _currentState = _previousParser.Parse;
+            SwitchTo(_previousParser, _previousState);
             _previousParser = null;
+            _previousState = null;
         }
     }
 
-    /// <summary>
-    /// Transfers parsing control back to the parent controller's value parser.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if there is no parent controller to switch to.
-    /// </exception>
     public void SwitchUp()
     {
         if (_parentController is null)

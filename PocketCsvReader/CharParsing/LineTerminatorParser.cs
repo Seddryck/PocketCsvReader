@@ -42,7 +42,7 @@ public class LineTerminatorParser : IParser
         {
             Reset();
             _controller.SwitchBack();
-            return ParserState.Continue;
+            return ParserState.Reprocess;
         }
     }
 
@@ -52,7 +52,11 @@ public class LineTerminatorParser : IParser
     /// <param name="pos">The position in the input where EOF was encountered.</param>
     /// <returns>The parser state to transition to at EOF.</returns>
     public ParserState ParseEof(int pos)
-    => _returnState;
+    {
+        Reset();
+        _controller.SwitchBack();
+        return _controller.ParseEof(pos);
+    }
     /// <summary>
     /// Resets the parser to its initial state, clearing progress through the line terminator sequence and setting the return state to <c>ParserState.Record</c>.
     /// </summary>

@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.CharParsing;
 public interface IParserStateController
 {
+    bool IsRecordStart => true;
+    void SetRecordStart(bool value) { }
     /// <summary>
     /// Processes a single character at the specified position and returns the resulting parser state.
     /// </summary>
