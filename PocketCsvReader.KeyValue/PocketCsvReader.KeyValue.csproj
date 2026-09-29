@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.KeyValue</PackageId>
+    <PackageTags>LTSV logfmt logs key-value DataReader DataTable Parser</PackageTags>
+    <Description>PocketCsvReader.KeyValue extends PocketCsvReader with streaming readers for LTSV and logfmt records.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>
