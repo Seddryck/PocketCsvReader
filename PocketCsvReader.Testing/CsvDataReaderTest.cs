@@ -846,6 +846,28 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    public void IsDBNull_WithFieldName_UsesMatchingField()
+    {
+        using var buffer = new MemoryStream(Encoding.UTF8.GetBytes("foo;bar\r\n(null);value"));
+        var reader = new CsvReaderBuilder()
+            .WithDialect(dialect => dialect
+                .WithDelimiter(';')
+                .WithHeader())
+            .WithResource(resource => resource.WithSequence("(null)", null))
+            .Build();
+
+        using var dataReader = reader.ToDataReader(buffer);
+        Assert.That(dataReader.Read(), Is.True);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(dataReader.IsDBNull("foo"), Is.True);
+            Assert.That(dataReader.IsDBNull("bar"), Is.False);
+            Assert.Throws<ArgumentOutOfRangeException>(() => dataReader.IsDBNull("missing"));
+        });
+    }
+
+    [Test]
     [TestCase("foo;bar\r\n20;NaN\r\n;15")]
     public void Read_WithSchemaNotStringAndSequences_CorrectParsing(string record)
     {
