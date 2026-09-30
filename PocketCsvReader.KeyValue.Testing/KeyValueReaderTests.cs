@@ -59,6 +59,24 @@ public class KeyValueReaderTests
         });
     }
 
+    [Test]
+    public void TryGetOrdinal_WithLabeledRecord_ReturnsMatchOrNull()
+    {
+        using var reader = CreateReader(new LogfmtReaderBuilder().Build(), "level=info message=ready");
+        Assert.That(reader.Read(), Is.True);
+
+        var found = reader.TryGetOrdinal("message", out var matchingOrdinal);
+        var missing = reader.TryGetOrdinal("timestamp", out var missingOrdinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(found, Is.True);
+            Assert.That(matchingOrdinal, Is.EqualTo(1));
+            Assert.That(missing, Is.False);
+            Assert.That(missingOrdinal, Is.Null);
+        });
+    }
+
     [TestCase("id:1\tname:Ada\r\nid:2\tname:Grace", KeyValueFormat.Ltsv)]
     [TestCase("id=1 name=Ada\nid=2 name=Grace", KeyValueFormat.Logfmt)]
     public void Reader_AcceptsStandardNewlinesAndFinalRecordWithoutNewline(string content, KeyValueFormat format)

@@ -36,6 +36,24 @@ public abstract class BaseRawRecord<P> where P : IProfile
         return index;
     }
 
+    /// <summary>
+    /// Attempts to find the zero-based ordinal of a field by name.
+    /// </summary>
+    /// <param name="name">The field name to find.</param>
+    /// <param name="ordinal">
+    /// When this method returns, contains the zero-based field ordinal if the field was found;
+    /// otherwise, <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> if a field with the specified name was found; otherwise, <c>false</c>.
+    /// </returns>
+    public virtual bool TryGetOrdinal(string name, out int? ordinal)
+    {
+        var index = Fields is null ? -1 : Array.IndexOf(Fields, name);
+        ordinal = index >= 0 ? index : null;
+        return ordinal.HasValue;
+    }
+
     public string GetDataTypeName(int i)
     {
         if (TryGetFieldDescriptor(i, out var field))
