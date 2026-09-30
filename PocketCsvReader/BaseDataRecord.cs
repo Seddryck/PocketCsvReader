@@ -323,6 +323,14 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P 
         => IsNull(i);
 
     /// <summary>
+    /// Determines whether the field with the specified name contains a null value.
+    /// </summary>
+    /// <param name="name">The name of the field.</param>
+    /// <returns><c>true</c> if the field contains a null value; otherwise, <c>false</c>.</returns>
+    public bool IsDBNull(string name)
+        => IsDBNull(GetOrdinal(name));
+
+    /// <summary>
     /// Parses the field at the specified index as an array of nullable values of type <typeparamref name="T"/>.
     /// </summary>
     /// <param name="i">The zero-based index of the field to parse as an array.</param>
