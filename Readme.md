@@ -1,6 +1,6 @@
 # PocketCsvReader
 
-![Logo](https://github.com/Seddryck/PocketCsvReader/raw/main/assets/PocketCsvReader-icon-256.png)
+![Logo](https://raw.githubusercontent.com/Seddryck/PocketCsvReader/main/assets/PocketCsvReader-icon-256.png)
 
 PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width, NDJSON, LTSV, and logfmt. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
