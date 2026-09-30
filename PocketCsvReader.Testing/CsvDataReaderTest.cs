@@ -23,6 +23,55 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    public void TryGetOrdinal_BeforeFieldsAreInitialized_ReturnsFalse()
+    {
+        using var stream = CreateStream("name\r\nAda");
+        using var dataReader = new CsvDataReader(stream, new CsvProfile(new DialectDescriptor()));
+
+        var result = dataReader.TryGetOrdinal("name", out var ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(ordinal, Is.Null);
+        });
+    }
+
+    [Test]
+    public void TryGetOrdinal_WithHeader_ReturnsMatchingOrdinal()
+    {
+        using var stream = CreateStream("id;name\r\n1;Ada");
+        using var dataReader = new CsvDataReader(stream,
+            new CsvProfile(new DialectDescriptor() { Delimiter = ';', Header = true }));
+        dataReader.Read();
+
+        var result = dataReader.TryGetOrdinal("name", out var ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(ordinal, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void TryGetOrdinal_WithMissingHeader_ReturnsFalse()
+    {
+        using var stream = CreateStream("id;name\r\n1;Ada");
+        using var dataReader = new CsvDataReader(stream,
+            new CsvProfile(new DialectDescriptor() { Delimiter = ';', Header = true }));
+        dataReader.Read();
+
+        var result = dataReader.TryGetOrdinal("email", out var ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(ordinal, Is.Null);
+        });
+    }
+
+    [Test]
     public void GetString_SingleFieldAttemptForSecond_Throws()
     {
         var profile = new CsvProfile(',', '\"', "\r\n", false);
