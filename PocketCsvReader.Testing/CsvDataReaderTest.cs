@@ -206,7 +206,6 @@ public class CsvDataReaderTest
             Assert.That(array[i], Is.EqualTo(values[i]));
     }
 
-
     [Test]
     [TestCase("[foo|bar];125", 0, "foo", "bar")]
     [TestCase("125;[foo|bar|qrz]", 1, "foo", "bar", "qrz")]
@@ -524,7 +523,6 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetDateTime(0), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
         Assert.That(dataReader.GetDateTime(1), Is.EqualTo(new DateTime(2025, 1, 4, 14, 35, 8)));
     }
-
 
     [Test]
     [TestCase("foo;bar\r\n2025-01-04T14:35:08Z;01/04/2025 02:35:08 PM +0100")]
@@ -914,7 +912,6 @@ public class CsvDataReaderTest
 
     }
 
-
     [Test]
     [TestCase("Ansi")]
     [TestCase("Utf16-BE")]
@@ -1238,7 +1235,6 @@ public class CsvDataReaderTest
         Assert.That(dataReader.Read(), Is.True);
         Assert.Throws<ArgumentNullException>(() => dataReader.GetValues(values!));
     }
-
 
     [TestCase("foo\r\nbar\r\n")]
     [TestCase("Comment\r\nfoo\r\nbar\r\n", 1)]
