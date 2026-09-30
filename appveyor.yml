@@ -60,6 +60,8 @@ test_script:
     dotnet test PocketCsvReader.FixedWidth.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader.FixedWidth]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.FixedWidth.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult += $LastExitCode
     dotnet test PocketCsvReader.KeyValue.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader.KeyValue]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.KeyValue.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
+
+    dotnet test PocketCsvReader.WebLogs.Testing -c Release /p:CollectCoverage=true /p:Include="[PocketCsvReader.WebLogs]*" /p:CoverletOutputFormat=opencover /p:Threshold=10 /p:ThresholdType=line /p:CoverletOutput=../.coverage/coverage.PocketCsvReader.WebLogs.xml --test-adapter-path:. --logger:Appveyor --no-build --nologo
     $globalTestResult += $LastExitCode
     if($globalTestResult -ne 0) { $host.SetShouldExit($globalTestResult) }
 
@@ -73,6 +75,7 @@ after_test:
 - dotnet pack PocketCsvReader.Ndjson -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo 
 - dotnet pack PocketCsvReader.FixedWidth -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
 - dotnet pack PocketCsvReader.KeyValue -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
+- dotnet pack PocketCsvReader.WebLogs -p:version="%GitVersion_SemVer%" -c Release --include-symbols --no-build --nologo
 
 artifacts:
 - path: '**\*.nupkg'

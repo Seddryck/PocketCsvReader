@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.WebLogs</PackageId>
+    <PackageTags>CLF W3C IIS Apache web logs DataReader DataTable Parser</PackageTags>
+    <Description>PocketCsvReader.WebLogs extends PocketCsvReader with streaming readers for Common Log Format and W3C Extended Log Format files.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

@@ -2,7 +2,7 @@
 
 ![Logo](https://raw.githubusercontent.com/Seddryck/PocketCsvReader/main/assets/PocketCsvReader-icon-256.png)
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width, NDJSON, LTSV, and logfmt. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width, NDJSON, LTSV, logfmt, Common Log Format, and W3C Extended Log Format. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
 [About][] | [Install][] | [Quick-start][]
 
@@ -74,6 +74,12 @@ Replace `<VersionNumber>` with the desired version in each of the following solu
    ```bash
    dotnet add package PocketCsvReader.KeyValue --version <VersionNumber>
    ```
+
+   For Common Log Format and W3C Extended Log Format files, install the web-log extension package:
+
+   ```bash
+   dotnet add package PocketCsvReader.WebLogs --version <VersionNumber>
+   ```
 ## Quick-start
 
 The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
@@ -88,6 +94,7 @@ The `CsvReader` class is a flexible and efficient tool for reading and parsing C
 - Supports encoding detection through the `IEncodingDetector` interface.
 - Read fixed-width files in one forward-only pass with field conversion deferred until a `Get*` accessor requests that field.
 - Read labeled LTSV and logfmt records through one shared reader and format-specific builders.
+- Read Common Log Format and W3C Extended Log Format files with format-aware streaming readers.
 
 Fixed-width support is distributed separately as `PocketCsvReader.FixedWidth`.
 
@@ -104,6 +111,26 @@ while (dataReader.Read())
 {
     var level = dataReader.GetString(dataReader.GetOrdinal("level"));
     var message = dataReader.GetString(dataReader.GetOrdinal("message"));
+}
+```
+
+Common and W3C Extended web-log support is distributed separately as `PocketCsvReader.WebLogs`:
+
+```csharp
+using PocketCsvReader.WebLogs;
+
+using var common = new CommonLogReader().ToDataReader("access.log");
+while (common.Read())
+{
+    var request = common.GetString(common.GetOrdinal("Request"));
+    var status = common.GetInt32(common.GetOrdinal("StatusCode"));
+}
+
+using var w3c = new W3cExtendedLogReader().ToDataReader("u_ex.log");
+while (w3c.Read())
+{
+    var method = w3c.GetString(w3c.GetOrdinal("cs-method"));
+    var path = w3c.GetString(w3c.GetOrdinal("cs-uri-stem"));
 }
 ```
 
