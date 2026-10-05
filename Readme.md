@@ -22,8 +22,7 @@ PocketCsvReader is a highly efficient and lightweight library tailored for parsi
 ![Still maintained](https://img.shields.io/maintenance/yes/2027.svg)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Seddryck/PocketCsvReader)
 
-**Continuous integration builds:** [![Build status](https://ci.appveyor.com/api/projects/status/t3d6qtln4hcjyrkl?svg=true)](https://ci.appveyor.com/project/Seddryck/PocketCsvReader/)
-[![Tests](https://img.shields.io/appveyor/tests/seddryck/PocketCsvReader.svg)](https://ci.appveyor.com/project/Seddryck/PocketCsvReader/build/tests)
+**Continuous integration builds:** [![CI and release](https://github.com/Seddryck/PocketCsvReader/actions/workflows/ci-release.yml/badge.svg)](https://github.com/Seddryck/PocketCsvReader/actions/workflows/ci-release.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader/badge)](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader)
 [![codecov](https://codecov.io/github/Seddryck/PocketCsvReader/branch/main/graph/badge.svg?token=PCRL1Y6JVR)](https://codecov.io/github/Seddryck/PocketCsvReader)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader?ref=badge_shield)
