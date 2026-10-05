@@ -44,7 +44,7 @@ foreach ($packageId in $packageIds) {
 
     try {
         $entryNames = @($archive.Entries | Select-Object -ExpandProperty FullName)
-        foreach ($framework in @('net8.0', 'net9.0')) {
+        foreach ($framework in @('net8.0', 'net9.0', 'net10.0')) {
             $assemblyPath = "lib/$framework/$packageId.dll"
             if ($assemblyPath -notin $entryNames) {
                 throw "$packagePath does not contain $assemblyPath."

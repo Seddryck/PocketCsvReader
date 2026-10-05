@@ -15,7 +15,7 @@ $tests = @(
 New-Item -ItemType Directory -Force artifacts/coverage, artifacts/test-results | Out-Null
 
 foreach ($test in $tests) {
-    foreach ($framework in @('net8.0', 'net9.0')) {
+    foreach ($framework in @('net8.0', 'net9.0', 'net10.0')) {
         $coverage = Join-Path $PWD "artifacts/coverage/$($test.Name).$framework.cobertura.xml"
         dotnet test $test.Project `
             --configuration Release `
