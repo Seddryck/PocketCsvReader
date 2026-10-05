@@ -1,6 +1,6 @@
 mode: ContinuousDeployment
 tag-prefix: 'v'
-continuous-delivery-fallback-tag: ''
+continuous-delivery-fallback-label: ''
 
 major-version-bump-message: "^(feat|fix|perf|revert)(\\([\\w\\s-]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
 minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:|\\+semver:\\s?(feature|minor)"
@@ -10,7 +10,7 @@ commit-message-incrementing: Enabled
 
 branches:
   feat:
-    tag: beta.{BranchName}
+    label: beta.{BranchName}
     regex: ^(feat(ure)?s?)[/-](?<BranchName>.+)
     increment: Minor
     source-branches:
@@ -19,8 +19,8 @@ branches:
 
   main:
     regex: ^main$
-    tag: ''
-    is-mainline: true
+    label: ''
+    is-main-branch: true
     increment: Patch
     mode: ContinuousDeployment
 
