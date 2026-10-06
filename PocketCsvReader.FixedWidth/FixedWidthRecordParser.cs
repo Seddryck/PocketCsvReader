@@ -75,6 +75,41 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
         }
     }
 
+    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        if (_completed)
+            return new(true, RecordMemory.Empty, RecordState.Eof);
+
+        _record.Clear();
+        while (true)
+        {
+            if (_bufferOffset == _bufferLength)
+            {
+                _bufferLength = await _reader.ReadAsync(_buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+                _bufferOffset = 0;
+                if (_bufferLength == 0)
+                {
+                    _completed = true;
+                    if (_record.Length == 0)
+                        return new(true, RecordMemory.Empty, RecordState.Eof);
+
+                    var finalRecord = _record.ToString();
+                    ValidateRecord(finalRecord.Length);
+                    return new(true, new RecordMemory(finalRecord.AsSpan(), _fieldSpans), RecordState.Record);
+                }
+            }
+
+            _record.Append(_buffer[_bufferOffset++]);
+            if (!EndsWithLineTerminator())
+                continue;
+
+            _record.Length -= Profile.Descriptor.LineTerminator.Length;
+            var value = _record.ToString();
+            ValidateRecord(value.Length);
+            return new(false, new RecordMemory(value.AsSpan(), _fieldSpans), RecordState.Record);
+        }
+    }
+
     private bool EndsWithLineTerminator()
     {
         var terminator = Profile.Descriptor.LineTerminator;

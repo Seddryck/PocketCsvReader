@@ -44,6 +44,29 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         return _reader.Peek() < 0;
     }
 
+    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        string? line = null;
+        while (line is null)
+        {
+            var candidate = await ReadRecordAsync(cancellationToken).ConfigureAwait(false);
+            if (candidate is null)
+                break;
+            if (string.IsNullOrWhiteSpace(candidate))
+                continue;
+
+            line = RemoveComment(candidate, Profile.Dialect.CommentChar, Profile.Dialect.Whitespaces);
+            if (string.IsNullOrWhiteSpace(line))
+                line = null;
+        }
+
+        if (line is null)
+            return new(true, RecordMemory.Empty, RecordState.Eof);
+
+        var fields = new JsonRecordParser(line, Profile.Dialect.Whitespaces).ParseRoot();
+        return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
+    }
+
     private string? ReadRecord()
     {
         var terminator = Profile.Dialect.LineTerminator;
@@ -68,6 +91,40 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
                 inComment = !wasInString
                     && !inString
                     && current == Profile.Dialect.CommentChar;
+            }
+            builder.Append(current);
+
+            if ((inComment || (!wasInString && !inString)) && EndsWith(builder, terminator))
+            {
+                builder.Length -= terminator.Length;
+                return builder.ToString();
+            }
+        }
+    }
+
+    private async ValueTask<string?> ReadRecordAsync(CancellationToken cancellationToken)
+    {
+        var terminator = Profile.Dialect.LineTerminator;
+        if (string.IsNullOrEmpty(terminator))
+            throw new InvalidOperationException("The line terminator cannot be empty.");
+
+        var builder = new StringBuilder();
+        var buffer = new char[1];
+        var inString = false;
+        var escaping = false;
+        var inComment = false;
+        while (true)
+        {
+            var count = await _reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            if (count == 0)
+                return builder.Length == 0 ? null : builder.ToString();
+
+            var current = buffer[0];
+            var wasInString = inString;
+            if (!inComment)
+            {
+                UpdateStringState(current, ref inString, ref escaping);
+                inComment = !wasInString && !inString && current == Profile.Dialect.CommentChar;
             }
             builder.Append(current);
 

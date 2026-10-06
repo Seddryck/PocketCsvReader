@@ -7,6 +7,18 @@ namespace PocketCsvReader.KeyValue.Testing;
 public class KeyValueReaderTests
 {
     [Test]
+    public async Task LtsvReader_ReadAsync_AdvancesAndExposesValues()
+    {
+        await using var reader = CreateReader(new LtsvReaderBuilder().Build(), "id:1\tname:Ada\nid:2\tname:Grace");
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(1));
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("name")), Is.EqualTo("Grace"));
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
     public void LtsvReader_ReadsChangingFieldOrder()
     {
         const string content = "id:1\tname:Ada\nname:Grace\tid:2";

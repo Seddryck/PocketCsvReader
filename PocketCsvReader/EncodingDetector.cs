@@ -17,6 +17,19 @@ public interface IEncodingDetector
 
 public class EncodingDetector : IEncodingDetector
 {
+    public virtual async ValueTask<EncodingInfo> GetStreamEncodingAsync(
+        Stream stream,
+        string? mime = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (stream == null || !stream.CanRead)
+            throw new ArgumentException("The stream is null or not readable.");
+
+        var buffer = new byte[5];
+        var count = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+        return DetectEncoding(buffer.AsSpan(0, count), mime);
+    }
+
     /// <summary>
     /// Detects the byte order mark of a streams and returns
     /// an appropriate encoding for the file.
@@ -28,15 +41,18 @@ public class EncodingDetector : IEncodingDetector
         if (stream == null || !stream.CanRead)
             throw new ArgumentException("The stream is null or not readable.");
 
+        var buffer = new byte[5];
+        var n = stream.Read(buffer, 0, buffer.Length);
+        return DetectEncoding(buffer.AsSpan(0, n), mime);
+    }
+
+    private static EncodingInfo DetectEncoding(ReadOnlySpan<byte> buffer, string? mime)
+    {
         // Default  = Ansi CodePage
         var encoding = Encoding.Default;
         var encodingBytesCount = 0;
 
-        // Detect byte order mark if any - otherwise assume default
-        var buffer = new byte[5];
-        var n = stream.Read(buffer, 0, 5);
-
-        if (n < 2)
+        if (buffer.Length < 2)
             return new(Encoding.UTF8, 0);
 
         if (mime is null)
@@ -44,7 +60,7 @@ public class EncodingDetector : IEncodingDetector
             foreach (var encodingInfo in Encoding.GetEncodings().OrderByDescending(e => e.GetEncoding().Preamble.Length))
             {
                 var preamble = encodingInfo.GetEncoding().Preamble;
-                if (preamble.Length > 0 && buffer.AsSpan(0, preamble.Length).SequenceEqual(preamble))
+                if (preamble.Length > 0 && buffer.Length >= preamble.Length && buffer[..preamble.Length].SequenceEqual(preamble))
                 {
                     encoding = encodingInfo.GetEncoding();
                     encodingBytesCount = preamble.Length;
@@ -60,7 +76,7 @@ public class EncodingDetector : IEncodingDetector
             if (!Encoding.GetEncodings().Any(e => e.Name.Equals(mime, StringComparison.OrdinalIgnoreCase)))
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             encoding = Encoding.GetEncoding(mime);
-            encodingBytesCount = encoding.Preamble.Length > 0 && buffer.AsSpan(0, encoding.Preamble.Length).SequenceEqual(encoding.Preamble)
+            encodingBytesCount = encoding.Preamble.Length > 0 && buffer.Length >= encoding.Preamble.Length && buffer[..encoding.Preamble.Length].SequenceEqual(encoding.Preamble)
                                     ? encoding.Preamble.Length
                                     : 0;
         }

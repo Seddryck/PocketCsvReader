@@ -70,6 +70,31 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         return true;
     }
 
+    protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    {
+        Fields = [];
+
+        var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+        IsEof = result.IsEndOfFile;
+        if (result.State == RecordState.Eof)
+        {
+            Record = RecordMemory.Empty;
+            return false;
+        }
+
+        Record = result.Record;
+        Fields = new string[result.Record.FieldSpans.Length];
+        for (var index = 0; index < result.Record.FieldSpans.Length; index++)
+        {
+            var field = result.Record.FieldSpans[index];
+            Fields[index] = field.DecodedLabel
+                ?? result.Record.Span.Slice(field.Label.Start, field.Label.Length).ToString();
+        }
+
+        RowCount++;
+        return true;
+    }
+
     protected override NullableSpan GetValueOrThrow(int i)
     {
         var record = Record ?? throw new InvalidOperationException("Current record is not set.");

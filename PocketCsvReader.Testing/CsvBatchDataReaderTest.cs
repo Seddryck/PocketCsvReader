@@ -23,6 +23,22 @@ public class CsvBatchDataReaderTest
     }
 
     [Test]
+    public async Task ReadAsync_TwoStreams_AdvancesAcrossStreamBoundary()
+    {
+        var profile = new CsvProfile(',', '"', "\n", false);
+        await using var dataReader = new CsvBatchDataReader(
+            [CreateStream("1,Ada\n2,Grace"), CreateStream("3,Linus")], profile);
+
+        Assert.That(await dataReader.ReadAsync(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(1));
+        Assert.That(await dataReader.ReadAsync(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(2));
+        Assert.That(await dataReader.ReadAsync(), Is.True);
+        Assert.That(dataReader.GetInt32(0), Is.EqualTo(3));
+        Assert.That(await dataReader.ReadAsync(), Is.False);
+    }
+
+    [Test]
     public void Read_TwoStreams_Successful()
     {
         var profile = new CsvProfile(',', '\"', "\r\n", false);

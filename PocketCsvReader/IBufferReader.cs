@@ -9,6 +9,7 @@ namespace PocketCsvReader;
 public interface IBufferReader : IDisposable
 {
     ReadOnlyMemory<char> Read();
+    ValueTask<ReadOnlyMemory<char>> ReadAsync(CancellationToken cancellationToken = default);
     bool IsEof { get; }
     void Reset();
 }

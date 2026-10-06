@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 
 namespace PocketCsvReader;
-public class CsvBatchDataReader : IDataReader
+public class CsvBatchDataReader : IAsyncDataReader
 {
     private readonly bool _allStreamsOpen = false;
     private IEnumerator<Func<Stream>> Streams { get; }
@@ -13,6 +13,7 @@ public class CsvBatchDataReader : IDataReader
     private CsvDataReader? Current { get; set; }
     private bool _isClosed = false;
     private int fileCount = 0;
+    private int _readInProgress;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
         : this(streams.Select<Stream, Func<Stream>>(x => () => x), profile)
@@ -51,17 +52,81 @@ public class CsvBatchDataReader : IDataReader
 
     public bool Read()
     {
-        if (Current is null)
-            return false;
-
-        while (!Current.Read())
+        EnterRead();
+        try
         {
-            MoveNext();
             if (Current is null)
                 return false;
+
+            while (!Current.Read())
+            {
+                MoveNext();
+                if (Current is null)
+                    return false;
+            }
+            return true;
         }
-        return true;
+        finally
+        {
+            ExitRead();
+        }
     }
+
+    public async Task<bool> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        EnterRead();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Current is null)
+                return false;
+
+            while (!await Current.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await MoveNextAsync().ConfigureAwait(false);
+                if (Current is null)
+                    return false;
+            }
+            return true;
+        }
+        finally
+        {
+            ExitRead();
+        }
+    }
+
+    private async ValueTask MoveNextAsync()
+    {
+        fileCount++;
+        var fields = Current?.Fields;
+
+        if (Current is not null)
+            await Current.DisposeAsync().ConfigureAwait(false);
+        if (_currentStream is not null)
+            await _currentStream.DisposeAsync().ConfigureAwait(false);
+
+        if (Streams.MoveNext())
+        {
+            _currentStream = Streams.Current.Invoke();
+            Current = new CsvDataReader(_currentStream, Profile);
+        }
+        else
+        {
+            Current = null;
+            _currentStream = null;
+        }
+
+        if (Current is not null && fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
+            Current.SetHeaders(fields);
+    }
+
+    private void EnterRead()
+    {
+        if (Interlocked.CompareExchange(ref _readInProgress, 1, 0) != 0)
+            throw new InvalidOperationException("Concurrent Read and ReadAsync calls are not supported.");
+    }
+
+    private void ExitRead() => Volatile.Write(ref _readInProgress, 0);
 
     #region composite
     public int FieldCount => Current?.FieldCount ?? 0;
@@ -122,6 +187,26 @@ public class CsvBatchDataReader : IDataReader
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _isClosed = true;
+
+        if (Current is not null)
+            await Current.DisposeAsync().ConfigureAwait(false);
+        if (_currentStream is not null)
+            await _currentStream.DisposeAsync().ConfigureAwait(false);
+        if (_allStreamsOpen)
+        {
+            while (Streams.MoveNext())
+                await Streams.Current.Invoke().DisposeAsync().ConfigureAwait(false);
+        }
+        (Streams as IDisposable)?.Dispose();
         GC.SuppressFinalize(this);
     }
 

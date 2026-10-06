@@ -14,7 +14,7 @@ using PocketCsvReader.FieldParsing;
 using PocketCsvReader.Compression;
 
 namespace PocketCsvReader;
-public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P : IProfile
+public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader where P : IProfile
 {
     private bool _isClosed = false;
     private bool _initialized;
@@ -25,6 +25,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
     private StreamReader? StreamReader { get; set; }
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
+    private int _readInProgress;
 
     protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
@@ -57,7 +58,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
         FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
             ? new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding)
             : new EncodingInfo(Encoding.UTF8, -1);
-        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0);
+        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
         if (FileEncoding.BomBytesCount >= 0)
         {
             var bufferBOM = new char[1];
@@ -82,11 +83,84 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
 
     public bool Read()
     {
-        Initialize();
-        return !IsEof && ReadCore();
+        EnterRead();
+        try
+        {
+            Initialize();
+            return !IsEof && ReadCore();
+        }
+        finally
+        {
+            ExitRead();
+        }
     }
 
     protected abstract bool ReadCore();
+
+    public async Task<bool> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        EnterRead();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await InitializeAsync(cancellationToken).ConfigureAwait(false);
+            return !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ExitRead();
+        }
+    }
+
+    protected virtual ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(ReadCore());
+    }
+
+    private void EnterRead()
+    {
+        if (Interlocked.CompareExchange(ref _readInProgress, 1, 0) != 0)
+            throw new InvalidOperationException("Concurrent Read and ReadAsync calls are not supported.");
+    }
+
+    private void ExitRead() => Volatile.Write(ref _readInProgress, 0);
+
+    private async ValueTask InitializeAsync(CancellationToken cancellationToken)
+    {
+        if (_initialized)
+            return;
+
+        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+        {
+            var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
+            FileEncoding = new(encoding, -1);
+        }
+
+        if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
+        {
+            var factory = ((FileEncoding?.BomBytesCount ?? 0) < 0)
+                ? DecompressorFactory.Streaming()
+                : DecompressorFactory.Buffered();
+            var decompressor = factory.GetDecompressor(Profile.Resource.Compression);
+            ProcessedStream = decompressor.Decompress(RawStream);
+        }
+        else
+            ProcessedStream = RawStream;
+
+        FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
+            ? await new EncodingDetector().GetStreamEncodingAsync(ProcessedStream, Profile.Resource?.Encoding, cancellationToken).ConfigureAwait(false)
+            : new EncodingInfo(Encoding.UTF8, -1);
+
+        if (FileEncoding.BomBytesCount >= 0 && ProcessedStream.CanSeek)
+            ProcessedStream.Position = FileEncoding.BomBytesCount;
+
+        StreamReader = new StreamReader(ProcessedStream, FileEncoding.Encoding, FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
+        IsEof = false;
+        RowCount = 0;
+        RecordSource = CreateRecordSource(StreamReader, Profile);
+        _initialized = true;
+    }
 
     public int Depth => 1;
 
@@ -115,6 +189,20 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IDataReader where P
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        RecordSource?.Dispose();
+        StreamReader?.Dispose();
+        if (ProcessedStream is not null && ProcessedStream != RawStream)
+            await ProcessedStream.DisposeAsync().ConfigureAwait(false);
+        await RawStream.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 

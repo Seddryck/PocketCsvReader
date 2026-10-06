@@ -81,6 +81,48 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
         return true;
     }
 
+    protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    {
+        if (!_headerProcessed)
+        {
+            _headerProcessed = true;
+            if (Profile.Descriptor.Header)
+            {
+                var headerResult = await FixedWidthRecordSource.ReadAsync(cancellationToken).ConfigureAwait(false);
+                if (headerResult.Record.FieldSpans.Length == 0)
+                {
+                    IsEof = headerResult.IsEndOfFile;
+                    return false;
+                }
+
+                var headers = new string[Profile.Descriptor.Fields.Count];
+                for (var i = 0; i < headers.Length; i++)
+                {
+                    var field = Profile.Descriptor.Fields[i];
+                    headers[i] = TrimPadding(headerResult.Record.Slice(i).Span, field.Padding, field.PaddingChar).ToString();
+                }
+                Fields = headers;
+                if (headerResult.IsEndOfFile)
+                {
+                    IsEof = true;
+                    return false;
+                }
+            }
+        }
+
+        var result = await FixedWidthRecordSource.ReadAsync(cancellationToken).ConfigureAwait(false);
+        IsEof = result.IsEndOfFile;
+        if (result.Record.FieldSpans.Length == 0)
+        {
+            Record = RecordMemory.Empty;
+            return false;
+        }
+
+        Record = result.Record;
+        RowCount++;
+        return true;
+    }
+
     private void ValidateOrdinal(int i)
     {
         if (Record is null)

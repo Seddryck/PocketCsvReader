@@ -30,10 +30,10 @@ internal class StreamBuffer : IDisposable
         Pool = pool;
     }
 
-    public async Task ReadAsync()
+    public async ValueTask ReadAsync(CancellationToken cancellationToken = default)
     {
         _length = null;
-        _length = await Reader.ReadAsync(_arrayChar, 0, MaxLength);
+        _length = await Reader.ReadAsync(_arrayChar.AsMemory(0, MaxLength), cancellationToken).ConfigureAwait(false);
         IsEof = _length < MaxLength;
         Memory = _arrayChar.AsMemory(0, _length.Value);
     }
