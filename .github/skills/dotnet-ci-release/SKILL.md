@@ -51,6 +51,8 @@ Report a decision ledger before or alongside the proposed workflow:
 | Architectures | ... | ... | ... |
 | Package identities | ... | ... | ... |
 | Generated prerequisites | ... | ... | ... |
+| Release identities | ... | ... | ... |
+| Publishing destinations | ... | ... | ... |
 
 State useful negative evidence, such as no native interop, no runtime-specific dependency assets, or no documented macOS support. Be precise: `System.IO` is cross-platform, while specific filesystem, permission, casing, symlink, and path semantics may still justify multi-OS tests.
 
@@ -220,15 +222,21 @@ Remember that `dotnet pack` builds by default. Do not add an immediately precedi
 
 ### 5. Reserve release identities
 
-Only on the release event, refresh remote tags and re-evaluate versions against the tested commit. Confirm the checkout identifies the commit whose artifacts were built. Create tags only after every required package succeeds. Reuse a tag idempotently only when it identifies the expected commit.
+Only on the release event, refresh remote tags and re-evaluate versions against the tested commit. Confirm the checkout identifies the commit whose artifacts were built and that the recalculated versions match the immutable packaged artifacts. Create tags only after every required package succeeds. Reuse a tag idempotently only when it identifies the expected commit, and handle a concurrent creator only when the remote tag resolves to that same commit.
+
+Decide from repository evidence whether reservation belongs in its own job. A distinct version or tag job is justified when publication has multiple destinations, multiple independently versioned deliverables or tag namespaces, long or parallel packaging stages, queued releases, another tag-producing workflow, or a requirement for a visible version-integrity check. Keeping reservation inside one publish job is reasonable for a single version and destination when it intentionally provides sequential atomicity. Do not copy multi-version or concurrency logic into a simpler repository without corresponding evidence.
 
 ### 6. Publish
 
 Download package-job artifacts; do not rebuild. Revalidate the complete artifact set before the first external publication. Use least-privilege permissions and trusted publishing where available. Pull requests and ordinary branch builds must not publish.
 
+Treat each external destination—such as NuGet, a container registry, or a GitHub release—as a potential job boundary. Separate destinations when evidence shows different triggers, artifacts, credentials, permissions, retry behavior, release cadence, or a need for distinct check conclusions. Combining destinations is valid when the repository deliberately requires one sequential operation and accepts the combined permissions and retry scope.
+
+When destinations are separated, choose their dependency relationship explicitly. Parallel jobs improve isolation and allow independent retries but can leave a partial release. Make an announcement or GitHub release depend on registry publication when users must not see a release before its installable package is available. Grant each job only its destination-specific permissions; for example, NuGet trusted publishing needs an identity token, while GitHub release or discussion creation needs repository-content or discussion permissions rather than that token.
+
 ### 7. Release
 
-Create or update the release only after its tag exists. Upload validated artifacts with deterministic names. Encode any rule limiting release pages to selected semantic versions separately from package publication.
+Create or update the release only after its tag exists. Upload validated artifacts with deterministic names. Encode any rule limiting release pages to selected semantic versions separately from package publication. Preserve the repository's evidenced relationship between registry publication and release-page creation; do not assume that every published package requires a release page or that both operations share the same cadence.
 
 ## Avoid matrix explosions
 
