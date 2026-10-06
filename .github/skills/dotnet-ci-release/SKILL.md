@@ -210,6 +210,8 @@ Select one coverage driver that matches the active test platform and do not mix 
 
 Inspect the test SDK and effective `dotnet test` mode rather than assuming compatibility from package presence. Make runner selection and framework-adapter activation explicit in repository configuration. Exercise the exact CI coverage command locally and fail when the expected report is absent, duplicated, or below its required threshold. When the selected driver does not enforce thresholds itself, validate the generated report explicitly.
 
+When users need test failures and insufficient coverage to appear as different checks, do not enforce the coverage threshold inside the test command or matrix job. Let test jobs generate and retain reports, then evaluate those reports in a clearly named downstream threshold job. Keep coverage-service upload separate as well so a low-coverage result, a test failure, and an upload outage have distinct check conclusions.
+
 ### 4. Package
 
 Package only after relevant validation succeeds. Create each distributable once and upload it under a stable, collision-free artifact name. Validate contents, executable names, manifests, archive formats, permissions, installers, and expected counts.
