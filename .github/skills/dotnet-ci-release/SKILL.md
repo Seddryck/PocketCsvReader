@@ -200,6 +200,16 @@ Set up SDKs and caches using project or lock files as cache keys. Run cheap sour
 
 Restore deterministically, preferring locked mode for release inputs. Build before testing, then use `--no-build` and `--no-restore` or their equivalents. Matrix dimensions must correspond to compilation, dependency, or behavior differences. Give every entry a descriptive name and unique coverage identity.
 
+Prefer a workflow-native matrix with direct build and test commands when the project, target-framework, runner, or architecture dimensions are stable and enumerable. Do not hide those dimensions in a wrapper script whose main purpose is nested iteration. A script remains appropriate for substantial reusable logic, but the workflow should still expose the dimensions that determine job isolation, status, retry scope, and artifact identity.
+
+Select one coverage driver that matches the active test platform and do not mix drivers in the same test project:
+
+- use `coverlet.collector` with `dotnet test --collect:"XPlat Code Coverage"` in VSTest mode;
+- use `coverlet.MTP` for Microsoft Testing Platform and pass its extension arguments after the `--` separator, for example `dotnet test --project <project> -- --coverlet`;
+- avoid `coverlet.msbuild` when the test host can be terminated before its process-exit hit-file flush, and never use it with MTP v2.
+
+Inspect the test SDK and effective `dotnet test` mode rather than assuming compatibility from package presence. Make runner selection and framework-adapter activation explicit in repository configuration. Exercise the exact CI coverage command locally and fail when the expected report is absent, duplicated, or below its required threshold. When the selected driver does not enforce thresholds itself, validate the generated report explicitly.
+
 ### 4. Package
 
 Package only after relevant validation succeeds. Create each distributable once and upload it under a stable, collision-free artifact name. Validate contents, executable names, manifests, archive formats, permissions, installers, and expected counts.
