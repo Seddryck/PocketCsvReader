@@ -51,6 +51,22 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
         return true;
     }
 
+    protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    {
+        var result = await Source.ReadAsync(cancellationToken).ConfigureAwait(false);
+        IsEof = result.IsEndOfFile;
+        Fields = Source.Fields;
+        if (result.Record.FieldSpans.Length == 0)
+        {
+            Record = RecordMemory.Empty;
+            return false;
+        }
+
+        Record = result.Record;
+        RowCount++;
+        return true;
+    }
+
     private void ValidateOrdinal(int i)
     {
         if (Record is null)

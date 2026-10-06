@@ -3,7 +3,7 @@ title: IDataReader API
 tags: [quick-start]
 ---
 
-The [`IDataReader` interface](https://learn.microsoft.com/en-us/dotnet/api/system.data.idatareader?view=net-9.0) is a .NET interface designed to provide a way to read a forward-only stream of rows from a data source. This model is particularly efficient for memory usage because it reads one row at a time and does not buffer the entire result set.
+The [`IDataReader` interface](https://learn.microsoft.com/en-us/dotnet/api/system.data.idatareader?view=net-9.0) is a .NET interface designed to provide a way to read a forward-only stream of rows from a data source. This model is particularly efficient for memory usage because it reads one row at a time and does not buffer the entire result set. `IDataReader` only defines synchronous advancement; PocketCsvReader data readers additionally implement `IAsyncDataReader` for asynchronous advancement and disposal.
 
 This behavior matches the use case for reading delimited files, where you typically want to iterate through rows sequentially.
 
@@ -32,11 +32,25 @@ while (reader.Read())
 }
 ```
 
+For streams backed by files, networks, or cloud storage, use `ReadAsync`. The cancellation token is forwarded to the underlying stream operations.
+
+```csharp
+await using var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+await using var reader = new CsvReader(profile).ToDataReader(stream);
+while (await reader.ReadAsync(cancellationToken))
+{
+    Console.WriteLine(reader.GetInt32(0));
+    Console.WriteLine(reader.GetString(1));
+}
+```
+
+Typed getters remain synchronous: once `ReadAsync` completes, the current record is buffered and parsed in memory. Do not call `Read` and `ReadAsync` concurrently on the same reader.
+
 ## Reading Values with IDataReader
 
 ### Iterating Over Records
 
-Use the `Read()` method to advance to the next row. It returns `true` if another row is available, and `false` once the end of the stream is reached.
+Use `Read()` for synchronous advancement or `ReadAsync(CancellationToken)` for asynchronous advancement. Both return `true` if another row is available and `false` once the end of the stream is reached.
 
 ### Accessing Typed Field Values
 

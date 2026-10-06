@@ -69,6 +69,37 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
         }
     }
 
+    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        if (_completed)
+            return new(true, RecordMemory.Empty, RecordState.Eof);
+
+        while (true)
+        {
+            var line = await _reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            if (line is null)
+            {
+                _completed = true;
+                return new(true, RecordMemory.Empty, RecordState.Eof);
+            }
+
+            _lineNumber++;
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            if (Profile.Format == WebLogFormat.W3cExtended && line.StartsWith('#'))
+            {
+                ParseDirective(line);
+                continue;
+            }
+
+            var spans = Profile.Format == WebLogFormat.Common
+                ? ParseCommon(line)
+                : ParseW3c(line);
+            return new(false, new RecordMemory(line, spans), RecordState.Record);
+        }
+    }
+
     private void ParseDirective(string line)
     {
         var separator = line.IndexOf(':');

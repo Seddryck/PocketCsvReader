@@ -62,6 +62,9 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     /// <returns><c>true</c> if a new record was read; <c>false</c> if the end of the file has been reached.</returns>
     protected override bool ReadCore() => ReadRow();
 
+    protected override ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+        => ReadRowAsync(cancellationToken);
+
     /// <summary>
     /// Reads the next non-comment CSV row, handling headers and end-of-file conditions as needed.
     /// </summary>
@@ -92,6 +95,36 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.FieldSpans!.Length)], "field_");
 
         Record = rawRecord.AsMemory();
+        HandleUnexpectedFields(Fields!.Length);
+        return true;
+    }
+
+    protected virtual async ValueTask<bool> ReadRowAsync(CancellationToken cancellationToken)
+    {
+        var firstRow = RowCount == 0;
+        if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
+            RegisterHeader(await RecordParser.ReadHeadersAsync(cancellationToken).ConfigureAwait(false), "field_");
+
+        RecordReadResult result;
+        do
+        {
+            if (IsEof)
+                return false;
+
+            result = await RecordParser.ReadAsync(cancellationToken).ConfigureAwait(false);
+            IsEof = result.IsEndOfFile;
+            if (IsEof && (result.Record.FieldSpans?.Length ?? 0) == 0)
+            {
+                Record = RecordMemory.Empty;
+                return false;
+            }
+            RowCount++;
+        } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || result.State == RecordState.Comment);
+
+        if (firstRow && (Fields?.Length ?? 0) == 0)
+            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.FieldSpans!.Length)], "field_");
+
+        Record = result.Record;
         HandleUnexpectedFields(Fields!.Length);
         return true;
     }

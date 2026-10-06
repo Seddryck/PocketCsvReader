@@ -8,6 +8,24 @@ namespace PocketCsvReader.FixedWidth.Testing;
 public class FixedWidthReaderTest
 {
     [Test]
+    public async Task DataReader_ReadAsync_AdvancesAndExposesTypedValues()
+    {
+        await using var reader = new FixedWidthReaderBuilder()
+            .WithLineTerminator("\n")
+            .WithField("Id", 0, 3, FixedWidthPadding.Left, '0')
+            .WithField("Name", 3, 3, FixedWidthPadding.None)
+            .WithSchema(schema => schema.Indexed().WithField<int>().WithField<string>())
+            .Build()
+            .ToDataReader(Text("001Ada\n002Bob"));
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(1));
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetString(1), Is.EqualTo("Bob"));
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
     public void Builder_CommonConfiguration_PreservesFixedWidthFluentType()
     {
         var builder = new FixedWidthReaderBuilder()

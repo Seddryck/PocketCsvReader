@@ -170,7 +170,7 @@ DataTable dataTable = csvReader.ToDataTable(stream);
 
 ### Accessing Data with `IDataReader`
 
-The `ToDataReader` method provides a forward-only, read-only `CsvDataReader` implementing `IDataReader` for processing large files efficiently.
+The `ToDataReader` method provides a forward-only, read-only `CsvDataReader` implementing `IDataReader` for processing large files efficiently. `IDataReader` itself is synchronous; PocketCsvReader readers also implement `IAsyncDataReader` when asynchronous stream I/O is needed.
 
 ```csharp
 using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
@@ -179,7 +179,19 @@ while (reader.Read())
 {
     Console.WriteLine(reader[0]); // Access the first column of the current row.
     Console.WriteLine(reader.GetDateTime(1)); // Access the second column of the current row as an object boxing a DateTime.
-    Console.WriteLine(reader.GetFieldValue<DateOnly>(2); // Access the third column of the current row as DateOnly.
+    Console.WriteLine(reader.GetFieldValue<DateOnly>(2)); // Access the third column of the current row as DateOnly.
+}
+```
+
+Asynchronous advancement uses the underlying stream's asynchronous operations and accepts a cancellation token. Field getters remain synchronous because the current record is already buffered after `ReadAsync` completes.
+
+```csharp
+await using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+await using var reader = csvReader.ToDataReader(stream);
+while (await reader.ReadAsync(cancellationToken))
+{
+    Console.WriteLine(reader.GetInt32(0));
+    Console.WriteLine(reader.GetString(1));
 }
 ```
 

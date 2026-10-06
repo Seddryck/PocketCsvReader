@@ -169,6 +169,120 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     }
 
     /// <summary>
+    /// Asynchronously parses the next record, using asynchronous reads whenever
+    /// more input is required.
+    /// </summary>
+    public virtual async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        var index = 0;
+        var eof = false;
+        var fieldCount = 0;
+        EnsureFieldCapacity(FieldsCount ?? 20);
+        var longMemory = ReadOnlyMemory<char>.Empty;
+        var longSpanLength = 0;
+
+        if (Buffer.Length == 0)
+        {
+            if (!Reader.IsEof)
+                Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            eof = Buffer.Length == 0;
+        }
+
+        if (eof)
+            return new(true, RecordMemory.Empty, RecordState.Eof);
+
+        var bufferSize = Buffer.Length;
+        while (!eof && index < bufferSize)
+        {
+            var c = Buffer.Span[index];
+            var state = FieldParser.Parse(c, index + longSpanLength);
+            if (state == ParserState.Reprocess)
+                continue;
+            if (state == ParserState.Field || state == ParserState.Record || state == ParserState.Header)
+            {
+                AddField(ref fieldCount, FieldParser.Result);
+                FieldParser.Reset(state != ParserState.Field);
+
+                if (state == ParserState.Record || state == ParserState.Header)
+                {
+                    var recordBuffer = Buffer;
+                    Buffer = Buffer.Slice(index + 1);
+                    FieldsCount ??= fieldCount;
+                    var record = CreateRecordSpan(
+                        longMemory.Length > 0 ? Concat(longMemory, recordBuffer) : recordBuffer,
+                        CopyFields(fieldCount));
+                    _recordNumber++;
+                    return new(false, record.AsMemory(), RecordState.Record);
+                }
+            }
+            else if (state == ParserState.Comment)
+            {
+                FieldParser.Reset(true);
+                Buffer = Buffer.Slice(index + 1);
+                return new(false, RecordMemory.Empty, RecordState.Comment);
+            }
+            else if (state == ParserState.Error)
+            {
+                var exception = new InvalidDataException($"Invalid character '{c}' at position {index}.");
+                var action = GetBadDataAction(exception, c.ToString(), index + longSpanLength, fieldCount);
+                if (action == BadDataAction.Stop)
+                {
+                    Buffer = ReadOnlyMemory<char>.Empty;
+                    return new(true, RecordMemory.Empty, RecordState.Eof);
+                }
+                if (action == BadDataAction.SkipRecord)
+                {
+                    var reachedEof = await SkipMalformedRecordAsync(index + 1, cancellationToken).ConfigureAwait(false);
+                    FieldParser.Reset(true);
+                    return new(reachedEof, RecordMemory.Empty, reachedEof ? RecordState.Eof : RecordState.Comment);
+                }
+                if (action != BadDataAction.ReturnPartialRecord)
+                    throw exception;
+            }
+
+            if (++index == bufferSize)
+            {
+                if (state == ParserState.Continue || state == ParserState.Field)
+                {
+                    longMemory = Concat(longMemory, Buffer);
+                    longSpanLength = longMemory.Length;
+                }
+
+                if (!Reader.IsEof)
+                {
+                    Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    bufferSize = Buffer.Length;
+                    eof = bufferSize == 0;
+                    index = 0;
+                }
+                else
+                {
+                    bufferSize = 0;
+                    eof = true;
+                }
+            }
+        }
+
+        switch (FieldParser.ParseEof(longMemory.Length))
+        {
+            case ParserState.Header:
+            case ParserState.Record:
+                AddField(ref fieldCount, FieldParser.Result);
+                var record = CreateRecordSpan(
+                    longMemory.Length > 0 ? Concat(longMemory, Buffer) : Buffer,
+                    CopyFields(fieldCount));
+                _recordNumber++;
+                return new(true, record.AsMemory(), RecordState.Record);
+            case ParserState.Eof:
+                return new(true, RecordMemory.Empty, RecordState.Eof);
+            case ParserState.Error:
+                throw new InvalidDataException("Invalid character End-of-File.");
+            default:
+                throw new InvalidOperationException("Invalid state at end-of-file.");
+        }
+    }
+
+    /// <summary>
         /// Creates a <see cref="RecordSpan"/> from the specified character span and array of field spans.
         /// </summary>
         /// <param name="span">The span of characters representing the entire record.</param>
@@ -242,6 +356,37 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
                 return true;
             }
             candidate = Reader.Read();
+            Buffer = candidate;
+            index = 0;
+        }
+    }
+
+    private async ValueTask<bool> SkipMalformedRecordAsync(int startIndex, CancellationToken cancellationToken)
+    {
+        var terminator = (Profile as CsvProfile)!.Dialect.LineTerminator;
+        var candidate = Buffer;
+        var index = startIndex;
+        var matched = 0;
+        while (true)
+        {
+            while (index < candidate.Length)
+            {
+                var c = candidate.Span[index++];
+                matched = c == terminator[matched] ? matched + 1 : c == terminator[0] ? 1 : 0;
+                if (matched == terminator.Length)
+                {
+                    Buffer = candidate.Slice(index);
+                    _recordNumber++;
+                    return false;
+                }
+            }
+            if (Reader.IsEof)
+            {
+                Buffer = ReadOnlyMemory<char>.Empty;
+                _recordNumber++;
+                return true;
+            }
+            candidate = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
             Buffer = candidate;
             index = 0;
         }

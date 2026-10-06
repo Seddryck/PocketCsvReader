@@ -20,6 +20,12 @@ public class SingleBuffer : IBufferReader
         return _streamBuffer.Memory;
     }
 
+    public async ValueTask<ReadOnlyMemory<char>> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        await _streamBuffer.ReadAsync(cancellationToken).ConfigureAwait(false);
+        return _streamBuffer.Memory;
+    }
+
     public bool IsEof => _streamBuffer.IsEof;
 
     public void Reset()

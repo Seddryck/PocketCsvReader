@@ -27,5 +27,15 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>
         return _reader.Peek() < 0;
     }
 
+    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        var line = await _reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+        if (line is null)
+            return new(true, RecordMemory.Empty, RecordState.Eof);
+
+        var fields = KeyValueRecordParser.Parse(line, Profile.Format);
+        return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
+    }
+
     public void Dispose() { }
 }

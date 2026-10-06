@@ -70,6 +70,31 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     }
 
     /// <summary>
+    /// Asynchronously reads the configured CSV header rows.
+    /// </summary>
+    public virtual async ValueTask<string[][]> ReadHeadersAsync(CancellationToken cancellationToken = default)
+    {
+        if (!Profile.Dialect.Header)
+            return [];
+
+        var headerList = new List<string[]>();
+        var rowCount = 1;
+        while (rowCount <= Profile.Dialect.HeaderRows.Max())
+        {
+            var result = await ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (Profile.Dialect.HeaderRows.Contains(rowCount))
+            {
+                var fields = new string[result.Record.FieldSpans.Length];
+                for (var index = 0; index < fields.Length; index++)
+                    fields[index] = result.Record.Slice(index).ToString();
+                headerList.Add(fields);
+            }
+            rowCount++;
+        }
+        return [.. headerList];
+    }
+
+    /// <summary>
     /// Returns the total number of CSV records, or null if row counting is not supported by the profile.
     /// </summary>
     /// <returns>The number of records, excluding headers, or null if counting is not enabled.</returns>

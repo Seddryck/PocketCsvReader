@@ -33,7 +33,23 @@ internal class DoubleBuffer : IBufferReader
             ReadAhead.Wait();
             SwitchBuffers();
         }
-        ReadAhead = ReadAheadBuffer.ReadAsync();
+        ReadAhead = ReadAheadBuffer.ReadAsync().AsTask();
+        return CurrentBuffer.Memory;
+    }
+
+    public async ValueTask<ReadOnlyMemory<char>> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        if (CurrentBuffer.IsEof)
+            throw new InvalidOperationException();
+
+        if (ReadAhead is null)
+            await CurrentBuffer.ReadAsync(cancellationToken).ConfigureAwait(false);
+        else
+        {
+            await ReadAhead.WaitAsync(cancellationToken).ConfigureAwait(false);
+            SwitchBuffers();
+            ReadAhead = null;
+        }
         return CurrentBuffer.Memory;
     }
 
