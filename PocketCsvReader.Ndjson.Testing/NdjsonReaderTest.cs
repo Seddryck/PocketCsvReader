@@ -15,6 +15,16 @@ namespace PocketCsvReader.Ndjson.Testing;
 public class NdjsonReaderTest
 {
     [Test]
+    public async Task ToDbDataReader_ExposesNdjsonRecords()
+    {
+        await using var reader = new NdjsonReader(new NdjsonProfile("\n"))
+            .ToDbDataReader(new MemoryStream(Encoding.UTF8.GetBytes("{\"id\":1}")));
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task ToDataReader_ReadAsync_AdvancesAndExposesValues()
     {
         await using var reader = new NdjsonReader(new NdjsonProfile("\n"))

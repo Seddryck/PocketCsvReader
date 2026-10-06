@@ -183,11 +183,11 @@ while (reader.Read())
 }
 ```
 
-Asynchronous advancement uses the underlying stream's asynchronous operations and accepts a cancellation token. Field getters remain synchronous because the current record is already buffered after `ReadAsync` completes.
+For consumers built around the standard `DbDataReader` abstraction, use `ToDbDataReader`. It is supported by every PocketCsvReader format and by CSV batch readers. Asynchronous advancement uses the underlying stream's asynchronous operations and accepts a cancellation token. Field getters remain synchronous because the current record is already buffered after `ReadAsync` completes.
 
 ```csharp
 await using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-await using var reader = csvReader.ToDataReader(stream);
+await using DbDataReader reader = csvReader.ToDbDataReader(stream);
 while (await reader.ReadAsync(cancellationToken))
 {
     Console.WriteLine(reader.GetInt32(0));

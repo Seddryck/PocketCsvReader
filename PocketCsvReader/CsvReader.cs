@@ -176,6 +176,15 @@ namespace PocketCsvReader
             return new CsvBatchDataReader(openers, Profile);
         }
 
+        public System.Data.Common.DbDataReader ToDbDataReader(string[] filenames)
+            => new DbDataReaderAdapter(ToDataReader(filenames));
+
+        public System.Data.Common.DbDataReader ToDbDataReader(IEnumerable<Stream> streams)
+            => new DbDataReaderAdapter(ToDataReader(streams));
+
+        public System.Data.Common.DbDataReader ToDbDataReader(IEnumerable<Func<Stream>> openers)
+            => new DbDataReaderAdapter(ToDataReader(openers));
+
         /// <summary>
         /// Reads a CSV file and maps its records into objects of type <typeparamref name="T"/>.
         /// </summary>

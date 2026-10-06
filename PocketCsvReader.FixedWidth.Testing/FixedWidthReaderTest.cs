@@ -8,6 +8,19 @@ namespace PocketCsvReader.FixedWidth.Testing;
 public class FixedWidthReaderTest
 {
     [Test]
+    public async Task ToDbDataReader_ExposesFixedWidthRecords()
+    {
+        await using var reader = new FixedWidthReaderBuilder()
+            .WithLineTerminator("\n")
+            .WithField("Id", 0, 3, FixedWidthPadding.Left, '0')
+            .Build()
+            .ToDbDataReader(Text("001\n"));
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task DataReader_ReadAsync_AdvancesAndExposesTypedValues()
     {
         await using var reader = new FixedWidthReaderBuilder()
