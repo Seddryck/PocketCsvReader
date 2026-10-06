@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Data;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace PocketCsvReader
@@ -245,6 +246,66 @@ namespace PocketCsvReader
                 foreach (var value in reader.Read())
                     yield return value;
             }
+        }
+
+        /// <summary>
+        /// Asynchronously streams CSV records from a file and maps them to objects of type
+        /// <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of objects to map the CSV records to.</typeparam>
+        /// <param name="filename">The full path of the CSV file to read.</param>
+        /// <param name="spanMapper">
+        /// An optional delegate for mapping CSV fields to object properties. If null, the same
+        /// constructor-based mapping as <see cref="To{T}(string, SpanMapper{T}?)"/> is used.
+        /// </param>
+        /// <param name="cancellationToken">A token used to cancel asynchronous input reads.</param>
+        /// <returns>A lazy, forward-only asynchronous sequence of mapped records.</returns>
+        /// <remarks>
+        /// The file is opened when enumeration starts and is closed when enumeration completes,
+        /// is cancelled, fails, or the enumerator is disposed.
+        /// </remarks>
+        public async IAsyncEnumerable<T> ToAsync<T>(
+            string filename,
+            SpanMapper<T>? spanMapper = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            CheckFileExists(filename);
+            await using var stream = new FileStream(
+                filename, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize, useAsync: true);
+            await using var reader = new CsvDataReader(stream, Profile, leaveOpen: true);
+            var mapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                yield return reader.MapCurrent(mapper);
+        }
+
+        /// <summary>
+        /// Asynchronously streams CSV records from a stream and maps them to objects of type
+        /// <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of objects to map the CSV records to.</typeparam>
+        /// <param name="stream">A readable stream positioned at the start of the CSV content.</param>
+        /// <param name="spanMapper">
+        /// An optional delegate for mapping CSV fields to object properties. If null, the same
+        /// constructor-based mapping as <see cref="To{T}(Stream, SpanMapper{T}?)"/> is used.
+        /// </param>
+        /// <param name="cancellationToken">A token used to cancel asynchronous input reads.</param>
+        /// <returns>A lazy, forward-only asynchronous sequence of mapped records.</returns>
+        /// <remarks>
+        /// The caller retains ownership of <paramref name="stream"/>. The stream is not closed when
+        /// enumeration completes, is cancelled, fails, or the enumerator is disposed.
+        /// </remarks>
+        public async IAsyncEnumerable<T> ToAsync<T>(
+            Stream stream,
+            SpanMapper<T>? spanMapper = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            await using var reader = new CsvDataReader(stream, Profile, leaveOpen: true);
+            var mapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                yield return reader.MapCurrent(mapper);
         }
     }
 }

@@ -140,6 +140,19 @@ foreach (var person in people)
 }
 ```
 
+#### Asynchronous Strongly-Typed Streaming
+
+Use `ToAsync<T>` when records should be mapped one at a time while the underlying input is read asynchronously:
+
+```csharp
+await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellationToken: cancellationToken))
+{
+    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
+}
+```
+
+The sequence is lazy, forward-only, and uses the same parser, mapping, profile, and bad-data behavior as the synchronous API. Cancellation is forwarded to the underlying asynchronous I/O. File inputs are closed when enumeration ends; caller-provided streams are left open.
+
 ## Error Handling
 
 The following exceptions may be thrown:

@@ -226,3 +226,14 @@ foreach (var person in people)
 }
 ```
 
+Use `ToAsync<T>` to stream the same strongly typed records with asynchronous input reads. It is lazy and forward-only, so records are mapped one at a time rather than buffering the complete input.
+
+```csharp
+await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellationToken: cancellationToken))
+{
+    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
+}
+```
+
+`ToAsync<T>` uses the same asynchronous reader and parser infrastructure as `ReadAsync`, including profiles, headers, bad-data handling, buffer-boundary handling, and cancellation. A file passed by name is opened on enumeration and closed with the enumerator. A caller-provided stream remains owned by the caller and is left open.
+
