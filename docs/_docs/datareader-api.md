@@ -48,6 +48,8 @@ Typed getters remain synchronous: once `ReadAsync` completes, the current record
 
 `ReadAsync` performs asynchronous stream I/O and forwards cancellation. `CloseAsync` and `DisposeAsync` asynchronously release the underlying reader and stream. `HasRows` may read and buffer the first record; the following `Read` or `ReadAsync` still returns that record.
 
+For strongly typed CSV consumers, `CsvReader.ToAsync<T>` builds on this same asynchronous reader and parser path and exposes it directly as `IAsyncEnumerable<T>`. Use `await foreach` when you want record mapping without managing a data reader; use `ToDbDataReader` when an ADO.NET-compatible consumer needs field-by-field access.
+
 ## Reading Values with IDataReader
 
 ### Iterating Over Records

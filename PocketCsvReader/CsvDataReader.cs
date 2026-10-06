@@ -11,8 +11,19 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     protected new RecordParser RecordParser => (RecordParser)base.RecordParser!;
 
     public CsvDataReader(Stream stream, CsvProfile profile)
-        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString))
+        : this(stream, profile, leaveOpen: false)
     { }
+
+    internal CsvDataReader(Stream stream, CsvProfile profile, bool leaveOpen)
+        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString), leaveOpen)
+    { }
+
+    internal T MapCurrent<T>(SpanMapper<T> mapper)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        var record = Record ?? throw new InvalidOperationException("No current record is available.");
+        return mapper(record.Span.Span, record.FieldSpans);
+    }
 
     protected override BaseRecordParser<CsvProfile> CreateRecordParser(StreamReader reader, CsvProfile profile)
         => new RecordParser(reader, profile);

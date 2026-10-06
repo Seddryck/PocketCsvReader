@@ -23,14 +23,16 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
     private Stream RawStream { get; }
     private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
+    private bool LeaveOpen { get; }
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
     private int _readInProgress;
 
-    protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper)
+    protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper, bool leaveOpen = false)
         : base(profile, stringMapper)
     {
         RawStream = stream;
+        LeaveOpen = leaveOpen;
     }
 
     public void Initialize()
@@ -179,9 +181,10 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
             _isClosed = true;
             RecordSource?.Dispose();
             StreamReader?.Dispose();
-            ProcessedStream?.Dispose();
-            if (ProcessedStream != RawStream)
-                RawStream?.Dispose();
+            if (ProcessedStream is not null && ProcessedStream != RawStream)
+                ProcessedStream.Dispose();
+            if (!LeaveOpen)
+                RawStream.Dispose();
         }
     }
 
@@ -202,7 +205,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         StreamReader?.Dispose();
         if (ProcessedStream is not null && ProcessedStream != RawStream)
             await ProcessedStream.DisposeAsync().ConfigureAwait(false);
-        await RawStream.DisposeAsync().ConfigureAwait(false);
+        if (!LeaveOpen)
+            await RawStream.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 
@@ -216,8 +220,10 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
             // free managed resources
             RecordSource?.Dispose();
             StreamReader?.Dispose();
-            RawStream?.Dispose();
-            ProcessedStream?.Dispose();
+            if (ProcessedStream is not null && ProcessedStream != RawStream)
+                ProcessedStream.Dispose();
+            if (!LeaveOpen)
+                RawStream.Dispose();
         }
     }
     ~BaseDataReader()
