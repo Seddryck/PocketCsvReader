@@ -46,13 +46,143 @@ jobs:
           configFilePath: GitVersion.yml
           verbosity: minimal
 
-  build-test-package:
-    name: Build, test, and package
+  test:
+    name: Test ${{ matrix.test.name }} (${{ matrix.framework }})
     needs: version
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        framework:
+          - net8.0
+          - net9.0
+          - net10.0
+        test:
+          - name: PocketCsvReader
+            artifact: core
+            project: PocketCsvReader.Testing/PocketCsvReader.Testing.csproj
+            include: '[PocketCsvReader]*'
+          - name: PocketCsvReader.Ndjson
+            artifact: ndjson
+            project: PocketCsvReader.Ndjson.Testing/PocketCsvReader.Ndjson.Testing.csproj
+            include: '[PocketCsvReader*]*'
+          - name: PocketCsvReader.FixedWidth
+            artifact: fixed-width
+            project: PocketCsvReader.FixedWidth.Testing/PocketCsvReader.FixedWidth.Testing.csproj
+            include: '[PocketCsvReader.FixedWidth]*'
+          - name: PocketCsvReader.KeyValue
+            artifact: key-value
+            project: PocketCsvReader.KeyValue.Testing/PocketCsvReader.KeyValue.Testing.csproj
+            include: '[PocketCsvReader.KeyValue]*'
+          - name: PocketCsvReader.WebLogs
+            artifact: web-logs
+            project: PocketCsvReader.WebLogs.Testing/PocketCsvReader.WebLogs.Testing.csproj
+            include: '[PocketCsvReader.WebLogs]*'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install .NET SDKs and runtimes
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore ${{ matrix.test.project }} --nologo
+
+      - name: Build
+        run: >-
+          dotnet build ${{ matrix.test.project }}
+          --configuration Release
+          --framework ${{ matrix.framework }}
+          --no-restore
+          --nologo
+          -p:ContinuousIntegrationBuild=true
+          -p:Version=${{ needs.version.outputs.semVer }}
+
+      - name: Test
+        shell: pwsh
+        run: >-
+          dotnet test
+          --project ${{ matrix.test.project }}
+          --configuration Release
+          --framework ${{ matrix.framework }}
+          --no-build
+          --results-directory artifacts/test-results
+          --
+          --report-trx
+          --report-trx-filename "${{ matrix.test.name }}.${{ matrix.framework }}.trx"
+          --coverlet
+          --coverlet-output-format cobertura
+          --coverlet-include "${{ matrix.test.include }}"
+          --coverlet-threshold 10
+          --coverlet-threshold-type line
+
+      - name: Normalize and validate coverage
+        shell: pwsh
+        env:
+          COVERAGE_NAME: ${{ matrix.test.name }}.${{ matrix.framework }}.cobertura.xml
+        run: |
+          $coverageFiles = @(Get-ChildItem artifacts/test-results -Recurse -Filter *.cobertura.*.xml -File)
+          if ($coverageFiles.Count -ne 1) {
+            throw "Expected one coverage report, found $($coverageFiles.Count)."
+          }
+
+          [xml]$report = Get-Content -LiteralPath $coverageFiles[0].FullName
+          $lineRate = [double]::Parse(
+            [string]$report.coverage.'line-rate',
+            [Globalization.CultureInfo]::InvariantCulture)
+          if ($lineRate -lt 0.10) {
+            throw "Line coverage $($lineRate * 100)% is below the required 10%."
+          }
+
+          New-Item -ItemType Directory -Force artifacts/coverage | Out-Null
+          Copy-Item -LiteralPath $coverageFiles[0].FullName -Destination "artifacts/coverage/$env:COVERAGE_NAME"
+
+      - name: Retain test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.test.artifact }}-${{ matrix.framework }}
+          path: |
+            artifacts/coverage
+            artifacts/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  coverage:
+    name: Upload coverage
+    needs: test
     runs-on: windows-2025
     permissions:
       contents: read
       id-token: write
+    steps:
+      - name: Download coverage results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-results-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: artifacts/coverage/*.xml
+          use_oidc: true
+
+  package:
+    name: Package
+    needs:
+      - version
+      - coverage
+    runs-on: windows-2025
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -76,19 +206,6 @@ jobs:
           --nologo
           -p:ContinuousIntegrationBuild=true
           -p:Version=${{ needs.version.outputs.semVer }}
-
-      - name: Test every supported target framework
-        shell: pwsh
-        run: .github/scripts/Invoke-Tests.ps1
-
-      - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        with:
-          disable_search: true
-          fail_ci_if_error: true
-          files: artifacts/coverage/*.xml
-          use_oidc: true
 
       - name: Pack NuGet packages
         shell: pwsh
@@ -123,17 +240,6 @@ jobs:
           -Version '${{ needs.version.outputs.semVer }}'
           -PackageDirectory artifacts/packages
 
-      - name: Retain test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-${{ needs.version.outputs.semVer }}
-          path: |
-            artifacts/coverage
-            artifacts/test-results
-          if-no-files-found: ignore
-          retention-days: 14
-
       - name: Upload immutable NuGet packages
         uses: actions/upload-artifact@v7
         with:
@@ -147,7 +253,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - version
-      - build-test-package
+      - package
     runs-on: windows-2025
     permissions:
       contents: write
