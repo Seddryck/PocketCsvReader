@@ -1,5 +1,25 @@
 # Changelog page source
 
+- title: Asynchronous data access
+  label:
+  date: Oct 6, 2026
+  list:
+  - '<a href="https://github.com/Seddryck/PocketCsvReader/commit/9561b0d32f9646e3dc585e1f79b09f503166f662">Asynchronous data reader advancement</a> (<a href="https://github.com/Seddryck/PocketCsvReader/pull/301">#301</a>)'
+  - '<a href="https://github.com/Seddryck/PocketCsvReader/issues/310">Expose readers through the standard DbDataReader abstraction (#310)</a>'
+
+- title: Log format readers
+  label:
+  date: Sep 30, 2026
+  list:
+  - '<a href="https://github.com/Seddryck/PocketCsvReader/commit/71771dfe44fbef3e3f113fb2789e7cd8c86c98e9">Support LTSV and logfmt records</a>'
+  - '<a href="https://github.com/Seddryck/PocketCsvReader/commit/e98e061e4aa22c6b144fedfbb1380faf7a975afa">Add web log format readers</a>'
+
+- title: Batch reader streams
+  label:
+  date: Apr 29, 2025
+  list:
+  - '<a href="https://github.com/Seddryck/PocketCsvReader/commit/3a3241ccb2cc638b24ae6b33107b345ed31386af">BatchCsvReader accepts functions returning streams</a> (<a href="https://github.com/Seddryck/PocketCsvReader/pull/169">#169</a>)'
+
 - title: To&lt;T&gt; support
   label:
   date: Nov 30, 2024
