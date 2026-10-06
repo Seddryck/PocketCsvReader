@@ -216,41 +216,30 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     }
 
     private void ReadComposite(StringBuilder builder)
-    {
-        var stack = new Stack<char>();
-        stack.Push(builder[0]);
-        var inString = false;
-        var escaping = false;
+        => ReadCompositeCoreAsync(builder, false, default).GetAwaiter().GetResult();
 
-        while (stack.Count > 0)
+    private ValueTask ReadCompositeAsync(StringBuilder builder, CancellationToken cancellationToken)
+        => ReadCompositeCoreAsync(builder, true, cancellationToken);
+
+    private async ValueTask ReadCompositeCoreAsync(
+        StringBuilder builder,
+        bool asynchronous,
+        CancellationToken cancellationToken)
+    {
+        var scanner = new CompositeScanner(builder[0]);
+
+        while (!scanner.IsComplete)
         {
-            var next = ReadCharacter();
+            var next = asynchronous
+                ? await ReadCharacterAsync(cancellationToken).ConfigureAwait(false)
+                : ReadCharacter();
             if (next < 0)
                 throw Error("The JSON value is incomplete");
 
             var current = (char)next;
             builder.Append(current);
-            if (inString)
-            {
-                if (escaping)
-                    escaping = false;
-                else if (current == '\\')
-                    escaping = true;
-                else if (current == '"')
-                    inString = false;
-                continue;
-            }
-
-            if (current == '"')
-                inString = true;
-            else if (current is '{' or '[')
-                stack.Push(current);
-            else if (current is '}' or ']')
-            {
-                var opening = stack.Pop();
-                if ((opening == '{' && current != '}') || (opening == '[' && current != ']'))
-                    throw Error($"Unexpected character '{current}'");
-            }
+            if (!scanner.Accept(current))
+                throw Error($"Unexpected character '{current}'");
         }
     }
 
@@ -271,45 +260,6 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
                 escaping = true;
             else if (current == '"')
                 return;
-        }
-    }
-
-    private async ValueTask ReadCompositeAsync(StringBuilder builder, CancellationToken cancellationToken)
-    {
-        var stack = new Stack<char>();
-        stack.Push(builder[0]);
-        var inString = false;
-        var escaping = false;
-
-        while (stack.Count > 0)
-        {
-            var next = await ReadCharacterAsync(cancellationToken).ConfigureAwait(false);
-            if (next < 0)
-                throw Error("The JSON value is incomplete");
-
-            var current = (char)next;
-            builder.Append(current);
-            if (inString)
-            {
-                if (escaping)
-                    escaping = false;
-                else if (current == '\\')
-                    escaping = true;
-                else if (current == '"')
-                    inString = false;
-                continue;
-            }
-
-            if (current == '"')
-                inString = true;
-            else if (current is '{' or '[')
-                stack.Push(current);
-            else if (current is '}' or ']')
-            {
-                var opening = stack.Pop();
-                if ((opening == '{' && current != '}') || (opening == '[' && current != ']'))
-                    throw Error($"Unexpected character '{current}'");
-            }
         }
     }
 
@@ -467,5 +417,55 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         SingleRoot,
         Array,
         Complete
+    }
+
+    private sealed class CompositeScanner(char opening)
+    {
+        private readonly Stack<char> _openings = new([opening]);
+        private bool _inString;
+        private bool _escaping;
+
+        public bool IsComplete => _openings.Count == 0;
+
+        public bool Accept(char current)
+        {
+            if (_inString)
+            {
+                AcceptStringCharacter(current);
+                return true;
+            }
+
+            return AcceptStructuralCharacter(current);
+        }
+
+        private void AcceptStringCharacter(char current)
+        {
+            if (_escaping)
+                _escaping = false;
+            else if (current == '\\')
+                _escaping = true;
+            else if (current == '"')
+                _inString = false;
+        }
+
+        private bool AcceptStructuralCharacter(char current)
+        {
+            switch (current)
+            {
+                case '"':
+                    _inString = true;
+                    return true;
+                case '{':
+                case '[':
+                    _openings.Push(current);
+                    return true;
+                case '}':
+                    return _openings.Pop() == '{';
+                case ']':
+                    return _openings.Pop() == '[';
+                default:
+                    return true;
+            }
+        }
     }
 }
