@@ -214,6 +214,8 @@ Inspect the test SDK and effective `dotnet test` mode rather than assuming compa
 
 Package only after relevant validation succeeds. Create each distributable once and upload it under a stable, collision-free artifact name. Validate contents, executable names, manifests, archive formats, permissions, installers, and expected counts.
 
+Remember that `dotnet pack` builds by default. Do not add an immediately preceding `dotnet build` followed by `dotnet pack --no-build` when the build exists only to feed that pack invocation. Prefer an explicit package matrix that restores each project, runs `dotnet pack --no-restore`, uploads one uniquely named artifact per entry, and validates the combined package set in a downstream job. Reuse a prior build only when its outputs are deliberately transferred as immutable artifacts and their version and configuration exactly match the package inputs.
+
 ### 5. Reserve release identities
 
 Only on the release event, refresh remote tags and re-evaluate versions against the tested commit. Confirm the checkout identifies the commit whose artifacts were built. Create tags only after every required package succeeds. Reuse a tag idempotently only when it identifies the expected commit.
