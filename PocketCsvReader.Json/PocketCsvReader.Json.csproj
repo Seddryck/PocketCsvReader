@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Json</PackageId>
+    <PackageTags>JSON DataReader DataTable Parser Streaming</PackageTags>
+    <Description>PocketCsvReader.Json is a lightweight streaming JSON document reader that exposes top-level objects and array elements through IDataReader and the PocketCsvReader materialization APIs.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PocketCsvReader.Ndjson" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

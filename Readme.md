@@ -2,7 +2,7 @@
 
 ![Logo](https://raw.githubusercontent.com/Seddryck/PocketCsvReader/main/assets/PocketCsvReader-icon-256.png)
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as fixed-width, NDJSON, LTSV, logfmt, Common Log Format, and W3C Extended Log Format. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as JSON, NDJSON, fixed-width, LTSV, logfmt, Common Log Format, and W3C Extended Log Format. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
 [About][] | [Install][] | [Quick-start][]
 
@@ -62,6 +62,18 @@ Replace `<VersionNumber>` with the desired version in each of the following solu
    dotnet add package PocketCsvReader --version <VersionNumber>
    ```
 
+   For standard JSON documents, install the JSON extension package:
+
+   ```bash
+   dotnet add package PocketCsvReader.Json --version <VersionNumber>
+   ```
+
+   For newline-delimited JSON streams, install the NDJSON extension package:
+
+   ```bash
+   dotnet add package PocketCsvReader.Ndjson --version <VersionNumber>
+   ```
+
    For fixed-width files, install the extension package as well:
 
    ```bash
@@ -91,11 +103,33 @@ The `CsvReader` class is a flexible and efficient tool for reading and parsing C
 - Map CSV records to array of strings.
 - Customizable CSV parsing profiles for delimiters, quote handling, and more.
 - Supports encoding detection through the `IEncodingDetector` interface.
+- Stream standard JSON objects and top-level arrays without materializing the complete document.
+- Read NDJSON as a sequence of independently framed JSON values.
 - Read fixed-width files in one forward-only pass with field conversion deferred until a `Get*` accessor requests that field.
 - Read labeled LTSV and logfmt records through one shared reader and format-specific builders.
 - Read Common Log Format and W3C Extended Log Format files with format-aware streaming readers.
 
 Fixed-width support is distributed separately as `PocketCsvReader.FixedWidth`.
+
+Standard JSON and NDJSON use separate extension packages. `PocketCsvReader.Json` accepts one JSON document and yields each element of a top-level array as a row. `PocketCsvReader.Ndjson` expects a sequence of JSON values separated by line terminators and supports NDJSON-specific comments and custom terminators.
+
+```csharp
+using PocketCsvReader.Json;
+using PocketCsvReader.Ndjson;
+
+using var json = new JsonReader().ToDataReader("people.json");
+while (json.Read())
+{
+    var id = json.GetInt32(json.GetOrdinal("id"));
+    var name = json.GetString(json.GetOrdinal("name"));
+}
+
+using var ndjson = new NdjsonReader().ToDataReader("events.ndjson");
+while (ndjson.Read())
+{
+    var eventName = ndjson.GetString(ndjson.GetOrdinal("event"));
+}
+```
 
 LTSV and logfmt support is distributed separately as `PocketCsvReader.KeyValue`:
 

@@ -1,4 +1,5 @@
 using System.Text;
+using PocketCsvReader.Json;
 using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson;

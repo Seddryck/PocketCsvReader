@@ -62,6 +62,10 @@ jobs:
             artifact: core
             project: PocketCsvReader.Testing/PocketCsvReader.Testing.csproj
             include: '[PocketCsvReader]*'
+          - name: PocketCsvReader.Json
+            artifact: json
+            project: PocketCsvReader.Json.Testing/PocketCsvReader.Json.Testing.csproj
+            include: '[PocketCsvReader.Json]*'
           - name: PocketCsvReader.Ndjson
             artifact: ndjson
             project: PocketCsvReader.Ndjson.Testing/PocketCsvReader.Ndjson.Testing.csproj
@@ -215,6 +219,9 @@ jobs:
           - name: PocketCsvReader
             artifact: core
             project: PocketCsvReader/PocketCsvReader.csproj
+          - name: PocketCsvReader.Json
+            artifact: json
+            project: PocketCsvReader.Json/PocketCsvReader.Json.csproj
           - name: PocketCsvReader.Ndjson
             artifact: ndjson
             project: PocketCsvReader.Ndjson/PocketCsvReader.Ndjson.csproj

@@ -26,6 +26,15 @@ This guide explains how to install the library using three common methods:
 
    Replace `<VersionNumber>` with the desired version. If no version is specified, the latest version will be installed.
 
+### JSON extension packages
+
+Use `PocketCsvReader.Json` for a single standard JSON document, including a pretty-printed top-level array. Use `PocketCsvReader.Ndjson` for a stream of independently framed JSON values:
+
+```bash
+dotnet add package PocketCsvReader.Json --version <VersionNumber>
+dotnet add package PocketCsvReader.Ndjson --version <VersionNumber>
+```
+
 ## 2. Installing with Visual Studio Package Manager Console
 
 ### Prerequisites with Visual Studio Package Manager Console

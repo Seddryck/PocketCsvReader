@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 $packageIds = @(
     'PocketCsvReader',
+    'PocketCsvReader.Json',
     'PocketCsvReader.Ndjson',
     'PocketCsvReader.FixedWidth',
     'PocketCsvReader.KeyValue',

@@ -61,6 +61,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.WebLogs", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.WebLogs.Testing", "PocketCsvReader.WebLogs.Testing\PocketCsvReader.WebLogs.Testing.csproj", "{F18442D3-8D8F-4A07-B4A0-17D9A7BDA973}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Json", "PocketCsvReader.Json\PocketCsvReader.Json.csproj", "{71026AA5-CD97-4867-A616-E84C6AEA0FCE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Json.Testing", "PocketCsvReader.Json.Testing\PocketCsvReader.Json.Testing.csproj", "{87237FDD-0863-48CD-80A2-2E8B205B097C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -115,6 +119,14 @@ Global
 		{F18442D3-8D8F-4A07-B4A0-17D9A7BDA973}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F18442D3-8D8F-4A07-B4A0-17D9A7BDA973}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F18442D3-8D8F-4A07-B4A0-17D9A7BDA973}.Release|Any CPU.Build.0 = Release|Any CPU
+		{71026AA5-CD97-4867-A616-E84C6AEA0FCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{71026AA5-CD97-4867-A616-E84C6AEA0FCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{71026AA5-CD97-4867-A616-E84C6AEA0FCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{71026AA5-CD97-4867-A616-E84C6AEA0FCE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87237FDD-0863-48CD-80A2-2E8B205B097C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87237FDD-0863-48CD-80A2-2E8B205B097C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87237FDD-0863-48CD-80A2-2E8B205B097C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87237FDD-0863-48CD-80A2-2E8B205B097C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
