@@ -51,6 +51,8 @@ Report a decision ledger before or alongside the proposed workflow:
 | Architectures | ... | ... | ... |
 | Package identities | ... | ... | ... |
 | Generated prerequisites | ... | ... | ... |
+| Release identities | ... | ... | ... |
+| Publishing destinations | ... | ... | ... |
 
 State useful negative evidence, such as no native interop, no runtime-specific dependency assets, or no documented macOS support. Be precise: `System.IO` is cross-platform, while specific filesystem, permission, casing, symlink, and path semantics may still justify multi-OS tests.
 
@@ -200,21 +202,41 @@ Set up SDKs and caches using project or lock files as cache keys. Run cheap sour
 
 Restore deterministically, preferring locked mode for release inputs. Build before testing, then use `--no-build` and `--no-restore` or their equivalents. Matrix dimensions must correspond to compilation, dependency, or behavior differences. Give every entry a descriptive name and unique coverage identity.
 
+Prefer a workflow-native matrix with direct build and test commands when the project, target-framework, runner, or architecture dimensions are stable and enumerable. Do not hide those dimensions in a wrapper script whose main purpose is nested iteration. A script remains appropriate for substantial reusable logic, but the workflow should still expose the dimensions that determine job isolation, status, retry scope, and artifact identity.
+
+Select one coverage driver that matches the active test platform and do not mix drivers in the same test project:
+
+- use `coverlet.collector` with `dotnet test --collect:"XPlat Code Coverage"` in VSTest mode;
+- use `coverlet.MTP` for Microsoft Testing Platform and pass its extension arguments after the `--` separator, for example `dotnet test --project <project> -- --coverlet`;
+- avoid `coverlet.msbuild` when the test host can be terminated before its process-exit hit-file flush, and never use it with MTP v2.
+
+Inspect the test SDK and effective `dotnet test` mode rather than assuming compatibility from package presence. Make runner selection and framework-adapter activation explicit in repository configuration. Exercise the exact CI coverage command locally and fail when the expected report is absent, duplicated, or below its required threshold. When the selected driver does not enforce thresholds itself, validate the generated report explicitly.
+
+When users need test failures and insufficient coverage to appear as different checks, do not enforce the coverage threshold inside the test command or matrix job. Let test jobs generate and retain reports, then evaluate those reports in a clearly named downstream threshold job. Keep coverage-service upload separate as well so a low-coverage result, a test failure, and an upload outage have distinct check conclusions.
+
 ### 4. Package
 
 Package only after relevant validation succeeds. Create each distributable once and upload it under a stable, collision-free artifact name. Validate contents, executable names, manifests, archive formats, permissions, installers, and expected counts.
 
+Remember that `dotnet pack` builds by default. Do not add an immediately preceding `dotnet build` followed by `dotnet pack --no-build` when the build exists only to feed that pack invocation. Prefer an explicit package matrix that restores each project, runs `dotnet pack --no-restore`, uploads one uniquely named artifact per entry, and validates the combined package set in a downstream job. Reuse a prior build only when its outputs are deliberately transferred as immutable artifacts and their version and configuration exactly match the package inputs.
+
 ### 5. Reserve release identities
 
-Only on the release event, refresh remote tags and re-evaluate versions against the tested commit. Confirm the checkout identifies the commit whose artifacts were built. Create tags only after every required package succeeds. Reuse a tag idempotently only when it identifies the expected commit.
+Only on the release event, refresh remote tags and re-evaluate versions against the tested commit. Confirm the checkout identifies the commit whose artifacts were built and that the recalculated versions match the immutable packaged artifacts. Create tags only after every required package succeeds. Reuse a tag idempotently only when it identifies the expected commit, and handle a concurrent creator only when the remote tag resolves to that same commit.
+
+Decide from repository evidence whether reservation belongs in its own job. A distinct version or tag job is justified when publication has multiple destinations, multiple independently versioned deliverables or tag namespaces, long or parallel packaging stages, queued releases, another tag-producing workflow, or a requirement for a visible version-integrity check. Keeping reservation inside one publish job is reasonable for a single version and destination when it intentionally provides sequential atomicity. Do not copy multi-version or concurrency logic into a simpler repository without corresponding evidence.
 
 ### 6. Publish
 
 Download package-job artifacts; do not rebuild. Revalidate the complete artifact set before the first external publication. Use least-privilege permissions and trusted publishing where available. Pull requests and ordinary branch builds must not publish.
 
+Treat each external destination—such as NuGet, a container registry, or a GitHub release—as a potential job boundary. Separate destinations when evidence shows different triggers, artifacts, credentials, permissions, retry behavior, release cadence, or a need for distinct check conclusions. Combining destinations is valid when the repository deliberately requires one sequential operation and accepts the combined permissions and retry scope.
+
+When destinations are separated, choose their dependency relationship explicitly. Parallel jobs improve isolation and allow independent retries but can leave a partial release. Make an announcement or GitHub release depend on registry publication when users must not see a release before its installable package is available. Grant each job only its destination-specific permissions; for example, NuGet trusted publishing needs an identity token, while GitHub release or discussion creation needs repository-content or discussion permissions rather than that token.
+
 ### 7. Release
 
-Create or update the release only after its tag exists. Upload validated artifacts with deterministic names. Encode any rule limiting release pages to selected semantic versions separately from package publication.
+Create or update the release only after its tag exists. Upload validated artifacts with deterministic names. Encode any rule limiting release pages to selected semantic versions separately from package publication. Preserve the repository's evidenced relationship between registry publication and release-page creation; do not assume that every published package requires a release page or that both operations share the same cadence.
 
 ## Avoid matrix explosions
 
