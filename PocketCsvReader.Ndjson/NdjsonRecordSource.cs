@@ -39,7 +39,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
             return true;
         }
 
-        var fields = new JsonRecordParser(line, Profile.Dialect.Whitespaces).ParseRoot();
+        var fields = new JsonRecordParser(line.AsMemory(), Profile.Dialect.Whitespaces).ParseRoot();
         record = new RecordSpan(line.AsSpan(), fields);
         recordState = RecordState.Record;
         return _reader.Peek() < 0;
@@ -64,7 +64,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         if (line is null)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
-        var fields = new JsonRecordParser(line, Profile.Dialect.Whitespaces).ParseRoot();
+        var fields = new JsonRecordParser(line.AsMemory(), Profile.Dialect.Whitespaces).ParseRoot();
         return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
     }
 
@@ -199,7 +199,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     {
         try
         {
-            _ = new JsonRecordParser(content, whitespaces).ParseRoot();
+            _ = new JsonRecordParser(content.AsMemory(), whitespaces).ParseRoot();
             return true;
         }
         catch (InvalidDataException)

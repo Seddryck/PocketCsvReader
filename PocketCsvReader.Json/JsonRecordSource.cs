@@ -1,4 +1,3 @@
-using System.Text;
 using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Json;
@@ -6,41 +5,41 @@ namespace PocketCsvReader.Json;
 internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
-    private readonly StreamReader _reader;
-    private readonly char[] _asyncBuffer = new char[1];
+    private readonly BufferedJsonCursor _cursor;
     private DocumentState _state;
     private bool _needsArrayElement;
-    private long _position;
 
     public JsonProfile Profile { get; }
 
     public JsonRecordSource(StreamReader reader, JsonProfile profile)
     {
-        _reader = reader;
         Profile = profile;
+        _cursor = new BufferedJsonCursor(reader, profile.ParserOptimizations.BufferSize);
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
+        _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
             return EndOfFile(out record, out recordState);
 
         var first = _state == DocumentState.BeforeRoot
-            ? ReadFirstRootCharacter()
-            : ReadFirstArrayElementCharacter();
+            ? PeekFirstRootCharacter()
+            : PeekFirstArrayElementCharacter();
 
         if (first < 0)
             return EndOfFile(out record, out recordState);
 
-        var recordStart = _position - 1;
-        var json = ReadValue((char)first, out var delimiter);
-        var fields = ParseFields(json, recordStart);
+        var recordStart = _cursor.Position;
+        var (capture, delimiter) = ReadValue((char)first);
+        _cursor.Protect(capture);
+        var fields = ParseFields(capture.Memory, recordStart);
 
         var isEndOfFile = _state == DocumentState.SingleRoot
             ? CompleteSingleRoot(delimiter)
             : CompleteArrayElement(delimiter);
 
-        record = new RecordSpan(json.AsSpan(), fields);
+        record = RecordSpan.FromMemory(capture.Memory, fields);
         recordState = RecordState.Record;
         return isEndOfFile;
     }
@@ -48,27 +47,29 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
         var first = _state == DocumentState.BeforeRoot
-            ? await ReadFirstRootCharacterAsync(cancellationToken).ConfigureAwait(false)
-            : await ReadFirstArrayElementCharacterAsync(cancellationToken).ConfigureAwait(false);
+            ? await PeekFirstRootCharacterAsync(cancellationToken).ConfigureAwait(false)
+            : await PeekFirstArrayElementCharacterAsync(cancellationToken).ConfigureAwait(false);
 
         if (first < 0)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
-        var recordStart = _position - 1;
-        var (json, delimiter) = await ReadValueAsync((char)first, cancellationToken).ConfigureAwait(false);
-        var fields = ParseFields(json, recordStart);
+        var recordStart = _cursor.Position;
+        var (capture, delimiter) = await ReadValueAsync((char)first, cancellationToken).ConfigureAwait(false);
+        _cursor.Protect(capture);
+        var fields = ParseFields(capture.Memory, recordStart);
         var isEndOfFile = _state == DocumentState.SingleRoot
             ? await CompleteSingleRootAsync(delimiter, cancellationToken).ConfigureAwait(false)
             : await CompleteArrayElementAsync(delimiter, cancellationToken).ConfigureAwait(false);
 
-        return new(isEndOfFile, new RecordMemory(json.AsSpan(), fields), RecordState.Record);
+        return new(isEndOfFile, new RecordMemory(capture.Memory, fields), RecordState.Record);
     }
 
-    private static FieldSpan[] ParseFields(string json, long recordStart)
+    private static FieldSpan[] ParseFields(ReadOnlyMemory<char> json, long recordStart)
     {
         try
         {
@@ -81,9 +82,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         }
     }
 
-    private int ReadFirstRootCharacter()
+    private int PeekFirstRootCharacter()
     {
-        var first = ReadNonWhitespace();
+        var first = PeekNonWhitespace();
         if (first < 0)
             throw Error("A JSON value was expected");
 
@@ -93,24 +94,26 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             return first;
         }
 
+        _cursor.Read();
         _state = DocumentState.Array;
-        var arrayFirst = ReadNonWhitespace();
+        var arrayFirst = PeekNonWhitespace();
         if (arrayFirst < 0)
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
 
+        _cursor.Read();
         CompleteDocument();
         return -1;
     }
 
-    private int ReadFirstArrayElementCharacter()
+    private int PeekFirstArrayElementCharacter()
     {
         if (!_needsArrayElement)
             throw new InvalidOperationException("The JSON document reader is not positioned at an array element.");
 
         _needsArrayElement = false;
-        var first = ReadNonWhitespace();
+        var first = PeekNonWhitespace();
         if (first < 0)
             throw Error("The top-level array is incomplete");
         if (first == ']')
@@ -118,9 +121,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         return first;
     }
 
-    private async ValueTask<int> ReadFirstRootCharacterAsync(CancellationToken cancellationToken)
+    private async ValueTask<int> PeekFirstRootCharacterAsync(CancellationToken cancellationToken)
     {
-        var first = await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+        var first = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
         if (first < 0)
             throw Error("A JSON value was expected");
 
@@ -130,24 +133,26 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             return first;
         }
 
+        await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
         _state = DocumentState.Array;
-        var arrayFirst = await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+        var arrayFirst = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
         if (arrayFirst < 0)
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
 
+        await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
         await CompleteDocumentAsync(cancellationToken).ConfigureAwait(false);
         return -1;
     }
 
-    private async ValueTask<int> ReadFirstArrayElementCharacterAsync(CancellationToken cancellationToken)
+    private async ValueTask<int> PeekFirstArrayElementCharacterAsync(CancellationToken cancellationToken)
     {
         if (!_needsArrayElement)
             throw new InvalidOperationException("The JSON document reader is not positioned at an array element.");
 
         _needsArrayElement = false;
-        var first = await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+        var first = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
         if (first < 0)
             throw Error("The top-level array is incomplete");
         if (first == ']')
@@ -155,130 +160,118 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         return first;
     }
 
-    private string ReadValue(char first, out int delimiter)
+    private (CapturedJson Json, int Delimiter) ReadValue(char first)
     {
-        var builder = new StringBuilder().Append(first);
-        delimiter = -1;
+        _cursor.BeginCapture();
+        _cursor.Read();
 
         if (first is '{' or '[')
         {
-            ReadComposite(builder);
-            return builder.ToString();
+            ReadComposite(first);
+            return (_cursor.EndCapture(), -1);
         }
 
         if (first == '"')
         {
-            ReadString(builder);
-            return builder.ToString();
+            ReadString();
+            return (_cursor.EndCapture(), -1);
         }
 
         while (true)
         {
-            var next = ReadCharacter();
+            var next = _cursor.Read();
             if (next < 0)
-                return builder.ToString();
+                return (_cursor.EndCapture(), -1);
             if (IsJsonWhitespace((char)next) || next is ',' or ']')
-            {
-                delimiter = next;
-                return builder.ToString();
-            }
-            builder.Append((char)next);
+                return (_cursor.EndCapture(trimEnd: 1), next);
         }
     }
 
-    private async ValueTask<(string Json, int Delimiter)> ReadValueAsync(
+    private async ValueTask<(CapturedJson Json, int Delimiter)> ReadValueAsync(
         char first,
         CancellationToken cancellationToken)
     {
-        var builder = new StringBuilder().Append(first);
+        _cursor.BeginCapture();
+        await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
 
         if (first is '{' or '[')
         {
-            await ReadCompositeAsync(builder, cancellationToken).ConfigureAwait(false);
-            return (builder.ToString(), -1);
+            await ReadCompositeAsync(first, cancellationToken).ConfigureAwait(false);
+            return (_cursor.EndCapture(), -1);
         }
 
         if (first == '"')
         {
-            await ReadStringAsync(builder, cancellationToken).ConfigureAwait(false);
-            return (builder.ToString(), -1);
+            await ReadStringAsync(cancellationToken).ConfigureAwait(false);
+            return (_cursor.EndCapture(), -1);
         }
 
         while (true)
         {
-            var next = await ReadCharacterAsync(cancellationToken).ConfigureAwait(false);
+            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
             if (next < 0)
-                return (builder.ToString(), -1);
+                return (_cursor.EndCapture(), -1);
             if (IsJsonWhitespace((char)next) || next is ',' or ']')
-                return (builder.ToString(), next);
-            builder.Append((char)next);
+                return (_cursor.EndCapture(trimEnd: 1), next);
         }
     }
 
-    private void ReadComposite(StringBuilder builder)
-        => ReadCompositeCoreAsync(builder, false, default).GetAwaiter().GetResult();
-
-    private ValueTask ReadCompositeAsync(StringBuilder builder, CancellationToken cancellationToken)
-        => ReadCompositeCoreAsync(builder, true, cancellationToken);
-
-    private async ValueTask ReadCompositeCoreAsync(
-        StringBuilder builder,
-        bool asynchronous,
-        CancellationToken cancellationToken)
+    private void ReadComposite(char opening)
     {
-        var scanner = new CompositeScanner(builder[0]);
-
+        var scanner = new CompositeScanner(opening);
         while (!scanner.IsComplete)
         {
-            var next = asynchronous
-                ? await ReadCharacterAsync(cancellationToken).ConfigureAwait(false)
-                : ReadCharacter();
+            var next = _cursor.Read();
             if (next < 0)
                 throw Error("The JSON value is incomplete");
-
-            var current = (char)next;
-            builder.Append(current);
-            if (!scanner.Accept(current))
-                throw Error($"Unexpected character '{current}'");
+            if (!scanner.Accept((char)next))
+                throw Error($"Unexpected character '{(char)next}'");
         }
     }
 
-    private void ReadString(StringBuilder builder)
+    private async ValueTask ReadCompositeAsync(char opening, CancellationToken cancellationToken)
+    {
+        var scanner = new CompositeScanner(opening);
+        while (!scanner.IsComplete)
+        {
+            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (next < 0)
+                throw Error("The JSON value is incomplete");
+            if (!scanner.Accept((char)next))
+                throw Error($"Unexpected character '{(char)next}'");
+        }
+    }
+
+    private void ReadString()
     {
         var escaping = false;
         while (true)
         {
-            var next = ReadCharacter();
+            var next = _cursor.Read();
             if (next < 0)
                 throw Error("The JSON string is incomplete");
-
-            var current = (char)next;
-            builder.Append(current);
             if (escaping)
                 escaping = false;
-            else if (current == '\\')
+            else if (next == '\\')
                 escaping = true;
-            else if (current == '"')
+            else if (next == '"')
                 return;
         }
     }
 
-    private async ValueTask ReadStringAsync(StringBuilder builder, CancellationToken cancellationToken)
+    private async ValueTask ReadStringAsync(CancellationToken cancellationToken)
     {
         var escaping = false;
         while (true)
         {
-            var next = await ReadCharacterAsync(cancellationToken).ConfigureAwait(false);
+            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
             if (next < 0)
                 throw Error("The JSON string is incomplete");
-
-            var current = (char)next;
-            builder.Append(current);
             if (escaping)
                 escaping = false;
-            else if (current == '\\')
+            else if (next == '\\')
                 escaping = true;
-            else if (current == '"')
+            else if (next == '"')
                 return;
         }
     }
@@ -293,9 +286,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 
     private bool CompleteArrayElement(int delimiter)
     {
-        var next = delimiter;
-        if (next < 0 || IsJsonWhitespace((char)next))
-            next = ReadNonWhitespace();
+        var next = delimiter >= 0 && !IsJsonWhitespace((char)delimiter)
+            ? delimiter
+            : ReadNonWhitespace();
 
         if (next == ',')
         {
@@ -322,9 +315,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 
     private async ValueTask<bool> CompleteArrayElementAsync(int delimiter, CancellationToken cancellationToken)
     {
-        var next = delimiter;
-        if (next < 0 || IsJsonWhitespace((char)next))
-            next = await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+        var next = delimiter >= 0 && !IsJsonWhitespace((char)delimiter)
+            ? delimiter
+            : await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
 
         if (next == ',')
         {
@@ -357,47 +350,41 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         _state = DocumentState.Complete;
     }
 
-    private int ReadNonWhitespace()
+    private int PeekNonWhitespace()
     {
         int current;
-        do
-        {
-            current = ReadCharacter();
-        }
-        while (current >= 0 && IsJsonWhitespace((char)current));
+        while ((current = _cursor.Peek()) >= 0 && IsJsonWhitespace((char)current))
+            _cursor.Read();
         return current;
     }
 
-    private int ReadCharacter()
+    private int ReadNonWhitespace()
     {
-        var value = _reader.Read();
-        if (value >= 0)
-            _position++;
-        return value;
+        var current = PeekNonWhitespace();
+        return current < 0 ? current : _cursor.Read();
+    }
+
+    private async ValueTask<int> PeekNonWhitespaceAsync(CancellationToken cancellationToken)
+    {
+        int current;
+        while ((current = await _cursor.PeekAsync(cancellationToken).ConfigureAwait(false)) >= 0
+               && IsJsonWhitespace((char)current))
+        {
+            await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+        return current;
     }
 
     private async ValueTask<int> ReadNonWhitespaceAsync(CancellationToken cancellationToken)
     {
-        int current;
-        do
-        {
-            current = await ReadCharacterAsync(cancellationToken).ConfigureAwait(false);
-        }
-        while (current >= 0 && IsJsonWhitespace((char)current));
-        return current;
-    }
-
-    private async ValueTask<int> ReadCharacterAsync(CancellationToken cancellationToken)
-    {
-        var count = await _reader.ReadAsync(_asyncBuffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-        if (count == 0)
-            return -1;
-        _position++;
-        return _asyncBuffer[0];
+        var current = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+        return current < 0
+            ? current
+            : await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private InvalidDataException Error(string message)
-        => new($"{message} at position {_position}.");
+        => new($"{message} at position {_cursor.Position}.");
 
     private static bool IsJsonWhitespace(char value)
         => value is ' ' or '\t' or '\r' or '\n';
@@ -409,7 +396,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         return true;
     }
 
-    public void Dispose() { }
+    public void Dispose()
+        => _cursor.Dispose();
 
     private enum DocumentState
     {
