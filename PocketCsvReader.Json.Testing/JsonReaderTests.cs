@@ -145,6 +145,18 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void RootValue_RemainsValidWhenTrailingWhitespaceRefillsBuffer()
+    {
+        var profile = new JsonProfile(
+            parserOptimizations: new ParserOptimizationOptions(BufferSize: 32, ReadAhead: false));
+        using var reader = CreateReader("{\"value\":42}" + new string(' ', 96), profile);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("value")), Is.EqualTo(42));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
     public void NonSeekableStream_IsSupported()
     {
         using var stream = new NonSeekableStream(StreamFor("[{\"id\":1},{\"id\":2}]"));
@@ -214,6 +226,18 @@ public class JsonReaderTests
         Assert.That(reader.GetInt32(0), Is.EqualTo(1));
         Assert.That(await reader.ReadAsync(), Is.True);
         Assert.That(reader.GetInt32(0), Is.EqualTo(2));
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
+    public async Task ReadAsync_ValueCrossingBuffers_RemainsValid()
+    {
+        var profile = new JsonProfile(
+            parserOptimizations: new ParserOptimizationOptions(BufferSize: 3, ReadAhead: false));
+        await using var reader = CreateReader("[{\"message\":\"cross-buffer\"}]", profile);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("message")), Is.EqualTo("cross-buffer"));
         Assert.That(await reader.ReadAsync(), Is.False);
     }
 
