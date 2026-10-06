@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 
 namespace PocketCsvReader;
 
@@ -23,6 +24,14 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         ArgumentNullException.ThrowIfNull(stream);
         return CreateDataReader(stream);
     }
+
+    /// <summary>Opens a flat file as a standard <see cref="DbDataReader"/>.</summary>
+    public DbDataReader ToDbDataReader(string filename)
+        => Adapt(ToDataReader(filename));
+
+    /// <summary>Reads a flat-file stream as a standard <see cref="DbDataReader"/>.</summary>
+    public DbDataReader ToDbDataReader(Stream stream)
+        => Adapt(ToDataReader(stream));
 
     public DataTable ToDataTable(string filename)
     {
@@ -65,5 +74,14 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         using var reader = createReader();
         foreach (var values in DataReaderMaterializer.ToStringArrays(reader))
             yield return values;
+    }
+
+    private static DbDataReader Adapt(TDataReader reader)
+    {
+        if (reader is IAsyncDataReader asyncReader)
+            return new DbDataReaderAdapter(asyncReader);
+
+        reader.Dispose();
+        throw new NotSupportedException($"{typeof(TDataReader).Name} must implement {nameof(IAsyncDataReader)} to be exposed as a DbDataReader.");
     }
 }

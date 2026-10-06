@@ -7,6 +7,16 @@ namespace PocketCsvReader.KeyValue.Testing;
 public class KeyValueReaderTests
 {
     [Test]
+    public async Task ToDbDataReader_ExposesKeyValueRecords()
+    {
+        await using var reader = new LtsvReaderBuilder().Build()
+            .ToDbDataReader(new MemoryStream(Encoding.UTF8.GetBytes("id:1\tname:Ada")));
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task LtsvReader_ReadAsync_AdvancesAndExposesValues()
     {
         await using var reader = CreateReader(new LtsvReaderBuilder().Build(), "id:1\tname:Ada\nid:2\tname:Grace");
