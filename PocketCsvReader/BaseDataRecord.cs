@@ -12,7 +12,7 @@ using System.Linq.Expressions;
 using System.ComponentModel.Design;
 
 namespace PocketCsvReader;
-public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord where P : IProfile
+public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldValueReader where P : IProfile
 {
     private SpanParser Parser { get; } = new();
     private Dictionary<int, ISanitizer>? _sanitizers;

@@ -7,6 +7,16 @@ namespace PocketCsvReader.WebLogs.Testing;
 public class WebLogReaderTests
 {
     [Test]
+    public async Task ToDbDataReader_ExposesWebLogRecords()
+    {
+        await using var reader = new CommonLogReader().ToDbDataReader(Text(
+            "127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] \"GET / HTTP/1.0\" 200 42\n"));
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("StatusCode")), Is.EqualTo(200));
+    }
+
+    [Test]
     public async Task CommonLogReader_ReadAsync_AdvancesAndExposesTypedValues()
     {
         await using var reader = new CommonLogReader().ToDataReader(Text(

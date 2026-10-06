@@ -1,9 +1,9 @@
 ---
-title: IDataReader API
+title: DataReader API
 tags: [quick-start]
 ---
 
-The [`IDataReader` interface](https://learn.microsoft.com/en-us/dotnet/api/system.data.idatareader?view=net-9.0) is a .NET interface designed to provide a way to read a forward-only stream of rows from a data source. This model is particularly efficient for memory usage because it reads one row at a time and does not buffer the entire result set. `IDataReader` only defines synchronous advancement; PocketCsvReader data readers additionally implement `IAsyncDataReader` for asynchronous advancement and disposal.
+The [`IDataReader` interface](https://learn.microsoft.com/en-us/dotnet/api/system.data.idatareader) provides a forward-only stream of rows. This model is memory-efficient because it reads one row at a time. PocketCsvReader supports both its existing `IDataReader`-based API and the standard [`DbDataReader`](https://learn.microsoft.com/en-us/dotnet/api/system.data.common.dbdatareader) abstraction.
 
 This behavior matches the use case for reading delimited files, where you typically want to iterate through rows sequentially.
 
@@ -32,11 +32,11 @@ while (reader.Read())
 }
 ```
 
-For streams backed by files, networks, or cloud storage, use `ReadAsync`. The cancellation token is forwarded to the underlying stream operations.
+For code that consumes the standard `DbDataReader` abstraction, use `ToDbDataReader`. It is available for CSV, fixed-width, NDJSON, key-value, and web-log readers, as well as CSV batches. The adapter delegates to the same parser and schema implementation as `ToDataReader`.
 
 ```csharp
 await using var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-await using var reader = new CsvReader(profile).ToDataReader(stream);
+await using DbDataReader reader = new CsvReader(profile).ToDbDataReader(stream);
 while (await reader.ReadAsync(cancellationToken))
 {
     Console.WriteLine(reader.GetInt32(0));
@@ -45,6 +45,8 @@ while (await reader.ReadAsync(cancellationToken))
 ```
 
 Typed getters remain synchronous: once `ReadAsync` completes, the current record is buffered and parsed in memory. Do not call `Read` and `ReadAsync` concurrently on the same reader.
+
+`ReadAsync` performs asynchronous stream I/O and forwards cancellation. `CloseAsync` and `DisposeAsync` asynchronously release the underlying reader and stream. `HasRows` may read and buffer the first record; the following `Read` or `ReadAsync` still returns that record.
 
 ## Reading Values with IDataReader
 

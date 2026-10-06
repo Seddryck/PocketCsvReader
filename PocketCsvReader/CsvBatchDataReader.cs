@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 
 namespace PocketCsvReader;
-public class CsvBatchDataReader : IAsyncDataReader
+public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
 {
     private readonly bool _allStreamsOpen = false;
     private IEnumerator<Func<Stream>> Streams { get; }
