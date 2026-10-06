@@ -118,10 +118,8 @@ jobs:
           --coverlet
           --coverlet-output-format cobertura
           --coverlet-include "${{ matrix.test.include }}"
-          --coverlet-threshold 10
-          --coverlet-threshold-type line
 
-      - name: Normalize and validate coverage
+      - name: Normalize coverage
         shell: pwsh
         env:
           COVERAGE_NAME: ${{ matrix.test.name }}.${{ matrix.framework }}.cobertura.xml
@@ -129,14 +127,6 @@ jobs:
           $coverageFiles = @(Get-ChildItem artifacts/test-results -Recurse -Filter *.cobertura.*.xml -File)
           if ($coverageFiles.Count -ne 1) {
             throw "Expected one coverage report, found $($coverageFiles.Count)."
-          }
-
-          [xml]$report = Get-Content -LiteralPath $coverageFiles[0].FullName
-          $lineRate = [double]::Parse(
-            [string]$report.coverage.'line-rate',
-            [Globalization.CultureInfo]::InvariantCulture)
-          if ($lineRate -lt 0.10) {
-            throw "Line coverage $($lineRate * 100)% is below the required 10%."
           }
 
           New-Item -ItemType Directory -Force artifacts/coverage | Out-Null
@@ -152,6 +142,40 @@ jobs:
             artifacts/test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  coverage-threshold:
+    name: Validate coverage threshold
+    needs: test
+    runs-on: windows-2025
+    steps:
+      - name: Download coverage results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-results-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Require 10% line coverage
+        shell: pwsh
+        run: |
+          $coverageFiles = @(Get-ChildItem artifacts/coverage -Filter *.xml -File)
+          if ($coverageFiles.Count -eq 0) {
+            throw 'No coverage reports were found.'
+          }
+
+          $failures = foreach ($coverageFile in $coverageFiles) {
+            [xml]$report = Get-Content -LiteralPath $coverageFile.FullName
+            $lineRate = [double]::Parse(
+              [string]$report.coverage.'line-rate',
+              [Globalization.CultureInfo]::InvariantCulture)
+            if ($lineRate -lt 0.10) {
+              "$($coverageFile.Name): $($lineRate * 100)%"
+            }
+          }
+
+          if ($failures.Count -gt 0) {
+            throw "Line coverage is below the required 10%:`n$($failures -join "`n")"
+          }
 
   coverage:
     name: Upload coverage
@@ -182,6 +206,7 @@ jobs:
     needs:
       - version
       - coverage
+      - coverage-threshold
     runs-on: windows-2025
     strategy:
       fail-fast: false
