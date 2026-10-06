@@ -178,11 +178,30 @@ jobs:
           use_oidc: true
 
   package:
-    name: Package
+    name: Package ${{ matrix.package.name }}
     needs:
       - version
       - coverage
     runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: PocketCsvReader
+            artifact: core
+            project: PocketCsvReader/PocketCsvReader.csproj
+          - name: PocketCsvReader.Ndjson
+            artifact: ndjson
+            project: PocketCsvReader.Ndjson/PocketCsvReader.Ndjson.csproj
+          - name: PocketCsvReader.FixedWidth
+            artifact: fixed-width
+            project: PocketCsvReader.FixedWidth/PocketCsvReader.FixedWidth.csproj
+          - name: PocketCsvReader.KeyValue
+            artifact: key-value
+            project: PocketCsvReader.KeyValue/PocketCsvReader.KeyValue.csproj
+          - name: PocketCsvReader.WebLogs
+            artifact: web-logs
+            project: PocketCsvReader.WebLogs/PocketCsvReader.WebLogs.csproj
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -196,42 +215,45 @@ jobs:
             10.0.x
 
       - name: Restore
-        run: dotnet restore PocketCsvReader.full.sln --nologo
-
-      - name: Build
         run: >-
-          dotnet build PocketCsvReader.full.sln
+          dotnet restore ${{ matrix.package.project }}
+          --nologo
+
+      - name: Pack NuGet package
+        run: >-
+          dotnet pack ${{ matrix.package.project }}
           --configuration Release
           --no-restore
+          --include-symbols
+          --output artifacts/packages
           --nologo
           -p:ContinuousIntegrationBuild=true
           -p:Version=${{ needs.version.outputs.semVer }}
 
-      - name: Pack NuGet packages
-        shell: pwsh
-        run: |
-          $projects = @(
-            'PocketCsvReader/PocketCsvReader.csproj',
-            'PocketCsvReader.Ndjson/PocketCsvReader.Ndjson.csproj',
-            'PocketCsvReader.FixedWidth/PocketCsvReader.FixedWidth.csproj',
-            'PocketCsvReader.KeyValue/PocketCsvReader.KeyValue.csproj',
-            'PocketCsvReader.WebLogs/PocketCsvReader.WebLogs.csproj'
-          )
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package-${{ matrix.package.artifact }}-${{ needs.version.outputs.semVer }}
+          path: artifacts/packages
+          if-no-files-found: error
+          retention-days: 30
 
-          foreach ($project in $projects) {
-            dotnet pack $project `
-              --configuration Release `
-              --no-build `
-              --no-restore `
-              --include-symbols `
-              --output artifacts/packages `
-              --nologo `
-              -p:Version=${{ needs.version.outputs.semVer }}
+  validate-packages:
+    name: Validate packages
+    needs:
+      - version
+      - package
+    runs-on: windows-2025
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
 
-            if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-            }
-          }
+      - name: Download package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: nuget-package-*-${{ needs.version.outputs.semVer }}
+          path: artifacts/packages
+          merge-multiple: true
 
       - name: Validate NuGet packages
         shell: pwsh
@@ -253,7 +275,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - version
-      - package
+      - validate-packages
     runs-on: windows-2025
     permissions:
       contents: write
