@@ -408,12 +408,10 @@ jobs:
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.version.outputs.patch == '0' &&
-      needs.reserve-release-tag.result == 'success' &&
-      needs.publish-nuget.result == 'success'
+      needs.reserve-release-tag.result == 'success'
     needs:
       - version
       - reserve-release-tag
-      - publish-nuget
     runs-on: windows-2025
     permissions:
       contents: write
