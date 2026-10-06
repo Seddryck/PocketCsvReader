@@ -20,5 +20,6 @@
   - fluent-api-schema
   - mapper-object-builder
   - compressed-files
+  - json-and-ndjson
   - web-log-formats
 

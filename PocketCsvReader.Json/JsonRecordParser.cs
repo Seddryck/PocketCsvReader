@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace PocketCsvReader.Ndjson;
+namespace PocketCsvReader.Json;
 
 internal sealed class JsonRecordParser
 {

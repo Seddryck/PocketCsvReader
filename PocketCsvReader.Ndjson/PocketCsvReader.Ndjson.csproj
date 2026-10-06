@@ -6,6 +6,6 @@
     <Description>PocketCsvReader.Ndjson is a lightweight library that extends PocketCsvReader to parse NDJSON (Newline Delimited JSON) files. Its main function is to read each JSON object line by line and expose the data through an IDataReader, mapping JSON properties to fields based on the object structure and an optional schema. It is designed for high performance and simplicity when processing large streams of structured JSON data.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
   </ItemGroup>
 </Project>
