@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
+using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Json.Benchmark;
 
@@ -8,7 +9,12 @@ namespace PocketCsvReader.Json.Benchmark;
 public class JsonParserBenchmarks
 {
     private const int ObjectCount = 50_000;
-    private readonly JsonReader _pocketCsvReader = new();
+    private readonly JsonReader _pocketCsvReader = new JsonReaderBuilder()
+        .WithProjection(projection => projection
+            .Property("name")
+            .Property("amount")
+            .Property("count"))
+        .Build();
     private byte[] _json = null!;
 
     [GlobalSetup]
