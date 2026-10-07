@@ -36,6 +36,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private char _highSurrogate;
     private int _propertyLength;
     private ulong _propertyHash;
+    private int _remainingProjectedFields;
     private bool _complete;
 
     public int Delimiter { get; private set; }
@@ -76,6 +77,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _depth = 0;
         _position = 0;
         _token = TokenKind.None;
+        _remainingProjectedFields = _fields.Length;
         _complete = false;
         Delimiter = -1;
         RequiresValueMaterialization = false;
@@ -278,7 +280,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _stringEscapeState = StringEscapeState.None;
         _highSurrogate = '\0';
 
-        if (isProperty && _depth == 1)
+        if (isProperty && _depth == 1 && _remainingProjectedFields > 0)
         {
             _propertyLength = 0;
             _propertyHash = PropertyHashOffset;
@@ -456,7 +458,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     private void AppendPropertyCharacters(ReadOnlySpan<char> value)
     {
-        if (!_stringIsProperty || _depth != 1)
+        if (!_stringIsProperty || _depth != 1 || _remainingProjectedFields == 0)
             return;
 
         foreach (var character in value)
@@ -465,7 +467,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     private void AppendPropertyCharacter(char value)
     {
-        if (!_stringIsProperty || _depth != 1)
+        if (!_stringIsProperty || _depth != 1 || _remainingProjectedFields == 0)
             return;
 
         if (_propertyLength < _propertyNameBuffer.Length)
@@ -477,14 +479,18 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private void CompletePropertyName()
     {
         ref var frame = ref _stack[_depth - 1];
-        var ordinal = _depth == 1 ? GetProjectedOrdinal() : -1;
+        var ordinal = _depth == 1 && _remainingProjectedFields > 0
+            ? GetProjectedOrdinal()
+            : -1;
 
         frame.ProjectedOrdinal = ordinal;
-        frame.Label = CompletedSpan(
-            _tokenStart,
-            _position - _tokenStart,
-            wasQuoted: true,
-            isEscaped: _stringWasEscaped);
+        frame.Label = ordinal >= 0
+            ? CompletedSpan(
+                _tokenStart,
+                _position - _tokenStart,
+                wasQuoted: true,
+                isEscaped: _stringWasEscaped)
+            : default;
         frame.DecodedLabel = ordinal >= 0 && _stringWasEscaped
             ? _projectedProperties[ordinal]
             : null;
@@ -813,10 +819,13 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     {
         if (_tokenOrdinal < 0)
             return;
+        var wasUnset = !_fields[_tokenOrdinal].Value.IsStarted;
         _fields[_tokenOrdinal] = new FieldSpan(
             value with { IsNull = isNull },
             _tokenLabel,
             DecodedLabel: _tokenDecodedLabel);
+        if (wasUnset)
+            _remainingProjectedFields--;
     }
 
     private void Push(
