@@ -35,6 +35,7 @@ public class JsonReader : FlatFileReader<JsonProfile, JsonDataReader>
             profile.Schema,
             profile.Resource,
             profile.Parsers,
-            profile.ParserOptimizations with { BufferSize = bufferSize });
+            profile.ParserOptimizations with { BufferSize = bufferSize },
+            profile.ProjectedProperties);
     }
 }

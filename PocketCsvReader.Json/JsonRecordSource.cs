@@ -70,11 +70,11 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         return new(isEndOfFile, new RecordMemory(capture.Memory, fields), RecordState.Record);
     }
 
-    private static FieldSpan[] ParseFields(ReadOnlyMemory<char> json, long recordStart)
+    private FieldSpan[] ParseFields(ReadOnlyMemory<char> json, long recordStart)
     {
         try
         {
-            return JsonRecordParser.Parse(json.Span, JsonWhitespaces);
+            return JsonRecordParser.Parse(json.Span, JsonWhitespaces, Profile.ProjectedProperties);
         }
         catch (InvalidDataException exception)
         {

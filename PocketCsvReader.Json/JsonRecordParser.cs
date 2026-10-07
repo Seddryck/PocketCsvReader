@@ -6,30 +6,100 @@ internal ref struct JsonRecordParser
 {
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
+    private readonly IReadOnlyList<string>? _projectedProperties;
     private int _position;
 
-    private JsonRecordParser(ReadOnlySpan<char> json, char[] whitespaces)
+    private JsonRecordParser(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        IReadOnlyList<string>? projectedProperties)
     {
         _json = json;
         _whitespaces = whitespaces;
+        _projectedProperties = projectedProperties;
     }
 
-    public static FieldSpan[] Parse(ReadOnlySpan<char> json, char[] whitespaces)
+    public static FieldSpan[] Parse(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        IReadOnlyList<string>? projectedProperties = null)
     {
-        var parser = new JsonRecordParser(json, whitespaces);
+        var parser = new JsonRecordParser(json, whitespaces, projectedProperties);
         return parser.ParseRoot();
     }
 
     private FieldSpan[] ParseRoot()
     {
         SkipWhitespace();
-        var fields = Current == '{'
-            ? ParseObject()
-            : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
+        FieldSpan[] fields;
+        if (Current == '{')
+            fields = _projectedProperties is null ? ParseObject() : ParseProjectedObject();
+        else if (_projectedProperties is not null)
+            throw new InvalidDataException("A JSON property projection requires an object value.");
+        else
+            fields = [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
         SkipWhitespace();
         if (!IsEnd)
             throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
         return fields;
+    }
+
+    private FieldSpan[] ParseProjectedObject()
+    {
+        Expect('{');
+        SkipWhitespace();
+
+        var fields = new FieldSpan[_projectedProperties!.Count];
+        if (Current != '}')
+        {
+            while (true)
+            {
+                var label = ParseString();
+                SkipWhitespace();
+                Expect(':');
+                SkipWhitespace();
+
+                var ordinal = GetProjectedOrdinal(label);
+                if (ordinal >= 0 && !fields[ordinal].Value.IsStarted)
+                {
+                    var value = ParseValue(allowObject: true, allowCompositeArrayItems: true);
+                    fields[ordinal] = value with { Label = label.Span, DecodedLabel = label.Decoded };
+                }
+                else
+                    SkipValue(allowObject: true, allowCompositeArrayItems: true);
+
+                SkipWhitespace();
+                if (Current == '}')
+                    break;
+
+                Expect(',');
+                SkipWhitespace();
+            }
+        }
+
+        Expect('}');
+        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
+        {
+            if (!fields[ordinal].Value.IsStarted)
+                throw new InvalidDataException($"Projected property '{_projectedProperties[ordinal]}' was not found.");
+        }
+
+        return fields;
+    }
+
+    private int GetProjectedOrdinal(ParsedString label)
+    {
+        for (var ordinal = 0; ordinal < _projectedProperties!.Count; ordinal++)
+        {
+            var projected = _projectedProperties[ordinal];
+            var matches = label.Decoded is not null
+                ? label.Decoded.Equals(projected, StringComparison.Ordinal)
+                : _json.Slice(label.Span.Start, label.Span.Length).SequenceEqual(projected);
+            if (matches)
+                return ordinal;
+        }
+
+        return -1;
     }
 
     private FieldSpan[] ParseObject()
@@ -95,6 +165,96 @@ internal ref struct JsonRecordParser
             >= '0' and <= '9' => ParseNumber(),
             _ => throw new InvalidDataException($"A JSON value was expected at position {_position}.")
         };
+    }
+
+    private void SkipValue(bool allowObject, bool allowCompositeArrayItems)
+    {
+        if (Current == '"')
+        {
+            SkipString();
+            return;
+        }
+
+        if (Current == '{')
+        {
+            if (!allowObject)
+                throw new InvalidDataException("Objects are not supported in this array.");
+            SkipObject();
+            return;
+        }
+
+        if (Current == '[')
+        {
+            SkipArray(allowCompositeArrayItems);
+            return;
+        }
+
+        _ = Current switch
+        {
+            't' => ParseLiteral("true"),
+            'f' => ParseLiteral("false"),
+            'n' => ParseLiteral("null", isNull: true),
+            '-' => ParseNumber(),
+            >= '0' and <= '9' => ParseNumber(),
+            _ => throw new InvalidDataException($"A JSON value was expected at position {_position}.")
+        };
+    }
+
+    private void SkipObject()
+    {
+        Expect('{');
+        SkipWhitespace();
+        if (Current == '}')
+        {
+            _position++;
+            return;
+        }
+
+        while (true)
+        {
+            SkipString();
+            SkipWhitespace();
+            Expect(':');
+            SkipWhitespace();
+            SkipValue(allowObject: true, allowCompositeArrayItems: true);
+            SkipWhitespace();
+            if (Current == '}')
+            {
+                _position++;
+                return;
+            }
+
+            Expect(',');
+            SkipWhitespace();
+        }
+    }
+
+    private void SkipArray(bool allowCompositeItems)
+    {
+        Expect('[');
+        SkipWhitespace();
+        if (Current == ']')
+        {
+            _position++;
+            return;
+        }
+
+        while (true)
+        {
+            if (!allowCompositeItems && Current is '[' or '{')
+                throw new InvalidDataException("Nested arrays and object array elements are not supported.");
+
+            SkipValue(allowObject: allowCompositeItems, allowCompositeArrayItems: allowCompositeItems);
+            SkipWhitespace();
+            if (Current == ']')
+            {
+                _position++;
+                return;
+            }
+
+            Expect(',');
+            SkipWhitespace();
+        }
     }
 
     private FieldSpan ParseLiteral(string literal, bool isNull = false)
@@ -236,28 +396,54 @@ internal ref struct JsonRecordParser
         throw new InvalidDataException("Unterminated JSON string.");
     }
 
-    private void DecodeEscape(StringBuilder decoded)
+    private void SkipString()
+    {
+        Expect('"');
+        while (!IsEnd)
+        {
+            if (Current == '\\')
+            {
+                _position++;
+                DecodeEscape(decoded: null);
+                continue;
+            }
+
+            if (Current == '"')
+            {
+                _position++;
+                return;
+            }
+
+            if (Current < ' ')
+                throw new InvalidDataException($"Unescaped control character at position {_position}.");
+            _position++;
+        }
+
+        throw new InvalidDataException("Unterminated JSON string.");
+    }
+
+    private void DecodeEscape(StringBuilder? decoded)
     {
         if (IsEnd)
             throw new InvalidDataException("Incomplete JSON escape sequence.");
 
         switch (Current)
         {
-            case '"': decoded.Append('"'); _position++; break;
-            case '\\': decoded.Append('\\'); _position++; break;
-            case '/': decoded.Append('/'); _position++; break;
-            case 'b': decoded.Append('\b'); _position++; break;
-            case 'f': decoded.Append('\f'); _position++; break;
-            case 'n': decoded.Append('\n'); _position++; break;
-            case 'r': decoded.Append('\r'); _position++; break;
-            case 't': decoded.Append('\t'); _position++; break;
+            case '"': decoded?.Append('"'); _position++; break;
+            case '\\': decoded?.Append('\\'); _position++; break;
+            case '/': decoded?.Append('/'); _position++; break;
+            case 'b': decoded?.Append('\b'); _position++; break;
+            case 'f': decoded?.Append('\f'); _position++; break;
+            case 'n': decoded?.Append('\n'); _position++; break;
+            case 'r': decoded?.Append('\r'); _position++; break;
+            case 't': decoded?.Append('\t'); _position++; break;
             case 'u': DecodeUnicodeEscape(decoded); break;
             default:
                 throw new InvalidDataException($"Invalid JSON escape character '{Current}' at position {_position}.");
         }
     }
 
-    private void DecodeUnicodeEscape(StringBuilder decoded)
+    private void DecodeUnicodeEscape(StringBuilder? decoded)
     {
         var codeUnit = ParseHexQuad(_position + 1);
         _position += 5;
@@ -267,7 +453,7 @@ internal ref struct JsonRecordParser
 
         if (!char.IsHighSurrogate(codeUnit))
         {
-            decoded.Append(codeUnit);
+            decoded?.Append(codeUnit);
             return;
         }
 
@@ -282,8 +468,8 @@ internal ref struct JsonRecordParser
         if (!char.IsLowSurrogate(lowSurrogate))
             throw new InvalidDataException("A high surrogate must be followed by a low surrogate.");
 
-        decoded.Append(codeUnit);
-        decoded.Append(lowSurrogate);
+        decoded?.Append(codeUnit);
+        decoded?.Append(lowSurrogate);
         _position += 6;
     }
 

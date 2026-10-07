@@ -152,6 +152,88 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void Projection_ExposesOnlySelectedPropertiesInProjectionOrder()
+    {
+        const string content = """
+            [
+              { "ignored": { "nested": [1, true, "value"] }, "count": 7, "na\u006de": "Ada", "amount": 12.50 },
+              { "amount": 25.75, "other": [1, { "deep": false }], "name": "Grace", "count": 8 }
+            ]
+            """;
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection
+                .Property("name")
+                .Property("amount")
+                .Property("count"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.FieldCount, Is.EqualTo(3));
+            Assert.That(reader.GetName(0), Is.EqualTo("name"));
+            Assert.That(reader.GetName(1), Is.EqualTo("amount"));
+            Assert.That(reader.GetName(2), Is.EqualTo("count"));
+            Assert.That(reader.GetString(reader.GetOrdinal("name")), Is.EqualTo("Ada"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(12.50m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(7));
+            Assert.Throws<ArgumentOutOfRangeException>(() => reader.GetOrdinal("ignored"));
+        });
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Grace"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(25.75m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(8));
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Projection_MissingSelectedProperty_Throws()
+    {
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor("[{\"name\":\"Ada\"}]"));
+
+        var exception = Assert.Throws<InvalidDataException>(() => reader.Read());
+
+        Assert.That(exception!.Message, Does.Contain("count"));
+    }
+
+    [Test]
+    public void Projection_MalformedSkippedProperty_Throws()
+    {
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor("[{\"name\":\"Ada\",\"ignored\":01}]"));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
+    public async Task Projection_ReadAsync_UsesProjectedOrdinals()
+    {
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        await using var stream = new AsyncOnlyStream(StreamFor("[{\"ignored\":[1,2],\"count\":3,\"name\":\"Ada\"}]"));
+        await using var reader = json.ToDataReader(stream);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetInt32(1), Is.EqualTo(3));
+        });
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
     public void SharedMaterializers_ReturnArraysAndDataTable()
     {
         const string content = "[{\"id\":1,\"name\":\"Ada\"},{\"id\":2,\"name\":\"Grace\"}]";
