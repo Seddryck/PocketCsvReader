@@ -10,7 +10,7 @@ public class JsonParserBenchmarks
 {
     private const int ObjectCount = 50_000;
     private readonly JsonReader _pocketCsvReader = new JsonReaderBuilder()
-        .WithProjection(projection => projection
+        .WithOrderedProjection(projection => projection
             .Property("name")
             .Property("amount")
             .Property("count"))

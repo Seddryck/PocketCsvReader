@@ -208,6 +208,54 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void OrderedProjection_AllowsSkippedPropertiesBetweenProjectedProperties()
+    {
+        const string content = """
+            [{"ignored":0,"na\u006de":"Ada","other":[1,2],"amount":12.50,"count":7,"tail":true}]
+            """;
+        var json = new JsonReaderBuilder()
+            .WithOrderedProjection(projection => projection
+                .Property("name")
+                .Property("amount")
+                .Property("count"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(12.50m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(7));
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void OrderedProjection_ReorderedProjectedProperty_Throws()
+    {
+        var json = new JsonReaderBuilder()
+            .WithOrderedProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor("[{\"count\":7,\"name\":\"Ada\"}]"));
+
+        var exception = Assert.Throws<InvalidDataException>(() => reader.Read());
+
+        Assert.That(exception!.Message, Does.Contain("count"));
+    }
+
+    [Test]
+    public void OrderedProjection_MalformedTrailingProperty_Throws()
+    {
+        var json = new JsonReaderBuilder()
+            .WithOrderedProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor("[{\"name\":\"Ada\",\"ignored\":01}]"));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
     public void Projection_MalformedSkippedProperty_Throws()
     {
         var json = new JsonReaderBuilder()

@@ -11,11 +11,12 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\");
 
     private readonly IReadOnlyList<string> _projectedProperties;
-    private readonly ulong[] _projectedPropertyHashes;
-    private readonly int[] _projectedPropertyLookup;
+    private readonly ulong[]? _projectedPropertyHashes;
+    private readonly int[]? _projectedPropertyLookup;
     private readonly int _projectedPropertyLookupMask;
-    private readonly char[] _propertyNameBuffer;
+    private readonly char[]? _propertyNameBuffer;
     private readonly FieldSpan[] _fields;
+    private readonly bool _orderedProjection;
     private ContainerFrame[] _stack = new ContainerFrame[16];
     private int _depth;
     private int _position;
@@ -36,16 +37,25 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private char _highSurrogate;
     private int _propertyLength;
     private ulong _propertyHash;
+    private bool _propertyMatchesExpected;
+    private int _nextProjectedOrdinal;
     private int _remainingProjectedFields;
     private bool _complete;
 
     public int Delimiter { get; private set; }
     public bool RequiresValueMaterialization { get; private set; }
 
-    public ProjectedJsonValueFramer(IReadOnlyList<string> projectedProperties, FieldSpan[] fields)
+    public ProjectedJsonValueFramer(
+        IReadOnlyList<string> projectedProperties,
+        FieldSpan[] fields,
+        bool orderedProjection = false)
     {
         _projectedProperties = projectedProperties;
         _fields = fields;
+        _orderedProjection = orderedProjection;
+        if (orderedProjection)
+            return;
+
         _projectedPropertyHashes = new ulong[projectedProperties.Count];
         var lookupCapacity = 1;
         while (lookupCapacity < projectedProperties.Count * 2)
@@ -77,6 +87,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _depth = 0;
         _position = 0;
         _token = TokenKind.None;
+        _nextProjectedOrdinal = 0;
         _remainingProjectedFields = _fields.Length;
         _complete = false;
         Delimiter = -1;
@@ -283,7 +294,10 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (isProperty && _depth == 1 && _remainingProjectedFields > 0)
         {
             _propertyLength = 0;
-            _propertyHash = PropertyHashOffset;
+            if (_orderedProjection)
+                _propertyMatchesExpected = true;
+            else
+                _propertyHash = PropertyHashOffset;
         }
     }
 
@@ -461,6 +475,18 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (!_stringIsProperty || _depth != 1 || _remainingProjectedFields == 0)
             return;
 
+        if (_orderedProjection)
+        {
+            if (_propertyMatchesExpected)
+            {
+                var expected = _projectedProperties[_nextProjectedOrdinal];
+                _propertyMatchesExpected = _propertyLength + value.Length <= expected.Length
+                    && value.SequenceEqual(expected.AsSpan(_propertyLength, value.Length));
+            }
+            _propertyLength += value.Length;
+            return;
+        }
+
         foreach (var character in value)
             AppendPropertyCharacter(character);
     }
@@ -470,7 +496,16 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (!_stringIsProperty || _depth != 1 || _remainingProjectedFields == 0)
             return;
 
-        if (_propertyLength < _propertyNameBuffer.Length)
+        if (_orderedProjection)
+        {
+            var expected = _projectedProperties[_nextProjectedOrdinal];
+            if (_propertyLength >= expected.Length || expected[_propertyLength] != value)
+                _propertyMatchesExpected = false;
+            _propertyLength++;
+            return;
+        }
+
+        if (_propertyLength < _propertyNameBuffer!.Length)
             _propertyNameBuffer[_propertyLength] = value;
         _propertyLength++;
         _propertyHash = (_propertyHash ^ value) * PropertyHashPrime;
@@ -532,14 +567,22 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     private int GetProjectedOrdinal()
     {
+        if (_orderedProjection)
+        {
+            var expected = _projectedProperties[_nextProjectedOrdinal];
+            return _propertyMatchesExpected && _propertyLength == expected.Length
+                ? _nextProjectedOrdinal
+                : -1;
+        }
+
         var slot = GetPropertyLookupSlot(_propertyHash);
-        while (_projectedPropertyLookup[slot] != 0)
+        while (_projectedPropertyLookup![slot] != 0)
         {
             var candidate = _projectedPropertyLookup[slot] - 1;
             var projectedProperty = _projectedProperties[candidate];
-            if (_projectedPropertyHashes[candidate] == _propertyHash
+            if (_projectedPropertyHashes![candidate] == _propertyHash
                 && projectedProperty.Length == _propertyLength
-                && _propertyNameBuffer.AsSpan(0, _propertyLength).SequenceEqual(projectedProperty))
+                && _propertyNameBuffer!.AsSpan(0, _propertyLength).SequenceEqual(projectedProperty))
             {
                 return candidate;
             }
@@ -825,7 +868,11 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             _tokenLabel,
             DecodedLabel: _tokenDecodedLabel);
         if (wasUnset)
+        {
             _remainingProjectedFields--;
+            if (_orderedProjection)
+                _nextProjectedOrdinal++;
+        }
     }
 
     private void Push(
