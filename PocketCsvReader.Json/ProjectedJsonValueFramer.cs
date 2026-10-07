@@ -12,6 +12,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     private readonly IReadOnlyList<string> _projectedProperties;
     private readonly ulong[] _projectedPropertyHashes;
+    private readonly int[] _projectedPropertyLookup;
+    private readonly int _projectedPropertyLookupMask;
     private readonly char[] _propertyNameBuffer;
     private readonly FieldSpan[] _fields;
     private ContainerFrame[] _stack = new ContainerFrame[16];
@@ -44,11 +46,22 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _projectedProperties = projectedProperties;
         _fields = fields;
         _projectedPropertyHashes = new ulong[projectedProperties.Count];
+        var lookupCapacity = 1;
+        while (lookupCapacity < projectedProperties.Count * 2)
+            lookupCapacity <<= 1;
+        _projectedPropertyLookup = new int[lookupCapacity];
+        _projectedPropertyLookupMask = lookupCapacity - 1;
+
         var maximumPropertyLength = 0;
         for (var ordinal = 0; ordinal < projectedProperties.Count; ordinal++)
         {
             var property = projectedProperties[ordinal];
-            _projectedPropertyHashes[ordinal] = HashProperty(property);
+            var hash = HashProperty(property);
+            _projectedPropertyHashes[ordinal] = hash;
+            var slot = GetPropertyLookupSlot(hash);
+            while (_projectedPropertyLookup[slot] != 0)
+                slot = (slot + 1) & _projectedPropertyLookupMask;
+            _projectedPropertyLookup[slot] = ordinal + 1;
             maximumPropertyLength = Math.Max(maximumPropertyLength, property.Length);
         }
         _propertyNameBuffer = new char[maximumPropertyLength];
@@ -81,15 +94,15 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                 continue;
             }
 
-            if (_token == TokenKind.Literal && _tokenOrdinal < 0)
+            if (_token == TokenKind.Literal)
             {
-                ScanSkippedLiteral(input, ref index);
+                ScanLiteral(input, ref index);
                 continue;
             }
 
-            if (_token == TokenKind.Number && _tokenOrdinal < 0)
+            if (_token == TokenKind.Number)
             {
-                ScanSkippedNumber(input, ref index);
+                ScanNumber(input, ref index);
                 continue;
             }
 
@@ -464,21 +477,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private void CompletePropertyName()
     {
         ref var frame = ref _stack[_depth - 1];
-        var ordinal = -1;
-        if (_depth == 1)
-        {
-            for (var candidate = 0; candidate < _projectedProperties.Count; candidate++)
-            {
-                var projectedProperty = _projectedProperties[candidate];
-                if (_projectedPropertyHashes[candidate] == _propertyHash
-                    && projectedProperty.Length == _propertyLength
-                    && _propertyNameBuffer.AsSpan(0, _propertyLength).SequenceEqual(projectedProperty))
-                {
-                    ordinal = candidate;
-                    break;
-                }
-            }
-        }
+        var ordinal = _depth == 1 ? GetProjectedOrdinal() : -1;
 
         frame.ProjectedOrdinal = ordinal;
         frame.Label = CompletedSpan(
@@ -525,7 +524,28 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         return false;
     }
 
-    private void ScanSkippedLiteral(ReadOnlySpan<char> input, ref int index)
+    private int GetProjectedOrdinal()
+    {
+        var slot = GetPropertyLookupSlot(_propertyHash);
+        while (_projectedPropertyLookup[slot] != 0)
+        {
+            var candidate = _projectedPropertyLookup[slot] - 1;
+            var projectedProperty = _projectedProperties[candidate];
+            if (_projectedPropertyHashes[candidate] == _propertyHash
+                && projectedProperty.Length == _propertyLength
+                && _propertyNameBuffer.AsSpan(0, _propertyLength).SequenceEqual(projectedProperty))
+            {
+                return candidate;
+            }
+            slot = (slot + 1) & _projectedPropertyLookupMask;
+        }
+        return -1;
+    }
+
+    private int GetPropertyLookupSlot(ulong hash)
+        => (int)(hash & (ulong)_projectedPropertyLookupMask);
+
+    private void ScanLiteral(ReadOnlySpan<char> input, ref int index)
     {
         var remainingLiteral = _literal.AsSpan(_literalIndex);
         var available = Math.Min(remainingLiteral.Length, input.Length - index);
@@ -648,7 +668,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         }
     }
 
-    private void ScanSkippedNumber(ReadOnlySpan<char> input, ref int index)
+    private void ScanNumber(ReadOnlySpan<char> input, ref int index)
     {
         while (index < input.Length && _token == TokenKind.Number)
         {
