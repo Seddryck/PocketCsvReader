@@ -5,7 +5,8 @@ namespace PocketCsvReader.Json;
 internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
-    private readonly BufferedJsonCursor _cursor;
+    private readonly BufferedRecordReader _cursor;
+    private readonly JsonValueFramer _valueFramer = new();
     private DocumentState _state;
     private bool _needsArrayElement;
 
@@ -14,7 +15,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     public JsonRecordSource(StreamReader reader, JsonProfile profile)
     {
         Profile = profile;
-        _cursor = new BufferedJsonCursor(reader, profile.ParserOptimizations.BufferSize);
+        _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -73,7 +74,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     {
         try
         {
-            return new JsonRecordParser(json, JsonWhitespaces).ParseRoot();
+            return JsonRecordParser.Parse(json.Span, JsonWhitespaces);
         }
         catch (InvalidDataException exception)
         {
@@ -160,120 +161,22 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         return first;
     }
 
-    private (CapturedJson Json, int Delimiter) ReadValue(char first)
+    private (CapturedRecord Json, int Delimiter) ReadValue(char first)
     {
-        _cursor.BeginCapture();
-        _cursor.Read();
-
-        if (first is '{' or '[')
-        {
-            ReadComposite(first);
-            return (_cursor.EndCapture(), -1);
-        }
-
-        if (first == '"')
-        {
-            ReadString();
-            return (_cursor.EndCapture(), -1);
-        }
-
-        while (true)
-        {
-            var next = _cursor.Read();
-            if (next < 0)
-                return (_cursor.EndCapture(), -1);
-            if (IsJsonWhitespace((char)next) || next is ',' or ']')
-                return (_cursor.EndCapture(trimEnd: 1), next);
-        }
+        _valueFramer.Prepare(first, _cursor.Position);
+        var capture = _cursor.ReadFrame(_valueFramer)
+            ?? throw Error("The JSON value is incomplete");
+        return (capture, _valueFramer.Delimiter);
     }
 
-    private async ValueTask<(CapturedJson Json, int Delimiter)> ReadValueAsync(
+    private async ValueTask<(CapturedRecord Json, int Delimiter)> ReadValueAsync(
         char first,
         CancellationToken cancellationToken)
     {
-        _cursor.BeginCapture();
-        await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
-
-        if (first is '{' or '[')
-        {
-            await ReadCompositeAsync(first, cancellationToken).ConfigureAwait(false);
-            return (_cursor.EndCapture(), -1);
-        }
-
-        if (first == '"')
-        {
-            await ReadStringAsync(cancellationToken).ConfigureAwait(false);
-            return (_cursor.EndCapture(), -1);
-        }
-
-        while (true)
-        {
-            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (next < 0)
-                return (_cursor.EndCapture(), -1);
-            if (IsJsonWhitespace((char)next) || next is ',' or ']')
-                return (_cursor.EndCapture(trimEnd: 1), next);
-        }
-    }
-
-    private void ReadComposite(char opening)
-    {
-        var scanner = new CompositeScanner(opening);
-        while (!scanner.IsComplete)
-        {
-            var next = _cursor.Read();
-            if (next < 0)
-                throw Error("The JSON value is incomplete");
-            if (!scanner.Accept((char)next))
-                throw Error($"Unexpected character '{(char)next}'");
-        }
-    }
-
-    private async ValueTask ReadCompositeAsync(char opening, CancellationToken cancellationToken)
-    {
-        var scanner = new CompositeScanner(opening);
-        while (!scanner.IsComplete)
-        {
-            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (next < 0)
-                throw Error("The JSON value is incomplete");
-            if (!scanner.Accept((char)next))
-                throw Error($"Unexpected character '{(char)next}'");
-        }
-    }
-
-    private void ReadString()
-    {
-        var escaping = false;
-        while (true)
-        {
-            var next = _cursor.Read();
-            if (next < 0)
-                throw Error("The JSON string is incomplete");
-            if (escaping)
-                escaping = false;
-            else if (next == '\\')
-                escaping = true;
-            else if (next == '"')
-                return;
-        }
-    }
-
-    private async ValueTask ReadStringAsync(CancellationToken cancellationToken)
-    {
-        var escaping = false;
-        while (true)
-        {
-            var next = await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (next < 0)
-                throw Error("The JSON string is incomplete");
-            if (escaping)
-                escaping = false;
-            else if (next == '\\')
-                escaping = true;
-            else if (next == '"')
-                return;
-        }
+        _valueFramer.Prepare(first, _cursor.Position);
+        var capture = await _cursor.ReadFrameAsync(_valueFramer, cancellationToken).ConfigureAwait(false)
+            ?? throw Error("The JSON value is incomplete");
+        return (capture, _valueFramer.Delimiter);
     }
 
     private bool CompleteSingleRoot(int delimiter)
@@ -407,53 +310,160 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         Complete
     }
 
-    private sealed class CompositeScanner(char opening)
+    private sealed class JsonValueFramer : IRecordFramer
     {
-        private readonly Stack<char> _openings = new([opening]);
+        private char[] _openings = new char[16];
+        private char _first;
+        private long _startPosition;
+        private int _depth;
+        private int _total;
         private bool _inString;
         private bool _escaping;
+        private ValueKind _kind;
 
-        public bool IsComplete => _openings.Count == 0;
+        public int Delimiter { get; private set; }
 
-        public bool Accept(char current)
+        public void Prepare(char first, long startPosition)
+        {
+            _first = first;
+            _startPosition = startPosition;
+        }
+
+        public void Reset()
+        {
+            _depth = 0;
+            _total = 0;
+            _inString = _first == '"';
+            _escaping = false;
+            Delimiter = -1;
+            _kind = _first switch
+            {
+                '{' or '[' => ValueKind.Composite,
+                '"' => ValueKind.String,
+                _ => ValueKind.Scalar
+            };
+
+            if (_kind == ValueKind.Composite)
+            {
+                _openings[0] = _first;
+                _depth = 1;
+            }
+        }
+
+        public FrameScanResult Scan(ReadOnlySpan<char> input)
+        {
+            for (var index = 0; index < input.Length; index++)
+            {
+                var current = input[index];
+                if (_total++ == 0)
+                    continue;
+
+                if (_kind == ValueKind.Scalar && TryCompleteScalar(current, out var scalarLength))
+                    return new FrameScanResult(index + 1, true, scalarLength);
+
+                if (_kind != ValueKind.Scalar && TryCompleteStructuredValue(current))
+                    return new FrameScanResult(index + 1, true, _total);
+            }
+
+            return new FrameScanResult(input.Length, false);
+        }
+
+        public FrameScanResult CompleteAtEof()
+        {
+            if (_total == 0)
+                return default;
+            if (_kind == ValueKind.Scalar)
+                return new FrameScanResult(0, true, _total);
+
+            var description = _kind == ValueKind.String ? "string" : "value";
+            throw new InvalidDataException($"The JSON {description} is incomplete at position {_startPosition + _total}.");
+        }
+
+        private bool TryCompleteScalar(char current, out int contentLength)
+        {
+            contentLength = _total - 1;
+            if (!IsJsonWhitespace(current) && current is not (',' or ']'))
+                return false;
+
+            Delimiter = current;
+            return true;
+        }
+
+        private bool TryCompleteStructuredValue(char current)
         {
             if (_inString)
-            {
-                AcceptStringCharacter(current);
-                return true;
-            }
+                return ProcessStringCharacter(current);
 
-            return AcceptStructuralCharacter(current);
+            return ProcessStructuralCharacter(current);
         }
 
-        private void AcceptStringCharacter(char current)
+        private bool ProcessStringCharacter(char current)
         {
             if (_escaping)
+            {
                 _escaping = false;
-            else if (current == '\\')
+                return false;
+            }
+
+            if (current == '\\')
+            {
                 _escaping = true;
-            else if (current == '"')
-                _inString = false;
+                return false;
+            }
+
+            if (current != '"')
+                return false;
+
+            _inString = false;
+            return _kind == ValueKind.String;
         }
 
-        private bool AcceptStructuralCharacter(char current)
+        private bool ProcessStructuralCharacter(char current)
         {
-            switch (current)
+            if (current == '"')
             {
-                case '"':
-                    _inString = true;
-                    return true;
-                case '{':
-                case '[':
-                    _openings.Push(current);
-                    return true;
-                case '}':
-                    return _openings.Pop() == '{';
-                case ']':
-                    return _openings.Pop() == '[';
-                default:
-                    return true;
+                _inString = true;
+                return false;
             }
+
+            if (current is '{' or '[')
+            {
+                EnsureStackCapacity(_depth + 1);
+                _openings[_depth++] = current;
+                return false;
+            }
+
+            if (current is not ('}' or ']'))
+                return false;
+
+            CloseComposite(current);
+            return _depth == 0;
+        }
+
+        private void CloseComposite(char current)
+        {
+            var expected = current == '}' ? '{' : '[';
+            if (_depth == 0 || _openings[_depth - 1] != expected)
+            {
+                throw new InvalidDataException(
+                    $"Unexpected character '{current}' at position {_startPosition + _total - 1}.");
+            }
+
+            _depth--;
+        }
+
+        private void EnsureStackCapacity(int required)
+        {
+            if (_openings.Length >= required)
+                return;
+            Array.Resize(ref _openings, _openings.Length * 2);
+        }
+
+        private enum ValueKind
+        {
+            Scalar,
+            String,
+            Composite
         }
     }
 }
