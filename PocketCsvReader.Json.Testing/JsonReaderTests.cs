@@ -57,6 +57,47 @@ public class JsonReaderTests
         Assert.That(reader.Read(), Is.False);
     }
 
+    [Test]
+    public void TopLevelArray_ReusesLabelsForRepeatedRowShapes()
+    {
+        const string content = """
+            [
+              { "id": 1, "name": "Ada" },
+              { "id": 2, "name": "Grace" },
+              { "name": "Linus", "id": 3 },
+              { "id": 4, "name": "Margaret" }
+            ]
+            """;
+        using var reader = CreateReader(content);
+
+        Assert.That(reader.Read(), Is.True);
+        var id = reader.GetName(0);
+        var name = reader.GetName(1);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetName(0), Is.SameAs(id));
+            Assert.That(reader.GetName(1), Is.SameAs(name));
+        });
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetOrdinal("name"), Is.Zero);
+            Assert.That(reader.GetOrdinal("id"), Is.EqualTo(1));
+        });
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetName(0), Is.SameAs(id));
+            Assert.That(reader.GetName(1), Is.SameAs(name));
+            Assert.That(reader.GetOrdinal("id"), Is.Zero);
+            Assert.That(reader.GetOrdinal("name"), Is.EqualTo(1));
+        });
+    }
+
     [TestCase("[]", 0)]
     [TestCase("{}", 1)]
     [TestCase("[{}, []]", 2)]

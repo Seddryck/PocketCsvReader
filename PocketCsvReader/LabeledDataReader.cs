@@ -9,6 +9,9 @@ namespace PocketCsvReader;
 public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     where TProfile : IProfile
 {
+    private readonly LabelRowShapeCache _rowShapeCache = new();
+    private LabelRowShape _rowShape = LabelRowShape.Empty;
+
     protected LabeledDataReader(Stream stream, TProfile profile, StringMapper stringMapper)
         : base(stream, profile, stringMapper)
     { }
@@ -24,13 +27,24 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
     public override int GetOrdinal(string name)
     {
+        ArgumentNullException.ThrowIfNull(name);
         if (Fields is null)
             throw new InvalidOperationException("Fields are not defined yet.");
-
-        var index = Array.IndexOf(Fields, name);
-        if (index >= 0)
+        if (_rowShape.TryGetOrdinal(name, out var index))
             return index;
         throw new ArgumentOutOfRangeException(nameof(name), $"Field '{name}' not found.");
+    }
+
+    public override bool TryGetOrdinal(string name, out int? ordinal)
+    {
+        if (Fields is not null && _rowShape.TryGetOrdinal(name, out var matchingOrdinal))
+        {
+            ordinal = matchingOrdinal;
+            return true;
+        }
+
+        ordinal = null;
+        return false;
     }
 
     public override string GetRawString(int i)
@@ -49,6 +63,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     protected override bool ReadCore()
     {
         Fields = [];
+        _rowShape = LabelRowShape.Empty;
 
         IsEof = RecordSource!.IsEndOfFile(out var recordSpan, out var recordState);
         if (recordState == RecordState.Eof)
@@ -58,13 +73,8 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         }
 
         Record = recordSpan.AsMemory();
-        Fields = new string[recordSpan.FieldSpans.Length];
-        for (var index = 0; index < recordSpan.FieldSpans.Length; index++)
-        {
-            var field = recordSpan.FieldSpans[index];
-            Fields[index] = field.DecodedLabel
-                ?? recordSpan.Span.Slice(field.Label.Start, field.Label.Length).ToString();
-        }
+        _rowShape = _rowShapeCache.Resolve(recordSpan.Memory, recordSpan.FieldSpans);
+        Fields = _rowShape.Labels;
 
         RowCount++;
         return true;
@@ -73,6 +83,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
     {
         Fields = [];
+        _rowShape = LabelRowShape.Empty;
 
         var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
@@ -83,13 +94,8 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         }
 
         Record = result.Record;
-        Fields = new string[result.Record.FieldSpans.Length];
-        for (var index = 0; index < result.Record.FieldSpans.Length; index++)
-        {
-            var field = result.Record.FieldSpans[index];
-            Fields[index] = field.DecodedLabel
-                ?? result.Record.Span.Slice(field.Label.Start, field.Label.Length).ToString();
-        }
+        _rowShape = _rowShapeCache.Resolve(result.Record.Span, result.Record.FieldSpans);
+        Fields = _rowShape.Labels;
 
         RowCount++;
         return true;
