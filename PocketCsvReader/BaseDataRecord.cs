@@ -165,7 +165,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= Record!.FieldSpans.Length)
+        if (i >= CurrentFieldSpans!.Length)
             return GetMissingField();
 
         var value = GetValueOrThrow(i);
@@ -419,10 +419,10 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= Record!.FieldSpans.Length)
+        if (i >= CurrentFieldSpans!.Length)
             return null;
 
-        var field = Record.FieldSpans[i];
+        var field = CurrentFieldSpans[i];
         if (field.Children is null)
             throw new NotImplementedException();
         return field;
@@ -461,8 +461,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (field.DecodedValue is not null)
             return field.DecodedValue.AsSpan();
-        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
-        return record.Span.Slice(field.Value.Start, field.Value.Length).Span;
+        if (CurrentFieldSpans is null)
+            throw new InvalidOperationException("Current record is not set.");
+        return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
     }
 
     /// <summary>

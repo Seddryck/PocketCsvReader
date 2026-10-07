@@ -17,7 +17,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     { }
 
     public override int FieldCount =>
-        Record?.FieldSpans.Length ?? throw new InvalidOperationException("Current record is not set.");
+        CurrentFieldSpans?.Length ?? throw new InvalidOperationException("Current record is not set.");
 
     public override string GetName(int i)
     {
@@ -51,10 +51,10 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         ValidateOrdinal(i);
 
-        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
-        var value = record.FieldSpans[i].Value;
+        var fields = CurrentFieldSpans ?? throw new InvalidOperationException("Current record is not set.");
+        var value = fields[i].Value;
         var quoteLength = value.WasQuoted ? 1 : 0;
-        return record.Span.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
+        return CurrentRecordMemory.Slice(value.Start - quoteLength, value.Length + (quoteLength * 2)).ToString();
     }
 
     protected override object GetNullValue(int i)
@@ -72,7 +72,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
             return false;
         }
 
-        Record = recordSpan.AsMemory();
+        SetRecord(recordSpan.Memory, recordSpan.FieldSpans);
         _rowShape = _rowShapeCache.Resolve(recordSpan.Memory, recordSpan.FieldSpans);
         Fields = _rowShape.Labels;
 
@@ -103,17 +103,17 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
     protected override NullableSpan GetValueOrThrow(int i)
     {
-        var record = Record ?? throw new InvalidOperationException("Current record is not set.");
-        if (i < 0 || i >= record.FieldSpans.Length)
+        var fields = CurrentFieldSpans ?? throw new InvalidOperationException("Current record is not set.");
+        if (i < 0 || i >= fields.Length)
             throw new ArgumentOutOfRangeException(nameof(i),
-                $"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {record.FieldSpans.Length} defined fields.");
+                $"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {fields.Length} defined fields.");
 
-        var field = record.FieldSpans[i];
+        var field = fields[i];
         if (field.Value.IsNull)
             return default;
         if (field.DecodedValue is not null)
             return field.DecodedValue.AsMemory();
-        return record.Slice(i).Span;
+        return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
     }
 
     private void ValidateOrdinal(int i)

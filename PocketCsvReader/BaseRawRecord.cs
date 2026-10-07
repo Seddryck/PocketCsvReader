@@ -13,12 +13,33 @@ public abstract class BaseRawRecord<P> where P : IProfile
     protected StringMapper StringMapper { get; }
     public int RowCount { get; protected set; } = 0;
     public string[]? Fields { get; protected set; } = null;
-    protected RecordMemory? Record { get; set; } = null;
+    private RecordMemory? _record;
+    protected RecordMemory? Record
+    {
+        get => _record ?? (CurrentFieldSpans is null
+            ? null
+            : _record = new RecordMemory(CurrentRecordMemory, CurrentFieldSpans));
+        set
+        {
+            _record = value;
+            CurrentRecordMemory = value?.Span ?? default;
+            CurrentFieldSpans = value?.FieldSpans;
+        }
+    }
+    protected ReadOnlyMemory<char> CurrentRecordMemory { get; private set; }
+    protected FieldSpan[]? CurrentFieldSpans { get; private set; }
 
     protected BaseRawRecord(P profile, StringMapper stringMapper)
     {
         Profile = profile;
         StringMapper = stringMapper;    
+    }
+
+    protected void SetRecord(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
+    {
+        _record = null;
+        CurrentRecordMemory = memory;
+        CurrentFieldSpans = fieldSpans;
     }
 
     public abstract int FieldCount { get; }
@@ -124,16 +145,16 @@ public abstract class BaseRawRecord<P> where P : IProfile
         /// </summary>
         /// <param name="i">The zero-based index of the field.</param>
         /// <returns>True if the field was quoted; otherwise, false.</returns>
-        public bool IsQuotedField(int i)
-        => Record!.FieldSpans[i].Value.WasQuoted;
+    public bool IsQuotedField(int i)
+        => CurrentFieldSpans![i].Value.WasQuoted;
 
     /// <summary>
         /// Determines whether the field at the specified index contains escaped characters in the raw record.
         /// </summary>
         /// <param name="i">The zero-based index of the field.</param>
         /// <returns>True if the field contains escaped characters; otherwise, false.</returns>
-        public bool IsEscapedField(int i)
-        => Record!.FieldSpans[i].Value.IsEscaped;
+    public bool IsEscapedField(int i)
+        => CurrentFieldSpans![i].Value.IsEscaped;
 #endif
 
     /// <summary>
