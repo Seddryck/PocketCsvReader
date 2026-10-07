@@ -24,7 +24,10 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             : new FieldSpan[profile.ProjectedProperties.Count];
         _projectedValueFramer = profile.ProjectedProperties is null
             ? null
-            : new ProjectedJsonValueFramer(profile.ProjectedProperties, _projectedFields!);
+            : new ProjectedJsonValueFramer(
+                profile.ProjectedProperties,
+                _projectedFields!,
+                profile.OrderedProjection);
         _valueFramer = _projectedValueFramer is null
             ? new JsonValueFramer()
             : _projectedValueFramer;
