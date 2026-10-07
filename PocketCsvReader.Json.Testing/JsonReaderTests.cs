@@ -242,6 +242,24 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void Projection_SkippedScalarFastPaths_CrossBufferBoundaries()
+    {
+        const string content = """
+            [{"ignoredString":"escaped\nvalue","ignoredTrue":true,"ignoredFalse":false,
+              "ignoredNull":null,"ignoredInteger":-12345,"ignoredDecimal":12.5e+2,"name":"Ada"}]
+            """;
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 1, ReadAhead: false))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
     public void Projection_EscapedAndCompositeSelectedValues_UseMaterializationFallback()
     {
         const string content = "[{\"text\":\"line\\nfeed\",\"items\":[null,2,\"three\"]}]";
@@ -266,6 +284,23 @@ public class JsonReaderTests
     {
         var json = new JsonReaderBuilder()
             .WithProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [TestCase("[{\"ignored\":\"bad\nx\",\"name\":\"Ada\"}]")]
+    [TestCase("[{\"ignored\":truex,\"name\":\"Ada\"}]")]
+    [TestCase("[{\"ignored\":1.,\"name\":\"Ada\"}]")]
+    [TestCase("[{\"ignored\":1e+,\"name\":\"Ada\"}]")]
+    [TestCase("[{\"ignored\":-,\"name\":\"Ada\"}]")]
+    [TestCase("[{\"ignored\":00,\"name\":\"Ada\"}]")]
+    public void Projection_MalformedSkippedScalarsAcrossBuffers_Throw(string content)
+    {
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 1, ReadAhead: false))
             .Build();
         using var reader = json.ToDataReader(StreamFor(content));
 

@@ -1,10 +1,19 @@
+using System.Buffers;
+
 namespace PocketCsvReader.Json;
 
 internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 {
+    private const ulong PropertyHashOffset = 14695981039346656037UL;
+    private const ulong PropertyHashPrime = 1099511628211UL;
+    private static readonly SearchValues<char> StringSpecialCharacters = SearchValues.Create(
+        "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F" +
+        "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\");
+
     private readonly IReadOnlyList<string> _projectedProperties;
+    private readonly ulong[] _projectedPropertyHashes;
+    private readonly char[] _propertyNameBuffer;
     private readonly FieldSpan[] _fields;
-    private readonly bool[] _propertyCandidates;
     private ContainerFrame[] _stack = new ContainerFrame[16];
     private int _depth;
     private int _position;
@@ -24,6 +33,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private int _unicodeValue;
     private char _highSurrogate;
     private int _propertyLength;
+    private ulong _propertyHash;
     private bool _complete;
 
     public int Delimiter { get; private set; }
@@ -33,7 +43,15 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     {
         _projectedProperties = projectedProperties;
         _fields = fields;
-        _propertyCandidates = new bool[projectedProperties.Count];
+        _projectedPropertyHashes = new ulong[projectedProperties.Count];
+        var maximumPropertyLength = 0;
+        for (var ordinal = 0; ordinal < projectedProperties.Count; ordinal++)
+        {
+            var property = projectedProperties[ordinal];
+            _projectedPropertyHashes[ordinal] = HashProperty(property);
+            maximumPropertyLength = Math.Max(maximumPropertyLength, property.Length);
+        }
+        _propertyNameBuffer = new char[maximumPropertyLength];
     }
 
     public void Prepare(char first, long startPosition)
@@ -55,6 +73,26 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         var index = 0;
         while (index < input.Length)
         {
+            if (_token == TokenKind.String)
+            {
+                ScanString(input, ref index);
+                if (_complete)
+                    return new FrameScanResult(index, true, _position);
+                continue;
+            }
+
+            if (_token == TokenKind.Literal && _tokenOrdinal < 0)
+            {
+                ScanSkippedLiteral(input, ref index);
+                continue;
+            }
+
+            if (_token == TokenKind.Number && _tokenOrdinal < 0)
+            {
+                ScanSkippedNumber(input, ref index);
+                continue;
+            }
+
             if (!Process(input[index]))
                 continue;
 
@@ -229,8 +267,62 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
         if (isProperty && _depth == 1)
         {
-            Array.Fill(_propertyCandidates, true);
             _propertyLength = 0;
+            _propertyHash = PropertyHashOffset;
+        }
+    }
+
+    private void ScanString(ReadOnlySpan<char> input, ref int index)
+    {
+        while (index < input.Length && _token == TokenKind.String)
+        {
+            if (_stringEscapeState != StringEscapeState.None)
+            {
+                ProcessStringEscape(input[index]);
+                index++;
+                _position++;
+                continue;
+            }
+
+            var remaining = input[index..];
+            var specialOffset = remaining.IndexOfAny(StringSpecialCharacters);
+            if (specialOffset < 0)
+            {
+                AppendPropertyCharacters(remaining);
+                _position += remaining.Length;
+                index = input.Length;
+                return;
+            }
+
+            if (specialOffset > 0)
+            {
+                AppendPropertyCharacters(remaining[..specialOffset]);
+                index += specialOffset;
+                _position += specialOffset;
+            }
+
+            var current = input[index];
+            if (current < ' ')
+                throw Error("An unescaped control character is not allowed in a JSON string");
+
+            if (current == '\\')
+            {
+                _stringWasEscaped = true;
+                if (!_stringIsProperty && _tokenOrdinal >= 0)
+                    RequiresValueMaterialization = true;
+                _stringEscapeState = StringEscapeState.AfterSlash;
+            }
+            else
+            {
+                if (_stringIsProperty)
+                    CompletePropertyName();
+                else
+                    CompleteStringValue();
+                _token = TokenKind.None;
+            }
+
+            index++;
+            _position++;
         }
     }
 
@@ -261,7 +353,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (current < ' ')
             throw Error("An unescaped control character is not allowed in a JSON string");
 
-        MatchPropertyCharacter(current);
+        AppendPropertyCharacter(current);
         return true;
     }
 
@@ -290,7 +382,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                     't' => '\t',
                     _ => throw Error($"Invalid JSON escape character '{current}'")
                 };
-                MatchPropertyCharacter(decoded);
+                AppendPropertyCharacter(decoded);
                 _stringEscapeState = StringEscapeState.None;
                 return true;
 
@@ -329,8 +421,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         {
             if (!char.IsLowSurrogate(codeUnit))
                 throw Error("A high surrogate must be followed by a low surrogate");
-            MatchPropertyCharacter(_highSurrogate);
-            MatchPropertyCharacter(codeUnit);
+            AppendPropertyCharacter(_highSurrogate);
+            AppendPropertyCharacter(codeUnit);
             _highSurrogate = '\0';
             _stringEscapeState = StringEscapeState.None;
             return;
@@ -345,25 +437,28 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             return;
         }
 
-        MatchPropertyCharacter(codeUnit);
+        AppendPropertyCharacter(codeUnit);
         _stringEscapeState = StringEscapeState.None;
     }
 
-    private void MatchPropertyCharacter(char value)
+    private void AppendPropertyCharacters(ReadOnlySpan<char> value)
     {
         if (!_stringIsProperty || _depth != 1)
             return;
 
-        for (var ordinal = 0; ordinal < _propertyCandidates.Length; ordinal++)
-        {
-            if (_propertyCandidates[ordinal]
-                && (_propertyLength >= _projectedProperties[ordinal].Length
-                    || _projectedProperties[ordinal][_propertyLength] != value))
-            {
-                _propertyCandidates[ordinal] = false;
-            }
-        }
+        foreach (var character in value)
+            AppendPropertyCharacter(character);
+    }
+
+    private void AppendPropertyCharacter(char value)
+    {
+        if (!_stringIsProperty || _depth != 1)
+            return;
+
+        if (_propertyLength < _propertyNameBuffer.Length)
+            _propertyNameBuffer[_propertyLength] = value;
         _propertyLength++;
+        _propertyHash = (_propertyHash ^ value) * PropertyHashPrime;
     }
 
     private void CompletePropertyName()
@@ -372,10 +467,12 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         var ordinal = -1;
         if (_depth == 1)
         {
-            for (var candidate = 0; candidate < _propertyCandidates.Length; candidate++)
+            for (var candidate = 0; candidate < _projectedProperties.Count; candidate++)
             {
-                if (_propertyCandidates[candidate]
-                    && _projectedProperties[candidate].Length == _propertyLength)
+                var projectedProperty = _projectedProperties[candidate];
+                if (_projectedPropertyHashes[candidate] == _propertyHash
+                    && projectedProperty.Length == _propertyLength
+                    && _propertyNameBuffer.AsSpan(0, _propertyLength).SequenceEqual(projectedProperty))
                 {
                     ordinal = candidate;
                     break;
@@ -426,6 +523,35 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             throw Error("Invalid character after a JSON literal");
         CompletePrimitive(isNull: _literal == "null");
         return false;
+    }
+
+    private void ScanSkippedLiteral(ReadOnlySpan<char> input, ref int index)
+    {
+        var remainingLiteral = _literal.AsSpan(_literalIndex);
+        var available = Math.Min(remainingLiteral.Length, input.Length - index);
+        var inputPart = input.Slice(index, available);
+        if (!inputPart.SequenceEqual(remainingLiteral[..available]))
+        {
+            for (var offset = 0; offset < available; offset++)
+            {
+                if (inputPart[offset] != remainingLiteral[offset])
+                {
+                    _position += offset;
+                    index += offset;
+                    throw Error("Invalid JSON literal");
+                }
+            }
+        }
+
+        _literalIndex += available;
+        _position += available;
+        index += available;
+        if (_literalIndex < _literal.Length || index == input.Length)
+            return;
+
+        if (!IsValueDelimiter(input[index]))
+            throw Error("Invalid character after a JSON literal");
+        CompletePrimitive(isNull: _literal == "null");
     }
 
     private void BeginNumber(
@@ -520,6 +646,123 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             default:
                 throw new InvalidOperationException("Invalid JSON number parser state.");
         }
+    }
+
+    private void ScanSkippedNumber(ReadOnlySpan<char> input, ref int index)
+    {
+        while (index < input.Length && _token == TokenKind.Number)
+        {
+            var current = input[index];
+            switch (_numberState)
+            {
+                case NumberState.AfterMinus:
+                    if (current == '0')
+                        _numberState = NumberState.Zero;
+                    else if (current is >= '1' and <= '9')
+                        _numberState = NumberState.Integer;
+                    else
+                        throw Error("A digit was expected after the JSON number sign");
+                    Consume(ref index);
+                    break;
+
+                case NumberState.Zero:
+                    if (current == '.')
+                    {
+                        _numberState = NumberState.Dot;
+                        Consume(ref index);
+                    }
+                    else if (current is 'e' or 'E')
+                    {
+                        _numberState = NumberState.ExponentMark;
+                        Consume(ref index);
+                    }
+                    else if (current is >= '0' and <= '9')
+                        throw Error("A JSON number cannot contain a leading zero");
+                    else
+                        CompleteNumberAtDelimiter(current);
+                    break;
+
+                case NumberState.Integer:
+                    ConsumeDigits(input, ref index);
+                    if (index == input.Length)
+                        break;
+                    current = input[index];
+                    if (current == '.')
+                    {
+                        _numberState = NumberState.Dot;
+                        Consume(ref index);
+                    }
+                    else if (current is 'e' or 'E')
+                    {
+                        _numberState = NumberState.ExponentMark;
+                        Consume(ref index);
+                    }
+                    else
+                        CompleteNumberAtDelimiter(current);
+                    break;
+
+                case NumberState.Dot:
+                    if (current is not (>= '0' and <= '9'))
+                        throw Error("A fractional digit was expected");
+                    _numberState = NumberState.Fraction;
+                    Consume(ref index);
+                    break;
+
+                case NumberState.Fraction:
+                    ConsumeDigits(input, ref index);
+                    if (index == input.Length)
+                        break;
+                    current = input[index];
+                    if (current is 'e' or 'E')
+                    {
+                        _numberState = NumberState.ExponentMark;
+                        Consume(ref index);
+                    }
+                    else
+                        CompleteNumberAtDelimiter(current);
+                    break;
+
+                case NumberState.ExponentMark:
+                    if (current is '+' or '-')
+                        _numberState = NumberState.ExponentSign;
+                    else if (current is >= '0' and <= '9')
+                        _numberState = NumberState.Exponent;
+                    else
+                        throw Error("An exponent digit was expected");
+                    Consume(ref index);
+                    break;
+
+                case NumberState.ExponentSign:
+                    if (current is not (>= '0' and <= '9'))
+                        throw Error("An exponent digit was expected");
+                    _numberState = NumberState.Exponent;
+                    Consume(ref index);
+                    break;
+
+                case NumberState.Exponent:
+                    ConsumeDigits(input, ref index);
+                    if (index < input.Length)
+                        CompleteNumberAtDelimiter(input[index]);
+                    break;
+
+                default:
+                    throw new InvalidOperationException("Invalid JSON number parser state.");
+            }
+        }
+    }
+
+    private void ConsumeDigits(ReadOnlySpan<char> input, ref int index)
+    {
+        var start = index;
+        while (index < input.Length && input[index] is >= '0' and <= '9')
+            index++;
+        _position += index - start;
+    }
+
+    private void Consume(ref int index)
+    {
+        index++;
+        _position++;
     }
 
     private bool CompleteNumberAtDelimiter(char current)
@@ -632,6 +875,14 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             >= 'A' and <= 'F' => value - 'A' + 10,
             _ => -1
         };
+
+    private static ulong HashProperty(ReadOnlySpan<char> property)
+    {
+        var hash = PropertyHashOffset;
+        foreach (var character in property)
+            hash = (hash ^ character) * PropertyHashPrime;
+        return hash;
+    }
 
     private static SpanInfo CompletedSpan(
         int start,
