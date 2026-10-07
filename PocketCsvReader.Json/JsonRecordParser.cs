@@ -40,6 +40,41 @@ internal ref struct JsonRecordParser
         return parser.ParseRoot();
     }
 
+    public static void MaterializeProjectedValues(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        FieldSpan[] fields)
+    {
+        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
+        {
+            var field = fields[ordinal];
+            var valueStart = field.Value.WasQuoted
+                ? field.Value.Start - 1
+                : field.Value.Start;
+            var isComposite = !field.Value.WasQuoted
+                && json[valueStart] is '{' or '[';
+            if (!field.Value.IsEscaped && !isComposite)
+                continue;
+
+            var parser = new JsonRecordParser(json, whitespaces, null, null)
+            {
+                _position = valueStart
+            };
+            var materialized = parser.ParseValue(allowObject: true, allowCompositeArrayItems: true);
+            var expectedEnd = field.Value.Start
+                + field.Value.Length
+                + (field.Value.WasQuoted ? 1 : 0);
+            if (parser._position != expectedEnd)
+                throw new InvalidDataException($"Unexpected character at position {parser._position}.");
+
+            fields[ordinal] = materialized with
+            {
+                Label = field.Label,
+                DecodedLabel = field.DecodedLabel
+            };
+        }
+    }
+
     private FieldSpan[] ParseRoot()
     {
         SkipWhitespace();

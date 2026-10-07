@@ -219,6 +219,60 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void Projection_CrossBufferScalarFields_AreParsedDuringFraming()
+    {
+        const string content = "[{\"ignored\":{\"nested\":[true,null,-1.5e2]},\"na\\u006de\":\"Ada\",\"amount\":12.50,\"count\":7}]";
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection
+                .Property("name")
+                .Property("amount")
+                .Property("count"))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 2, ReadAhead: false))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(12.50m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(7));
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Projection_EscapedAndCompositeSelectedValues_UseMaterializationFallback()
+    {
+        const string content = "[{\"text\":\"line\\nfeed\",\"items\":[null,2,\"three\"]}]";
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("text").Property("items"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("line\nfeed"));
+            Assert.That(reader.GetArray(1), Is.EqualTo(new object?[] { null, "2", "three" }));
+        });
+    }
+
+    [TestCase("[{\"name\":\"Ada\",\"ignored\":[1,]}]")]
+    [TestCase("[{\"name\":\"Ada\",\"ignored\":\"bad\\x\"}]")]
+    [TestCase("[{\"name\":\"Ada\",\"ignored\":truex}]")]
+    [TestCase("[{\"name\":\"Ada\",\"ignored\":{\"nested\" 1}}]")]
+    public void Projection_MalformedSkippedStructures_Throw(string content)
+    {
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
     public async Task Projection_ReadAsync_UsesProjectedOrdinals()
     {
         var json = new JsonReaderBuilder()
