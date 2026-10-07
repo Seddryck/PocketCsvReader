@@ -90,8 +90,8 @@ The JSON, NDJSON, and LTSV/logfmt readers share the labeled-reader layer, but th
 | Project selected JSON properties | `WithProjection` | `WithProjection` | Not applicable |
 | Reuse the projected `FieldSpan` buffer between records | Yes | Yes | Not applicable |
 | Find projected fields while locating the record boundary | Yes | No; projection runs after NDJSON framing | Not applicable |
-| Stop property lookup after every projected field is found | Yes | No | Not applicable |
-| Require projected properties in a known order | `WithOrderedProjection` | No | Not applicable |
+| Stop property lookup after every projected field is found | Yes | Yes | Not applicable |
+| Require projected properties in a known order | `WithOrderedProjection` | `WithOrderedProjection` | Not applicable |
 
 ### Repeated labeled row shapes
 
@@ -105,9 +105,11 @@ When rows repeat the same labels in the same order, their label strings and name
 
 ### NDJSON projection
 
-`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. NDJSON first finds the complete record according to its line terminator and comment settings, then uses the shared JSON field parser to validate the record, skip unselected values, and populate a reusable projected-field buffer.
+`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. NDJSON first finds the complete record according to its line terminator and comment settings, then uses the shared projected JSON scanner to validate the record, skip unselected values, and populate a reusable projected-field buffer. It uses property-name fingerprints and stops projection lookup after all selected fields have been found.
 
-Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing or ordered-projection fast paths.
+`NdjsonReaderBuilder.WithOrderedProjection` avoids the fingerprint lookup by comparing each property with the next expected selected name. Unselected properties may occur between selected properties; reordered selected properties are rejected.
+
+Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing optimization.
 
 ### LTSV and logfmt
 

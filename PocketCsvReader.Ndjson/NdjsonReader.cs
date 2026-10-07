@@ -51,6 +51,7 @@ public class NdjsonReader : FlatFileReader<NdjsonProfile, NdjsonDataReader>
             profile.Resource,
             profile.Parsers,
             profile.ParserOptimizations with { BufferSize = bufferSize },
-            profile.ProjectedProperties);
+            profile.ProjectedProperties,
+            profile.OrderedProjection);
     }
 }

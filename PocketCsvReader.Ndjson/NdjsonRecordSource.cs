@@ -9,6 +9,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     private readonly NdjsonFramer _framer;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
+    private readonly ProjectedJsonValueFramer? _projectedValueFramer;
 
     public NdjsonProfile Profile { get; }
 
@@ -20,6 +21,12 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         _projectedFields = profile.ProjectedProperties is null
             ? null
             : new FieldSpan[profile.ProjectedProperties.Count];
+        _projectedValueFramer = profile.ProjectedProperties is null
+            ? null
+            : new ProjectedJsonValueFramer(
+                profile.ProjectedProperties,
+                _projectedFields!,
+                profile.OrderedProjection);
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -77,24 +84,51 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
 
         try
         {
-            return new ParsedRecord(
-                candidate,
-                ParseFields(candidate.Span));
+            return ParseCandidate(candidate);
         }
         catch (InvalidDataException) when (commentIndex >= 0)
         {
-            return new ParsedRecord(
-                record,
-                ParseFields(record.Span));
+            return ParseCandidate(record);
         }
     }
 
-    private FieldSpan[] ParseFields(ReadOnlySpan<char> record)
-        => JsonRecordParser.Parse(
-            record,
-            Profile.Dialect.Whitespaces,
-            Profile.ProjectedProperties,
-            _projectedFields);
+    private ParsedRecord ParseCandidate(ReadOnlyMemory<char> record)
+    {
+        if (_projectedValueFramer is null)
+            return new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
+
+        var projectedRecord = Trim(record);
+        _projectedValueFramer.Prepare(projectedRecord.Span[0], 0);
+        _projectedValueFramer.Reset();
+        var result = _projectedValueFramer.Scan(projectedRecord.Span);
+        if (!result.Complete)
+            _projectedValueFramer.CompleteAtEof();
+        if (!IsNullOrWhiteSpace(projectedRecord.Span[result.Consumed..]))
+            throw new InvalidDataException($"Unexpected character after the JSON object at position {result.Consumed}.");
+
+        if (_projectedValueFramer.RequiresValueMaterialization)
+        {
+            JsonRecordParser.MaterializeProjectedValues(
+                projectedRecord.Span,
+                Profile.Dialect.Whitespaces,
+                _projectedFields!);
+        }
+
+        return new ParsedRecord(projectedRecord, _projectedFields!);
+    }
+
+    private ReadOnlyMemory<char> Trim(ReadOnlyMemory<char> value)
+    {
+        var start = 0;
+        while (start < value.Length && IsWhitespace(value.Span[start]))
+            start++;
+
+        var length = value.Length - start;
+        while (length > 0 && IsWhitespace(value.Span[start + length - 1]))
+            length--;
+
+        return value.Slice(start, length);
+    }
 
     private ReadOnlyMemory<char> TrimEnd(ReadOnlyMemory<char> value)
     {

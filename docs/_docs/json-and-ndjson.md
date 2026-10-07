@@ -78,3 +78,15 @@ using var reader = ndjson.ToDataReader("events.ndjson");
 ```
 
 Each NDJSON record must be a JSON object containing every projected property. Additional properties may appear anywhere and remain fully validated. Projection does not change custom line terminators, blank-line handling, or comment behavior.
+
+When the selected properties have a guaranteed input order, `WithOrderedProjection` provides the same stricter contract as the JSON reader:
+
+```csharp
+var ndjson = new NdjsonReaderBuilder()
+    .WithOrderedProjection(projection => projection
+        .Property("event")
+        .Property("timestamp"))
+    .Build();
+```
+
+Unselected properties may occur before, after, or between selected properties, but the selected properties themselves must occur in configuration order. A reordered selected property is rejected.

@@ -402,6 +402,74 @@ public class NdjsonReaderTest
     }
 
     [Test]
+    public void Projection_EscapedAndCompositeSelectedValues_AreMaterialized()
+    {
+        const string content = "{\"text\":\"line\\nfeed\",\"items\":[null,2,\"three\"]}";
+        var ndjson = new NdjsonReaderBuilder()
+            .WithProjection(projection => projection.Property("text").Property("items"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("line\nfeed"));
+            Assert.That(reader.GetArray(1), Is.EqualTo(new object?[] { null, "2", "three" }));
+        });
+    }
+
+    [Test]
+    public void OrderedProjection_AllowsSkippedPropertiesBetweenProjectedProperties()
+    {
+        const string content = " \t{\"ignored\":0,\"na\\u006de\":\"Ada\",\"other\":[1,2],\"amount\":12.50,\"count\":7,\"tail\":true} # trailing";
+        var ndjson = new NdjsonReaderBuilder()
+            .WithDialect(dialect => dialect.WithCommentChar('#'))
+            .WithOrderedProjection(projection => projection
+                .Property("name")
+                .Property("amount")
+                .Property("count"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(12.50m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(7));
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void OrderedProjection_ReorderedProjectedProperty_Throws()
+    {
+        var ndjson = new NdjsonReaderBuilder()
+            .WithOrderedProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"count\":7,\"name\":\"Ada\"}")));
+
+        var exception = Assert.Throws<InvalidDataException>(() => reader.Read());
+
+        Assert.That(exception!.Message, Does.Contain("count"));
+    }
+
+    [Test]
+    public void OrderedProjection_MalformedTrailingProperty_Throws()
+    {
+        var ndjson = new NdjsonReaderBuilder()
+            .WithOrderedProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"name\":\"Ada\",\"ignored\":01}")));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
     public async Task Projection_ReadAsync_UsesProjectedOrdinals()
     {
         var ndjson = new NdjsonReaderBuilder()
