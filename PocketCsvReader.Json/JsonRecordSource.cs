@@ -6,7 +6,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
-    private readonly JsonValueFramer _valueFramer = new();
+    private readonly IJsonValueFramer _valueFramer;
+    private readonly ProjectedJsonValueFramer? _projectedValueFramer;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private DocumentState _state;
@@ -21,6 +22,12 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         _projectedFields = profile.ProjectedProperties is null
             ? null
             : new FieldSpan[profile.ProjectedProperties.Count];
+        _projectedValueFramer = profile.ProjectedProperties is null
+            ? null
+            : new ProjectedJsonValueFramer(profile.ProjectedProperties, _projectedFields!);
+        _valueFramer = _projectedValueFramer is null
+            ? new JsonValueFramer()
+            : _projectedValueFramer;
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -39,7 +46,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         var recordStart = _cursor.Position;
         var (capture, delimiter) = ReadValue((char)first);
         _cursor.Protect(capture);
-        var fields = ParseFields(capture.Memory, recordStart);
+        var fields = GetFields(capture.Memory, recordStart);
 
         var isEndOfFile = _state == DocumentState.SingleRoot
             ? CompleteSingleRoot(delimiter)
@@ -67,7 +74,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         var recordStart = _cursor.Position;
         var (capture, delimiter) = await ReadValueAsync((char)first, cancellationToken).ConfigureAwait(false);
         _cursor.Protect(capture);
-        var fields = ParseFields(capture.Memory, recordStart);
+        var fields = GetFields(capture.Memory, recordStart);
         var isEndOfFile = _state == DocumentState.SingleRoot
             ? await CompleteSingleRootAsync(delimiter, cancellationToken).ConfigureAwait(false)
             : await CompleteArrayElementAsync(delimiter, cancellationToken).ConfigureAwait(false);
@@ -90,6 +97,26 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             throw new InvalidDataException(
                 $"Invalid JSON value starting at position {recordStart}: {exception.Message}", exception);
         }
+    }
+
+    private FieldSpan[] GetFields(ReadOnlyMemory<char> json, long recordStart)
+    {
+        if (_projectedValueFramer is null)
+            return ParseFields(json, recordStart);
+
+        if (_projectedValueFramer.RequiresValueMaterialization)
+        {
+            try
+            {
+                JsonRecordParser.MaterializeProjectedValues(json.Span, JsonWhitespaces, _projectedFields!);
+            }
+            catch (InvalidDataException exception)
+            {
+                throw new InvalidDataException(
+                    $"Invalid JSON value starting at position {recordStart}: {exception.Message}", exception);
+            }
+        }
+        return _projectedFields!;
     }
 
     private int PeekFirstRootCharacter()
@@ -319,7 +346,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         Complete
     }
 
-    private sealed class JsonValueFramer : IRecordFramer
+    private sealed class JsonValueFramer : IJsonValueFramer
     {
         private char[] _openings = new char[16];
         private char _first;
