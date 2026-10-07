@@ -23,14 +23,14 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         {
             _reader.BeginOperation();
             var capture = _reader.ReadFrame(_framer);
-            if (capture is null)
+            if (capture is not { } captured)
                 return EndOfFile(out record, out recordState);
 
-            var parsed = ParseRecord(capture.Memory, _framer.CommentIndex);
+            var parsed = ParseRecord(captured.Memory, _framer.CommentIndex);
             if (parsed is null)
                 continue;
 
-            _reader.Protect(capture);
+            _reader.Protect(captured);
             var isEndOfFile = _reader.Peek() < 0;
             record = RecordSpan.FromMemory(parsed.Value.Memory, parsed.Value.Fields);
             recordState = RecordState.Record;
@@ -45,14 +45,14 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         {
             _reader.BeginOperation();
             var capture = await _reader.ReadFrameAsync(_framer, cancellationToken).ConfigureAwait(false);
-            if (capture is null)
+            if (capture is not { } captured)
                 return new(true, RecordMemory.Empty, RecordState.Eof);
 
-            var parsed = ParseRecord(capture.Memory, _framer.CommentIndex);
+            var parsed = ParseRecord(captured.Memory, _framer.CommentIndex);
             if (parsed is null)
                 continue;
 
-            _reader.Protect(capture);
+            _reader.Protect(captured);
             var isEndOfFile = await _reader.PeekAsync(cancellationToken).ConfigureAwait(false) < 0;
             return new(
                 isEndOfFile,

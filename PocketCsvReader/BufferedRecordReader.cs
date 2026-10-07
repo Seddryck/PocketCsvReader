@@ -315,8 +315,4 @@ internal sealed class BufferedRecordReader : IDisposable
     private readonly record struct BufferSegment(char[] Array, int Start, int Length);
 }
 
-internal sealed class CapturedRecord(ReadOnlyMemory<char> memory, char[]? backingArray)
-{
-    public ReadOnlyMemory<char> Memory { get; } = memory;
-    public char[]? BackingArray { get; } = backingArray;
-}
+internal readonly record struct CapturedRecord(ReadOnlyMemory<char> Memory, char[]? BackingArray);
