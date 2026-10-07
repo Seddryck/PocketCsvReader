@@ -197,7 +197,10 @@ public class JsonReaderTests
         var json = new JsonReaderBuilder()
             .WithProjection(projection => projection.Property("name").Property("count"))
             .Build();
-        using var reader = json.ToDataReader(StreamFor("[{\"name\":\"Ada\"}]"));
+        using var reader = json.ToDataReader(StreamFor("[{\"name\":\"Ada\",\"count\":7},{\"name\":\"Grace\"}]"));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(1), Is.EqualTo(7));
 
         var exception = Assert.Throws<InvalidDataException>(() => reader.Read());
 

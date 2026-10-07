@@ -7,24 +7,36 @@ internal ref struct JsonRecordParser
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
     private readonly IReadOnlyList<string>? _projectedProperties;
+    private readonly FieldSpan[]? _projectedFields;
     private int _position;
 
     private JsonRecordParser(
         ReadOnlySpan<char> json,
         char[] whitespaces,
-        IReadOnlyList<string>? projectedProperties)
+        IReadOnlyList<string>? projectedProperties,
+        FieldSpan[]? projectedFields)
     {
         _json = json;
         _whitespaces = whitespaces;
         _projectedProperties = projectedProperties;
+        _projectedFields = projectedFields;
     }
 
     public static FieldSpan[] Parse(
         ReadOnlySpan<char> json,
         char[] whitespaces,
-        IReadOnlyList<string>? projectedProperties = null)
+        IReadOnlyList<string>? projectedProperties = null,
+        FieldSpan[]? projectedFields = null)
     {
-        var parser = new JsonRecordParser(json, whitespaces, projectedProperties);
+        if (projectedFields is not null
+            && (projectedProperties is null || projectedFields.Length != projectedProperties.Count))
+        {
+            throw new ArgumentException(
+                "The projected field buffer must match the configured property count.",
+                nameof(projectedFields));
+        }
+
+        var parser = new JsonRecordParser(json, whitespaces, projectedProperties, projectedFields);
         return parser.ParseRoot();
     }
 
@@ -46,10 +58,12 @@ internal ref struct JsonRecordParser
 
     private FieldSpan[] ParseProjectedObject()
     {
+        var projectedProperties = _projectedProperties!;
         Expect('{');
         SkipWhitespace();
 
-        var fields = new FieldSpan[_projectedProperties!.Count];
+        var fields = _projectedFields ?? new FieldSpan[projectedProperties.Count];
+        Array.Clear(fields);
         if (Current != '}')
         {
             while (true)
@@ -81,7 +95,7 @@ internal ref struct JsonRecordParser
         for (var ordinal = 0; ordinal < fields.Length; ordinal++)
         {
             if (!fields[ordinal].Value.IsStarted)
-                throw new InvalidDataException($"Projected property '{_projectedProperties[ordinal]}' was not found.");
+                throw new InvalidDataException($"Projected property '{projectedProperties[ordinal]}' was not found.");
         }
 
         return fields;
