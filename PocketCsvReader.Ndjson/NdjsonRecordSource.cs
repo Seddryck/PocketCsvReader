@@ -7,6 +7,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
 {
     private readonly BufferedRecordReader _reader;
     private readonly NdjsonFramer _framer;
+    // The current record owns this buffer until the reader advances to the next record.
+    private readonly FieldSpan[]? _projectedFields;
 
     public NdjsonProfile Profile { get; }
 
@@ -15,6 +17,9 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         Profile = profile;
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
         _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
+        _projectedFields = profile.ProjectedProperties is null
+            ? null
+            : new FieldSpan[profile.ProjectedProperties.Count];
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -74,15 +79,22 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         {
             return new ParsedRecord(
                 candidate,
-                JsonRecordParser.Parse(candidate.Span, Profile.Dialect.Whitespaces));
+                ParseFields(candidate.Span));
         }
         catch (InvalidDataException) when (commentIndex >= 0)
         {
             return new ParsedRecord(
                 record,
-                JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
+                ParseFields(record.Span));
         }
     }
+
+    private FieldSpan[] ParseFields(ReadOnlySpan<char> record)
+        => JsonRecordParser.Parse(
+            record,
+            Profile.Dialect.Whitespaces,
+            Profile.ProjectedProperties,
+            _projectedFields);
 
     private ReadOnlyMemory<char> TrimEnd(ReadOnlyMemory<char> value)
     {

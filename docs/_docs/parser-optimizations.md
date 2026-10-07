@@ -77,3 +77,38 @@ The `ParserOptimizationOptions` record provides a set of parameters to fine-tune
 - **Impact:**
   - When `true`, a lookup table is used, which speeds up character checks during parsing.
   - Disabling this might slightly reduce parsing speed but save some memory.
+
+## JSON, NDJSON, and key-value readers
+
+The JSON, NDJSON, and LTSV/logfmt readers share the labeled-reader layer, but their framing and field-parsing strategies differ. The following optimizations are applied automatically unless the table identifies an opt-in API.
+
+| Optimization | JSON | NDJSON | LTSV/logfmt |
+| --- | --- | --- | --- |
+| Cache repeated label sequences and ordinal dictionaries | Yes | Yes | Yes |
+| Keep synchronous current-record memory without a per-row wrapper | Yes | Yes | Yes |
+| Read records through reusable chunk buffers | Yes | Yes | No; records currently use line-based strings |
+| Project selected JSON properties | `WithProjection` | `WithProjection` | Not applicable |
+| Reuse the projected `FieldSpan` buffer between records | Yes | Yes | Not applicable |
+| Find projected fields while locating the record boundary | Yes | No; projection runs after NDJSON framing | Not applicable |
+| Stop property lookup after every projected field is found | Yes | No | Not applicable |
+| Require projected properties in a known order | `WithOrderedProjection` | No | Not applicable |
+
+### Repeated labeled row shapes
+
+When rows repeat the same labels in the same order, their label strings and name-to-ordinal dictionary are reused. A different field count or label order is treated as another row shape. Up to 64 shapes are cached per data reader so highly heterogeneous input remains bounded.
+
+### JSON projection
+
+`JsonReaderBuilder.WithProjection` validates the complete JSON value while materializing only selected properties. The JSON reader combines projection with object framing, reuses field metadata, compares property names without creating a string for ordinary unescaped names, and stops projection lookup once all selected fields have been found.
+
+`JsonReaderBuilder.WithOrderedProjection` is a faster opt-in contract. Selected properties must occur in the configured order, although unselected properties may occur between them. Reordered selected properties are rejected.
+
+### NDJSON projection
+
+`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. NDJSON first finds the complete record according to its line terminator and comment settings, then uses the shared JSON field parser to validate the record, skip unselected values, and populate a reusable projected-field buffer.
+
+Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing or ordered-projection fast paths.
+
+### LTSV and logfmt
+
+The key-value readers benefit from shared row-shape caching and direct synchronous record storage. They do not use JSON projection or JSON framing. Their current record sources read one complete line as a string before parsing its labeled fields.
