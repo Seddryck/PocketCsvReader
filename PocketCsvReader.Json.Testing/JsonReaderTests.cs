@@ -260,6 +260,29 @@ public class JsonReaderTests
     }
 
     [Test]
+    public void Projection_SelectedLiteralFastPaths_CrossBufferBoundaries()
+    {
+        const string content = "[{\"enabled\":true,\"missing\":null,\"disabled\":false}]";
+        var json = new JsonReaderBuilder()
+            .WithProjection(projection => projection
+                .Property("enabled")
+                .Property("missing")
+                .Property("disabled"))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 1, ReadAhead: false))
+            .Build();
+        using var reader = json.ToDataReader(StreamFor(content));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetBoolean(0), Is.True);
+            Assert.That(reader.IsDBNull(1), Is.True);
+            Assert.That(reader.GetBoolean(2), Is.False);
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
     public void Projection_EscapedAndCompositeSelectedValues_UseMaterializationFallback()
     {
         const string content = "[{\"text\":\"line\\nfeed\",\"items\":[null,2,\"three\"]}]";
