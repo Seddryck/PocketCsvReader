@@ -7,6 +7,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
     private readonly JsonValueFramer _valueFramer = new();
+    // The current record owns this buffer until the reader advances to the next record.
+    private readonly FieldSpan[]? _projectedFields;
     private DocumentState _state;
     private bool _needsArrayElement;
 
@@ -16,6 +18,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     {
         Profile = profile;
         _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
+        _projectedFields = profile.ProjectedProperties is null
+            ? null
+            : new FieldSpan[profile.ProjectedProperties.Count];
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -74,7 +79,11 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     {
         try
         {
-            return JsonRecordParser.Parse(json.Span, JsonWhitespaces, Profile.ProjectedProperties);
+            return JsonRecordParser.Parse(
+                json.Span,
+                JsonWhitespaces,
+                Profile.ProjectedProperties,
+                _projectedFields);
         }
         catch (InvalidDataException exception)
         {
