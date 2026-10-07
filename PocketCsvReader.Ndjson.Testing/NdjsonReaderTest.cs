@@ -315,6 +315,112 @@ public class NdjsonReaderTest
     }
 
     [Test]
+    public void Projection_ExposesOnlySelectedPropertiesInProjectionOrder()
+    {
+        const string content = """
+            {"ignored":{"nested":[1,true,"value"]},"count":7,"na\u006de":"Ada","amount":12.50}
+            {"amount":25.75,"other":[1,{"deep":false}],"name":"Grace","count":8}
+            """;
+        var ndjson = new NdjsonReaderBuilder()
+            .WithDialect(dialect => dialect.WithLineTerminator("\n"))
+            .WithProjection(projection => projection
+                .Property("name")
+                .Property("amount")
+                .Property("count"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.FieldCount, Is.EqualTo(3));
+            Assert.That(reader.GetName(0), Is.EqualTo("name"));
+            Assert.That(reader.GetName(1), Is.EqualTo("amount"));
+            Assert.That(reader.GetName(2), Is.EqualTo("count"));
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(12.50m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(7));
+            Assert.Throws<ArgumentOutOfRangeException>(() => reader.GetOrdinal("ignored"));
+        });
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Grace"));
+            Assert.That(reader.GetDecimal(1), Is.EqualTo(25.75m));
+            Assert.That(reader.GetInt32(2), Is.EqualTo(8));
+        });
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Projection_MissingSelectedProperty_Throws()
+    {
+        var ndjson = new NdjsonReaderBuilder()
+            .WithDialect(dialect => dialect.WithLineTerminator("\n"))
+            .WithProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"name\":\"Ada\",\"count\":7}\n{\"name\":\"Grace\"}")));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(1), Is.EqualTo(7));
+
+        var exception = Assert.Throws<InvalidDataException>(() => reader.Read());
+
+        Assert.That(exception!.Message, Does.Contain("count"));
+    }
+
+    [Test]
+    public void Projection_SkipsUnselectedValuesAcrossBufferBoundaries()
+    {
+        const string content =
+            "{\"ignored\":{\"nested\":[true,null,-1.5e2]},\"name\":\"Ada\",\"tail\":\"escaped\\nvalue\"}";
+        var ndjson = new NdjsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 2, ReadAhead: false))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+        Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void Projection_MalformedSkippedProperty_Throws()
+    {
+        var ndjson = new NdjsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name"))
+            .Build();
+        using var reader = ndjson.ToDataReader(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"name\":\"Ada\",\"ignored\":01}")));
+
+        Assert.Throws<InvalidDataException>(() => reader.Read());
+    }
+
+    [Test]
+    public async Task Projection_ReadAsync_UsesProjectedOrdinals()
+    {
+        var ndjson = new NdjsonReaderBuilder()
+            .WithProjection(projection => projection.Property("name").Property("count"))
+            .Build();
+        await using var stream = new AsyncOnlyStream(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"ignored\":[1,2],\"count\":3,\"name\":\"Ada\"}")));
+        await using var reader = ndjson.ToDataReader(stream);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader.GetString(0), Is.EqualTo("Ada"));
+            Assert.That(reader.GetInt32(1), Is.EqualTo(3));
+        });
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
     public void ReaderBuilder_CommonConfiguration_PreservesFluentTypeAndBuffering()
     {
         var builder = new NdjsonReaderBuilder()

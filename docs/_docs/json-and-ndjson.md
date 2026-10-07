@@ -28,6 +28,21 @@ A root object produces one labeled row. A root array produces one row per elemen
 
 JSON is strict: comments, custom record separators, trailing commas, and content after the root value are rejected.
 
+When only part of each object is needed, configure a projection. Unselected properties are validated but are not materialized, and selected properties are exposed in projection order regardless of their input order:
+
+```csharp
+using PocketCsvReader.Json.Configuration;
+
+var json = new JsonReaderBuilder()
+    .WithProjection(projection => projection
+        .Property("name")
+        .Property("amount")
+        .Property("count"))
+    .Build();
+```
+
+Use `WithOrderedProjection` only when the selected properties are guaranteed to occur in projection order. It avoids general property lookup, but a record whose selected properties are reordered is rejected.
+
 ## Newline-delimited JSON
 
 Install `PocketCsvReader.Ndjson` when the input contains a sequence of complete JSON values separated by line terminators:
@@ -47,3 +62,19 @@ while (reader.Read())
 ```
 
 NDJSON keeps its format-specific framing options, including custom line terminators, blank-line handling, and optional comments. Use `PocketCsvReader.Json` for a pretty-printed array document; use `PocketCsvReader.Ndjson` for independently framed JSON values.
+
+NDJSON also supports order-independent projection:
+
+```csharp
+using PocketCsvReader.Ndjson.Configuration;
+
+var ndjson = new NdjsonReaderBuilder()
+    .WithProjection(projection => projection
+        .Property("event")
+        .Property("timestamp"))
+    .Build();
+
+using var reader = ndjson.ToDataReader("events.ndjson");
+```
+
+Each NDJSON record must be a JSON object containing every projected property. Additional properties may appear anywhere and remain fully validated. Projection does not change custom line terminators, blank-line handling, or comment behavior.
