@@ -6,3 +6,4 @@ using System.Runtime.InteropServices;
 
 [assembly: InternalsVisibleTo("PocketCsvReader.Testing")]
 [assembly: InternalsVisibleTo("PocketCsvReader.Json")]
+[assembly: InternalsVisibleTo("PocketCsvReader.Ndjson")]

@@ -2,19 +2,25 @@ using System.Text;
 
 namespace PocketCsvReader.Json;
 
-internal sealed class JsonRecordParser
+internal ref struct JsonRecordParser
 {
-    private readonly ReadOnlyMemory<char> _json;
+    private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
     private int _position;
 
-    public JsonRecordParser(ReadOnlyMemory<char> json, char[] whitespaces)
+    private JsonRecordParser(ReadOnlySpan<char> json, char[] whitespaces)
     {
         _json = json;
         _whitespaces = whitespaces;
     }
 
-    public FieldSpan[] ParseRoot()
+    public static FieldSpan[] Parse(ReadOnlySpan<char> json, char[] whitespaces)
+    {
+        var parser = new JsonRecordParser(json, whitespaces);
+        return parser.ParseRoot();
+    }
+
+    private FieldSpan[] ParseRoot()
     {
         SkipWhitespace();
         var fields = Current == '{'
@@ -95,7 +101,7 @@ internal sealed class JsonRecordParser
     {
         var start = _position;
         if (_json.Length - start < literal.Length
-            || !_json.Span.Slice(start, literal.Length).SequenceEqual(literal))
+            || !_json.Slice(start, literal.Length).SequenceEqual(literal))
         {
             throw new InvalidDataException($"Invalid JSON literal at position {start}.");
         }
@@ -206,7 +212,7 @@ internal sealed class JsonRecordParser
             if (Current == '\\')
             {
                 decoded ??= new StringBuilder();
-                decoded.Append(_json.Span.Slice(segmentStart, _position - segmentStart));
+                decoded.Append(_json.Slice(segmentStart, _position - segmentStart));
                 _position++;
                 DecodeEscape(decoded);
                 segmentStart = _position;
@@ -216,7 +222,7 @@ internal sealed class JsonRecordParser
             if (Current == '"')
             {
                 var length = _position - start;
-                decoded?.Append(_json.Span.Slice(segmentStart, _position - segmentStart));
+                decoded?.Append(_json.Slice(segmentStart, _position - segmentStart));
                 _position++;
                 var span = CompletedSpan(start, length, wasQuoted: true, isEscaped: decoded is not null);
                 return new ParsedString(span, decoded?.ToString());
@@ -266,8 +272,8 @@ internal sealed class JsonRecordParser
         }
 
         if (_position + 6 > _json.Length
-            || _json.Span[_position] != '\\'
-            || _json.Span[_position + 1] != 'u')
+            || _json[_position] != '\\'
+            || _json[_position + 1] != 'u')
         {
             throw new InvalidDataException("A high surrogate must be followed by a Unicode low-surrogate escape.");
         }
@@ -289,7 +295,7 @@ internal sealed class JsonRecordParser
         var value = 0;
         for (var index = start; index < start + 4; index++)
         {
-            var digit = HexValue(_json.Span[index]);
+            var digit = HexValue(_json[index]);
             if (digit < 0)
                 throw new InvalidDataException($"Invalid hexadecimal digit at position {index}.");
             value = (value << 4) | digit;
@@ -328,7 +334,7 @@ internal sealed class JsonRecordParser
         _position++;
     }
 
-    private char Current => IsEnd ? '\0' : _json.Span[_position];
+    private char Current => IsEnd ? '\0' : _json[_position];
     private bool IsEnd => _position >= _json.Length;
 
     private static SpanInfo CompletedSpan(int start, int length, bool wasQuoted = false, bool isEscaped = false, bool isNull = false)

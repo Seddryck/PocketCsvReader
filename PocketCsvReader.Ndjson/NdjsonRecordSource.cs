@@ -1,4 +1,3 @@
-using System.Text;
 using PocketCsvReader.Json;
 using PocketCsvReader.Ndjson.Configuration;
 
@@ -6,207 +5,229 @@ namespace PocketCsvReader.Ndjson;
 
 internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
 {
-    private readonly StreamReader _reader;
+    private readonly BufferedRecordReader _reader;
+    private readonly NdjsonFramer _framer;
 
     public NdjsonProfile Profile { get; }
 
     public NdjsonRecordSource(StreamReader reader, NdjsonProfile profile)
     {
-        _reader = reader;
         Profile = profile;
+        _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
+        _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
-        string? line = null;
-        while (line is null)
+        while (true)
         {
-            var candidate = ReadRecord();
-            if (candidate is null)
-                break;
-            if (string.IsNullOrWhiteSpace(candidate))
+            _reader.BeginOperation();
+            var capture = _reader.ReadFrame(_framer);
+            if (capture is null)
+                return EndOfFile(out record, out recordState);
+
+            var parsed = ParseRecord(capture.Memory, _framer.CommentIndex);
+            if (parsed is null)
                 continue;
 
-            line = RemoveComment(candidate, Profile.Dialect.CommentChar, Profile.Dialect.Whitespaces);
-            if (string.IsNullOrWhiteSpace(line))
-                line = null;
+            _reader.Protect(capture);
+            var isEndOfFile = _reader.Peek() < 0;
+            record = RecordSpan.FromMemory(parsed.Value.Memory, parsed.Value.Fields);
+            recordState = RecordState.Record;
+            return isEndOfFile;
         }
-
-        if (line is null)
-        {
-            record = new RecordSpan([], []);
-            recordState = RecordState.Eof;
-            return true;
-        }
-
-        var fields = new JsonRecordParser(line.AsMemory(), Profile.Dialect.Whitespaces).ParseRoot();
-        record = new RecordSpan(line.AsSpan(), fields);
-        recordState = RecordState.Record;
-        return _reader.Peek() < 0;
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
-        string? line = null;
-        while (line is null)
-        {
-            var candidate = await ReadRecordAsync(cancellationToken).ConfigureAwait(false);
-            if (candidate is null)
-                break;
-            if (string.IsNullOrWhiteSpace(candidate))
-                continue;
-
-            line = RemoveComment(candidate, Profile.Dialect.CommentChar, Profile.Dialect.Whitespaces);
-            if (string.IsNullOrWhiteSpace(line))
-                line = null;
-        }
-
-        if (line is null)
-            return new(true, RecordMemory.Empty, RecordState.Eof);
-
-        var fields = new JsonRecordParser(line.AsMemory(), Profile.Dialect.Whitespaces).ParseRoot();
-        return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
-    }
-
-    private string? ReadRecord()
-    {
-        var terminator = Profile.Dialect.LineTerminator;
-        if (string.IsNullOrEmpty(terminator))
-            throw new InvalidOperationException("The line terminator cannot be empty.");
-
-        var builder = new StringBuilder();
-        var inString = false;
-        var escaping = false;
-        var inComment = false;
+        cancellationToken.ThrowIfCancellationRequested();
         while (true)
         {
-            var next = _reader.Read();
-            if (next < 0)
-                return builder.Length == 0 ? null : builder.ToString();
+            _reader.BeginOperation();
+            var capture = await _reader.ReadFrameAsync(_framer, cancellationToken).ConfigureAwait(false);
+            if (capture is null)
+                return new(true, RecordMemory.Empty, RecordState.Eof);
 
-            var current = (char)next;
-            var wasInString = inString;
-            if (!inComment)
-            {
-                UpdateStringState(current, ref inString, ref escaping);
-                inComment = !wasInString
-                    && !inString
-                    && current == Profile.Dialect.CommentChar;
-            }
-            builder.Append(current);
-
-            if ((inComment || (!wasInString && !inString)) && EndsWith(builder, terminator))
-            {
-                builder.Length -= terminator.Length;
-                return builder.ToString();
-            }
-        }
-    }
-
-    private async ValueTask<string?> ReadRecordAsync(CancellationToken cancellationToken)
-    {
-        var terminator = Profile.Dialect.LineTerminator;
-        if (string.IsNullOrEmpty(terminator))
-            throw new InvalidOperationException("The line terminator cannot be empty.");
-
-        var builder = new StringBuilder();
-        var buffer = new char[1];
-        var inString = false;
-        var escaping = false;
-        var inComment = false;
-        while (true)
-        {
-            var count = await _reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-            if (count == 0)
-                return builder.Length == 0 ? null : builder.ToString();
-
-            var current = buffer[0];
-            var wasInString = inString;
-            if (!inComment)
-            {
-                UpdateStringState(current, ref inString, ref escaping);
-                inComment = !wasInString && !inString && current == Profile.Dialect.CommentChar;
-            }
-            builder.Append(current);
-
-            if ((inComment || (!wasInString && !inString)) && EndsWith(builder, terminator))
-            {
-                builder.Length -= terminator.Length;
-                return builder.ToString();
-            }
-        }
-    }
-
-    private static bool EndsWith(StringBuilder builder, string value)
-    {
-        if (builder.Length < value.Length)
-            return false;
-
-        var offset = builder.Length - value.Length;
-        for (var index = 0; index < value.Length; index++)
-        {
-            if (builder[offset + index] != value[index])
-                return false;
-        }
-        return true;
-    }
-
-    private static string? RemoveComment(string line, char? commentChar, char[] whitespaces)
-    {
-        if (!commentChar.HasValue)
-            return line;
-
-        var inString = false;
-        var escaping = false;
-        for (var i = 0; i < line.Length; i++)
-        {
-            var current = line[i];
-            if (UpdateStringState(current, ref inString, ref escaping))
+            var parsed = ParseRecord(capture.Memory, _framer.CommentIndex);
+            if (parsed is null)
                 continue;
 
-            if (current != commentChar.Value)
-                continue;
-
-            var content = line[..i].TrimEnd();
-            if (content.Length == 0 || IsCompleteJson(content, whitespaces))
-                return content;
-            return line;
+            _reader.Protect(capture);
+            var isEndOfFile = await _reader.PeekAsync(cancellationToken).ConfigureAwait(false) < 0;
+            return new(
+                isEndOfFile,
+                new RecordMemory(parsed.Value.Memory, parsed.Value.Fields),
+                RecordState.Record);
         }
-
-        return line;
     }
 
-    private static bool UpdateStringState(char current, ref bool inString, ref bool escaping)
+    private ParsedRecord? ParseRecord(ReadOnlyMemory<char> record, int commentIndex)
     {
-        if (!inString)
-        {
-            if (current != '"')
-                return false;
-            inString = true;
-            return true;
-        }
+        var candidate = commentIndex >= 0
+            ? TrimEnd(record[..commentIndex])
+            : record;
 
-        if (escaping)
-            escaping = false;
-        else if (current == '\\')
-            escaping = true;
-        else if (current == '"')
-            inString = false;
-        return true;
-    }
+        if (IsNullOrWhiteSpace(candidate.Span))
+            return null;
 
-    private static bool IsCompleteJson(string content, char[] whitespaces)
-    {
         try
         {
-            _ = new JsonRecordParser(content.AsMemory(), whitespaces).ParseRoot();
-            return true;
+            return new ParsedRecord(
+                candidate,
+                JsonRecordParser.Parse(candidate.Span, Profile.Dialect.Whitespaces));
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException) when (commentIndex >= 0)
         {
-            return false;
+            return new ParsedRecord(
+                record,
+                JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
         }
     }
 
-    public void Dispose() { }
+    private ReadOnlyMemory<char> TrimEnd(ReadOnlyMemory<char> value)
+    {
+        var length = value.Length;
+        while (length > 0 && IsWhitespace(value.Span[length - 1]))
+            length--;
+        return value[..length];
+    }
+
+    private bool IsNullOrWhiteSpace(ReadOnlySpan<char> value)
+    {
+        foreach (var current in value)
+        {
+            if (!IsWhitespace(current))
+                return false;
+        }
+        return true;
+    }
+
+    private bool IsWhitespace(char value)
+        => Array.IndexOf(Profile.Dialect.Whitespaces, value) >= 0;
+
+    private static bool EndOfFile(out RecordSpan record, out RecordState recordState)
+    {
+        record = new RecordSpan([], []);
+        recordState = RecordState.Eof;
+        return true;
+    }
+
+    public void Dispose()
+        => _reader.Dispose();
+
+    private readonly record struct ParsedRecord(ReadOnlyMemory<char> Memory, FieldSpan[] Fields);
+
+    private sealed class NdjsonFramer : IRecordFramer
+    {
+        private readonly string _terminator;
+        private readonly char? _commentChar;
+        private readonly int[] _failure;
+        private int _matched;
+        private int _total;
+        private bool _inString;
+        private bool _escaping;
+        private bool _inComment;
+
+        public int CommentIndex { get; private set; }
+
+        public NdjsonFramer(string terminator, char? commentChar)
+        {
+            if (string.IsNullOrEmpty(terminator))
+                throw new InvalidOperationException("The line terminator cannot be empty.");
+
+            _terminator = terminator;
+            _commentChar = commentChar;
+            _failure = BuildFailureTable(terminator);
+        }
+
+        public void Reset()
+        {
+            _matched = 0;
+            _total = 0;
+            _inString = false;
+            _escaping = false;
+            _inComment = false;
+            CommentIndex = -1;
+        }
+
+        public FrameScanResult Scan(ReadOnlySpan<char> input)
+        {
+            for (var index = 0; index < input.Length; index++)
+            {
+                var current = input[index];
+                var wasInString = _inString;
+                if (!_inComment)
+                {
+                    UpdateStringState(current);
+                    if (!wasInString && !_inString && current == _commentChar)
+                    {
+                        _inComment = true;
+                        CommentIndex = _total;
+                    }
+                }
+
+                _total++;
+                if (!CanTerminate(wasInString))
+                {
+                    _matched = 0;
+                    continue;
+                }
+
+                if (AdvanceTerminator(current))
+                    return new FrameScanResult(index + 1, true, _total - _terminator.Length);
+            }
+
+            return new FrameScanResult(input.Length, false);
+        }
+
+        public FrameScanResult CompleteAtEof()
+            => _total == 0
+                ? default
+                : new FrameScanResult(0, true, _total);
+
+        private bool CanTerminate(bool wasInString)
+            => _inComment || (!wasInString && !_inString);
+
+        private bool AdvanceTerminator(char current)
+        {
+            while (_matched > 0 && current != _terminator[_matched])
+                _matched = _failure[_matched - 1];
+            if (current == _terminator[_matched])
+                _matched++;
+
+            return _matched == _terminator.Length;
+        }
+
+        private void UpdateStringState(char current)
+        {
+            if (!_inString)
+            {
+                if (current == '"')
+                    _inString = true;
+                return;
+            }
+
+            if (_escaping)
+                _escaping = false;
+            else if (current == '\\')
+                _escaping = true;
+            else if (current == '"')
+                _inString = false;
+        }
+
+        private static int[] BuildFailureTable(string value)
+        {
+            var failure = new int[value.Length];
+            for (var index = 1; index < value.Length; index++)
+            {
+                var candidate = failure[index - 1];
+                while (candidate > 0 && value[index] != value[candidate])
+                    candidate = failure[candidate - 1];
+                if (value[index] == value[candidate])
+                    candidate++;
+                failure[index] = candidate;
+            }
+            return failure;
+        }
+    }
 }

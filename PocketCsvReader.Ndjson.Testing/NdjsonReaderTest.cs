@@ -38,6 +38,33 @@ public class NdjsonReaderTest
     }
 
     [Test]
+    public async Task ToDataReader_ReadAsync_UsesOnlyAsynchronousStreamOperations()
+    {
+        await using var stream = new AsyncOnlyStream(
+            new MemoryStream(Encoding.UTF8.GetBytes("{\"id\":1}\n{\"id\":2}")));
+        await using var reader = new NdjsonReader(new NdjsonProfile("\n")).ToDataReader(stream);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(1));
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(2));
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
+    [Test]
+    public void ToDataReader_LargeDocument_ReturnsFirstRecordBeforeReadingCompleteInput()
+    {
+        var content = string.Join("\n", Enumerable.Range(0, 10_000).Select(index => $"{{\"id\":{index}}}"));
+        var bytes = Encoding.UTF8.GetBytes(content);
+        using var stream = new TrackingStream(new MemoryStream(bytes), maxReadSize: 64);
+        using var reader = new NdjsonReader(new NdjsonProfile("\n")).ToDataReader(stream);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.Zero);
+        Assert.That(stream.BytesRead, Is.LessThan(bytes.Length));
+    }
+
+    [Test]
     [TestCase(@"Resources\metrics.ndjson")]
     public void ToDataReader_Metrics_Successful(string filename)
     {
@@ -338,5 +365,75 @@ public class NdjsonReaderTest
         Assert.That(reader.Read(), Is.True);
         _ = reader.GetString(0);
         Assert.That(cache.GetValue(reader), Is.Null);
+    }
+
+    private sealed class TrackingStream(Stream inner, int maxReadSize) : Stream
+    {
+        public long BytesRead { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = inner.Read(buffer, offset, Math.Min(count, maxReadSize));
+            BytesRead += read;
+            return read;
+        }
+        public override int Read(Span<byte> buffer)
+        {
+            var read = inner.Read(buffer[..Math.Min(buffer.Length, maxReadSize)]);
+            BytesRead += read;
+            return read;
+        }
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            => ReadTrackedAsync(buffer, cancellationToken);
+        private async ValueTask<int> ReadTrackedAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var read = await inner.ReadAsync(buffer[..Math.Min(buffer.Length, maxReadSize)], cancellationToken);
+            BytesRead += read;
+            return read;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class AsyncOnlyStream(Stream inner) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+            => throw new InvalidOperationException("Synchronous reads are not allowed.");
+        public override int Read(Span<byte> buffer)
+            => throw new InvalidOperationException("Synchronous reads are not allowed.");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            => inner.ReadAsync(buffer, cancellationToken);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync();
+            GC.SuppressFinalize(this);
+        }
     }
 }
