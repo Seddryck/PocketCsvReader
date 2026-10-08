@@ -12,6 +12,7 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
     private NdjsonDialectDescriptorBuilder _dialectBuilder = new();
     private string[]? _projectedProperties;
     private bool _orderedProjection;
+    private bool _stableObjectShape;
 
     public NdjsonReaderBuilder()
         : base(NdjsonProfile.DefaultParserOptimizations)
@@ -42,6 +43,18 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
     public NdjsonReaderBuilder WithOrderedProjection(Func<JsonProjectionBuilder, JsonProjectionBuilder> configure)
         => ConfigureProjection(configure, ordered: true);
 
+    /// <summary>
+    /// Trusts that every object has the same top-level properties in the same order.
+    /// The first object establishes labels and ordinals. Later property names are validated as JSON syntax
+    /// but are not decoded or compared; renames or reordering with the same count can therefore map values
+    /// to the wrong ordinal. Objects with a different property count are rejected.
+    /// </summary>
+    public NdjsonReaderBuilder WithStableObjectShape()
+    {
+        _stableObjectShape = true;
+        return this;
+    }
+
     private NdjsonReaderBuilder ConfigureProjection(
         Func<JsonProjectionBuilder, JsonProjectionBuilder> configure,
         bool ordered)
@@ -60,5 +73,6 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
             BuildParsers(),
             BuildParserOptimizations(),
             _projectedProperties,
-            _orderedProjection));
+            _orderedProjection,
+            _stableObjectShape));
 }

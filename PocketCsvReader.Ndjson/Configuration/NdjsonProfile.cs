@@ -17,6 +17,12 @@ public class NdjsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    /// <summary>
+    /// Gets whether the input is trusted to contain the same top-level properties in the same order.
+    /// Only the first object's names establish labels and ordinals; later names are consumed as JSON syntax
+    /// without being decoded or compared. Later objects with a different property count are rejected.
+    /// </summary>
+    public bool StableObjectShape { get; }
 
     public NdjsonProfile(
         NdjsonDialectDescriptor dialect,
@@ -25,7 +31,8 @@ public class NdjsonProfile : IProfile
         RuntimeParsersDescriptor? parsers = null,
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
-        bool orderedProjection = false)
+        bool orderedProjection = false,
+        bool stableObjectShape = false)
     {
         Dialect = dialect;
         Schema = schema;
@@ -46,6 +53,7 @@ public class NdjsonProfile : IProfile
         }
         ProjectedProperties = projection is null ? null : Array.AsReadOnly(projection);
         OrderedProjection = orderedProjection;
+        StableObjectShape = stableObjectShape;
         if (ParserOptimizations.BufferSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(parserOptimizations), "The parser buffer size must be positive.");
     }

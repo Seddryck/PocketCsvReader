@@ -10,6 +10,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
+    private int? _stablePropertyCount;
+    private int[]? _stableProjectedOrdinals;
 
     public NdjsonProfile Profile { get; }
 
@@ -94,6 +96,9 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
 
     private ParsedRecord ParseCandidate(ReadOnlyMemory<char> record)
     {
+        if (Profile.StableObjectShape)
+            return ParseStableCandidate(record);
+
         if (_projectedValueFramer is null)
             return new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
 
@@ -115,6 +120,68 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         }
 
         return new ParsedRecord(projectedRecord, _projectedFields!);
+    }
+
+    private ParsedRecord ParseStableCandidate(ReadOnlyMemory<char> record)
+    {
+        var stableRecord = Trim(record);
+        FieldSpan[] fields;
+        if (_stablePropertyCount is null)
+        {
+            if (stableRecord.IsEmpty || stableRecord.Span[0] != '{')
+                throw new InvalidDataException("A stable-shape NDJSON record must be a JSON object.");
+            fields = JsonRecordParser.Parse(stableRecord.Span, Profile.Dialect.Whitespaces);
+            _stablePropertyCount = fields.Length;
+            if (Profile.ProjectedProperties is not null)
+                _stableProjectedOrdinals = ResolveProjectedOrdinals(stableRecord.Span, fields);
+        }
+        else
+        {
+            fields = JsonRecordParser.ParseStableObjectValues(
+                stableRecord.Span,
+                Profile.Dialect.Whitespaces,
+                _stablePropertyCount.Value);
+        }
+
+        if (_stableProjectedOrdinals is null)
+            return new ParsedRecord(stableRecord, fields);
+
+        for (var projectedOrdinal = 0; projectedOrdinal < _stableProjectedOrdinals.Length; projectedOrdinal++)
+            _projectedFields![projectedOrdinal] = fields[_stableProjectedOrdinals[projectedOrdinal]];
+        return new ParsedRecord(stableRecord, _projectedFields!);
+    }
+
+    private int[] ResolveProjectedOrdinals(ReadOnlySpan<char> record, FieldSpan[] fields)
+    {
+        var ordinals = new int[Profile.ProjectedProperties!.Count];
+        var previousOrdinal = -1;
+        for (var projectedOrdinal = 0; projectedOrdinal < ordinals.Length; projectedOrdinal++)
+        {
+            var property = Profile.ProjectedProperties[projectedOrdinal];
+            var sourceOrdinal = FindProperty(record, fields, property);
+            if (sourceOrdinal < 0)
+                throw new InvalidDataException($"Projected property '{property}' was not found.");
+            if (Profile.OrderedProjection && sourceOrdinal <= previousOrdinal)
+                throw new InvalidDataException($"Projected property '{property}' was not found in the configured order.");
+            ordinals[projectedOrdinal] = sourceOrdinal;
+            previousOrdinal = sourceOrdinal;
+        }
+        return ordinals;
+    }
+
+    private static int FindProperty(ReadOnlySpan<char> record, FieldSpan[] fields, string property)
+    {
+        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
+        {
+            var field = fields[ordinal];
+            if (field.DecodedLabel is not null
+                ? field.DecodedLabel.Equals(property, StringComparison.Ordinal)
+                : record.Slice(field.Label.Start, field.Label.Length).SequenceEqual(property))
+            {
+                return ordinal;
+            }
+        }
+        return -1;
     }
 
     private ReadOnlyMemory<char> Trim(ReadOnlyMemory<char> value)

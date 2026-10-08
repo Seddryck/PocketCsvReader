@@ -96,7 +96,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            Parser.CacheTypeParser<T>(i);
+            return Parser.Parse<T>(i, GetValueOrThrow(i));
         }
         catch (TargetInvocationException ex)
         {
@@ -111,7 +112,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             if (Parser.TryParse<Guid>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            return Parser.Parse<Guid>(GetValueOrThrow(i));
+            Parser.CacheTypeParser<Guid>(i);
+            return Parser.Parse<Guid>(i, GetValueOrThrow(i));
         }
         catch (TargetInvocationException ex)
         {
@@ -150,7 +152,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            Parser.CacheTypeParser<T>(i);
+            return Parser.Parse<T>(i, GetValueOrThrow(i));
         }
         catch (TargetInvocationException ex)
         {
@@ -260,7 +263,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 RegisterFieldParser(i, field);
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            Parser.CacheTypeParser<T>(i);
+            return Parser.Parse<T>(i, GetValueOrThrow(i));
         }
         catch (TargetInvocationException ex)
         {

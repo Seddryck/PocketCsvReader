@@ -92,6 +92,7 @@ The JSON, NDJSON, and LTSV/logfmt readers share the labeled-reader layer, but th
 | Find projected fields while locating the record boundary | Yes | No; projection runs after NDJSON framing | Not applicable |
 | Stop property lookup after every projected field is found | Yes | Yes | Not applicable |
 | Require projected properties in a known order | `WithOrderedProjection` | `WithOrderedProjection` | Not applicable |
+| Trust and reuse one stable object shape | Not applicable | `WithStableObjectShape` | Not applicable |
 
 ### Repeated labeled row shapes
 
@@ -110,6 +111,10 @@ When rows repeat the same labels in the same order, their label strings and name
 `NdjsonReaderBuilder.WithOrderedProjection` avoids the fingerprint lookup by comparing each property with the next expected selected name. Unselected properties may occur between selected properties; reordered selected properties are rejected.
 
 Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing optimization.
+
+### NDJSON stable object shape
+
+`NdjsonReaderBuilder.WithStableObjectShape` is an opt-in trusted-input contract for streams whose objects always have the same top-level property count and order. The first object creates the label and ordinal metadata. Later objects validate property-name syntax but skip decoding, comparison, and lookup, then write values directly by ordinal into a fixed-size field array. Property-count drift throws before a record is exposed. Same-count renames and reorders are deliberately not detected, so callers must use this option only for trusted stable-shape input. Value types remain dynamic unless a schema or typed accessor establishes and caches a conversion for an ordinal.
 
 ### LTSV and logfmt
 

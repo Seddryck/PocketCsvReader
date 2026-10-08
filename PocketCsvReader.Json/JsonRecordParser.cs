@@ -1,9 +1,13 @@
+using System.Buffers;
 using System.Text;
 
 namespace PocketCsvReader.Json;
 
 internal ref struct JsonRecordParser
 {
+    private static readonly SearchValues<char> StringSpecialCharacters = SearchValues.Create(
+        "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F" +
+        "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\");
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
     private int _position;
@@ -19,6 +23,65 @@ internal ref struct JsonRecordParser
         var parser = new JsonRecordParser(json, whitespaces);
         return parser.ParseRoot();
     }
+
+    public static FieldSpan[] ParseStableObjectValues(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        int expectedPropertyCount)
+    {
+        var parser = new JsonRecordParser(json, whitespaces);
+        parser.SkipWhitespace();
+        if (parser.Current != '{')
+            throw new InvalidDataException("A stable-shape JSON value must be an object.");
+
+        var fields = parser.ParseStableObject(expectedPropertyCount);
+        parser.SkipWhitespace();
+        if (!parser.IsEnd)
+            throw new InvalidDataException($"Unexpected character '{parser.Current}' at position {parser._position}.");
+        return fields;
+    }
+
+    private FieldSpan[] ParseStableObject(int expectedPropertyCount)
+    {
+        Expect('{');
+        SkipWhitespace();
+        var fields = new FieldSpan[expectedPropertyCount];
+        if (Current == '}')
+        {
+            _position++;
+            if (expectedPropertyCount != 0)
+                throw PropertyCountChanged(expectedPropertyCount, 0);
+            return fields;
+        }
+
+        var ordinal = 0;
+        while (true)
+        {
+            if (ordinal >= expectedPropertyCount)
+                throw PropertyCountChanged(expectedPropertyCount, ordinal + 1);
+
+            _ = SkipString();
+            SkipWhitespace();
+            Expect(':');
+            SkipWhitespace();
+            fields[ordinal++] = ParseValue(allowObject: true, allowCompositeArrayItems: true);
+
+            SkipWhitespace();
+            if (Current == '}')
+            {
+                _position++;
+                if (ordinal != expectedPropertyCount)
+                    throw PropertyCountChanged(expectedPropertyCount, ordinal);
+                return fields;
+            }
+
+            Expect(',');
+            SkipWhitespace();
+        }
+    }
+
+    private static InvalidDataException PropertyCountChanged(int expected, int actual)
+        => new($"Stable-shape object property count changed from {expected} to {actual}.");
 
     public static void MaterializeProjectedValues(
         ReadOnlySpan<char> json,
@@ -59,7 +122,7 @@ internal ref struct JsonRecordParser
     {
         SkipWhitespace();
         var fields = Current == '{'
-            ? ParseObject()
+            ? ParseObject(materializeLabels: true)
             : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
         SkipWhitespace();
         if (!IsEnd)
@@ -67,7 +130,7 @@ internal ref struct JsonRecordParser
         return fields;
     }
 
-    private FieldSpan[] ParseObject()
+    private FieldSpan[] ParseObject(bool materializeLabels)
     {
         Expect('{');
         SkipWhitespace();
@@ -80,7 +143,7 @@ internal ref struct JsonRecordParser
         var fields = new List<FieldSpan>();
         while (true)
         {
-            var label = ParseString();
+            var label = materializeLabels ? ParseString() : SkipString();
             SkipWhitespace();
             Expect(':');
             SkipWhitespace();
@@ -114,7 +177,7 @@ internal ref struct JsonRecordParser
                 throw new InvalidDataException("Objects are not supported in this array.");
 
             var start = _position;
-            var children = ParseObject();
+            var children = ParseObject(materializeLabels: true);
             return new FieldSpan(CompletedSpan(start, _position - start), default, children);
         }
 
@@ -269,6 +332,71 @@ internal ref struct JsonRecordParser
         }
 
         throw new InvalidDataException("Unterminated JSON string.");
+    }
+
+    private ParsedString SkipString()
+    {
+        Expect('"');
+        var start = _position;
+        var escaped = false;
+
+        while (!IsEnd)
+        {
+            var specialOffset = _json[_position..].IndexOfAny(StringSpecialCharacters);
+            if (specialOffset < 0)
+                break;
+            _position += specialOffset;
+
+            if (Current == '\\')
+            {
+                escaped = true;
+                _position++;
+                SkipEscape();
+                continue;
+            }
+
+            if (Current == '"')
+            {
+                var length = _position - start;
+                _position++;
+                return new ParsedString(
+                    CompletedSpan(start, length, wasQuoted: true, isEscaped: escaped),
+                    null);
+            }
+
+            throw new InvalidDataException($"Unescaped control character at position {_position}.");
+        }
+
+        throw new InvalidDataException("Unterminated JSON string.");
+    }
+
+    private void SkipEscape()
+    {
+        if (IsEnd)
+            throw new InvalidDataException("Incomplete JSON escape sequence.");
+
+        if (Current is '"' or '\\' or '/' or 'b' or 'f' or 'n' or 'r' or 't')
+        {
+            _position++;
+            return;
+        }
+
+        if (Current != 'u')
+            throw new InvalidDataException($"Invalid JSON escape character '{Current}' at position {_position}.");
+
+        var codeUnit = ParseHexQuad(_position + 1);
+        _position += 5;
+        if (char.IsLowSurrogate(codeUnit))
+            throw new InvalidDataException("A low surrogate must follow a high surrogate.");
+        if (!char.IsHighSurrogate(codeUnit))
+            return;
+
+        if (_position + 6 > _json.Length || _json[_position] != '\\' || _json[_position + 1] != 'u')
+            throw new InvalidDataException("A high surrogate must be followed by a Unicode low-surrogate escape.");
+        var lowSurrogate = ParseHexQuad(_position + 2);
+        if (!char.IsLowSurrogate(lowSurrogate))
+            throw new InvalidDataException("A high surrogate must be followed by a low surrogate.");
+        _position += 6;
     }
 
     private void DecodeEscape(StringBuilder decoded)
