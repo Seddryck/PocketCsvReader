@@ -89,11 +89,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     {
         try
         {
-            return JsonRecordParser.Parse(
-                json.Span,
-                JsonWhitespaces,
-                Profile.ProjectedProperties,
-                _projectedFields);
+            return JsonRecordParser.Parse(json.Span, JsonWhitespaces);
         }
         catch (InvalidDataException exception)
         {

@@ -136,9 +136,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     private bool Process(char current)
     {
-        if (_token != TokenKind.None)
-            return ProcessToken(current);
-
         if (_depth == 0)
         {
             if (_position != 0 || current != '{')
@@ -270,15 +267,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         }
     }
 
-    private bool ProcessToken(char current)
-        => _token switch
-        {
-            TokenKind.String => ProcessString(current),
-            TokenKind.Literal => ProcessLiteral(current),
-            TokenKind.Number => ProcessNumber(current),
-            _ => throw new InvalidOperationException("Invalid JSON token parser state.")
-        };
-
     private void BeginString(bool isProperty, int ordinal, SpanInfo label, string? decodedLabel)
     {
         _token = TokenKind.String;
@@ -353,37 +341,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             index++;
             _position++;
         }
-    }
-
-    private bool ProcessString(char current)
-    {
-        if (_stringEscapeState != StringEscapeState.None)
-            return ProcessStringEscape(current);
-
-        if (current == '\\')
-        {
-            _stringWasEscaped = true;
-            if (!_stringIsProperty && _tokenOrdinal >= 0)
-                RequiresValueMaterialization = true;
-            _stringEscapeState = StringEscapeState.AfterSlash;
-            return true;
-        }
-
-        if (current == '"')
-        {
-            if (_stringIsProperty)
-                CompletePropertyName();
-            else
-                CompleteStringValue();
-            _token = TokenKind.None;
-            return true;
-        }
-
-        if (current < ' ')
-            throw Error("An unescaped control character is not allowed in a JSON string");
-
-        AppendPropertyCharacter(current);
-        return true;
     }
 
     private bool ProcessStringEscape(char current)
@@ -550,21 +507,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _literalIndex = 1;
     }
 
-    private bool ProcessLiteral(char current)
-    {
-        if (_literalIndex < _literal.Length)
-        {
-            if (current != _literal[_literalIndex++])
-                throw Error("Invalid JSON literal");
-            return true;
-        }
-
-        if (!IsValueDelimiter(current))
-            throw Error("Invalid character after a JSON literal");
-        CompletePrimitive(isNull: _literal == "null");
-        return false;
-    }
-
     private int GetProjectedOrdinal()
     {
         if (_orderedProjection)
@@ -631,90 +573,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     {
         BeginPrimitive(TokenKind.Number, ordinal, label, decodedLabel);
         _numberState = state;
-    }
-
-    private bool ProcessNumber(char current)
-    {
-        switch (_numberState)
-        {
-            case NumberState.AfterMinus:
-                if (current == '0')
-                    _numberState = NumberState.Zero;
-                else if (current is >= '1' and <= '9')
-                    _numberState = NumberState.Integer;
-                else
-                    throw Error("A digit was expected after the JSON number sign");
-                return true;
-
-            case NumberState.Zero:
-                if (current == '.')
-                {
-                    _numberState = NumberState.Dot;
-                    return true;
-                }
-                if (current is 'e' or 'E')
-                {
-                    _numberState = NumberState.ExponentMark;
-                    return true;
-                }
-                if (current is >= '0' and <= '9')
-                    throw Error("A JSON number cannot contain a leading zero");
-                return CompleteNumberAtDelimiter(current);
-
-            case NumberState.Integer:
-                if (current is >= '0' and <= '9')
-                    return true;
-                if (current == '.')
-                {
-                    _numberState = NumberState.Dot;
-                    return true;
-                }
-                if (current is 'e' or 'E')
-                {
-                    _numberState = NumberState.ExponentMark;
-                    return true;
-                }
-                return CompleteNumberAtDelimiter(current);
-
-            case NumberState.Dot:
-                if (current is not (>= '0' and <= '9'))
-                    throw Error("A fractional digit was expected");
-                _numberState = NumberState.Fraction;
-                return true;
-
-            case NumberState.Fraction:
-                if (current is >= '0' and <= '9')
-                    return true;
-                if (current is 'e' or 'E')
-                {
-                    _numberState = NumberState.ExponentMark;
-                    return true;
-                }
-                return CompleteNumberAtDelimiter(current);
-
-            case NumberState.ExponentMark:
-                if (current is '+' or '-')
-                    _numberState = NumberState.ExponentSign;
-                else if (current is >= '0' and <= '9')
-                    _numberState = NumberState.Exponent;
-                else
-                    throw Error("An exponent digit was expected");
-                return true;
-
-            case NumberState.ExponentSign:
-                if (current is not (>= '0' and <= '9'))
-                    throw Error("An exponent digit was expected");
-                _numberState = NumberState.Exponent;
-                return true;
-
-            case NumberState.Exponent:
-                if (current is >= '0' and <= '9')
-                    return true;
-                return CompleteNumberAtDelimiter(current);
-
-            default:
-                throw new InvalidOperationException("Invalid JSON number parser state.");
-        }
     }
 
     private void ScanNumber(ReadOnlySpan<char> input, ref int index)
