@@ -11,4 +11,8 @@ public class NdjsonDataReader : LabeledDataReader<NdjsonProfile>
 
     protected override IRecordSource<NdjsonProfile> CreateRecordSource(StreamReader reader, NdjsonProfile profile)
         => new NdjsonRecordSource(reader, profile);
+
+    protected override bool HasStableLabelShape => Profile.StableObjectShape;
+
+    protected override bool CacheInferredFieldParsers => Profile.StableObjectShape;
 }

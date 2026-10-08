@@ -60,6 +60,13 @@ internal class SpanParser
         FieldParsers[index] = dlg;
     }
 
+    public void CacheTypeParser<T>(int index)
+    {
+        if (!TypeParsers.TryGetValue(typeof(T), out var parser))
+            throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+        FieldParsers[index] = parser;
+    }
+
     private static bool IsParseSpan(Delegate dlg, out Type parsedType)
     {
         var t = dlg.GetType();

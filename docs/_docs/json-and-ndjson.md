@@ -90,3 +90,13 @@ var ndjson = new NdjsonReaderBuilder()
 ```
 
 Unselected properties may occur before, after, or between selected properties, but the selected properties themselves must occur in configuration order. A reordered selected property is rejected.
+
+When every object is guaranteed to have the same properties in the same order, opt in to stable-shape parsing:
+
+```csharp
+var ndjson = new NdjsonReaderBuilder()
+    .WithStableObjectShape()
+    .Build();
+```
+
+This is a trusted-input assertion. The first object establishes the recursive JSON structure, including object property counts, array lengths, property labels, and ordinal mappings at every level. Later objects must retain that structure, but their property names are consumed only as JSON syntax and are not decoded or compared. Missing or additional properties, array-length changes, and scalar/container changes throw `InvalidDataException`; a rename or reorder with the same property count can map values to the wrong ordinal. JSON syntax, escaped names, comments, synchronous and asynchronous reads, and projections retain their normal behavior. Scalar leaf types remain dynamic: conversion strategies are cached only after a schema or typed accessor establishes the target type for an ordinal.

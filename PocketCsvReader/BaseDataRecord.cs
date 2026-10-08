@@ -59,6 +59,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     private protected virtual FieldEscaper? CreateFieldEscaper() => null;
 
+    protected virtual bool CacheInferredFieldParsers => false;
+
     public object this[int i]
         => GetValue(i);
     public object this[string name]
@@ -96,7 +98,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            return ParseAndOptionallyCache<T>(i);
         }
         catch (TargetInvocationException ex)
         {
@@ -111,7 +113,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             if (Parser.TryParse<Guid>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            return Parser.Parse<Guid>(GetValueOrThrow(i));
+            return ParseAndOptionallyCache<Guid>(i);
         }
         catch (TargetInvocationException ex)
         {
@@ -150,7 +152,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            return ParseAndOptionallyCache<T>(i);
         }
         catch (TargetInvocationException ex)
         {
@@ -260,7 +262,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 RegisterFieldParser(i, field);
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
-            return Parser.Parse<T>(GetValueOrThrow(i));
+            return ParseAndOptionallyCache<T>(i);
         }
         catch (TargetInvocationException ex)
         {
@@ -268,6 +270,15 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         }
 
         throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+    }
+
+    private T ParseAndOptionallyCache<T>(int i)
+    {
+        if (!CacheInferredFieldParsers)
+            return Parser.Parse<T>(GetValueOrThrow(i));
+
+        Parser.CacheTypeParser<T>(i);
+        return Parser.Parse<T>(i, GetValueOrThrow(i));
     }
 
     public T GetFieldValue<T>(int i, IFormatProvider format) where T : IParsable<T>
