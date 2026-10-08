@@ -61,7 +61,9 @@ public class RecordParser : BaseRecordParser<CsvProfile>
             IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
             if (Profile.Dialect.HeaderRows.Contains(rowCount))
             {
-                var fields = rawRecord.FieldSpans.Length == 0 ? [] : headerMapper(rawRecord.Span, rawRecord.FieldSpans);
+                var fields = (rawRecord.FieldSpans?.Length ?? 0) == 0
+                    ? []
+                    : headerMapper(rawRecord.Span, rawRecord.FieldSpans!);
                 headerList.Add(fields);
             }
             rowCount++;
