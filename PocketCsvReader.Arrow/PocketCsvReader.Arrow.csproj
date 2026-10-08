@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Arrow</PackageId>
+    <PackageTags>CSV Arrow RecordBatch Columnar Analytics</PackageTags>
+    <Description>Streams PocketCsvReader inputs as typed Apache Arrow record batches.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Apache.Arrow" Version="23.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

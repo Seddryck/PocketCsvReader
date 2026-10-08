@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="NUnit" Version="5.0.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader.Arrow\PocketCsvReader.Arrow.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+  </ItemGroup>
+</Project>
