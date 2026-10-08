@@ -27,6 +27,28 @@ public class StableObjectShapeTests
         });
     }
 
+    [Test]
+    public void Read_StableShape_ReusesTopLevelFieldArrays()
+    {
+        using var reader = CreateReader(
+            "{\"id\":1,\"payload\":{\"value\":2}}\n" +
+            "{\"id\":3,\"payload\":{\"value\":4}}\n" +
+            "{\"id\":5,\"payload\":{\"value\":6}}");
+
+        Assert.That(reader.Read(), Is.True);
+        var firstFields = GetCurrentFields(reader);
+
+        Assert.That(reader.Read(), Is.True);
+        var secondFields = GetCurrentFields(reader);
+        Assert.That(secondFields, Is.Not.SameAs(firstFields));
+        Assert.That(reader.GetInt32(0), Is.EqualTo(3));
+        Assert.That(reader.GetRawString(1), Is.EqualTo("{\"value\":4}"));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(GetCurrentFields(reader), Is.SameAs(firstFields));
+        Assert.That(reader.GetInt32(0), Is.EqualTo(5));
+    }
+
     [TestCase("{\"id\":1,\"name\":\"Ada\"}\n{\"id\":2}")]
     [TestCase("{\"id\":1,\"name\":\"Ada\"}\n{\"id\":2,\"name\":\"Grace\",\"active\":true}")]
     public void Read_PropertyCountChanges_ThrowsBeforeExposingRecord(string content)
@@ -36,6 +58,7 @@ public class StableObjectShapeTests
         Assert.That(reader.Read(), Is.True);
         Assert.That(() => reader.Read(), Throws.TypeOf<InvalidDataException>());
         Assert.That(reader.FieldCount, Is.EqualTo(2));
+        Assert.That(reader.GetInt32(0), Is.EqualTo(1));
     }
 
     [Test]
@@ -177,4 +200,9 @@ public class StableObjectShapeTests
             .GetValue(parser)!;
         return conversions.Count;
     }
+
+    private static FieldSpan[] GetCurrentFields(NdjsonDataReader reader)
+        => (FieldSpan[])typeof(BaseRawRecord<NdjsonProfile>)
+            .GetProperty("CurrentFieldSpans", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(reader)!;
 }

@@ -10,7 +10,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
-    private int? _stablePropertyCount;
+    private FieldSpan[]? _stableFields;
+    private FieldSpan[]? _stableScratchFields;
     private int[]? _stableProjectedOrdinals;
 
     public NdjsonProfile Profile { get; }
@@ -126,21 +127,23 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     {
         var stableRecord = Trim(record);
         FieldSpan[] fields;
-        if (_stablePropertyCount is null)
+        if (_stableFields is null)
         {
             if (stableRecord.IsEmpty || stableRecord.Span[0] != '{')
                 throw new InvalidDataException("A stable-shape NDJSON record must be a JSON object.");
             fields = JsonRecordParser.Parse(stableRecord.Span, Profile.Dialect.Whitespaces);
-            _stablePropertyCount = fields.Length;
+            _stableFields = fields;
             if (Profile.ProjectedProperties is not null)
                 _stableProjectedOrdinals = ResolveProjectedOrdinals(stableRecord.Span, fields);
         }
         else
         {
+            _stableScratchFields ??= new FieldSpan[_stableFields.Length];
             fields = JsonRecordParser.ParseStableObjectValues(
                 stableRecord.Span,
                 Profile.Dialect.Whitespaces,
-                _stablePropertyCount.Value);
+                _stableScratchFields);
+            (_stableFields, _stableScratchFields) = (fields, _stableFields);
         }
 
         if (_stableProjectedOrdinals is null)

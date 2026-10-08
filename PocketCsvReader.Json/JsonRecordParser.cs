@@ -27,31 +27,32 @@ internal ref struct JsonRecordParser
     public static FieldSpan[] ParseStableObjectValues(
         ReadOnlySpan<char> json,
         char[] whitespaces,
-        int expectedPropertyCount)
+        FieldSpan[] fields)
     {
+        ArgumentNullException.ThrowIfNull(fields);
         var parser = new JsonRecordParser(json, whitespaces);
         parser.SkipWhitespace();
         if (parser.Current != '{')
             throw new InvalidDataException("A stable-shape JSON value must be an object.");
 
-        var fields = parser.ParseStableObject(expectedPropertyCount);
+        parser.ParseStableObject(fields);
         parser.SkipWhitespace();
         if (!parser.IsEnd)
             throw new InvalidDataException($"Unexpected character '{parser.Current}' at position {parser._position}.");
         return fields;
     }
 
-    private FieldSpan[] ParseStableObject(int expectedPropertyCount)
+    private void ParseStableObject(FieldSpan[] fields)
     {
+        var expectedPropertyCount = fields.Length;
         Expect('{');
         SkipWhitespace();
-        var fields = new FieldSpan[expectedPropertyCount];
         if (Current == '}')
         {
             _position++;
             if (expectedPropertyCount != 0)
                 throw PropertyCountChanged(expectedPropertyCount, 0);
-            return fields;
+            return;
         }
 
         var ordinal = 0;
@@ -72,7 +73,7 @@ internal ref struct JsonRecordParser
                 _position++;
                 if (ordinal != expectedPropertyCount)
                     throw PropertyCountChanged(expectedPropertyCount, ordinal);
-                return fields;
+                return;
             }
 
             Expect(',');
