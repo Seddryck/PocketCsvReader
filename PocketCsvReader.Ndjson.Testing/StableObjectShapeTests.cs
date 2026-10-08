@@ -132,6 +132,7 @@ public class StableObjectShapeTests
         Assert.That(GetCachedConversionCount(reader), Is.Zero);
         Assert.That(reader.GetInt32(0), Is.EqualTo(1));
         Assert.That(GetCachedConversionCount(reader), Is.EqualTo(1));
+        Assert.That(reader.GetValue(0), Is.EqualTo(1));
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetInt32(0), Is.EqualTo(2));
