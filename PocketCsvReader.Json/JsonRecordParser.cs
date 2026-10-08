@@ -27,24 +27,32 @@ internal ref struct JsonRecordParser
     public static FieldSpan[] ParseStableObjectValues(
         ReadOnlySpan<char> json,
         char[] whitespaces,
+        StableJsonShape shape,
         FieldSpan[] fields)
     {
+        ArgumentNullException.ThrowIfNull(shape);
         ArgumentNullException.ThrowIfNull(fields);
         var parser = new JsonRecordParser(json, whitespaces);
         parser.SkipWhitespace();
         if (parser.Current != '{')
             throw new InvalidDataException("A stable-shape JSON value must be an object.");
 
-        parser.ParseStableObject(fields);
+        parser.ParseStableObject(shape, fields);
         parser.SkipWhitespace();
         if (!parser.IsEnd)
             throw new InvalidDataException($"Unexpected character '{parser.Current}' at position {parser._position}.");
         return fields;
     }
 
-    private void ParseStableObject(FieldSpan[] fields)
+    public static StableJsonShape CreateStableShape(ReadOnlySpan<char> json, FieldSpan[] fields)
+        => StableJsonShape.CreateObject(json, fields);
+
+    private void ParseStableObject(StableJsonShape shape, FieldSpan[] fields)
     {
-        var expectedPropertyCount = fields.Length;
+        var expectedPropertyCount = shape.Children.Length;
+        if (fields.Length != expectedPropertyCount)
+            throw new InvalidOperationException("The stable-shape field buffer does not match the object shape.");
+
         Expect('{');
         SkipWhitespace();
         if (Current == '}')
@@ -65,7 +73,8 @@ internal ref struct JsonRecordParser
             SkipWhitespace();
             Expect(':');
             SkipWhitespace();
-            fields[ordinal++] = ParseValue(allowObject: true, allowCompositeArrayItems: true);
+            fields[ordinal] = ParseStableValue(shape.Children[ordinal], fields[ordinal].Children);
+            ordinal++;
 
             SkipWhitespace();
             if (Current == '}')
@@ -81,8 +90,81 @@ internal ref struct JsonRecordParser
         }
     }
 
+    private FieldSpan ParseStableValue(StableJsonShape shape, FieldSpan[]? fields)
+    {
+        if (shape.Kind == StableJsonShapeKind.Object)
+        {
+            if (Current != '{')
+                throw StructureChanged("object");
+            var start = _position;
+            ParseStableObject(shape, RequireStableFields(shape, fields));
+            return new FieldSpan(CompletedSpan(start, _position - start), default, fields);
+        }
+
+        if (shape.Kind == StableJsonShapeKind.Array)
+        {
+            if (Current != '[')
+                throw StructureChanged("array");
+            return ParseStableArray(shape, RequireStableFields(shape, fields));
+        }
+
+        if (Current is '{' or '[')
+            throw StructureChanged("scalar");
+        return ParseValue(allowObject: false, allowCompositeArrayItems: false);
+    }
+
+    private FieldSpan ParseStableArray(StableJsonShape shape, FieldSpan[] fields)
+    {
+        var start = _position;
+        var expectedItemCount = shape.Children.Length;
+        if (fields.Length != expectedItemCount)
+            throw new InvalidOperationException("The stable-shape field buffer does not match the array shape.");
+
+        Expect('[');
+        SkipWhitespace();
+        if (Current == ']')
+        {
+            _position++;
+            if (expectedItemCount != 0)
+                throw ArrayItemCountChanged(expectedItemCount, 0);
+            return new FieldSpan(CompletedSpan(start, _position - start), default, fields);
+        }
+
+        var ordinal = 0;
+        while (true)
+        {
+            if (ordinal >= expectedItemCount)
+                throw ArrayItemCountChanged(expectedItemCount, ordinal + 1);
+
+            fields[ordinal] = ParseStableValue(shape.Children[ordinal], fields[ordinal].Children);
+            ordinal++;
+            SkipWhitespace();
+            if (Current == ']')
+            {
+                _position++;
+                if (ordinal != expectedItemCount)
+                    throw ArrayItemCountChanged(expectedItemCount, ordinal);
+                return new FieldSpan(CompletedSpan(start, _position - start), default, fields);
+            }
+
+            Expect(',');
+            SkipWhitespace();
+        }
+    }
+
+    private static FieldSpan[] RequireStableFields(StableJsonShape shape, FieldSpan[]? fields)
+        => fields is not null && fields.Length == shape.Children.Length
+            ? fields
+            : throw new InvalidOperationException("The stable-shape child buffer does not match the JSON shape.");
+
+    private InvalidDataException StructureChanged(string expected)
+        => new($"Stable JSON structure expected a {expected} value at position {_position}.");
+
     private static InvalidDataException PropertyCountChanged(int expected, int actual)
         => new($"Stable-shape object property count changed from {expected} to {actual}.");
+
+    private static InvalidDataException ArrayItemCountChanged(int expected, int actual)
+        => new($"Stable-shape array item count changed from {expected} to {actual}.");
 
     public static void MaterializeProjectedValues(
         ReadOnlySpan<char> json,
@@ -505,4 +587,65 @@ internal ref struct JsonRecordParser
         => new(start, length, wasQuoted, isEscaped, IsStarted: true, IsComplete: true, IsNull: isNull);
 
     private readonly record struct ParsedString(SpanInfo Span, string? Decoded);
+}
+
+internal enum StableJsonShapeKind
+{
+    Scalar,
+    Object,
+    Array
+}
+
+internal sealed class StableJsonShape
+{
+    private static readonly StableJsonShape Scalar = new(StableJsonShapeKind.Scalar, []);
+
+    public StableJsonShapeKind Kind { get; }
+    public StableJsonShape[] Children { get; }
+
+    private StableJsonShape(StableJsonShapeKind kind, StableJsonShape[] children)
+    {
+        Kind = kind;
+        Children = children;
+    }
+
+    public static StableJsonShape CreateObject(ReadOnlySpan<char> json, FieldSpan[] fields)
+        => new(StableJsonShapeKind.Object, CreateChildren(json, fields));
+
+    private static StableJsonShape[] CreateChildren(ReadOnlySpan<char> json, FieldSpan[] fields)
+    {
+        var children = new StableJsonShape[fields.Length];
+        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
+            children[ordinal] = Create(json, fields[ordinal]);
+        return children;
+    }
+
+    private static StableJsonShape Create(ReadOnlySpan<char> json, FieldSpan field)
+    {
+        if (field.Children is null || field.Value.WasQuoted)
+            return Scalar;
+
+        return json[field.Value.Start] switch
+        {
+            '{' => new StableJsonShape(
+                StableJsonShapeKind.Object,
+                CreateChildren(json, field.Children)),
+            '[' => new StableJsonShape(
+                StableJsonShapeKind.Array,
+                CreateChildren(json, field.Children)),
+            _ => Scalar
+        };
+    }
+
+    public FieldSpan[] CreateFieldBuffer()
+    {
+        var fields = new FieldSpan[Children.Length];
+        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
+        {
+            var childShape = Children[ordinal];
+            if (childShape.Kind != StableJsonShapeKind.Scalar)
+                fields[ordinal] = new FieldSpan(default, default, childShape.CreateFieldBuffer());
+        }
+        return fields;
+    }
 }

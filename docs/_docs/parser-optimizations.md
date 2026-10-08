@@ -114,7 +114,7 @@ Because NDJSON framing and property projection are separate passes, it does not 
 
 ### NDJSON stable object shape
 
-`NdjsonReaderBuilder.WithStableObjectShape` is an opt-in trusted-input contract for streams whose objects always have the same top-level property count and order. The first object creates the label and ordinal metadata. Later objects validate property-name syntax but skip decoding, comparison, and lookup, then write values directly by ordinal into a fixed-size field array. Property-count drift throws before a record is exposed. Same-count renames and reorders are deliberately not detected, so callers must use this option only for trusted stable-shape input. Value types remain dynamic unless a schema or typed accessor establishes and caches a conversion for an ordinal.
+`NdjsonReaderBuilder.WithStableObjectShape` is an opt-in trusted-input contract for streams whose objects always have the same recursive JSON structure and property order. The first object establishes object property counts, array lengths, labels, and ordinals at every level. Later objects validate property-name syntax but skip decoding, comparison, and lookup, then write values directly by ordinal into reusable field-array trees. Property-count, array-length, and scalar/container drift throws before a record is exposed. Same-count renames and reorders are deliberately not detected, so callers must use this option only for trusted stable-shape input. Scalar leaf types remain dynamic unless a schema or typed accessor establishes and caches a conversion for an ordinal.
 
 ### LTSV and logfmt
 

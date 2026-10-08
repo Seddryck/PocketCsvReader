@@ -44,10 +44,11 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
         => ConfigureProjection(configure, ordered: true);
 
     /// <summary>
-    /// Trusts that every object has the same top-level properties in the same order.
-    /// The first object establishes labels and ordinals. Later property names are validated as JSON syntax
-    /// but are not decoded or compared; renames or reordering with the same count can therefore map values
-    /// to the wrong ordinal. Objects with a different property count are rejected.
+    /// Trusts that every object has the same recursive JSON structure and property order.
+    /// The first object establishes object property counts, array lengths, labels, and ordinals at every level.
+    /// Later property names are validated as JSON syntax but are not decoded or compared; renames or reordering
+    /// with the same count can therefore map values to the wrong ordinal. Structural drift is rejected.
+    /// Scalar leaf types may still vary.
     /// </summary>
     public NdjsonReaderBuilder WithStableObjectShape()
     {

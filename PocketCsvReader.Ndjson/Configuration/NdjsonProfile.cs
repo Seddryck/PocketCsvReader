@@ -18,9 +18,10 @@ public class NdjsonProfile : IProfile
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
     /// <summary>
-    /// Gets whether the input is trusted to contain the same top-level properties in the same order.
-    /// Only the first object's names establish labels and ordinals; later names are consumed as JSON syntax
-    /// without being decoded or compared. Later objects with a different property count are rejected.
+    /// Gets whether the input is trusted to contain the same recursive JSON structure and property order.
+    /// The first object establishes object property counts, array lengths, labels, and ordinals at every level;
+    /// later names are consumed as JSON syntax without being decoded or compared. Structural drift is rejected,
+    /// while scalar leaf types may still vary.
     /// </summary>
     public bool StableObjectShape { get; }
 

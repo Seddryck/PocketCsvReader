@@ -105,6 +105,40 @@ public class StableObjectShapeTests
         Assert.That(reader.GetRawString(1), Does.Contain("false"));
     }
 
+    [TestCase(
+        "{\"payload\":{\"id\":1,\"name\":\"Ada\"}}\n{\"payload\":{\"id\":2}}")]
+    [TestCase(
+        "{\"payload\":{\"id\":1,\"name\":\"Ada\"}}\n{\"payload\":{\"id\":2,\"name\":\"Grace\",\"active\":true}}")]
+    public void Read_NestedObjectShapeChanges_ThrowsBeforeExposingRecord(string content)
+    {
+        using var reader = CreateReader(content);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.Read(), Throws.TypeOf<InvalidDataException>());
+        Assert.That(reader.GetRawString(0), Is.EqualTo("{\"id\":1,\"name\":\"Ada\"}"));
+    }
+
+    [Test]
+    public void Read_NestedArrayLengthChanges_ThrowsBeforeExposingRecord()
+    {
+        using var reader = CreateReader(
+            "{\"values\":[1,2]}\n{\"values\":[3,4,5]}");
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.Read(), Throws.TypeOf<InvalidDataException>());
+        Assert.That(reader.GetArray<int>(0), Is.EqualTo(new[] { 1, 2 }));
+    }
+
+    [TestCase("{\"value\":1}\n{\"value\":{\"nested\":2}}")]
+    [TestCase("{\"value\":{\"nested\":1}}\n{\"value\":2}")]
+    public void Read_ScalarContainerShapeChanges_ThrowsBeforeExposingRecord(string content)
+    {
+        using var reader = CreateReader(content);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.Read(), Throws.TypeOf<InvalidDataException>());
+    }
+
     [Test]
     public void Read_AcrossSmallBufferBoundaries_ReturnsAllValues()
     {
