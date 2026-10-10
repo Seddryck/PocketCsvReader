@@ -164,7 +164,10 @@ public static class CsvInference
                 var consistency = (double)groups[0].Count() / records.Count;
                 var widthScore = modalWidth > 1 ? Math.Min(modalWidth, 6) / 6d : 0;
                 var quoteEvidence = quote.HasValue && text.Contains(quote.Value) ? 0.05 : 0;
-                var score = consistency * 0.65 + widthScore * 0.25 + Math.Min(records.Count, 10) / 100d + quoteEvidence;
+                var score = (consistency * 0.65)
+                    + (widthScore * 0.25)
+                    + (Math.Min(records.Count, 10) / 100d)
+                    + quoteEvidence;
                 candidates.Add((candidate, score));
             }
             catch (InvalidDataException)
@@ -312,11 +315,7 @@ public static class CsvInference
     private static bool InferHeader(List<List<SampleCell>> records, CsvInferenceOptions options, List<InferenceDiagnostic> diagnostics)
     {
         if (options.Header != CsvHeaderMode.Auto)
-        {
-            var present = options.Header == CsvHeaderMode.Present;
-            diagnostics.Add(new("header.explicit", $"Header presence was explicitly set to {present.ToString().ToLowerInvariant()}.", Confidence: 1));
-            return present;
-        }
+            return UseExplicitHeader(options.Header, diagnostics);
 
         if (records.Count < 2)
         {
@@ -324,11 +323,39 @@ public static class CsvInference
             return false;
         }
 
+        var confidence = CalculateHeaderConfidence(records, options.Culture);
+        return ReportHeaderDecision(confidence, diagnostics);
+    }
+
+    private static bool UseExplicitHeader(CsvHeaderMode header, List<InferenceDiagnostic> diagnostics)
+    {
+        var present = header == CsvHeaderMode.Present;
+        diagnostics.Add(new("header.explicit", $"Header presence was explicitly set to {present.ToString().ToLowerInvariant()}.", Confidence: 1));
+        return present;
+    }
+
+    private static double CalculateHeaderConfidence(List<List<SampleCell>> records, IFormatProvider culture)
+    {
         var first = records[0];
         var widthStable = records.Skip(1).All(record => record.Count == first.Count);
         var names = first.Select(cell => cell.Value?.Trim()).ToArray();
         var uniqueNames = names.All(name => !string.IsNullOrEmpty(name)) && names.Distinct(StringComparer.OrdinalIgnoreCase).Count() == names.Length;
         var nameLike = uniqueNames && names.All(name => name!.Any(char.IsLetter));
+        var comparison = CompareHeaderTypes(records, culture);
+        var typeDifference = comparison.Compared == 0 ? 0 : (double)comparison.Different / comparison.Compared;
+        var typedSimilarity = comparison.Compared == 0 ? 0 : (double)comparison.MatchingTyped / comparison.Compared;
+        var nameConfidence = nameLike ? 0.25 : 0;
+        var widthConfidence = widthStable ? 0.1 : 0;
+        var typeConfidence = typeDifference * 0.65;
+        var similarityPenalty = typedSimilarity * 0.25;
+        return Math.Clamp(nameConfidence + widthConfidence + typeConfidence - similarityPenalty, 0, 1);
+    }
+
+    private static (int Compared, int Different, int MatchingTyped) CompareHeaderTypes(
+        List<List<SampleCell>> records,
+        IFormatProvider culture)
+    {
+        var first = records[0];
         var compared = 0;
         var different = 0;
         var matchingTyped = 0;
@@ -338,22 +365,24 @@ public static class CsvInference
             if (later.Length == 0 || first[column].Value is null)
                 continue;
             compared++;
-            var firstType = InferRuntimeType([first[column].Value!], options.Culture);
-            var laterType = InferRuntimeType(later, options.Culture);
+            var firstType = InferRuntimeType([first[column].Value!], culture);
+            var laterType = InferRuntimeType(later, culture);
             if (firstType == typeof(string) && laterType != typeof(string))
                 different++;
             else if (firstType != typeof(string) && firstType == laterType)
                 matchingTyped++;
         }
+        return (compared, different, matchingTyped);
+    }
 
-        var typeDifference = compared == 0 ? 0 : (double)different / compared;
-        var typedSimilarity = compared == 0 ? 0 : (double)matchingTyped / compared;
-        var confidence = Math.Clamp((nameLike ? 0.25 : 0) + (widthStable ? 0.1 : 0) + typeDifference * 0.65 - typedSimilarity * 0.25, 0, 1);
+    private static bool ReportHeaderDecision(double confidence, List<InferenceDiagnostic> diagnostics)
+    {
         var hasHeader = confidence >= 0.55;
+        var ambiguous = confidence is >= 0.25 and < 0.75;
         diagnostics.Add(new(
-            confidence is >= 0.25 and < 0.75 ? "header.ambiguous" : "header.inferred",
+            ambiguous ? "header.ambiguous" : "header.inferred",
             hasHeader ? "The first sampled record was inferred to be a header." : "The first sampled record was inferred to contain data.",
-            confidence is >= 0.25 and < 0.75 ? InferenceDiagnosticSeverity.Warning : InferenceDiagnosticSeverity.Information,
+            ambiguous ? InferenceDiagnosticSeverity.Warning : InferenceDiagnosticSeverity.Information,
             confidence));
         return hasHeader;
     }
