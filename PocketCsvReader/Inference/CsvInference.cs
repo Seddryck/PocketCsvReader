@@ -7,7 +7,7 @@ using PocketCsvReader.FieldParsing;
 namespace PocketCsvReader;
 
 /// <summary>Infers a reusable schema and, optionally, a CSV dialect from a bounded sample.</summary>
-public static class CsvInference
+public sealed class CsvInference
 {
     private static readonly string[] DatePatterns = ["yyyy-MM-dd", "yyyyMMdd", "d"];
     private static readonly string[] TimePatterns = ["HH:mm", "HH:mm:ss", "HH:mm:ss.FFFFFFF", "t", "T"];
@@ -16,16 +16,20 @@ public static class CsvInference
     private static readonly string[] DateTimeOffsetPatterns =
         ["yyyy-MM-dd'T'HH:mm:ssK", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK", "yyyy-MM-dd HH:mm:ss zzz", "yyyy-MM-dd HH:mm:ss.FFFFFFF zzz"];
 
-    public static CsvInferenceResult Infer(string filename, CsvInferenceOptions? options = null)
+    private readonly CsvInferenceOptions _options;
+
+    public CsvInference(CsvInferenceOptions? options = null)
+        => _options = options ?? new CsvInferenceOptions();
+
+    public CsvInferenceResult Infer(string filename)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filename);
         if (!File.Exists(filename))
             throw new FileNotFoundException($"The file {filename} was not found.", filename);
 
-        options ??= new CsvInferenceOptions();
-        var resource = options.Resource ?? InferResource(filename);
+        var resource = _options.Resource ?? InferResource(filename);
         using var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return InferCore(stream, options with { Resource = resource });
+        return InferCore(stream, _options with { Resource = resource });
     }
 
     /// <summary>
@@ -33,12 +37,12 @@ public static class CsvInference
     /// non-seekable stream is consumed. Set <see cref="CsvInferenceOptions.RestoreStreamPosition"/>
     /// to false to leave a seekable stream at the parser's final buffered position.
     /// </summary>
-    public static CsvInferenceResult Infer(Stream stream, CsvInferenceOptions? options = null)
+    public CsvInferenceResult Infer(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanRead)
             throw new ArgumentException("The stream must be readable.", nameof(stream));
-        return InferCore(stream, options ?? new CsvInferenceOptions());
+        return InferCore(stream, _options);
     }
 
     private static CsvInferenceResult InferCore(Stream stream, CsvInferenceOptions options)

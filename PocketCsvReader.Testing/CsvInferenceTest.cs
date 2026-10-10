@@ -16,10 +16,10 @@ public class CsvInferenceTest
         var csv = $"Name,Age,Active,Amount,Date,Id,Postal,Optional\nAlice,12,true,12.5,2026-01-02,{guid1},00123,\nBob,40000,false,17.25,2026-02-03,{guid2},00999,";
         using var stream = Utf8(csv);
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -44,11 +44,11 @@ public class CsvInferenceTest
     {
         using var stream = Utf8("1,10\n40000,20\n3000000000,30");
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Absent,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -64,11 +64,11 @@ public class CsvInferenceTest
     {
         using var stream = Utf8("Name;Notes;Value\nAlice;\"first\nsecond\";1,5\nBob;plain;2,5");
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             InferDialect = true,
             Culture = CultureInfo.GetCultureInfo("fr-FR")
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -85,11 +85,11 @@ public class CsvInferenceTest
     {
         using var stream = Utf8("A,B,C\n1,2,3\n4,5\n6,7,8,9");
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -104,11 +104,11 @@ public class CsvInferenceTest
     public void Infer_ShouldDistinguishConfiguredNullsFromEmptyCells()
     {
         using var stream = Utf8("A,B\n1,NULL\n2,");
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed) with { NullSequence = "NULL" }
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -123,12 +123,12 @@ public class CsvInferenceTest
     {
         const string sampled = "A,B\n1,2\n";
         using var stream = Utf8(sampled + "3,4\n5,6");
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             MaximumBytes = Encoding.UTF8.GetByteCount(sampled),
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -142,10 +142,10 @@ public class CsvInferenceTest
     public void Infer_ShouldReportAmbiguousAllStringHeader()
     {
         using var stream = Utf8("Name,Place\nAlice,Brussels\nBob,Paris");
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.That(result.Diagnostics.Any(diagnostic => diagnostic.Code == "header.ambiguous"), Is.True);
     }
@@ -156,12 +156,12 @@ public class CsvInferenceTest
         using var stream = Utf8("ignored\nA,B\n1,2\n3,4\n5,6");
         stream.Position = "ignored\n"u8.Length;
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             MaximumRecords = 2,
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.Multiple(() =>
         {
@@ -176,11 +176,11 @@ public class CsvInferenceTest
     {
         using var stream = new NonSeekableStream(Utf8("A,B\n1,2"));
 
-        var result = CsvInference.Infer(stream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(stream);
 
         Assert.That(result.Columns.Select(column => column.RuntimeType), Is.EqualTo(new[] { typeof(short), typeof(short) }));
         Assert.That(stream.ReadByte(), Is.EqualTo(-1));
@@ -199,12 +199,12 @@ public class CsvInferenceTest
         }
         compressed.Position = 0;
 
-        var result = CsvInference.Infer(compressed, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed) with { CommentChar = '#' },
             Resource = new ResourceDescriptor(Compression: "gz")
-        });
+        }).Infer(compressed);
 
         Assert.Multiple(() =>
         {
@@ -219,11 +219,11 @@ public class CsvInferenceTest
     {
         const string csv = "Name,Age\nAlice,42";
         using var inferenceStream = Utf8(csv);
-        var result = CsvInference.Infer(inferenceStream, new CsvInferenceOptions
+        var result = new CsvInference(new CsvInferenceOptions
         {
             Header = CsvHeaderMode.Present,
             Dialect = NoHeader(LineTerminator.LineFeed)
-        });
+        }).Infer(inferenceStream);
         var reader = new CsvReaderBuilder()
             .WithDialect(result.Dialect)
             .WithSchema(result.Schema)

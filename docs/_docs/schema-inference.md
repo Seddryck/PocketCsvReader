@@ -21,7 +21,7 @@ var options = new CsvInferenceOptions
         .Build()
 };
 
-var result = CsvInference.Infer("input.csv", options);
+var result = new CsvInference(options).Infer("input.csv");
 
 var reader = new CsvReaderBuilder()
     .WithDialect(result.Dialect)
@@ -36,12 +36,13 @@ var reader = new CsvReaderBuilder()
 Dialect inference evaluates comma, tab, semicolon, and pipe delimiters together with common quote behavior. It also detects CRLF, LF, and CR line terminators. The selected dialect and a confidence diagnostic are returned rather than applied to another reader automatically.
 
 ```csharp
-var result = CsvInference.Infer("unknown.csv", new CsvInferenceOptions
+var inference = new CsvInference(new CsvInferenceOptions
 {
     MaximumRecords = 500,
     InferDialect = true,
     Culture = CultureInfo.GetCultureInfo("fr-FR")
 });
+var result = inference.Infer("unknown.csv");
 
 foreach (var diagnostic in result.Diagnostics)
     Console.WriteLine($"{diagnostic.Code}: {diagnostic.Message}");
