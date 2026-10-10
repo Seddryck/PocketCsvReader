@@ -35,6 +35,8 @@ public readonly struct CommentParser : IParser
         if (c == _lineTerminatorChar)
         {
             _ctx.StartValue(pos + _lineTerminatorLength, false);
+            if (_lineTerminatorLength == 1)
+                return ParserState.Comment;
             _controller.SwitchToLineTerminator(ParserState.Comment);
             return ParserState.Continue;
         }
