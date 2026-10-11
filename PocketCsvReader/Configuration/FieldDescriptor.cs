@@ -14,5 +14,6 @@ public record FieldDescriptor
     , ParseFunction? Parse = null
     , ImmutableSequenceCollection? Sequences = null
     , string DataSourceTypeName = ""
+    , bool IsNullable = false
 )
 { }

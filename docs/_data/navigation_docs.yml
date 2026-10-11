@@ -19,6 +19,7 @@
   - fluent-api-runtime-parsers
   - fluent-api-resource
   - fluent-api-schema
+  - schema-inference
   - mapper-object-builder
   - compressed-files
   - json-and-ndjson

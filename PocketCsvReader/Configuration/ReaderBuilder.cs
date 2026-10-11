@@ -23,6 +23,12 @@ public abstract class ReaderBuilder<TBuilder>
         return (TBuilder)this;
     }
 
+    public TBuilder WithSchema(SchemaDescriptor schema)
+    {
+        _components.ConfigureSchema(schema);
+        return (TBuilder)this;
+    }
+
     public TBuilder WithResource(Func<ResourceDescriptorBuilder, ResourceDescriptorBuilder> configure)
     {
         _components.ConfigureResource(configure);

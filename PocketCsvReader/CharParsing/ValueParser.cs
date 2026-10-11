@@ -12,6 +12,7 @@ public readonly struct ValueParser : IParser
     private readonly IParserStateController _controller;
 
     private readonly char _lineTerminator;
+    private readonly int _lineTerminatorLength;
     private readonly char _delimiter;
     private readonly char? _quote;
     private readonly char? _escape;
@@ -35,8 +36,8 @@ public readonly struct ValueParser : IParser
     /// <param name="prefixArray">Optional character indicating the start of an array value.</param>
     public ValueParser(IParserContext ctx, IParserStateController controller, string lineTerminator, char delimiter,
 char? quote = null, char? escape = null, bool skipInitialSpace = false, bool doubleQuote = false, char? comment = null, char? prefixArray = null)
-=> (_ctx, _controller, _lineTerminator, _delimiter, _quote, _escape, _skipInitialSpace, _doubleQuote, _comment, _prefixArray)
-    = (ctx, controller, lineTerminator[0], delimiter, quote, escape, skipInitialSpace, doubleQuote, comment, prefixArray);
+=> (_ctx, _controller, _lineTerminator, _lineTerminatorLength, _delimiter, _quote, _escape, _skipInitialSpace, _doubleQuote, _comment, _prefixArray)
+    = (ctx, controller, lineTerminator[0], lineTerminator.Length, delimiter, quote, escape, skipInitialSpace, doubleQuote, comment, prefixArray);
 
     /// <summary>
     /// Processes a single character during CSV parsing, updating the parser state based on delimiters, quotes, escapes, comments, array prefixes, and line terminators.
@@ -86,6 +87,8 @@ char? quote = null, char? escape = null, bool skipInitialSpace = false, bool dou
                 _ctx.EndValue(pos);
             else
                 _ctx.EmptyValue();
+            if (_lineTerminatorLength == 1)
+                return ParserState.Record;
             _controller.SwitchToLineTerminator(ParserState.Record);
             return ParserState.Continue;
         }
