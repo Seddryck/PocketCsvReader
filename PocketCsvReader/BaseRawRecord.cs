@@ -22,8 +22,8 @@ public abstract class BaseRawRecord<P> where P : IProfile
         set
         {
             _record = value;
-            CurrentRecordMemory = value?.Span ?? default;
-            CurrentFieldSpans = value?.FieldSpans;
+            CurrentRecordMemory = value?.CharacterMemoryOrDefault ?? default;
+            CurrentFieldSpans = value?.ParsedFields;
         }
     }
     protected ReadOnlyMemory<char> CurrentRecordMemory { get; private set; }

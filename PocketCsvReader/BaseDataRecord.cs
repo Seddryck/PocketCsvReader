@@ -127,6 +127,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     protected T GetNumeric<T>(int i)
     {
+        if (TryGetDirectValue<T>(i, out var direct)) return direct;
         try
         {
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
@@ -147,6 +148,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         {
             throw ex.InnerException!;
         }
+    }
+
+    private protected virtual bool TryGetDirectValue<T>(int i, out T value)
+    {
+        value = default!;
+        return false;
     }
 
     protected virtual object GetMissingField()
@@ -241,6 +248,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     public T GetFieldValue<T>(int i)
     {
+        if (TryGetDirectValue<T>(i, out var direct)) return direct;
         if (IsNullFieldValue<T>(i))
             return default!;
         try

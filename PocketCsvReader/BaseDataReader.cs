@@ -57,6 +57,14 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         else
             ProcessedStream = RawStream;
 
+        var nativeSource = CreateStreamRecordSource(ProcessedStream, Profile);
+        if (nativeSource is not null)
+        {
+            RecordSource = nativeSource;
+            _initialized = true;
+            return;
+        }
+
         FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
             ? new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding)
             : new EncodingInfo(Encoding.UTF8, -1);
@@ -79,6 +87,11 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 
     protected virtual IRecordSource<P> CreateRecordSource(StreamReader reader, P profile)
         => CreateRecordParser(reader, profile);
+
+    protected virtual IRecordSource<P>? CreateStreamRecordSource(Stream stream, P profile) => null;
+
+    protected virtual ValueTask<IRecordSource<P>?> CreateStreamRecordSourceAsync(Stream stream, P profile, CancellationToken cancellationToken)
+        => ValueTask.FromResult<IRecordSource<P>?>(null);
 
     protected virtual BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile)
         => throw new NotSupportedException("Override CreateRecordSource or CreateRecordParser to provide records.");
@@ -149,6 +162,14 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         }
         else
             ProcessedStream = RawStream;
+
+        var nativeSource = await CreateStreamRecordSourceAsync(ProcessedStream, Profile, cancellationToken).ConfigureAwait(false);
+        if (nativeSource is not null)
+        {
+            RecordSource = nativeSource;
+            _initialized = true;
+            return;
+        }
 
         FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
             ? await new EncodingDetector().GetStreamEncodingAsync(ProcessedStream, Profile.Resource?.Encoding, cancellationToken).ConfigureAwait(false)

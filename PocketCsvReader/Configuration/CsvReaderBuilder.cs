@@ -8,6 +8,13 @@ namespace PocketCsvReader.Configuration;
 public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
+    private StreamInitializationOptions _streamInitialization = StreamInitializationOptions.Default;
+
+    public CsvReaderBuilder WithStreamInitialization(StreamInitializationOptions options)
+    {
+        _streamInitialization = options ?? throw new ArgumentNullException(nameof(options));
+        return this;
+    }
     private DialectDescriptor? _dialect;
 
     public CsvReaderBuilder WithDialect(Func<DialectDescriptorBuilder, DialectDescriptorBuilder> func)
@@ -37,7 +44,8 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
             BuildResource(),
             BuildParsers())
         {
-            ParserOptimizations = BuildParserOptimizations()
+            ParserOptimizations = BuildParserOptimizations(),
+            StreamInitialization = _streamInitialization
         };
         return new CsvReader(profile);
     }

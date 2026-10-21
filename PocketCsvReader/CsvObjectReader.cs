@@ -16,6 +16,9 @@ public class CsvObjectReader<T> : IDisposable
     protected StreamReader? StreamReader { get; private set; }
     private bool LeaveOpen { get; }
     private bool _disposed;
+    private CsvDataReader? _dataReader;
+    private bool UseDataReader => Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
+        || !string.IsNullOrEmpty(Profile.Resource?.Encoding);
     protected Memory<char> buffer;
     public int RowCount { get; private set; } = 0;
 
@@ -37,6 +40,12 @@ public class CsvObjectReader<T> : IDisposable
 
     public void Initialize()
     {
+        if (UseDataReader)
+        {
+            _dataReader ??= new CsvDataReader(Stream, Profile, LeaveOpen);
+            _dataReader.Initialize();
+            return;
+        }
         FileEncoding ??= new EncodingDetector().GetStreamEncoding(Stream);
         StreamReader = new StreamReader(Stream, FileEncoding!.Encoding, false, bufferSize: 1024, leaveOpen: true);
         var bufferBOM = new char[1];
@@ -52,6 +61,16 @@ public class CsvObjectReader<T> : IDisposable
 
     public IEnumerable<T> Read()
     {
+        if (UseDataReader)
+        {
+            Initialize();
+            while (_dataReader!.Read())
+            {
+                RowCount++;
+                yield return _dataReader.MapCurrent(SpanMapper);
+            }
+            yield break;
+        }
         if (FileEncoding is null)
             Initialize();
         if (IsEof)
@@ -80,6 +99,7 @@ public class CsvObjectReader<T> : IDisposable
             return;
 
         RecordParser?.Dispose();
+        _dataReader?.Dispose();
         StreamReader?.Dispose();
         if (!LeaveOpen)
             Stream.Dispose();

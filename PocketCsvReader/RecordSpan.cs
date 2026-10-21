@@ -8,9 +8,12 @@ namespace PocketCsvReader;
 public readonly ref struct RecordSpan
 {
     private readonly ReadOnlyMemory<char> _memory;
-    public ReadOnlySpan<char> Span => _memory.Span;
-    internal ReadOnlyMemory<char> Memory => _memory;
-    public FieldSpan[] FieldSpans { get; }
+    private readonly RecordMemory? _utf8Record;
+    public ReadOnlySpan<char> Span => _utf8Record is null ? _memory.Span : _utf8Record.Span.Span;
+    internal ReadOnlyMemory<char> Memory => _utf8Record?.Span ?? _memory;
+    private readonly FieldSpan[] _fields;
+    public FieldSpan[] FieldSpans => _utf8Record?.FieldSpans ?? _fields;
+    internal FieldSpan[] ParsedFields => _fields;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RecordSpan"/> struct with the specified character span and field spans.
@@ -24,7 +27,15 @@ public readonly ref struct RecordSpan
     private RecordSpan(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
     {
         _memory = memory;
-        FieldSpans = fieldSpans;
+        _utf8Record = null;
+        _fields = fieldSpans;
+    }
+
+    internal RecordSpan(RecordMemory record)
+    {
+        _memory = default;
+        _utf8Record = record;
+        _fields = record.ParsedFields;
     }
 
     internal static RecordSpan FromMemory(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
@@ -37,12 +48,13 @@ public readonly ref struct RecordSpan
         /// <returns>A <see cref="ReadOnlySpan{char}"/> containing the field's characters.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the record span is empty.</exception>
         public ReadOnlySpan<char> Slice(int i)
-        => Span.Length > 0 ? Span.Slice(FieldSpans[i].Value.Start, FieldSpans[i].Value.Length) : throw new InvalidOperationException();
+        => _utf8Record is not null ? _utf8Record.Slice(i).Span
+            : Span.Length > 0 ? Span.Slice(FieldSpans[i].Value.Start, FieldSpans[i].Value.Length) : throw new InvalidOperationException();
 
     /// <summary>
         /// Converts the current record span to a <see cref="RecordMemory"/> instance representing the same data.
         /// </summary>
         /// <returns>A <see cref="RecordMemory"/> containing the record's character span and field spans.</returns>
     public RecordMemory AsMemory()
-        => new RecordMemory(_memory, FieldSpans);
+        => _utf8Record ?? new RecordMemory(_memory, FieldSpans);
 }
