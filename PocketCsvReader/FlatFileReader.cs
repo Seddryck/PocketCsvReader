@@ -57,6 +57,29 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return MaterializeStringArrays(() => ToDataReader(stream));
     }
 
+    /// <summary>Lazily reads independently owned dictionaries keyed by the reader's field names.</summary>
+    /// <remarks>Values use the configured parsers; database nulls become null. Duplicate names
+    /// (compared ordinally) throw InvalidDataException. Enumeration owns and disposes the reader.</remarks>
+    public IEnumerable<IReadOnlyDictionary<string, object?>> ToDictionaries(string filename)
+    {
+        CheckFileExists(filename);
+        return MaterializeDictionaries(() => ToDataReader(filename));
+    }
+
+    /// <inheritdoc cref="ToDictionaries(string)"/>
+    public IEnumerable<IReadOnlyDictionary<string, object?>> ToDictionaries(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return MaterializeDictionaries(() => ToDataReader(stream));
+    }
+
+    private static IEnumerable<IReadOnlyDictionary<string, object?>> MaterializeDictionaries(Func<TDataReader> createReader)
+    {
+        using var reader = createReader();
+        foreach (var row in DataReaderMaterializer.ToDictionaries(reader))
+            yield return row;
+    }
+
     protected Stream OpenRead(string filename)
     {
         CheckFileExists(filename);

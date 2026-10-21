@@ -271,3 +271,30 @@ await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellati
 
 `ToAsync<T>` uses the same asynchronous reader and parser infrastructure as `ReadAsync`, including profiles, headers, bad-data handling, buffer-boundary handling, and cancellation. A file passed by name is opened on enumeration and closed with the enumerator. A caller-provided stream remains owned by the caller and is left open.
 
+
+### Dictionary rows
+
+`ToDictionaries` streams independently owned `IReadOnlyDictionary<string, object?>`
+rows from a filename or a stream. Values use the schema and runtime parsers;
+fields without an explicit type remain strings. Null fields and `DBNull.Value`
+become C# `null`.
+
+```csharp
+var reader = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithSchema(s => s.Named().WithField<int>("Id").WithField<string>("Name"))
+    .Build();
+foreach (var row in reader.ToDictionaries("people.csv"))
+    Console.WriteLine($"{row["Id"]}: {row["Name"]}");
+// Alternatively: reader.ToDictionaries(stream)
+```
+
+Keys match `IDataReader.GetName` for each record, including schema-provided names
+in formats that expose them. CSV without headers uses `field_0`, `field_1`, etc.;
+unnamed CSV headers use the reader's generated names. Names are case-sensitive
+(ordinal comparison). Duplicate names throw `InvalidDataException` to avoid losing
+values. Each row reflects that record's field count and names, including changing
+shapes in labeled formats. Record-width rules, special-value handling, and parser
+errors follow the underlying data reader. Enumeration opens the reader lazily and
+disposes it, including its input stream, when completed, stopped, or failed. Retained
+rows stay valid after enumeration advances.
