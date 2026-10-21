@@ -10,8 +10,16 @@ namespace PocketCsvReader.Configuration;
 
 public class RuntimeParsersDescriptorBuilder
 {
-    private Dictionary<Type, ParseFunction> _types = new();
+    private Dictionary<Type, Action<RuntimeParsersDescriptor>> _types = new();
     private RuntimeParsersDescriptor? Descriptor { get; set; }
+
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public RuntimeParsersDescriptorBuilder WithParser<T>(ParseSpan<T> parse)
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        _types[typeof(T)] = descriptor => descriptor.AddParser(parse);
+        return this;
+    }
 
     public RuntimeParsersDescriptorBuilder WithParser<T>(ParseFunction<T> parse)
         => WithParser(typeof(T), (string str) => parse.Invoke(str)!);
@@ -22,8 +30,7 @@ public class RuntimeParsersDescriptorBuilder
         if (!type.IsAssignableTo(returnType))
             throw new ArgumentException($"The provided parser returns {returnType}, which is not assignable from {type}.");
 
-        if (!_types.TryAdd(type, parse))
-            _types[type] = parse;
+        _types[type] = descriptor => descriptor.AddParser(type, parse);
         return this;
     }
 
@@ -31,7 +38,7 @@ public class RuntimeParsersDescriptorBuilder
     {
         Descriptor = new RuntimeParsersDescriptor();
         foreach (var type in _types)
-            Descriptor.AddParser(type.Key, type.Value);
+            type.Value(Descriptor);
         return Descriptor.Count > 0 ? Descriptor : null;
     }
 }

@@ -8,7 +8,18 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.Configuration;
 public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunction>>
 {
-    private Dictionary<Type, ParseFunction> Parsers { get; init; } = [];
+    private Dictionary<Type, (ParseFunction Legacy, Delegate Span)> Parsers { get; } = [];
+
+    internal IEnumerable<KeyValuePair<Type, Delegate>> SpanParsers
+        => Parsers.Select(parser => new KeyValuePair<Type, Delegate>(parser.Key, parser.Value.Span));
+
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public void AddParser<T>(ParseSpan<T> parse)
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        // Retain the existing enumerable contract for clients inspecting registrations.
+        Parsers.Add(typeof(T), (text => parse(text.AsSpan())!, parse));
+    }
 
     public void AddParser<T>(ParseFunction<T> parse)
         => AddParser(typeof(T), (string str) => parse.Invoke(str)!);
@@ -19,13 +30,13 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
         if (!type.IsAssignableTo(returnType))
             throw new ArgumentException($"The provided parser returns {returnType}, which is not assignable from {type}.");
 
-        Parsers.Add(type, parse);
+        Parsers.Add(type, (parse, SpanParser.Adapt(type, parse)));
     }
 
     public int Count => Parsers.Count;
 
     public IEnumerator<KeyValuePair<Type, ParseFunction>> GetEnumerator()
-        => Parsers.GetEnumerator();
+        => Parsers.Select(parser => new KeyValuePair<Type, ParseFunction>(parser.Key, parser.Value.Legacy)).GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator()
         => GetEnumerator();
 }

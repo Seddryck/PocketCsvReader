@@ -72,3 +72,39 @@ In this example:
 
 - You can define multiple parsers for different types.
 - If two parsers are registered for the same type, the most recently registered parser overrides the previous one.
+
+### Parsing spans without intermediate strings
+
+Use the public `PocketCsvReader.ParseSpan<T>` delegate to consume a `ReadOnlySpan<char>` directly:
+
+```csharp
+ParseSpan<int> parse = (ReadOnlySpan<char> value) =>
+    int.Parse(value, CultureInfo.InvariantCulture);
+
+var parsers = new RuntimeParsersDescriptorBuilder().WithParser(parse).Build();
+
+// Direct descriptor registration is also supported.
+var descriptor = new RuntimeParsersDescriptor();
+descriptor.AddParser(parse);
+```
+
+Field parsers and field formats retain precedence over runtime parsers. A schema builder may supply a default numeric or temporal format; use field-level registration to override that format.
+
+The parser runs synchronously and must not retain the span. It receives the same sanitized and decoded input as existing string parsers. Typed reads avoid intermediate strings; boxed reads still allocate when boxing value types, and returned objects may allocate themselves. Null values retain the existing reader behavior and skip custom parsers for nullable/reference typed reads. Arrays use the registered parser for each non-null element.
+
+Use an explicitly typed span lambda or a `ParseSpan<T>` variable to select the span overload. For a method group, assign or cast it to `ParseSpan<T>` first:
+
+```csharp
+ParseSpan<int> parse = int.Parse;
+var parsers = new RuntimeParsersDescriptorBuilder().WithParser(parse).Build();
+```
+
+Existing string delegates continue to work. With C# 13 or newer, overload priorities keep untyped lambdas and overloaded method groups on the legacy string overload. With an older compiler, explicitly type the lambda parameter as `string` when overload resolution is ambiguous.
+
+To compare custom numeric and date parsers at field and runtime scope, run:
+
+```text
+dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*CustomParsing*' --job short
+```
+
+These benchmarks measure steady-state typed access with registration and initial parser caching outside the measured operation. `MemoryDiagnoser` reports total managed allocations alongside throughput, including intermediate strings and any boxing performed by the legacy adapter. They do not measure CSV tokenization or boxed access. The custom benchmark runner preserves the current power plan.

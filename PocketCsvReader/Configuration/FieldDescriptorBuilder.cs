@@ -14,6 +14,7 @@ public class FieldDescriptorBuilder
     protected Type runtimeType;
     protected FormatDescriptorBuilder? Format { get; set; }
     protected ParseFunction? parse;
+    protected Delegate? spanParse;
     protected string? name;
     protected SequenceCollection? sequences;
     protected string? dataSourceTypeName;
@@ -60,7 +61,20 @@ public class FieldDescriptorBuilder
 
     public FieldDescriptorBuilder WithParser(ParseFunction parse)
     {
+        ArgumentNullException.ThrowIfNull(parse);
         this.parse = parse;
+        spanParse = null;
+        return this;
+    }
+
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public FieldDescriptorBuilder WithParser<T>(ParseSpan<T> parse)
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        if (runtimeType != typeof(T))
+            throw new ArgumentException($"Parser must return {runtimeType}.", nameof(parse));
+        spanParse = parse;
+        this.parse = null;
         return this;
     }
 
@@ -73,6 +87,6 @@ public class FieldDescriptorBuilder
 
     public virtual FieldDescriptor Build()
     {
-        return new FieldDescriptor(runtimeType, name, (Format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty);
+        return new FieldDescriptor(runtimeType, name, (Format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty) { SpanParse = spanParse };
     }
 }

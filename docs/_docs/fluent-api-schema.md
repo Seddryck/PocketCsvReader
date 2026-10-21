@@ -113,6 +113,17 @@ If such a method exists, it is used automatically.
 
 #### Providing a Custom Parser
 
+For allocation-free input handling, register a span parser with an explicitly typed lambda:
+
+```csharp
+var schema = new SchemaDescriptorBuilder().Indexed()
+    .WithField<int>(field => field.WithParser((ReadOnlySpan<char> value) =>
+        int.Parse(value, CultureInfo.InvariantCulture)))
+    .Build();
+```
+
+`WithParser(ParseSpan<T>)` is available on general, integer, number, temporal, and custom field builders. The return type must match the field's runtime type. String-based `WithParser` registrations remain supported; the most recent registration on a field replaces the previous parser. A span parser consumes its input synchronously and must not retain it. See [Runtime Type Parsers](/docs/fluent-api-runtime-parsers#parsing-spans-without-intermediate-strings) for overload selection and lifetime details.
+
 If the default method resolution does not find a suitable Parse method, or if the required method is inaccessible, you can manually register a parser using `WithParser`:
 
 ```csharp

@@ -22,7 +22,9 @@ public class ToDataReader
     [ParamsSource(nameof(Versions))]
     public string VersionPath { get; set; } = string.Empty;
 
-    public static IEnumerable<string> Versions => Directory.GetDirectories(@"C:\Users\cedri\Projects\PocketCsvReader\NuGetPackages\");
+    public static IEnumerable<string> Versions => Directory.Exists(@"C:\Users\cedri\Projects\PocketCsvReader\NuGetPackages\")
+        ? Directory.GetDirectories(@"C:\Users\cedri\Projects\PocketCsvReader\NuGetPackages\")
+        : [];
 
     private Assembly? _csvAssembly;
 

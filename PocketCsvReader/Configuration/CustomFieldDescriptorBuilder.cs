@@ -25,6 +25,10 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new CustomFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (CustomFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public new CustomFieldDescriptorBuilder WithParser<T>(ParseSpan<T> parse)
+        => (CustomFieldDescriptorBuilder)base.WithParser(parse);
+
     public new CustomFieldDescriptorBuilder WithParser(ParseFunction parse)
         => (CustomFieldDescriptorBuilder)base.WithParser(parse);
 }
