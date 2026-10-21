@@ -7,79 +7,112 @@ namespace PocketCsvReader.Json;
 internal sealed class JsonRecordPath(string?[] segments)
 {
     public static JsonRecordPath Parse(string path)
+        => new PathParser(path).Parse();
+
+    private sealed class PathParser(string path)
     {
-        ArgumentException Invalid() => new($"Invalid record path '{path}'.", nameof(path));
-        if (path.Length == 0 || path[0] != '$')
-            throw Invalid();
-        var segments = new List<string?>();
-        var index = 1;
-        while (index < path.Length)
+        private int _position;
+
+        public JsonRecordPath Parse()
         {
-            if (path[index] == '.')
+            Expect('$');
+            var segments = new List<string?>();
+            while (_position < path.Length)
+                segments.Add(ParseSegment());
+            return new(segments.ToArray());
+        }
+
+        private string? ParseSegment()
+            => path[_position++] switch
             {
-                var start = ++index;
-                if (index == path.Length || !IsNameFirst(path[index]))
-                    throw Invalid();
-                index++;
-                while (index < path.Length && (IsNameFirst(path[index]) || char.IsAsciiDigit(path[index])))
-                    index++;
-                var name = path[start..index];
-                if (!ValidUnicode(name))
-                    throw Invalid();
-                segments.Add(name);
-                continue;
-            }
-            if (path[index++] != '[' || index == path.Length)
+                '.' => ParseDotName(),
+                '[' => ParseBracketSegment(),
+                _ => throw Invalid()
+            };
+
+        private string ParseDotName()
+        {
+            var start = _position;
+            if (_position == path.Length || !IsNameFirst(path[_position]))
                 throw Invalid();
-            if (path[index] == '*')
-            {
-                index++;
-                segments.Add(null);
-            }
+            _position++;
+            while (_position < path.Length && IsNameCharacter(path[_position]))
+                _position++;
+            var name = path[start.._position];
+            return ValidUnicode(name) ? name : throw Invalid();
+        }
+
+        private static bool IsNameCharacter(char value)
+            => IsNameFirst(value) || char.IsAsciiDigit(value);
+
+        private string? ParseBracketSegment()
+        {
+            if (_position == path.Length)
+                throw Invalid();
+            string? name = null;
+            if (path[_position] == '*')
+                _position++;
             else
+                name = ParseQuotedName();
+            Expect(']');
+            return name;
+        }
+
+        private string ParseQuotedName()
+        {
+            var quote = path[_position++];
+            if (quote is not ('\'' or '"'))
+                throw Invalid();
+            var name = new StringBuilder();
+            while (_position < path.Length && path[_position] != quote)
+                name.Append(ParseNameCharacter(quote));
+            Expect(quote);
+            var value = name.ToString();
+            return ValidUnicode(value) ? value : throw Invalid();
+        }
+
+        private char ParseNameCharacter(char quote)
+        {
+            var current = path[_position++];
+            if (current < ' ')
+                throw Invalid();
+            return current == '\\' ? ParseEscape(quote) : current;
+        }
+
+        private char ParseEscape(char quote)
+        {
+            if (_position == path.Length)
+                throw Invalid();
+            var escape = path[_position++];
+            if (escape == quote || escape is '\\' or '/')
+                return escape;
+            return escape switch
             {
-                var quote = path[index++];
-                if (quote is not ('\'' or '"'))
-                    throw Invalid();
-                var name = new StringBuilder();
-                while (index < path.Length && path[index] != quote)
-                {
-                    var current = path[index++];
-                    if (current < ' ')
-                        throw Invalid();
-                    if (current != '\\')
-                    {
-                        name.Append(current);
-                        continue;
-                    }
-                    if (index == path.Length)
-                        throw Invalid();
-                    var escape = path[index++];
-                    if (escape == 'u')
-                    {
-                        if (index + 4 > path.Length || !ushort.TryParse(path.AsSpan(index, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var code))
-                            throw Invalid();
-                        name.Append((char)code);
-                        index += 4;
-                    }
-                    else if (escape == quote || escape is '\\' or '/')
-                        name.Append(escape);
-                    else
-                        name.Append(escape switch
-                        {
-                            'b' => '\b', 'f' => '\f', 'n' => '\n', 'r' => '\r', 't' => '\t',
-                            _ => throw Invalid()
-                        });
-                }
-                if (index == path.Length || !ValidUnicode(name.ToString()))
-                    throw Invalid();
-                index++;
-                segments.Add(name.ToString());
+                'u' => ParseUnicodeEscape(),
+                'b' => '\b', 'f' => '\f', 'n' => '\n', 'r' => '\r', 't' => '\t',
+                _ => throw Invalid()
+            };
+        }
+
+        private char ParseUnicodeEscape()
+        {
+            if (_position + 4 > path.Length
+                || !ushort.TryParse(path.AsSpan(_position, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var code))
+            {
+                throw Invalid();
             }
-            if (index == path.Length || path[index++] != ']')
+            _position += 4;
+            return (char)code;
+        }
+
+        private void Expect(char expected)
+        {
+            if (_position == path.Length || path[_position++] != expected)
                 throw Invalid();
         }
-        return new(segments.ToArray());
+
+        private ArgumentException Invalid()
+            => new($"Invalid record path '{path}'.", nameof(path));
     }
 
     private static bool IsNameFirst(char value)
@@ -119,35 +152,41 @@ internal sealed class JsonRecordPath(string?[] segments)
             yield return json.Slice(node.Value.Start - (quoted ? 1 : 0), node.Value.Length + (quoted ? 2 : 0));
             yield break;
         }
+        foreach (var child in SelectChildren(json, node, segments[depth]))
+            foreach (var match in SelectNode(json, child, depth + 1))
+                yield return match;
+    }
+
+    private static IEnumerable<FieldSpan> SelectChildren(ReadOnlyMemory<char> json, FieldSpan node, string? name)
+    {
         if (node.Children is null || node.Value.WasQuoted)
             yield break;
         var kind = json.Span[node.Value.Start];
-        var name = segments[depth];
         if (name is null)
         {
-            if (kind != '[')
-                yield break;
-            foreach (var child in node.Children)
-                foreach (var match in SelectNode(json, child, depth + 1))
-                    yield return match;
+            if (kind == '[')
+                foreach (var child in node.Children)
+                    yield return child;
+            yield break;
         }
-        else if (kind == '{')
+        if (kind == '{' && FindMember(json, node.Children, name) is { } member)
+            yield return member;
+    }
+
+    private static FieldSpan? FindMember(ReadOnlyMemory<char> json, FieldSpan[] children, string name)
+    {
+        FieldSpan? selected = null;
+        foreach (var child in children)
         {
-            FieldSpan? selected = null;
-            foreach (var child in node.Children)
-            {
-                var matches = child.DecodedLabel is { } label
-                    ? string.Equals(label, name, StringComparison.Ordinal)
-                    : json.Span.Slice(child.Label.Start, child.Label.Length).SequenceEqual(name);
-                if (!matches)
-                    continue;
-                if (selected.HasValue)
-                    throw new InvalidDataException($"Duplicate matching member '{name}' at position {child.Label.Start}.");
-                selected = child;
-            }
-            if (selected is { } value)
-                foreach (var match in SelectNode(json, value, depth + 1))
-                    yield return match;
+            var matches = child.DecodedLabel is { } label
+                ? string.Equals(label, name, StringComparison.Ordinal)
+                : json.Span.Slice(child.Label.Start, child.Label.Length).SequenceEqual(name);
+            if (!matches)
+                continue;
+            if (selected.HasValue)
+                throw new InvalidDataException($"Duplicate matching member '{name}' at position {child.Label.Start}.");
+            selected = child;
         }
+        return selected;
     }
 }
