@@ -42,6 +42,18 @@ internal static class DataReaderMaterializer
         }
     }
 
+    public static IEnumerable<object?[]> ToObjectArrays(IDataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        while (reader.Read())
+        {
+            var row = new object?[reader.FieldCount];
+            for (var index = 0; index < row.Length; index++)
+                row[index] = ReadValue(reader, index);
+            yield return row;
+        }
+    }
+
     private static object? ReadValue(IDataReader reader, int index)
     {
         if (reader.IsDBNull(index))

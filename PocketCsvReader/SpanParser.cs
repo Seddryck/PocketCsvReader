@@ -18,6 +18,8 @@ internal class SpanParser
     private Dictionary<Type, Delegate> TypeParsers { get; } = new();
     private Dictionary<int, Delegate> FieldParsers { get; } = new();
 
+    public void ClearFieldParsers() => FieldParsers.Clear();
+
     internal static Delegate Adapt(Type type, Configuration.ParseFunction parse)
     {
         ArgumentNullException.ThrowIfNull(parse);

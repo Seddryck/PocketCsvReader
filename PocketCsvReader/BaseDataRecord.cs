@@ -44,6 +44,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     protected virtual bool CacheInferredFieldParsers => false;
 
+    protected void ResetFieldCaches()
+    {
+        Parser.ClearFieldParsers();
+        _sanitizers?.Clear();
+    }
+
     public object this[int i]
         => GetValue(i);
     public object this[string name]
@@ -193,7 +199,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (HasCustomParser(field))
             return RegisterFieldParser(i, field);
-        Parser.TryGetParser(field.RuntimeType, out ParseSpan<object>? parse);
+        if (!Parser.TryGetParser(field.RuntimeType, out ParseSpan<object>? parse)
+            && Nullable.GetUnderlyingType(field.RuntimeType) is { } underlyingType)
+            Parser.TryGetParser(underlyingType, out parse);
         return parse;
     }
 

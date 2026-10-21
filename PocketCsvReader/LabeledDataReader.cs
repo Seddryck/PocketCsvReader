@@ -65,8 +65,6 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     protected override bool ReadCore()
     {
         Fields = [];
-        if (!HasStableLabelShape || RowCount == 0)
-            _rowShape = LabelRowShape.Empty;
 
         IsEof = RecordSource!.IsEndOfFile(out var recordSpan, out var recordState);
         if (recordState == RecordState.Eof)
@@ -77,7 +75,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
         SetRecord(recordSpan.Memory, recordSpan.FieldSpans);
         if (!HasStableLabelShape || RowCount == 0)
-            _rowShape = _rowShapeCache.Resolve(recordSpan.Memory, recordSpan.FieldSpans);
+            UpdateRowShape(recordSpan.Memory, recordSpan.FieldSpans);
         Fields = _rowShape.Labels;
 
         RowCount++;
@@ -87,8 +85,6 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
     {
         Fields = [];
-        if (!HasStableLabelShape || RowCount == 0)
-            _rowShape = LabelRowShape.Empty;
 
         var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
@@ -100,11 +96,19 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
         Record = result.Record;
         if (!HasStableLabelShape || RowCount == 0)
-            _rowShape = _rowShapeCache.Resolve(result.Record.Span, result.Record.FieldSpans);
+            UpdateRowShape(result.Record.Span, result.Record.FieldSpans);
         Fields = _rowShape.Labels;
 
         RowCount++;
         return true;
+    }
+
+    private void UpdateRowShape(ReadOnlyMemory<char> record, FieldSpan[] fields)
+    {
+        var shape = _rowShapeCache.Resolve(record, fields);
+        if (!ReferenceEquals(_rowShape, shape))
+            ResetFieldCaches();
+        _rowShape = shape;
     }
 
     protected override NullableSpan GetValueOrThrow(int i)

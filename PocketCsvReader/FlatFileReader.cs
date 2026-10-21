@@ -80,6 +80,30 @@ public abstract class FlatFileReader<TProfile, TDataReader>
             yield return row;
     }
 
+    /// <summary>Lazily reads independently owned arrays of parsed field values in reader order.</summary>
+    /// <remarks>Values use the configured schema and runtime parsers; untyped fields remain strings.
+    /// Database nulls become null. Record-width and error handling follow the underlying reader.
+    /// Enumeration owns and disposes the reader, including its input stream.</remarks>
+    public IEnumerable<object?[]> ToObjectArrays(string filename)
+    {
+        CheckFileExists(filename);
+        return MaterializeObjectArrays(() => ToDataReader(filename));
+    }
+
+    /// <inheritdoc cref="ToObjectArrays(string)"/>
+    public IEnumerable<object?[]> ToObjectArrays(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return MaterializeObjectArrays(() => ToDataReader(stream));
+    }
+
+    private static IEnumerable<object?[]> MaterializeObjectArrays(Func<TDataReader> createReader)
+    {
+        using var reader = createReader();
+        foreach (var row in DataReaderMaterializer.ToObjectArrays(reader))
+            yield return row;
+    }
+
     protected Stream OpenRead(string filename)
     {
         CheckFileExists(filename);
