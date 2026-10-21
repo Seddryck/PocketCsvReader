@@ -5,6 +5,8 @@ tags: [configuration]
 
 ## Overview
 
+The optional [Chrononuensis integration](/docs/chrononuensis) registers span parsers for temporal periods with `options.UseChrononuensis()`. Explicit custom parsers override its defaults in either registration order.
+
 The Fluent API for runtime type parsers in PocketCsvReader provides an intuitive and flexible way to define parsers for various runtime types. This is particularly useful when working with custom or non-standard types serialized in a CSV file that need to be correctly deserialized.
 
 By defining a set of parsers, you ensure that these types are always deserialized properly across different CSV files. However, if the deserialization logic varies depending on the field, you should register the parser at the field level instead. See: [Providing a Custom Parser](/docs/fluent-api-schema#providing-a-custom-parser).
