@@ -10,6 +10,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
+    private IEnumerator<ReadOnlyMemory<char>>? _matches;
     private DocumentState _state;
     private bool _needsArrayElement;
 
@@ -35,6 +36,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
+        if (Profile.ParsedRecordPath is not null)
+            return ReadSelected(out record, out recordState);
         _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
             return EndOfFile(out record, out recordState);
@@ -63,6 +66,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (Profile.ParsedRecordPath is not null)
+            return await ReadSelectedAsync(cancellationToken).ConfigureAwait(false);
         _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
             return new(true, RecordMemory.Empty, RecordState.Eof);
@@ -83,6 +88,73 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             : await CompleteArrayElementAsync(delimiter, cancellationToken).ConfigureAwait(false);
 
         return new(isEndOfFile, new RecordMemory(capture.Memory, fields), RecordState.Record);
+    }
+
+    private bool ReadSelected(out RecordSpan record, out RecordState recordState)
+    {
+        if (_matches is null && _state != DocumentState.Complete)
+        {
+            _cursor.BeginOperation();
+            var first = PeekNonWhitespace();
+            if (first < 0)
+                throw Error("A JSON value was expected");
+            var framer = new JsonValueFramer();
+            framer.Prepare((char)first, _cursor.Position);
+            var capture = _cursor.ReadFrame(framer) ?? throw Error("The JSON value is incomplete");
+            _cursor.Protect(capture);
+            CompleteSingleRoot(framer.Delimiter);
+            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
+        }
+        if (TrySelectRow(out var row))
+        {
+            record = RecordSpan.FromMemory(row.Span, row.FieldSpans);
+            recordState = RecordState.Record;
+            return false;
+        }
+        return EndOfFile(out record, out recordState);
+    }
+
+    private async ValueTask<RecordReadResult> ReadSelectedAsync(CancellationToken cancellationToken)
+    {
+        if (_matches is null && _state != DocumentState.Complete)
+        {
+            _cursor.BeginOperation();
+            var first = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
+            if (first < 0)
+                throw Error("A JSON value was expected");
+            var framer = new JsonValueFramer();
+            framer.Prepare((char)first, _cursor.Position);
+            var capture = await _cursor.ReadFrameAsync(framer, cancellationToken).ConfigureAwait(false)
+                ?? throw Error("The JSON value is incomplete");
+            _cursor.Protect(capture);
+            await CompleteSingleRootAsync(framer.Delimiter, cancellationToken).ConfigureAwait(false);
+            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
+        }
+        return TrySelectRow(out var row)
+            ? new(false, row, RecordState.Record)
+            : new(true, RecordMemory.Empty, RecordState.Eof);
+    }
+
+    private bool TrySelectRow(out RecordMemory row)
+    {
+        if (_matches?.MoveNext() == true)
+        {
+            var json = _matches.Current;
+            if (_projectedValueFramer is not null)
+            {
+                _projectedValueFramer.Prepare(json.Span[0], 0);
+                _projectedValueFramer.Reset();
+                var result = _projectedValueFramer.Scan(json.Span);
+                if (!result.Complete)
+                    _projectedValueFramer.CompleteAtEof();
+            }
+            row = new RecordMemory(json, GetFields(json, 0));
+            return true;
+        }
+        _matches?.Dispose();
+        _matches = null;
+        row = RecordMemory.Empty;
+        return false;
     }
 
     private FieldSpan[] ParseFields(ReadOnlyMemory<char> json, long recordStart)
@@ -335,7 +407,10 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     }
 
     public void Dispose()
-        => _cursor.Dispose();
+    {
+        _matches?.Dispose();
+        _cursor.Dispose();
+    }
 
     private enum DocumentState
     {

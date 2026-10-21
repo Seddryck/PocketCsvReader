@@ -17,6 +17,8 @@ public class NdjsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    public string? RecordPath { get; }
+    internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
     /// <summary>
     /// Gets whether the input is trusted to contain the same recursive JSON structure and property order.
     /// The first object establishes object property counts, array lengths, labels, and ordinals at every level;
@@ -33,9 +35,12 @@ public class NdjsonProfile : IProfile
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
         bool orderedProjection = false,
-        bool stableObjectShape = false)
+        bool stableObjectShape = false,
+        string? recordPath = null)
     {
         Dialect = dialect;
+        RecordPath = recordPath;
+        ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;
         Resource = resource;
         Parsers = parsers;

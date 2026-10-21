@@ -13,6 +13,8 @@ public class JsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    public string? RecordPath { get; }
+    internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
 
     public JsonProfile(
         SchemaDescriptor? schema = null,
@@ -20,8 +22,11 @@ public class JsonProfile : IProfile
         RuntimeParsersDescriptor? parsers = null,
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
-        bool orderedProjection = false)
+        bool orderedProjection = false,
+        string? recordPath = null)
     {
+        RecordPath = recordPath;
+        ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;
         Resource = resource;
         Parsers = parsers;
