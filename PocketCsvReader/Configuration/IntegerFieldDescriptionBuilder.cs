@@ -24,6 +24,10 @@ public class IntegerFieldDescriptorBuilder : FieldDescriptorBuilder
 
     public new IntegerFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (IntegerFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public new IntegerFieldDescriptorBuilder WithParser<T>(ParseSpan<T> parse)
+        => (IntegerFieldDescriptorBuilder)base.WithParser(parse);
+
     public new IntegerFieldDescriptorBuilder WithParser(ParseFunction parse)
         => (IntegerFieldDescriptorBuilder)base.WithParser(parse);
 }

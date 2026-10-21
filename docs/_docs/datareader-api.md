@@ -97,6 +97,17 @@ This allows support for user-defined types like `YearMonth`.
 
 See also: [Providing a Custom Parser](/docs/fluent-api-schema#providing-a-custom-parser).
 
+To parse one field directly from its sanitized span, pass a typed span lambda or a `ParseSpan<T>` delegate. Both ordinal and name overloads are supported:
+
+```csharp
+var value = reader.GetFieldValue(0, (ReadOnlySpan<char> input) =>
+    int.Parse(input, CultureInfo.InvariantCulture));
+var namedValue = reader.GetFieldValue("Count", (ReadOnlySpan<char> input) =>
+    int.Parse(input, CultureInfo.InvariantCulture));
+```
+
+The delegate is called synchronously without an intermediate string. Nullable/reference typed reads return `default` for null fields without invoking the delegate. Existing `Func<string, T>` overloads retain their string-based behavior.
+
 ### Accessing Boxed Values
 
 - `GetValue(int)` returns a field as an `object`, boxing the parsed value.

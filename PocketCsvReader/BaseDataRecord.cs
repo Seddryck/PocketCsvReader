@@ -21,25 +21,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     protected BaseDataRecord(P profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
-        foreach (var parser in profile.Parsers ?? [])
-        {
-            var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
-            // Convert span to string: span.ToString()
-            var toStringCall = Expression.Call(spanParam, typeof(ReadOnlySpan<char>).GetMethod(nameof(ReadOnlySpan<char>.ToString), Type.EmptyTypes)!);
-
-            // Call the existing parser.Value(string)
-            var parserFunc = Expression.Constant(parser.Value); // Func<string, X>
-            var invokeParser = Expression.Invoke(parserFunc, toStringCall);
-
-            // Cast the result to the expected return type (if needed)
-            var castResult = Expression.Convert(invokeParser, parser.Key); // parser.Key is typeof(X)
-
-            var delegateType = typeof(ParseSpan<>).MakeGenericType(parser.Key);
-            var lambda = Expression.Lambda(delegateType, castResult, spanParam);
-
-            var parse = lambda.Compile();
-            Parser.Register(parser.Key, parse);
-        }
+        foreach (var parser in profile.Parsers?.SpanParsers ?? [])
+            Parser.Register(parser.Key, parser.Value);
     }
 
     protected ISanitizer GetSanitizer(int ordinal, ParserOptimizationOptions parserOptimizations)
@@ -92,9 +75,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            if (TryGetFieldDescriptor(i, out var field) && field.Format is TemporalFormatDescriptor)
+            if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is TemporalFormatDescriptor))
             {
-                Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                if (field.SpanParse is not null || field.Parse is not null)
+                    RegisterFieldParser(i, field);
+                else
+                    Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
@@ -146,9 +132,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
                 return value;
 
-            if (TryGetFieldDescriptor(i, out var field) && field.Format is NumericFormatDescriptor)
+            if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is NumericFormatDescriptor))
             {
-                Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                if (field.SpanParse is not null || field.Parse is not null)
+                    RegisterFieldParser(i, field);
+                else
+                    Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
@@ -209,15 +198,16 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     }
 
     private static bool HasCustomParser(FieldDescriptor field)
-        => field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
+        => field.SpanParse is not null || field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
     private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
     {
         ParseSpan<object>? parse = null;
-        if (field.Parse is not null)
+        if (field.SpanParse is not null || field.Parse is not null)
         {
-            parse = (ReadOnlySpan<char> span) => field.Parse.Invoke(span.ToString());
-            Parser.Register(i, parse);
+            Parser.Register(i, field.RuntimeType, field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
+            if (!Parser.TryGetParser(i, out parse))
+                throw new InvalidOperationException($"No parser registered for index '{i}'.");
         }
         else if (field.RuntimeType == typeof(string))
         {
@@ -257,7 +247,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         {
             if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
                 return value;
-            if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+            if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
             {
                 RegisterFieldParser(i, field);
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
@@ -299,6 +289,21 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
         return func(GetValueOrThrow(i).Value.ToString());
     }
+
+    /// <summary>Parses a sanitized field synchronously without materializing a string.</summary>
+    /// <remarks>Use a typed span lambda or a ParseSpan delegate to select this overload.</remarks>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public T GetFieldValue<T>(int i, ParseSpan<T> parse)
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        if (IsNullFieldValue<T>(i))
+            return default!;
+        return parse(GetValueOrThrow(i).Value);
+    }
+
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
+    public T GetFieldValue<T>(string name, ParseSpan<T> parse)
+        => GetFieldValue(GetOrdinal(name), parse);
 
     public T GetFieldValue<T>(int i, Func<string, T> parse)
     {
@@ -443,7 +448,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (Parser.TryGetParser<T>(i, out var parse))
             return parse;
-        if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+        if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
         {
             RegisterFieldParser(i, field);
             return Parser.GetParser<T>(i);
@@ -457,12 +462,14 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (Parser.TryGetParser(i, out var parse))
             return parse;
-        if (TryGetFieldDescriptor(i, out var field) && (field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor)))
+        if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
         {
             RegisterFieldParser(i, field);
             if (Parser.TryGetParser(i, out parse))
                 return parse;
         }
+        if (field is not null && Parser.TryGetParser(field.RuntimeType, out parse))
+            return parse;
         if (Parser.TryGetParser(out parse))
             return parse;
         return (ReadOnlySpan<char> span) => span.ToString();

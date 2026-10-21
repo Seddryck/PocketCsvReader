@@ -10,11 +10,22 @@ using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
 
-internal delegate T ParseSpan<T>(ReadOnlySpan<char> span);
+/// <summary>Parses a span synchronously without creating an intermediate string.</summary>
+/// <remarks>The parser must consume the span during the call and must not retain it.</remarks>
+public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
 internal class SpanParser
 {
     private Dictionary<Type, Delegate> TypeParsers { get; } = new();
     private Dictionary<int, Delegate> FieldParsers { get; } = new();
+
+    internal static Delegate Adapt(Type type, Configuration.ParseFunction parse)
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+        var text = Expression.Call(span, typeof(ReadOnlySpan<char>).GetMethod("ToString", Type.EmptyTypes)!);
+        var result = Expression.Convert(Expression.Invoke(Expression.Constant(parse), text), type);
+        return Expression.Lambda(typeof(ParseSpan<>).MakeGenericType(type), result, span).Compile();
+    }
 
     public SpanParser()
     {
