@@ -10,6 +10,7 @@ public class JsonProfile : IProfile
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }
     public RuntimeParsersDescriptor? Parsers { get; }
+    public bool TrackPosition => ParserOptimizations.TrackPosition;
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }

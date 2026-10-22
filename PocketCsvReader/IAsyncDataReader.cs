@@ -11,8 +11,9 @@ namespace PocketCsvReader;
 /// </remarks>
 public interface IAsyncDataReader : IDataReader, IAsyncDisposable
 {
-    /// <summary>
-    /// Advances the reader to the next record asynchronously.
-    /// </summary>
+    /// <summary>The current record source position, when explicitly enabled.</summary>
+    RecordPosition? CurrentPosition => null;
+
+    /// <summary>Advances the reader to the next record asynchronously.</summary>
     Task<bool> ReadAsync(CancellationToken cancellationToken = default);
 }

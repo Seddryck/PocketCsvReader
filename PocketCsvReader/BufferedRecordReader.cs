@@ -14,6 +14,7 @@ internal readonly record struct FrameScanResult(int Consumed, bool Complete, int
 internal sealed class BufferedRecordReader : IDisposable
 {
     private readonly StreamReader _reader;
+    private readonly PositionTracker? _tracker;
     private readonly int _bufferSize;
     private readonly ArrayPool<char> _pool;
     private char[]? _buffer;
@@ -29,13 +30,14 @@ internal sealed class BufferedRecordReader : IDisposable
 
     public long Position { get; private set; }
 
-    public BufferedRecordReader(StreamReader reader, int bufferSize, ArrayPool<char>? pool = null)
+    public BufferedRecordReader(StreamReader reader, int bufferSize, ArrayPool<char>? pool = null, PositionTracker? tracker = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (bufferSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(bufferSize));
 
         _reader = reader;
+        _tracker = tracker;
         _bufferSize = bufferSize;
         _pool = pool ?? ArrayPool<char>.Shared;
     }
@@ -123,6 +125,53 @@ internal sealed class BufferedRecordReader : IDisposable
         }
     }
 
+    public CapturedRecord? ReadLineFrame()
+    {
+        BeginCapture();
+        int length = 0;
+        while (true)
+        {
+            EnsureAvailable();
+            if (_index == _length)
+                return length == 0 ? CancelCapture() : EndCapture(length);
+            if (!ConsumeLineChunk(ref length, out bool cr))
+                continue;
+            if (cr && Peek() == '\n') Advance(1);
+            return EndCapture(length);
+        }
+    }
+
+    public async ValueTask<CapturedRecord?> ReadLineFrameAsync(CancellationToken cancellationToken)
+    {
+        BeginCapture();
+        int length = 0;
+        while (true)
+        {
+            await EnsureAvailableAsync(cancellationToken).ConfigureAwait(false);
+            if (_index == _length)
+                return length == 0 ? CancelCapture() : EndCapture(length);
+            if (!ConsumeLineChunk(ref length, out bool cr))
+                continue;
+            if (cr && await PeekAsync(cancellationToken).ConfigureAwait(false) == '\n') Advance(1);
+            return EndCapture(length);
+        }
+    }
+
+    private bool ConsumeLineChunk(ref int length, out bool cr)
+    {
+        var remaining = _buffer.AsSpan(_index, _length - _index);
+        int newline = remaining.IndexOfAny('\r', '\n');
+        cr = newline >= 0 && remaining[newline] == '\r';
+        if (newline < 0)
+        {
+            length += remaining.Length;
+            Advance(remaining.Length);
+            return false;
+        }
+        length += newline;
+        Advance(newline + 1);
+        return true;
+    }
     public void Protect(CapturedRecord capture)
         => _protectedCapture = capture;
 
@@ -286,6 +335,7 @@ internal sealed class BufferedRecordReader : IDisposable
 
     private void Advance(int count)
     {
+        _tracker?.Advance(_buffer.AsSpan(_index, count));
         _index += count;
         Position += count;
     }

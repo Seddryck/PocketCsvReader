@@ -1,0 +1,15 @@
+Parser,Scenario,Tracking,MeanUs,StdDevUs,AllocatedBytes,RecordsPerSecond
+DecodedChars,ShortSkipped,False,582.77,5.62,554336,3431860
+DecodedChars,WideUnicodeSkipped,False,2682.03,11.61,2910016,745704
+DecodedChars,MultilineStrings,False,1090.89,6.85,843896,1833366
+DecodedChars,Numeric,False,951.31,4.52,555896,2102358
+DecodedChars,WideStrings,False,4379.13,44.75,4458609,456711
+DecodedChars,CustomNewlines,False,727.05,4.27,554336,2750850
+DecodedChars,CrossBuffer,False,9287.36,33.69,554338,215346
+Utf8Bytes,ShortSkipped,False,389.24,4.42,549783,5138255
+Utf8Bytes,WideUnicodeSkipped,False,2232.75,20.07,2906368,895756
+Utf8Bytes,MultilineStrings,False,834.47,5.55,837787,2396719
+Utf8Bytes,Numeric,False,496.96,3.66,549783,4024456
+Utf8Bytes,WideStrings,False,3342.26,23.15,4442388,598398
+Utf8Bytes,CustomNewlines,False,524.29,3.54,549727,3814713
+Utf8Bytes,CrossBuffer,False,1216.99,16.96,549784,1643396

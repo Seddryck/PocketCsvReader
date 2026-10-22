@@ -6,7 +6,7 @@ using System.Text;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
-public abstract class BaseRecordParser<P> : IRecordSource<P>
+public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
 {
     public P Profile { get; }
     protected IParser FieldParser { get; }
@@ -16,6 +16,10 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
 
     private int? FieldsCount { get; set; }
     private FieldSpan[] _fieldBuffer = new FieldSpan[20];
+    private readonly PositionTracker? _position;
+    private int _trackedInBuffer;
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private long _recordNumber;
     private int _errorCount;
 
@@ -27,7 +31,10 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         /// <param name="pool">An optional array pool for efficient character buffer management.</param>
         /// <param name="parserFactory">A factory function that creates an <see cref="IParser"/> instance based on the provided profile.</param>
         protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
-        => (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
+    {
+        (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
+        if (profile is IProfile { TrackPosition: true }) _position = new();
+    }
 
     /// <summary>
     /// Attempts to parse the next record from the buffer, indicating whether the end of the file has been reached.
@@ -41,11 +48,16 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     /// <exception cref="InvalidOperationException">Thrown if an unexpected parser state occurs at end-of-file.</exception>
     public virtual bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
+        _position?.BeginRecord();
+        _trackedInBuffer = 0;
         var context = new ReadContext();
         EnsureFieldCapacity(FieldsCount ?? 20);
         bool eof;
         while (!TryParseRecord(ref context, Reader.IsEof, out record, out recordState, out eof))
+        {
             Buffer = Reader.Read();
+            _trackedInBuffer = 0;
+        }
         return eof;
     }
 
@@ -53,11 +65,16 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     public virtual async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        _position?.BeginRecord();
+        _trackedInBuffer = 0;
         var context = new ReadContext();
         EnsureFieldCapacity(FieldsCount ?? 20);
         RecordReadResult result;
         while (!TryReadResult(ref context, Reader.IsEof, out result))
+        {
             Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            _trackedInBuffer = 0;
+        }
         return result;
     }
 
@@ -86,6 +103,23 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
     // No I/O or asynchronous mode inside the scanner. The wrappers supply chunks
     // and retain this context only while assembling the current record.
     private bool TryParseRecord(scoped ref ReadContext context, bool endOfInput,
+        out RecordSpan record, out RecordState recordState, out bool eof)
+    {
+        if (_position is null)
+            return TryParseRecordCore(ref context, endOfInput, out record, out recordState, out eof);
+
+        var input = Buffer;
+        long start = _position.Offset;
+        bool complete = TryParseRecordCore(ref context, endOfInput, out record, out recordState, out eof);
+        int consumed = complete ? input.Length - Buffer.Length : input.Length;
+        // Error diagnostics may already have advanced to the offending input.
+        int advanced = checked((int)(_position.Offset - start));
+        _position.Advance(input.Span.Slice(advanced, consumed - advanced));
+        if (complete && recordState == RecordState.Record) _position.CompleteRecord();
+        return complete;
+    }
+
+    private bool TryParseRecordCore(scoped ref ReadContext context, bool endOfInput,
         out RecordSpan record, out RecordState recordState, out bool eof)
     {
         record = default;
@@ -159,6 +193,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         }
         if (state != ParserState.Error) return false;
 
+        ConsumePosition(index);
         var exception = new InvalidDataException($"Invalid character '{c}' at position {index}.");
         switch (GetBadDataAction(exception, c.ToString(), index + length, fieldCount))
         {
@@ -176,6 +211,13 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         }
     }
 
+    private void ConsumePosition(int consumed)
+    {
+        if (_position is null) return;
+        _position.Advance(Buffer.Span.Slice(_trackedInBuffer, consumed - _trackedInBuffer));
+        _trackedInBuffer = consumed;
+    }
+
     private bool TrySkipMalformedRecord(ref int index, ref int matched)
     {
         var terminator = (Profile as CsvProfile)!.Dialect.LineTerminator;
@@ -187,6 +229,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             if (matched != terminator.Length) continue;
             Buffer = Buffer.Slice(index);
             _recordNumber++;
+            _position?.SkipRecord();
             FieldParser.Reset(true);
             return true;
         }
@@ -203,6 +246,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
         {
             Buffer = ReadOnlyMemory<char>.Empty;
             _recordNumber++;
+            _position?.SkipRecord();
             FieldParser.Reset(true);
             return true;
         }
@@ -291,8 +335,11 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             return BadDataAction.Throw;
         if (++_errorCount > policy.MaximumErrors)
             throw new InvalidDataException($"The maximum bad-data count of {policy.MaximumErrors} was exceeded.", exception);
-        return policy.Handler(new BadDataContext(_recordNumber + 1, _recordNumber + 1, fieldIndex,
-            offset, ParserState.Error, offendingInput, exception));
+        var start = _position?.PendingPosition;
+        return policy.Handler(new BadDataContext(start?.RecordNumber ?? _recordNumber + 1,
+            _position?.PhysicalLine ?? _recordNumber + 1, fieldIndex,
+            _position?.Offset ?? offset, ParserState.Error, offendingInput, exception)
+        { RecordPosition = start });
     }
 
     /// <summary>

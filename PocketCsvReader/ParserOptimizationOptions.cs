@@ -16,4 +16,7 @@ public record ParserOptimizationOptions
     int BufferSize = 4096,
     PoolString? PoolString = null,
     bool LookupTableChar = true
-) { }
+) {
+    /// <summary>Enables source positions. Disabled by default; configure before creating the reader.</summary>
+    public bool TrackPosition { get; init; }
+}

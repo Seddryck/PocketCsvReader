@@ -13,6 +13,7 @@ public class CsvProfile : IProfile
     public RuntimeParsersDescriptor? Parsers { get; private set; }
     public StreamInitializationOptions StreamInitialization { get; set; } = StreamInitializationOptions.Default;
 
+    public bool TrackPosition => ParserOptimizations.TrackPosition;
     public ParserOptimizationOptions ParserOptimizations { get; set; }
     public BadDataPolicy? BadDataPolicy { get; set; }
 

@@ -16,6 +16,7 @@ internal static class CsvHeaders
         {
             source.IsEndOfFile(out var record, out _);
             headers.Add(record.AsMemory());
+            PositionTracker.ExcludeRecord(source);
         }
         return headers.ToArray();
     }
@@ -27,6 +28,7 @@ internal static class CsvHeaders
         {
             var result = await source.ReadAsync(cancellationToken).ConfigureAwait(false);
             headers.Add(result.Record);
+            PositionTracker.ExcludeRecord(source);
         }
         return headers.ToArray();
     }

@@ -4,6 +4,14 @@ public abstract class ReaderBuilder<TBuilder>
     where TBuilder : ReaderBuilder<TBuilder>
 {
     private readonly ProfileBuilderComponents _components = new();
+    private bool? _trackPosition;
+
+    /// <summary>Explicitly enables or disables source position tracking.</summary>
+    public TBuilder WithPositionTracking(bool enabled = true)
+    {
+        _trackPosition = enabled;
+        return (TBuilder)this;
+    }
 
     protected ReaderBuilder(ParserOptimizationOptions? defaultParserOptimizations = null)
     {
@@ -64,7 +72,9 @@ public abstract class ReaderBuilder<TBuilder>
     protected RuntimeParsersDescriptor? BuildParsers() => _components.BuildParsers();
 
     protected ParserOptimizationOptions BuildParserOptimizations()
-        => NormalizeParserOptimizations(_components.ParserOptimizations);
+        => NormalizeParserOptimizations(_trackPosition.HasValue
+            ? _components.ParserOptimizations with { TrackPosition = _trackPosition.Value }
+            : _components.ParserOptimizations);
 
     protected virtual ParserOptimizationOptions NormalizeParserOptimizations(ParserOptimizationOptions options)
         => options;

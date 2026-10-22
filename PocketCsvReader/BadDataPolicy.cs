@@ -3,7 +3,13 @@ namespace PocketCsvReader;
 public enum BadDataAction { Throw, SkipRecord, ReturnPartialRecord, Stop }
 
 public sealed record BadDataContext(long RecordNumber, long PhysicalLine, int? FieldIndex,
-    long Offset, ParserState ParserState, string OffendingInput, Exception Exception);
+    long Offset, ParserState ParserState, string OffendingInput, Exception Exception)
+{
+    /// <summary>The precise record start when position tracking is enabled.</summary>
+    public RecordPosition? RecordPosition { get; init; }
+    /// <summary>Unit of Offset; the legacy character path also uses UTF-16 units.</summary>
+    public PositionOffsetUnit OffsetUnit { get; init; } = PositionOffsetUnit.Utf16CodeUnits;
+}
 
 public sealed record BadDataPolicy
 {

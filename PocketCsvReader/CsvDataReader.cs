@@ -148,6 +148,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
                 return false;
             }
             RowCount++;
+            if (Profile.Dialect.CommentRows?.Contains(RowCount) == true)
+                PositionTracker.ExcludeRecord(RecordSource!);
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || state == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
@@ -178,6 +180,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
                 return false;
             }
             RowCount++;
+            if (Profile.Dialect.CommentRows?.Contains(RowCount) == true)
+                PositionTracker.ExcludeRecord(RecordSource!);
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || result.State == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
