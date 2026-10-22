@@ -40,61 +40,11 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     /// Reads and returns the CSV header rows as a jagged array of strings based on the profile's dialect settings.
     /// </summary>
     /// <returns>An array of string arrays, each representing a header row. Returns an empty array if headers are not defined in the profile.</returns>
-    public virtual string[][] ReadHeaders()
-    {
-        if (!Profile.Dialect.Header)
-            return [];
+    public virtual string[][] ReadHeaders() => CsvHeaders.ReadCore(this);
 
-        var headerMapper = new SpanMapper<string[]>((span, fieldSpans) =>
-        {
-            var headers = new string[fieldSpans.Count()];
-            var index = 0;
-            foreach (var fieldSpan in fieldSpans)
-                headers[index++] = span.Slice(fieldSpan.Value.Start, fieldSpan.Value.Length).ToString();
-            return headers;
-        });
-
-        var headerList = new List<string[]>();
-        var rowCount = 1;
-        while (rowCount <= Profile.Dialect.HeaderRows.Max())
-        {
-            IsEndOfFile(out RecordSpan rawRecord, out RecordState state);
-            if (Profile.Dialect.HeaderRows.Contains(rowCount))
-            {
-                var fields = (rawRecord.FieldSpans?.Length ?? 0) == 0
-                    ? []
-                    : headerMapper(rawRecord.Span, rawRecord.FieldSpans!);
-                headerList.Add(fields);
-            }
-            rowCount++;
-        }
-        return [.. headerList];
-    }
-
-    /// <summary>
-    /// Asynchronously reads the configured CSV header rows.
-    /// </summary>
-    public virtual async ValueTask<string[][]> ReadHeadersAsync(CancellationToken cancellationToken = default)
-    {
-        if (!Profile.Dialect.Header)
-            return [];
-
-        var headerList = new List<string[]>();
-        var rowCount = 1;
-        while (rowCount <= Profile.Dialect.HeaderRows.Max())
-        {
-            var result = await ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (Profile.Dialect.HeaderRows.Contains(rowCount))
-            {
-                var fields = new string[result.Record.FieldSpans.Length];
-                for (var index = 0; index < fields.Length; index++)
-                    fields[index] = result.Record.Slice(index).ToString();
-                headerList.Add(fields);
-            }
-            rowCount++;
-        }
-        return [.. headerList];
-    }
+    /// <summary>Asynchronously reads the configured CSV header rows.</summary>
+    public virtual ValueTask<string[][]> ReadHeadersAsync(CancellationToken cancellationToken = default)
+        => CsvHeaders.ReadCoreAsync(this, cancellationToken);
 
     /// <summary>
     /// Returns the total number of CSV records, or null if row counting is not supported by the profile.

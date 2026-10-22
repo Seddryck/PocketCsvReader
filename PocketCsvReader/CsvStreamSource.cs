@@ -65,9 +65,12 @@ internal static class CsvStreamSource
             throw new NotSupportedException("UTF-8 byte parsing requires ASCII CSV syntax without array fields or a bad-data policy. Use Auto or DecodedChars for this profile.");
 
         var preamble = encoding.Preamble;
-        int skip = preamble.Length > 0 && prefix.AsSpan(0, count).StartsWith(preamble) ? preamble.Length : 0;
+        bool useBytes = options.InputMode != CsvInputMode.DecodedChars && utf8 && supported;
+        // The byte source consumes the BOM here; StreamReader consumes its own
+        // preamble, so replay it on the character path rather than stripping twice.
+        int skip = useBytes && preamble.Length > 0 && prefix.AsSpan(0, count).StartsWith(preamble) ? preamble.Length : 0;
         var replay = new PrefixStream(prefix.AsMemory(skip, count - skip), stream, leaveOpen);
-        return options.InputMode != CsvInputMode.DecodedChars && utf8 && supported ? new Utf8RecordSource(replay, profile)
+        return useBytes ? new Utf8RecordSource(replay, profile)
             : new OwnedCharacterSource(replay, encoding, profile);
     }
 

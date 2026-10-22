@@ -37,3 +37,5 @@ The scanner also uses `SearchValues<byte>` to copy ordinary payload runs up to t
 Correctness coverage includes generated quoted records, malformed quotes, partial/custom terminators, escapes, invalid UTF-8 replacement, reverse/repeated field access, buffer growth, custom pools, derived readers, and Unicode character offsets. This benchmark does not separately measure custom-pool or whole-record mapper workloads.
 
 The implementation uses pooled contiguous buffers. No pipeline or external UTF-8 line-reader prototype was introduced, so these results compare only the two shipped parsers.
+
+These measurements precede the shared character-core refactor. Its separate [character parser comparison](CharacterRecordParsing.md) reports the subsequent character-path changes; the UTF-8 scanner remains separate.
