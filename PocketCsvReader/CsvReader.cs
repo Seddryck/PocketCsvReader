@@ -83,7 +83,8 @@ namespace PocketCsvReader
             {
                 StreamInitialization = profile.StreamInitialization,
                 ParserOptimizations = profile.ParserOptimizations with { BufferSize = bufferSize },
-                BadDataPolicy = profile.BadDataPolicy
+                BadDataPolicy = profile.BadDataPolicy,
+                RowNumber = profile.RowNumber
             };
         }
 

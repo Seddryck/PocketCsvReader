@@ -18,6 +18,7 @@ public class CsvObjectReader<T> : IDisposable
     private bool _disposed;
     private CsvDataReader? _dataReader;
     private bool UseDataReader => Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
+        || Profile.RowNumber is not null
         || !string.IsNullOrEmpty(Profile.Resource?.Encoding);
     protected Memory<char> buffer;
     public int RowCount { get; private set; } = 0;

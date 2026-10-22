@@ -8,6 +8,23 @@ namespace PocketCsvReader.Configuration;
 public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
+    private RowNumberOptions? _rowNumber;
+
+    /// <summary>Prepends a generated integer column, numbered from one across the returned records.</summary>
+    public CsvReaderBuilder WithRowNumber(string columnName = "rowNumber")
+    {
+        var options = new RowNumberOptions(columnName);
+        options.Validate();
+        _rowNumber = options;
+        return this;
+    }
+
+    /// <summary>Disables the generated row-number column.</summary>
+    public CsvReaderBuilder WithoutRowNumber()
+    {
+        _rowNumber = null;
+        return this;
+    }
     private StreamInitializationOptions _streamInitialization = StreamInitializationOptions.Default;
 
     public CsvReaderBuilder WithStreamInitialization(StreamInitializationOptions options)
@@ -45,7 +62,8 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
             BuildParsers())
         {
             ParserOptimizations = BuildParserOptimizations(),
-            StreamInitialization = _streamInitialization
+            StreamInitialization = _streamInitialization,
+            RowNumber = _rowNumber
         };
         return new CsvReader(profile);
     }

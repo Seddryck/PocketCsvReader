@@ -17,6 +17,18 @@ public class CsvProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; set; }
     public BadDataPolicy? BadDataPolicy { get; set; }
 
+    private RowNumberOptions? _rowNumber;
+    /// <summary>Generated row-number column configuration, or null to disable it (the default).</summary>
+    public RowNumberOptions? RowNumber
+    {
+        get => _rowNumber;
+        set
+        {
+            value?.Validate();
+            _rowNumber = value;
+        }
+    }
+
     public virtual string EmptyCell { get; private set; }
 
     /// <summary>
