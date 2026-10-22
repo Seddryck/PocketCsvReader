@@ -77,6 +77,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow", "Po
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.Testing", "PocketCsvReader.Arrow.Testing\PocketCsvReader.Arrow.Testing.csproj", "{5F802A78-39BE-40EA-ADE6-6CCF627C5E38}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Chrononuensis", "PocketCsvReader.Chrononuensis\PocketCsvReader.Chrononuensis.csproj", "{A8462DBA-1AEA-492E-9D61-06C64BEE6D0D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Chrononuensis.Testing", "PocketCsvReader.Chrononuensis.Testing\PocketCsvReader.Chrononuensis.Testing.csproj", "{A7B62315-BA36-4E41-911E-8F0C0AE75939}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -147,6 +151,14 @@ Global
 		{5F802A78-39BE-40EA-ADE6-6CCF627C5E38}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5F802A78-39BE-40EA-ADE6-6CCF627C5E38}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5F802A78-39BE-40EA-ADE6-6CCF627C5E38}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A8462DBA-1AEA-492E-9D61-06C64BEE6D0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8462DBA-1AEA-492E-9D61-06C64BEE6D0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A8462DBA-1AEA-492E-9D61-06C64BEE6D0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A8462DBA-1AEA-492E-9D61-06C64BEE6D0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7B62315-BA36-4E41-911E-8F0C0AE75939}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7B62315-BA36-4E41-911E-8F0C0AE75939}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7B62315-BA36-4E41-911E-8F0C0AE75939}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7B62315-BA36-4E41-911E-8F0C0AE75939}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

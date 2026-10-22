@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using PocketCsvReader.Configuration;
+using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Ndjson.Configuration;
 
@@ -17,6 +18,8 @@ public class NdjsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    public string? RecordPath { get; }
+    internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
     /// <summary>
     /// Gets whether the input is trusted to contain the same recursive JSON structure and property order.
     /// The first object establishes object property counts, array lengths, labels, and ordinals at every level;
@@ -33,26 +36,17 @@ public class NdjsonProfile : IProfile
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
         bool orderedProjection = false,
-        bool stableObjectShape = false)
+        bool stableObjectShape = false,
+        string? recordPath = null)
     {
         Dialect = dialect;
+        RecordPath = recordPath;
+        ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;
         Resource = resource;
         Parsers = parsers;
         ParserOptimizations = parserOptimizations ?? DefaultParserOptimizations;
-        var projection = projectedProperties?.ToArray();
-        if (projection is { Length: 0 })
-            throw new ArgumentException("At least one projected property must be configured.", nameof(projectedProperties));
-        if (orderedProjection && projection is null)
-            throw new ArgumentException("An ordered projection requires projected properties.", nameof(orderedProjection));
-        if (projection?.Any(string.IsNullOrEmpty) == true)
-            throw new ArgumentException("Projected property names cannot be null or empty.", nameof(projectedProperties));
-        if (projection is not null
-            && projection.Distinct(StringComparer.Ordinal).Count() != projection.Length)
-        {
-            throw new ArgumentException("Projected properties must be unique.", nameof(projectedProperties));
-        }
-        ProjectedProperties = projection is null ? null : Array.AsReadOnly(projection);
+        ProjectedProperties = JsonProjection.Create(projectedProperties, orderedProjection);
         OrderedProjection = orderedProjection;
         StableObjectShape = stableObjectShape;
         if (ParserOptimizations.BufferSize <= 0)

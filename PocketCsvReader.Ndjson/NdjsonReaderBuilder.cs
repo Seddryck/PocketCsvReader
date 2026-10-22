@@ -12,6 +12,15 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
     private NdjsonDialectDescriptorBuilder _dialectBuilder = new();
     private string[]? _projectedProperties;
     private bool _orderedProjection;
+    private string? _recordPath;
+
+    /// <summary>Selects the nodes exposed as rows using the supported JSONPath subset.</summary>
+    public NdjsonReaderBuilder WithRecordPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        _recordPath = path;
+        return this;
+    }
     private bool _stableObjectShape;
 
     public NdjsonReaderBuilder()
@@ -75,5 +84,6 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
             BuildParserOptimizations(),
             _projectedProperties,
             _orderedProjection,
-            _stableObjectShape));
+            _stableObjectShape,
+            _recordPath));
 }

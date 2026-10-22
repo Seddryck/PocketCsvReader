@@ -499,8 +499,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     /// <param name="field">The field descriptor containing format information.</param>
     /// <returns>A delegate that parses a span into the specified type.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the parser locator cannot be instantiated.</exception>
-    private static Delegate CreateParser(Type type, FieldDescriptor field)
+    private Delegate CreateParser(Type type, FieldDescriptor field)
     {
+        if (Profile.Parsers?.TryCreateFormattedParser(type, field.Format, out var parser) is true)
+            return parser!;
+
         var locatorType = typeof(TypeParserLocator<>).MakeGenericType(type);
         var locator = (ITypeParserLocator)(Activator.CreateInstance(locatorType)
             ?? throw new InvalidOperationException());

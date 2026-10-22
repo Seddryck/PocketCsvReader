@@ -33,6 +33,8 @@ PocketCsvReader is a highly efficient and lightweight library tailored for parsi
 
 ## Install
 
+The optional `PocketCsvReader.Chrononuensis` package adds span parsers for ten temporal period types with `.WithParsers(options => options.UseChrononuensis())`. See the [supported types, formats, and precedence rules](docs/_docs/chrononuensis.md). The core package has no Chrononuensis dependency.
+
 Replace `<VersionNumber>` with the desired version in each of the following solutions. If no version is specified, the latest version will be installed.
 
 ### NuGet CLI
