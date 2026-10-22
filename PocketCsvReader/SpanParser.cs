@@ -15,7 +15,7 @@ namespace PocketCsvReader;
 public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
 internal class SpanParser
 {
-    private sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null)
+    internal sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null)
     {
         public Delegate Typed { get; } = typed;
         private ParseSpan<object>? _boxed = boxed;
@@ -28,6 +28,8 @@ internal class SpanParser
     private Dictionary<int, ParserEntry> FieldParsers { get; } = new();
 
     public void ClearFieldParsers() => FieldParsers.Clear();
+
+    internal void BindFieldParser(int index, ParserEntry parser) => FieldParsers[index] = parser;
 
     internal static Delegate Adapt(Type type, Configuration.ParseFunction parse)
     {
@@ -64,11 +66,14 @@ internal class SpanParser
     }
 
     public void Register(Type type, Delegate dlg)
+        => TypeParsers[type] = CreateEntry(type, dlg);
+
+    internal static ParserEntry CreateEntry(Type type, Delegate dlg)
     {
         ArgumentNullException.ThrowIfNull(dlg);
         if (!IsParseSpan(dlg, out var parseType) || type != parseType)
             throw new ArgumentException("Unexpected delegate.", nameof(dlg));
-        TypeParsers[type] = new(dlg);
+        return new(dlg);
     }
 
     public void Register<T>(int index, ParseSpan<T> parse)
@@ -78,12 +83,7 @@ internal class SpanParser
     }
 
     public void Register(int index, Type type, Delegate dlg)
-    {
-        ArgumentNullException.ThrowIfNull(dlg);
-        if (!IsParseSpan(dlg, out var parseType) || type != parseType)
-            throw new ArgumentException("Unexpected delegate.", nameof(dlg));
-        FieldParsers[index] = new(dlg);
-    }
+        => FieldParsers[index] = CreateEntry(type, dlg);
 
     public void CacheTypeParser<T>(int index)
     {

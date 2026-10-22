@@ -15,6 +15,8 @@ namespace PocketCsvReader;
 public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldValueReader where P : IProfile
 {
     private SpanParser Parser { get; } = new();
+    // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
+    private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
     private Dictionary<int, ISanitizer>? _sanitizers;
     private SanitizerFactory? _sanitizerFactory;
 
@@ -86,7 +88,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 if (field.SpanParse is not null || field.Parse is not null)
                     RegisterFieldParser(i, field);
                 else
-                    Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                    RegisterFormattedParser(i, typeof(T), field);
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
@@ -143,7 +145,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 if (field.SpanParse is not null || field.Parse is not null)
                     RegisterFieldParser(i, field);
                 else
-                    Parser.Register(i, typeof(T), CreateParser(typeof(T), field));
+                    RegisterFormattedParser(i, typeof(T), field);
                 return Parser.Parse<T>(i, GetValueOrThrow(i));
             }
 
@@ -210,28 +212,37 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
     {
-        ParseSpan<object>? parse = null;
-        if (field.SpanParse is not null || field.Parse is not null)
+        var key = (field, field.RuntimeType);
+        if (!_schemaParsers.TryGetValue(key, out var entry))
         {
-            Parser.Register(i, field.RuntimeType, field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
-            if (!Parser.TryGetParser(i, out parse))
-                throw new InvalidOperationException($"No parser registered for index '{i}'.");
-        }
-        else if (field.RuntimeType == typeof(string))
-        {
-            parse = (ReadOnlySpan<char> span) => span.ToString();
-            Parser.Register(i, parse);
-        }
-        else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
-        {
-            Parser.Register(i, field.RuntimeType, CreateParser(field.RuntimeType, field));
-            if (!Parser.TryGetParser(i, out parse))
-                throw new InvalidOperationException($"No parser registered for index '{i}'.");
-        }
-        else
-            throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
+            if (field.SpanParse is not null || field.Parse is not null)
+                entry = SpanParser.CreateEntry(field.RuntimeType,
+                    field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
+            else if (field.RuntimeType == typeof(string))
+            {
+                ParseSpan<string> parse = span => span.ToString();
+                entry = new(parse, span => parse(span));
+            }
+            else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
+                entry = new(CreateParser(field.RuntimeType, field));
+            else
+                throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
 
-        return parse;
+            _schemaParsers.Add(key, entry);
+        }
+        Parser.BindFieldParser(i, entry);
+        return entry.Boxed;
+    }
+
+    private void RegisterFormattedParser(int i, Type type, FieldDescriptor field)
+    {
+        var key = (field, type);
+        if (!_schemaParsers.TryGetValue(key, out var entry))
+        {
+            entry = new(CreateParser(type, field));
+            _schemaParsers.Add(key, entry);
+        }
+        Parser.BindFieldParser(i, entry);
     }
 
     public object GetValue(string name)
@@ -501,7 +512,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     /// <exception cref="InvalidOperationException">Thrown if the parser locator cannot be instantiated.</exception>
     private static Delegate CreateParser(Type type, FieldDescriptor field)
     {
-        var locatorType = typeof(TypeParserLocator<>).MakeGenericType(type);
+        // Nullable<T> has no Parse methods. Parse T, then lift the result to Nullable<T>.
+        var parseType = Nullable.GetUnderlyingType(type) ?? type;
+        var locatorType = typeof(TypeParserLocator<>).MakeGenericType(parseType);
         var locator = (ITypeParserLocator)(Activator.CreateInstance(locatorType)
             ?? throw new InvalidOperationException());
 
