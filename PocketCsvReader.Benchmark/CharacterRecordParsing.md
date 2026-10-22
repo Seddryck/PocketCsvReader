@@ -12,14 +12,14 @@ The baseline is commit `dfad1c1` with this benchmark harness added, before the s
 
 | Method | Field characters | Before time | After time | Before allocated | After allocated |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Sync | 32 | 31.75 μs | 27.96 μs | 30.06 KB | 22.34 KB |
-| Async | 32 | 36.07 μs | 30.49 μs | 40.13 KB | 32.41 KB |
-| Sync | 4,096 | 1,587.29 μs | 991.58 μs | 3,481.58 KB | 22.34 KB |
-| Async | 4,096 | 1,597.91 μs | 1,007.35 μs | 3,491.65 KB | 32.41 KB |
-| Sync | 32,768 | 17,519.64 μs | 7,785.51 μs | 141,129.58 KB | 22.34 KB |
-| Async | 32,768 | 18,175.39 μs | 8,087.19 μs | 141,139.65 KB | 32.41 KB |
+| Sync | 32 | 31.75 μs | 29.39 μs | 30.06 KB | 22.34 KB |
+| Async | 32 | 36.07 μs | 31.23 μs | 40.13 KB | 32.41 KB |
+| Sync | 4,096 | 1,587.29 μs | 1,483.01 μs | 3,481.58 KB | 22.34 KB |
+| Async | 4,096 | 1,597.91 μs | 991.20 μs | 3,491.65 KB | 32.41 KB |
+| Sync | 32,768 | 17,519.64 μs | 7,603.68 μs | 141,129.58 KB | 22.34 KB |
+| Async | 32,768 | 18,175.39 μs | 7,943.34 μs | 141,139.65 KB | 32.41 KB |
 
-The small-record samples took about 12–15% less time, and the largest samples about 56% less. Long-record allocation falls because completed prefixes are no longer concatenated into a fresh array on every refill. These short local measurements are comparative evidence; small timing differences need longer runs on the intended workload.
+The small-record samples took about 7–13% less time, and the largest samples about 56–57% less. The intermediate samples improved by about 7% synchronously and 38% asynchronously. Long-record allocation falls because completed prefixes are no longer concatenated into a fresh array on every refill. These short local measurements are comparative evidence; small timing differences need longer runs on the intended workload.
 
 ## Ownership and shared lifecycle
 

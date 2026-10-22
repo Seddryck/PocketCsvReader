@@ -101,76 +101,103 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
 
         while (index < span.Length)
         {
-            char c = span[index];
             if (skipping)
             {
-                var terminator = (Profile as CsvProfile)!.Dialect.LineTerminator;
-                matched = c == terminator[matched] ? matched + 1 : c == terminator[0] ? 1 : 0;
-                index++;
-                if (matched == terminator.Length)
-                {
-                    Buffer = Buffer.Slice(index);
-                    _recordNumber++;
-                    FieldParser.Reset(true);
-                    recordState = RecordState.Comment;
-                    return true;
-                }
-                continue;
-            }
-
-            var state = FieldParser.Parse(c, index + length);
-            if (state == ParserState.Reprocess)
-                continue;
-            if (state is ParserState.Field or ParserState.Record or ParserState.Header)
-            {
-                AddField(ref fieldCount, FieldParser.Result);
-                FieldParser.Reset(state != ParserState.Field);
-                if (state is ParserState.Record or ParserState.Header)
-                {
-                    record = CreateRecordSpan(RecordMemoryFor(length, Buffer.Slice(0, index + 1)), CopyFields(fieldCount));
-                    Buffer = Buffer.Slice(index + 1);
-                    FieldsCount ??= fieldCount;
-                    _recordNumber++;
-                    recordState = RecordState.Record;
-                    return true;
-                }
-            }
-            else if (state == ParserState.Comment)
-            {
-                FieldParser.Reset(true);
-                Buffer = Buffer.Slice(index + 1);
+                if (!TrySkipMalformedRecord(ref index, ref matched)) break;
                 recordState = RecordState.Comment;
                 return true;
             }
-            else if (state == ParserState.Error)
+
+            char c = span[index];
+            var state = FieldParser.Parse(c, index + length);
+            if (state == ParserState.Reprocess) continue;
+            if (state != ParserState.Continue)
             {
-                var exception = new InvalidDataException($"Invalid character '{c}' at position {index}.");
-                var action = GetBadDataAction(exception, c.ToString(), index + length, fieldCount);
-                if (action == BadDataAction.Stop)
-                {
-                    Buffer = ReadOnlyMemory<char>.Empty;
-                    eof = true;
+                if (TryCompleteToken(state, c, index, length, ref fieldCount,
+                    out var skipRecord, out record, out recordState, out eof))
                     return true;
-                }
-                if (action == BadDataAction.SkipRecord)
-                    skipping = true;
-                else if (action != BadDataAction.ReturnPartialRecord)
-                    throw exception;
+                skipping = skipRecord;
             }
             index++;
         }
 
-        if (!endOfInput)
-        {
-            if (!skipping)
-                length = AppendContinuation(length, Buffer.Span);
-            context.Length = length;
-            context.FieldCount = fieldCount;
-            context.Skipping = skipping;
-            context.TerminatorMatched = matched;
-            return false;
-        }
+        if (endOfInput)
+            return FinishRecord(context.HasInput, length, fieldCount, skipping, out record, out recordState, out eof);
 
+        context.Length = skipping ? length : AppendContinuation(length, Buffer.Span);
+        context.FieldCount = fieldCount;
+        context.Skipping = skipping;
+        context.TerminatorMatched = matched;
+        return false;
+    }
+
+    private bool TryCompleteToken(ParserState state, char c, int index, int length,
+        scoped ref int fieldCount, out bool skipRecord, out RecordSpan record, out RecordState recordState, out bool eof)
+    {
+        record = default;
+        recordState = RecordState.Eof;
+        eof = false;
+        skipRecord = false;
+        if (state is ParserState.Field or ParserState.Record or ParserState.Header)
+        {
+            AddField(ref fieldCount, FieldParser.Result);
+            FieldParser.Reset(state != ParserState.Field);
+            if (state == ParserState.Field) return false;
+            record = CreateRecordSpan(RecordMemoryFor(length, Buffer.Slice(0, index + 1)), CopyFields(fieldCount));
+            Buffer = Buffer.Slice(index + 1);
+            FieldsCount ??= fieldCount;
+            _recordNumber++;
+            recordState = RecordState.Record;
+            return true;
+        }
+        if (state == ParserState.Comment)
+        {
+            FieldParser.Reset(true);
+            Buffer = Buffer.Slice(index + 1);
+            recordState = RecordState.Comment;
+            return true;
+        }
+        if (state != ParserState.Error) return false;
+
+        var exception = new InvalidDataException($"Invalid character '{c}' at position {index}.");
+        switch (GetBadDataAction(exception, c.ToString(), index + length, fieldCount))
+        {
+            case BadDataAction.Stop:
+                Buffer = ReadOnlyMemory<char>.Empty;
+                eof = true;
+                return true;
+            case BadDataAction.SkipRecord:
+                skipRecord = true;
+                return false;
+            case BadDataAction.ReturnPartialRecord:
+                return false;
+            default:
+                throw exception;
+        }
+    }
+
+    private bool TrySkipMalformedRecord(ref int index, ref int matched)
+    {
+        var terminator = (Profile as CsvProfile)!.Dialect.LineTerminator;
+        var span = Buffer.Span;
+        while (index < span.Length)
+        {
+            char c = span[index++];
+            matched = c == terminator[matched] ? matched + 1 : c == terminator[0] ? 1 : 0;
+            if (matched != terminator.Length) continue;
+            Buffer = Buffer.Slice(index);
+            _recordNumber++;
+            FieldParser.Reset(true);
+            return true;
+        }
+        return false;
+    }
+
+    private bool FinishRecord(bool hasInput, int length, int fieldCount, bool skipping,
+        out RecordSpan record, out RecordState recordState, out bool eof)
+    {
+        record = default;
+        recordState = RecordState.Eof;
         eof = true;
         if (skipping)
         {
@@ -179,8 +206,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>
             FieldParser.Reset(true);
             return true;
         }
-        if (!context.HasInput)
-            return true;
+        if (!hasInput) return true;
 
         switch (FieldParser.ParseEof(length + Buffer.Length))
         {
