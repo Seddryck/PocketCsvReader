@@ -18,6 +18,9 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 {
     private bool _isClosed = false;
     private bool _initialized;
+    private bool _hasCurrentRecord;
+    /// <summary>The current record start, or null when tracking is disabled or no record is current.</summary>
+    public RecordPosition? CurrentPosition => _hasCurrentRecord && !_disposed ? RecordSource?.CurrentPosition : null;
     protected IRecordSource<P>? RecordSource { get; private set; }
     protected BaseRecordParser<P>? RecordParser => RecordSource as BaseRecordParser<P>;
     private Stream RawStream { get; }
@@ -106,7 +109,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         try
         {
             Initialize();
-            return !IsEof && ReadCore();
+            _hasCurrentRecord = false;
+            return _hasCurrentRecord = !IsEof && ReadCore();
         }
         finally
         {
@@ -123,7 +127,8 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         {
             cancellationToken.ThrowIfCancellationRequested();
             await InitializeAsync(cancellationToken).ConfigureAwait(false);
-            return !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
+            _hasCurrentRecord = false;
+            return _hasCurrentRecord = !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -172,6 +177,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 
     public void Close()
     {
+        _hasCurrentRecord = false;
         if (!_isClosed)
         {
             _isClosed = true;

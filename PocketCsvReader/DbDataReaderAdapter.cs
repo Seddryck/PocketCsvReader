@@ -22,6 +22,8 @@ public sealed class DbDataReaderAdapter : DbDataReader
     /// <summary>Gets the wrapped PocketCsvReader reader.</summary>
     public IAsyncDataReader InnerReader => _reader;
 
+    public RecordPosition? CurrentPosition => _bufferedRecord || IsClosed ? null : _reader.CurrentPosition;
+
     public override int Depth => _reader.Depth;
     public override int FieldCount => _reader.FieldCount;
     public override bool IsClosed => Volatile.Read(ref _disposed) != 0 || _reader.IsClosed;

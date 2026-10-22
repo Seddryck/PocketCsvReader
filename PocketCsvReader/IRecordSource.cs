@@ -3,6 +3,7 @@ namespace PocketCsvReader;
 public interface IRecordSource<out P> : IDisposable
 {
     P Profile { get; }
+    RecordPosition? CurrentPosition => null;
     bool IsEndOfFile(out RecordSpan record, out RecordState recordState);
     ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {

@@ -4,9 +4,12 @@ using PocketCsvReader;
 
 namespace PocketCsvReader.FixedWidth;
 
-internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
+internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>, IPositionSource
 {
     private readonly StreamReader _reader;
+    private readonly PositionTracker? _position;
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private readonly char[] _buffer;
     private readonly StringBuilder _record = new();
     private readonly FieldSpan[] _fieldSpans;
@@ -22,6 +25,7 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
     {
         _reader = reader;
         Profile = profile;
+        if (profile.TrackPosition) _position = new();
         _buffer = ArrayPool<char>.Shared.Rent(profile.ParserOptimizations.BufferSize);
         _fieldSpans = profile.Descriptor.Fields
             .Select(field => new FieldSpan(field.Offset, field.Width))
@@ -37,6 +41,7 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
             return true;
         }
 
+        _position?.BeginRecord();
         _record.Clear();
         while (true)
         {
@@ -62,7 +67,9 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
                 }
             }
 
-            _record.Append(_buffer[_bufferOffset++]);
+            char current = _buffer[_bufferOffset++];
+            _position?.Advance(current);
+            _record.Append(current);
             if (!EndsWithLineTerminator())
                 continue;
 
@@ -80,6 +87,7 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
         if (_completed)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
+        _position?.BeginRecord();
         _record.Clear();
         while (true)
         {
@@ -99,7 +107,9 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
                 }
             }
 
-            _record.Append(_buffer[_bufferOffset++]);
+            char current = _buffer[_bufferOffset++];
+            _position?.Advance(current);
+            _record.Append(current);
             if (!EndsWithLineTerminator())
                 continue;
 
@@ -125,6 +135,7 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>
     private void ValidateRecord(int actualWidth)
     {
         _recordNumber++;
+        _position?.CompleteRecord();
         var expectedWidth = Profile.RecordWidth;
         if (actualWidth < expectedWidth)
             throw new InvalidDataException($"Fixed-width record {_recordNumber} is too short: expected {expectedWidth} characters but found {actualWidth}.");

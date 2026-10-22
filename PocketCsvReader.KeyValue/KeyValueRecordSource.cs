@@ -2,14 +2,16 @@ using PocketCsvReader.KeyValue.Configuration;
 
 namespace PocketCsvReader.KeyValue;
 
-internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>
+internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPositionSource
 {
-    private readonly StreamReader _reader;
+    private readonly PositionedLineReader _reader;
+    PositionTracker? IPositionSource.Tracker => _reader.Tracker;
+    public RecordPosition? CurrentPosition => _reader.Tracker?.CurrentPosition;
 
     public KeyValueProfile Profile { get; }
 
     public KeyValueRecordSource(StreamReader reader, KeyValueProfile profile)
-        => (_reader, Profile) = (reader, profile);
+        => (_reader, Profile) = (new PositionedLineReader(reader, profile.ParserOptimizations.BufferSize, profile.TrackPosition), profile);
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
@@ -21,6 +23,7 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>
             return true;
         }
 
+        _reader.Tracker?.CompleteRecord();
         var fields = KeyValueRecordParser.Parse(line, Profile.Format);
         record = new RecordSpan(line.AsSpan(), fields);
         recordState = RecordState.Record;
@@ -33,9 +36,10 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>
         if (line is null)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
+        _reader.Tracker?.CompleteRecord();
         var fields = KeyValueRecordParser.Parse(line, Profile.Format);
         return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
     }
 
-    public void Dispose() { }
+    public void Dispose() => _reader.Dispose();
 }

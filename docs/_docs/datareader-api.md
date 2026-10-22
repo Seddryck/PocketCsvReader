@@ -133,3 +133,7 @@ The following members return information about fields:
 - `GetFieldType(int)` — Gets the field's CLR type.
 - `GetDataTypeName(int)` — Gets the data type name from schema.
 - `FieldCount` — Total number of columns expected from schema and headers.
+
+## Source positions
+
+Enable optional source positions through `WithPositionTracking()`. See [source positions](source-positions.md) for offset units, lifecycle, and diagnostics.

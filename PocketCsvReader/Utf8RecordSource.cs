@@ -5,7 +5,7 @@ namespace PocketCsvReader;
 
 // Only ASCII syntax is supported. Non-ASCII payload bytes are opaque to the
 // shared state machine; all offsets are byte offsets until a field is requested.
-internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
+internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSource
 {
     public CsvProfile Profile { get; }
     private readonly Stream _stream;
@@ -19,10 +19,14 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
     private int _length;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
+    private readonly PositionTracker? _positionTracker;
+    PositionTracker? IPositionSource.Tracker => _positionTracker;
+    public RecordPosition? CurrentPosition => _positionTracker?.CurrentPosition;
 
     public Utf8RecordSource(Stream stream, CsvProfile profile)
     {
         Profile = profile;
+        if (profile.TrackPosition) _positionTracker = new(PositionOffsetUnit.Bytes);
         _stream = stream;
         _parser = FieldParserFactory.Create(profile.Dialect);
         var dialect = profile.Dialect;
@@ -86,6 +90,22 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
     }
 
     private bool TryRead(bool eof, out RecordReadResult result)
+    {
+        if (_positionTracker is null) return TryReadCore(eof, out result);
+        // Keep the grammar and IndexOfAny bulk copies identical in both modes.
+        // Only enabled tracking searches the consumed spans for physical newlines.
+        int start = _position;
+        if (_length == 0) _positionTracker?.BeginRecord();
+        bool complete = TryReadCore(eof, out result);
+        if (_positionTracker is { } tracker)
+        {
+            tracker.Advance(_input.AsSpan(start, _position - start));
+            if (complete && result.State == RecordState.Record) tracker.CompleteRecord();
+        }
+        return complete;
+    }
+
+    private bool TryReadCore(bool eof, out RecordReadResult result)
     {
         var fields = _fields;
         int length = _length;

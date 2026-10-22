@@ -3,10 +3,15 @@ using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson;
 
-internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
+internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
     private readonly NdjsonFramer _framer;
+    private readonly PositionTracker? _position;
+    private ReadOnlyMemory<char> _selectionInput;
+    private RecordPosition _selectionStart;
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
@@ -21,7 +26,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     public NdjsonRecordSource(StreamReader reader, NdjsonProfile profile)
     {
         Profile = profile;
-        _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
+        if (profile.TrackPosition) _position = new();
+        _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
         _projectedFields = profile.ProjectedProperties is null
             ? null
@@ -45,6 +51,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
                 return false;
             }
             _reader.BeginOperation();
+            _position?.BeginRecord();
             var capture = _reader.ReadFrame(_framer);
             if (capture is not { } captured)
                 return EndOfFile(out record, out recordState);
@@ -56,9 +63,12 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
             _reader.Protect(captured);
             if (Profile.ParsedRecordPath is not null)
             {
+                _selectionInput = parsed.Value.Memory;
+                _selectionStart = _position?.PendingPosition ?? default;
                 _matches = Profile.ParsedRecordPath.Select(parsed.Value.Memory, Profile.Dialect.Whitespaces, parsed.Value.Fields).GetEnumerator();
                 continue;
             }
+            _position?.CompleteRecord();
             var isEndOfFile = _reader.Peek() < 0;
             record = RecordSpan.FromMemory(parsed.Value.Memory, parsed.Value.Fields);
             recordState = RecordState.Record;
@@ -76,6 +86,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
                 return new(false, new RecordMemory(selected.Memory, selected.Fields), RecordState.Record);
             }
             _reader.BeginOperation();
+            _position?.BeginRecord();
             var capture = await _reader.ReadFrameAsync(_framer, cancellationToken).ConfigureAwait(false);
             if (capture is not { } captured)
                 return new(true, RecordMemory.Empty, RecordState.Eof);
@@ -87,9 +98,12 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
             _reader.Protect(captured);
             if (Profile.ParsedRecordPath is not null)
             {
+                _selectionInput = parsed.Value.Memory;
+                _selectionStart = _position?.PendingPosition ?? default;
                 _matches = Profile.ParsedRecordPath.Select(parsed.Value.Memory, Profile.Dialect.Whitespaces, parsed.Value.Fields).GetEnumerator();
                 continue;
             }
+            _position?.CompleteRecord();
             var isEndOfFile = await _reader.PeekAsync(cancellationToken).ConfigureAwait(false) < 0;
             return new(
                 isEndOfFile,
@@ -127,6 +141,12 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         if (_matches?.MoveNext() == true)
         {
             row = ParseCandidate(_matches.Current);
+            if (_position is not null)
+            {
+                if (!_selectionInput.Span.Overlaps(_matches.Current.Span, out int offset))
+                    throw new InvalidOperationException("Selected JSON must retain its source memory.");
+                _position.CompleteRecordAt(_selectionStart, _selectionInput.Span[..offset]);
+            }
             return true;
         }
         _matches?.Dispose();

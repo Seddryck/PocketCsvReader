@@ -1,6 +1,6 @@
 namespace PocketCsvReader.WebLogs;
 
-internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
+internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositionSource
 {
     internal static readonly string[] CommonFields =
     [
@@ -13,7 +13,9 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
         "ResponseBytes"
     ];
 
-    private readonly StreamReader _reader;
+    private readonly PositionedLineReader _reader;
+    PositionTracker? IPositionSource.Tracker => _reader.Tracker;
+    public RecordPosition? CurrentPosition => _reader.Tracker?.CurrentPosition;
     private readonly List<W3cDirective> _directives = [];
     private int _lineNumber;
     private bool _completed;
@@ -24,7 +26,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
 
     public WebLogRecordSource(StreamReader reader, WebLogProfile profile)
     {
-        _reader = reader;
+        _reader = new PositionedLineReader(reader, profile.ParserOptimizations.BufferSize, profile.TrackPosition);
         Profile = profile;
         if (profile.Format == WebLogFormat.Common)
             Fields = [.. CommonFields];
@@ -60,6 +62,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
                 continue;
             }
 
+            _reader.Tracker?.CompleteRecord();
             var spans = Profile.Format == WebLogFormat.Common
                 ? ParseCommon(line)
                 : ParseW3c(line);
@@ -93,6 +96,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
                 continue;
             }
 
+            _reader.Tracker?.CompleteRecord();
             var spans = Profile.Format == WebLogFormat.Common
                 ? ParseCommon(line)
                 : ParseW3c(line);
@@ -210,6 +214,5 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>
     private string FormatName()
         => Profile.Format == WebLogFormat.Common ? "Common Log Format" : "W3C Extended Log Format";
 
-    public void Dispose()
-    { }
+    public void Dispose() => _reader.Dispose();
 }

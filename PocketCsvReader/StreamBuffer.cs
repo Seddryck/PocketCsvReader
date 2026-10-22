@@ -33,14 +33,29 @@ internal class StreamBuffer : IDisposable
     public async ValueTask ReadAsync(CancellationToken cancellationToken = default)
     {
         _length = null;
-        _length = await Reader.ReadAsync(_arrayChar.AsMemory(0, MaxLength), cancellationToken).ConfigureAwait(false);
+        int length = await Reader.ReadAsync(_arrayChar.AsMemory(0, MaxLength), cancellationToken).ConfigureAwait(false);
+        // StreamReader may return a short read before EOF on forward-only inputs.
+        while (length > 0 && length < MaxLength)
+        {
+            int read = await Reader.ReadAsync(_arrayChar.AsMemory(length, MaxLength - length), cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            length += read;
+        }
+        _length = length;
         IsEof = _length < MaxLength;
         Memory = _arrayChar.AsMemory(0, _length.Value);
     }
 
     public void Read()
     {
-        _length = Reader.Read(_arrayChar, 0, MaxLength);
+        int length = Reader.Read(_arrayChar, 0, MaxLength);
+        while (length > 0 && length < MaxLength)
+        {
+            int read = Reader.Read(_arrayChar, length, MaxLength - length);
+            if (read == 0) break;
+            length += read;
+        }
+        _length = length;
         IsEof = _length < MaxLength;
         Memory = _arrayChar.AsMemory(0, _length.Value);
     }

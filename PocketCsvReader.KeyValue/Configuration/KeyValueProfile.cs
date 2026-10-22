@@ -11,6 +11,7 @@ public sealed class KeyValueProfile : IProfile
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }
     public RuntimeParsersDescriptor? Parsers { get; }
+    public bool TrackPosition => ParserOptimizations.TrackPosition;
     public ParserOptimizationOptions ParserOptimizations { get; }
     public StreamInitializationOptions StreamInitialization => StreamInitializationOptions.ForwardOnly;
 

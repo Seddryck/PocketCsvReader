@@ -2,10 +2,15 @@ using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Json;
 
-internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
+internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSource
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
+    private readonly PositionTracker? _position;
+    private ReadOnlyMemory<char> _selectionInput;
+    private RecordPosition _selectionStart;
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private readonly IJsonValueFramer _valueFramer;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
     // The current record owns this buffer until the reader advances to the next record.
@@ -19,7 +24,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
     public JsonRecordSource(StreamReader reader, JsonProfile profile)
     {
         Profile = profile;
-        _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize);
+        if (profile.TrackPosition) _position = new();
+        _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         _projectedFields = profile.ProjectedProperties is null
             ? null
             : new FieldSpan[profile.ProjectedProperties.Count];
@@ -49,6 +55,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         if (first < 0)
             return EndOfFile(out record, out recordState);
 
+        _position?.BeginRecord();
         var recordStart = _cursor.Position;
         var (capture, delimiter) = ReadValue((char)first);
         _cursor.Protect(capture);
@@ -58,6 +65,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             ? CompleteSingleRoot(delimiter)
             : CompleteArrayElement(delimiter);
 
+        _position?.CompleteRecord();
         record = RecordSpan.FromMemory(capture.Memory, fields);
         recordState = RecordState.Record;
         return isEndOfFile;
@@ -79,6 +87,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         if (first < 0)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
+        _position?.BeginRecord();
         var recordStart = _cursor.Position;
         var (capture, delimiter) = await ReadValueAsync((char)first, cancellationToken).ConfigureAwait(false);
         _cursor.Protect(capture);
@@ -87,6 +96,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             ? await CompleteSingleRootAsync(delimiter, cancellationToken).ConfigureAwait(false)
             : await CompleteArrayElementAsync(delimiter, cancellationToken).ConfigureAwait(false);
 
+        _position?.CompleteRecord();
         return new(isEndOfFile, new RecordMemory(capture.Memory, fields), RecordState.Record);
     }
 
@@ -98,11 +108,14 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             var first = PeekNonWhitespace();
             if (first < 0)
                 throw Error("A JSON value was expected");
+            _position?.BeginRecord();
             var framer = new JsonValueFramer();
             framer.Prepare((char)first, _cursor.Position);
             var capture = _cursor.ReadFrame(framer) ?? throw Error("The JSON value is incomplete");
             _cursor.Protect(capture);
             CompleteSingleRoot(framer.Delimiter);
+            _selectionInput = capture.Memory;
+            _selectionStart = _position?.PendingPosition ?? default;
             _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
         }
         if (TrySelectRow(out var row))
@@ -122,12 +135,15 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
             var first = await PeekNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
             if (first < 0)
                 throw Error("A JSON value was expected");
+            _position?.BeginRecord();
             var framer = new JsonValueFramer();
             framer.Prepare((char)first, _cursor.Position);
             var capture = await _cursor.ReadFrameAsync(framer, cancellationToken).ConfigureAwait(false)
                 ?? throw Error("The JSON value is incomplete");
             _cursor.Protect(capture);
             await CompleteSingleRootAsync(framer.Delimiter, cancellationToken).ConfigureAwait(false);
+            _selectionInput = capture.Memory;
+            _selectionStart = _position?.PendingPosition ?? default;
             _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
         }
         return TrySelectRow(out var row)
@@ -140,6 +156,12 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>
         if (_matches?.MoveNext() == true)
         {
             var json = _matches.Current;
+            if (_position is not null)
+            {
+                if (!_selectionInput.Span.Overlaps(json.Span, out int offset))
+                    throw new InvalidOperationException("Selected JSON must retain its source memory.");
+                _position.CompleteRecordAt(_selectionStart, _selectionInput.Span[..offset]);
+            }
             if (_projectedValueFramer is not null)
             {
                 _projectedValueFramer.Prepare(json.Span[0], 0);
