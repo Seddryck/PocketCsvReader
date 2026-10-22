@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Opt-in span-based Chrononuensis temporal parsers for PocketCsvReader.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Chrononuensis" Version="0.28.0" />
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

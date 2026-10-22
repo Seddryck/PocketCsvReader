@@ -10,6 +10,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
+    private IEnumerator<ReadOnlyMemory<char>>? _matches;
     private StableJsonShape? _stableShape;
     private FieldSpan[]? _stableFields;
     private FieldSpan[]? _stableScratchFields;
@@ -37,6 +38,12 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     {
         while (true)
         {
+            if (TrySelectRow(out var selected))
+            {
+                record = RecordSpan.FromMemory(selected.Memory, selected.Fields);
+                recordState = RecordState.Record;
+                return false;
+            }
             _reader.BeginOperation();
             var capture = _reader.ReadFrame(_framer);
             if (capture is not { } captured)
@@ -47,6 +54,11 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
                 continue;
 
             _reader.Protect(captured);
+            if (Profile.ParsedRecordPath is not null)
+            {
+                _matches = Profile.ParsedRecordPath.Select(parsed.Value.Memory, Profile.Dialect.Whitespaces, parsed.Value.Fields).GetEnumerator();
+                continue;
+            }
             var isEndOfFile = _reader.Peek() < 0;
             record = RecordSpan.FromMemory(parsed.Value.Memory, parsed.Value.Fields);
             recordState = RecordState.Record;
@@ -59,6 +71,10 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
         cancellationToken.ThrowIfCancellationRequested();
         while (true)
         {
+            if (TrySelectRow(out var selected))
+            {
+                return new(false, new RecordMemory(selected.Memory, selected.Fields), RecordState.Record);
+            }
             _reader.BeginOperation();
             var capture = await _reader.ReadFrameAsync(_framer, cancellationToken).ConfigureAwait(false);
             if (capture is not { } captured)
@@ -69,6 +85,11 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
                 continue;
 
             _reader.Protect(captured);
+            if (Profile.ParsedRecordPath is not null)
+            {
+                _matches = Profile.ParsedRecordPath.Select(parsed.Value.Memory, Profile.Dialect.Whitespaces, parsed.Value.Fields).GetEnumerator();
+                continue;
+            }
             var isEndOfFile = await _reader.PeekAsync(cancellationToken).ConfigureAwait(false) < 0;
             return new(
                 isEndOfFile,
@@ -88,12 +109,30 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
 
         try
         {
-            return ParseCandidate(candidate);
+            return ParseInputCandidate(candidate);
         }
         catch (InvalidDataException) when (commentIndex >= 0)
         {
-            return ParseCandidate(record);
+            return ParseInputCandidate(record);
         }
+    }
+
+    private ParsedRecord ParseInputCandidate(ReadOnlyMemory<char> record)
+        => Profile.ParsedRecordPath is null
+            ? ParseCandidate(record)
+            : new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
+
+    private bool TrySelectRow(out ParsedRecord row)
+    {
+        if (_matches?.MoveNext() == true)
+        {
+            row = ParseCandidate(_matches.Current);
+            return true;
+        }
+        _matches?.Dispose();
+        _matches = null;
+        row = default;
+        return false;
     }
 
     private ParsedRecord ParseCandidate(ReadOnlyMemory<char> record)
@@ -234,7 +273,10 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>
     }
 
     public void Dispose()
-        => _reader.Dispose();
+    {
+        _matches?.Dispose();
+        _reader.Dispose();
+    }
 
     private readonly record struct ParsedRecord(ReadOnlyMemory<char> Memory, FieldSpan[] Fields);
 

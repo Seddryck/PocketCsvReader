@@ -6,6 +6,15 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
 {
     private string[]? _projectedProperties;
     private bool _orderedProjection;
+    private string? _recordPath;
+
+    /// <summary>Selects the nodes exposed as rows using the supported JSONPath subset.</summary>
+    public JsonReaderBuilder WithRecordPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        _recordPath = path;
+        return this;
+    }
 
     public JsonReaderBuilder()
         : base(JsonProfile.DefaultParserOptimizations)
@@ -38,5 +47,6 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
             BuildParsers(),
             BuildParserOptimizations(),
             _projectedProperties,
-            _orderedProjection));
+            _orderedProjection,
+            _recordPath));
 }

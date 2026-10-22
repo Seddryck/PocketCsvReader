@@ -17,7 +17,8 @@ $packageIds = @(
     'PocketCsvReader.Arrow',
     'PocketCsvReader.FixedWidth',
     'PocketCsvReader.KeyValue',
-    'PocketCsvReader.WebLogs'
+    'PocketCsvReader.WebLogs',
+    'PocketCsvReader.Chrononuensis'
 )
 
 $packageDirectoryPath = (Resolve-Path -LiteralPath $PackageDirectory).Path

@@ -9,6 +9,30 @@ namespace PocketCsvReader.Configuration;
 public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunction>>
 {
     private Dictionary<Type, (ParseFunction Legacy, Delegate Span)> Parsers { get; } = [];
+    private Dictionary<Type, Func<string?, IFormatProvider?, Delegate>>? _formatParsers;
+
+    internal void AddDefaultParser<T>(ParseSpan<T> parse,
+        Func<string?, IFormatProvider?, ParseSpan<T>>? formatParser)
+    {
+        AddParser(parse);
+        if (formatParser is not null)
+            (_formatParsers ??= [])[typeof(T)] = (pattern, culture) => formatParser(pattern, culture);
+    }
+
+    internal bool TryCreateFormattedParser(Type type, IFormatDescriptor? format, out Delegate? parser)
+    {
+        parser = null;
+        if (_formatParsers is null || !_formatParsers.TryGetValue(type, out var factory))
+            return false;
+        var pattern = format switch
+        {
+            CustomFormatDescriptor custom => custom.Pattern,
+            TemporalFormatDescriptor temporal => temporal.Pattern,
+            _ => null
+        };
+        parser = factory(pattern, (format as ICultureFormatDescriptor)?.Culture);
+        return true;
+    }
 
     internal IEnumerable<KeyValuePair<Type, Delegate>> SpanParsers
         => Parsers.Select(parser => new KeyValuePair<Type, Delegate>(parser.Key, parser.Value.Span));
