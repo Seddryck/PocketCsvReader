@@ -17,6 +17,7 @@
   - apache-arrow
   - fluent-api-profile-configuration
   - fluent-api-runtime-parsers
+  - chrononuensis
   - fluent-api-resource
   - fluent-api-schema
   - schema-inference
