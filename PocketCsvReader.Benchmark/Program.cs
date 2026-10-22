@@ -13,7 +13,7 @@ public class Program
     public static void Main(string[] args)
     {
         if (args.Length > 0)
-            BenchmarkSwitcher.FromTypes([typeof(CustomParsing), typeof(ChrononuensisParsing)]).Run(args,
+            BenchmarkSwitcher.FromTypes([typeof(CustomParsing), typeof(ChrononuensisParsing), typeof(Utf8Input), typeof(CharacterRecordParsing)]).Run(args,
                 ManualConfig.Create(DefaultConfig.Instance).AddJob(Job.Default.DontEnforcePowerPlan().AsDefault()));
         else
             BenchmarkRunner.Run<ToDataReader>();

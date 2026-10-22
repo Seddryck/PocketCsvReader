@@ -37,48 +37,65 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 
     public void Initialize()
     {
-        if (_initialized)
-            return;
-
-        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+        if (_initialized) return;
+        PrepareStream();
+        var source = CreateStreamRecordSource(ProcessedStream!, Profile);
+        if (source is null)
         {
-            var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
-            FileEncoding = new(encoding, -1);
+            FileEncoding ??= ShouldProbeEncoding
+                ? new EncodingDetector().GetStreamEncoding(ProcessedStream!, Profile.Resource?.Encoding)
+                : new EncodingInfo(Encoding.UTF8, -1);
+            source = CreateCharacterSource();
         }
+        CompleteInitialization(source);
+    }
+
+    private bool ShouldProbeEncoding => Profile.StreamInitialization.ProbeEncoding && ProcessedStream!.CanSeek;
+
+    private void PrepareStream()
+    {
+        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+            FileEncoding = new(Encoding.GetEncoding(Profile.Resource.Encoding), -1);
 
         if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
         {
-            var factory = ((FileEncoding?.BomBytesCount ?? 0) < 0)
+            var factory = (FileEncoding?.BomBytesCount ?? 0) < 0
                 ? DecompressorFactory.Streaming()
                 : DecompressorFactory.Buffered();
-            var decompressor = factory.GetDecompressor(Profile.Resource.Compression);
-            ProcessedStream = decompressor.Decompress(RawStream);
+            ProcessedStream = factory.GetDecompressor(Profile.Resource.Compression).Decompress(RawStream);
         }
         else
             ProcessedStream = RawStream;
+    }
 
-        FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
-            ? new EncodingDetector().GetStreamEncoding(ProcessedStream, Profile.Resource?.Encoding)
-            : new EncodingInfo(Encoding.UTF8, -1);
-        StreamReader = new StreamReader(ProcessedStream, FileEncoding!.Encoding, FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
-        if (FileEncoding.BomBytesCount >= 0)
-        {
-            var bufferBOM = new char[1];
-            StreamReader.Read(bufferBOM, 0, bufferBOM.Length);
-            StreamReader.Rewind();
+    private IRecordSource<P> CreateCharacterSource()
+    {
+        // Let StreamReader consume its matching preamble once. Skipping it here
+        // as well could discard a following U+FEFF that is actual field data.
+        // A custom BOM length without a matching encoding preamble is skipped explicitly.
+        if (FileEncoding!.BomBytesCount >= 0 && ProcessedStream!.CanSeek)
+            ProcessedStream.Position = FileEncoding.BomBytesCount == FileEncoding.Encoding.Preamble.Length
+                ? 0 : FileEncoding.BomBytesCount;
+        StreamReader = new StreamReader(ProcessedStream!, FileEncoding.Encoding,
+            FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
+        return CreateRecordSource(StreamReader, Profile);
+    }
 
-            if (FileEncoding!.BomBytesCount > 0)
-                StreamReader.BaseStream.Position = FileEncoding!.BomBytesCount;
-        }
-
+    private void CompleteInitialization(IRecordSource<P> source)
+    {
         IsEof = false;
         RowCount = 0;
-        RecordSource = CreateRecordSource(StreamReader, Profile);
+        RecordSource = source;
         _initialized = true;
     }
 
     protected virtual IRecordSource<P> CreateRecordSource(StreamReader reader, P profile)
         => CreateRecordParser(reader, profile);
+
+    protected virtual IRecordSource<P>? CreateStreamRecordSource(Stream stream, P profile) => null;
+
+    protected virtual ValueTask<IRecordSource<P>?> CreateStreamRecordSourceAsync(Stream stream, P profile, CancellationToken cancellationToken)
+        => ValueTask.FromResult<IRecordSource<P>?>(null);
 
     protected virtual BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile)
         => throw new NotSupportedException("Override CreateRecordSource or CreateRecordParser to provide records.");
@@ -130,38 +147,17 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 
     private async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
-        if (_initialized)
-            return;
-
-        if (FileEncoding is null && !string.IsNullOrEmpty(Profile.Resource?.Encoding))
+        if (_initialized) return;
+        PrepareStream();
+        var source = await CreateStreamRecordSourceAsync(ProcessedStream!, Profile, cancellationToken).ConfigureAwait(false);
+        if (source is null)
         {
-            var encoding = Encoding.GetEncoding(Profile.Resource.Encoding);
-            FileEncoding = new(encoding, -1);
+            FileEncoding ??= ShouldProbeEncoding
+                ? await new EncodingDetector().GetStreamEncodingAsync(ProcessedStream!, Profile.Resource?.Encoding, cancellationToken).ConfigureAwait(false)
+                : new EncodingInfo(Encoding.UTF8, -1);
+            source = CreateCharacterSource();
         }
-
-        if (!string.IsNullOrEmpty(Profile.Resource?.Compression))
-        {
-            var factory = ((FileEncoding?.BomBytesCount ?? 0) < 0)
-                ? DecompressorFactory.Streaming()
-                : DecompressorFactory.Buffered();
-            var decompressor = factory.GetDecompressor(Profile.Resource.Compression);
-            ProcessedStream = decompressor.Decompress(RawStream);
-        }
-        else
-            ProcessedStream = RawStream;
-
-        FileEncoding ??= Profile.StreamInitialization.ProbeEncoding && ProcessedStream.CanSeek
-            ? await new EncodingDetector().GetStreamEncodingAsync(ProcessedStream, Profile.Resource?.Encoding, cancellationToken).ConfigureAwait(false)
-            : new EncodingInfo(Encoding.UTF8, -1);
-
-        if (FileEncoding.BomBytesCount >= 0 && ProcessedStream.CanSeek)
-            ProcessedStream.Position = FileEncoding.BomBytesCount;
-
-        StreamReader = new StreamReader(ProcessedStream, FileEncoding.Encoding, FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
-        IsEof = false;
-        RowCount = 0;
-        RecordSource = CreateRecordSource(StreamReader, Profile);
-        _initialized = true;
+        CompleteInitialization(source);
     }
 
     public int Depth => 1;
