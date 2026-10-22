@@ -26,6 +26,42 @@ internal static class DataReaderMaterializer
         return table;
     }
 
+    public static IEnumerable<IReadOnlyDictionary<string, object?>> ToDictionaries(IDataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        while (reader.Read())
+        {
+            var row = new Dictionary<string, object?>(reader.FieldCount, StringComparer.Ordinal);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                var name = reader.GetName(index);
+                if (!row.TryAdd(name, ReadValue(reader, index)))
+                    throw new InvalidDataException($"Duplicate field name '{name}' cannot be materialized as a dictionary.");
+            }
+            yield return row;
+        }
+    }
+
+    public static IEnumerable<object?[]> ToObjectArrays(IDataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        while (reader.Read())
+        {
+            var row = new object?[reader.FieldCount];
+            for (var index = 0; index < row.Length; index++)
+                row[index] = ReadValue(reader, index);
+            yield return row;
+        }
+    }
+
+    private static object? ReadValue(IDataReader reader, int index)
+    {
+        if (reader.IsDBNull(index))
+            return null;
+        var value = reader.GetValue(index);
+        return value is DBNull ? null : value;
+    }
+
     public static IEnumerable<string?[]> ToStringArrays(IDataReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
