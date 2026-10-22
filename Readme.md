@@ -307,3 +307,73 @@ Byte parsing is opt-in because throughput and allocations depend on the workload
 dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*Utf8Input*'
 ```
 
+
+### Dictionary rows
+
+`ToDictionaries` streams independently owned `IReadOnlyDictionary<string, object?>`
+rows from a filename or a stream. Values use the schema and runtime parsers;
+fields without an explicit type remain strings. Null fields and `DBNull.Value`
+become C# `null`.
+
+```csharp
+var reader = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithSchema(s => s.Named().WithField<int>("Id").WithField<string>("Name"))
+    .Build();
+foreach (var row in reader.ToDictionaries("people.csv"))
+    Console.WriteLine($"{row["Id"]}: {row["Name"]}");
+// Alternatively: reader.ToDictionaries(stream)
+```
+
+Keys match `IDataReader.GetName` for each record, including schema-provided names
+in formats that expose them. CSV without headers uses `field_0`, `field_1`, etc.;
+unnamed CSV headers use the reader's generated names. Names are case-sensitive
+(ordinal comparison). Duplicate names throw `InvalidDataException` to avoid losing
+values. Each row reflects that record's field count and names, including changing
+shapes in labeled formats. Record-width rules, special-value handling, and parser
+errors follow the underlying data reader. Enumeration opens the reader lazily and
+disposes it, including its input stream, when completed, stopped, or failed. Retained
+rows stay valid after enumeration advances.
+
+### Parsed value arrays
+
+`ToObjectArrays(filename)` and `ToObjectArrays(stream)` return a lazy
+`IEnumerable<object?[]>`. Each record gets an independently owned array in the
+underlying reader's field order. This API is inherited by CSV, JSON, NDJSON,
+fixed-width, key-value, and web-log readers through the shared reader base.
+
+```csharp
+var reader = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithSchema(s => s.Named().WithField<int>("Id").WithField<string>("Name"))
+    .Build();
+foreach (object?[] row in reader.ToObjectArrays("people.csv"))
+    Console.WriteLine($"{(int)row[0]!}: {row[1]}");
+```
+
+| Output API | Row contents | Access |
+|---|---|---|
+| `ToArrayString` | Strings and nulls | Field ordinal |
+| `ToObjectArrays` | Schema/runtime-parser values and nulls | Field ordinal |
+| `ToDictionaries` | Schema/runtime-parser values and nulls | Reader field name |
+| `To<T>` | Mapped typed objects | Object members (CSV) |
+
+Untyped fields remain strings. Both parsed row APIs normalize null fields and
+`DBNull.Value` to C# `null`, and retain empty strings unless configured special-value
+handling maps them differently. Parsers and special values follow the data reader's
+configuration, including field-specific and runtime parsers. With a named schema,
+define every field, just as for `IDataReader`.
+
+Arrays use the current `IDataReader.FieldCount`: for CSV, an incomplete record
+therefore produces a shorter array (and a dictionary with fewer keys); absent
+trailing columns are not padded. Explicit empty cells remain present. Extra CSV
+fields throw `InvalidDataException`. Malformed records follow `BadDataPolicy`
+(default: throw; configured skipping remains effective). Invalid typed values
+propagate the parser's exception. Other formats retain their own data-reader
+width, field ordering, and missing-value rules. Duplicate names are allowed in
+arrays because access is positional.
+
+Opening and reading begin when enumeration advances. Enumerating a stream is
+forward-only; disposing the enumerator closes its reader and input stream, even
+on early exit or errors. Returned arrays and dictionaries remain valid afterwards.
+Normal reader buffering can read ahead, but neither API buffers the whole input.

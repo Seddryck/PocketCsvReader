@@ -15,8 +15,21 @@ namespace PocketCsvReader;
 public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
 internal class SpanParser
 {
-    private Dictionary<Type, Delegate> TypeParsers { get; } = new();
-    private Dictionary<int, Delegate> FieldParsers { get; } = new();
+    internal sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null)
+    {
+        public Delegate Typed { get; } = typed;
+        private ParseSpan<object>? _boxed = boxed;
+
+        // Runtime registrations compile the adapter only when object access is first needed.
+        public ParseSpan<object> Boxed => _boxed ??= Typed as ParseSpan<object> ?? BoxParser(Typed);
+    }
+
+    private Dictionary<Type, ParserEntry> TypeParsers { get; } = new();
+    private Dictionary<int, ParserEntry> FieldParsers { get; } = new();
+
+    public void ClearFieldParsers() => FieldParsers.Clear();
+
+    internal void BindFieldParser(int index, ParserEntry parser) => FieldParsers[index] = parser;
 
     internal static Delegate Adapt(Type type, Configuration.ParseFunction parse)
     {
@@ -47,29 +60,30 @@ internal class SpanParser
     }
 
     public void Register<T>(ParseSpan<T> parse)
-        => Register(typeof(T), parse);
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        TypeParsers[typeof(T)] = new(parse, span => parse(span)!);
+    }
 
     public void Register(Type type, Delegate dlg)
+        => TypeParsers[type] = CreateEntry(type, dlg);
+
+    internal static ParserEntry CreateEntry(Type type, Delegate dlg)
     {
         ArgumentNullException.ThrowIfNull(dlg);
         if (!IsParseSpan(dlg, out var parseType) || type != parseType)
             throw new ArgumentException("Unexpected delegate.", nameof(dlg));
-        TypeParsers[type] = dlg;
+        return new(dlg);
     }
 
     public void Register<T>(int index, ParseSpan<T> parse)
     {
         ArgumentNullException.ThrowIfNull(parse);
-        FieldParsers[index] = parse;
+        FieldParsers[index] = new(parse, span => parse(span)!);
     }
 
     public void Register(int index, Type type, Delegate dlg)
-    {
-        ArgumentNullException.ThrowIfNull(dlg);
-        if (!IsParseSpan(dlg, out var parseType) || type != parseType)
-            throw new ArgumentException("Unexpected delegate.", nameof(dlg));
-        FieldParsers[index] = dlg;
-    }
+        => FieldParsers[index] = CreateEntry(type, dlg);
 
     public void CacheTypeParser<T>(int index)
     {
@@ -93,8 +107,9 @@ internal class SpanParser
 
     public bool TryGetParser<T>([NotNullWhen(true)] out ParseSpan<T>? parse)
     {
-        if (TypeParsers.TryGetValue(typeof(T), out var dlg))
+        if (TypeParsers.TryGetValue(typeof(T), out var entry))
         {
+            var dlg = entry.Typed;
             if (dlg is not ParseSpan<T>)
                 throw new InvalidOperationException($"Parser for type {typeof(T).Name} is not a ParseSpan<{typeof(T).Name}> but a {dlg.GetType().Name}");
             parse = (ParseSpan<T>)dlg!;
@@ -106,9 +121,9 @@ internal class SpanParser
 
     public bool TryGetParser(Type type, [NotNullWhen(true)] out ParseSpan<object>? parse)
     {
-        if (TypeParsers.TryGetValue(type, out var dlg))
+        if (TypeParsers.TryGetValue(type, out var entry))
         {
-            parse = BoxParser(dlg);
+            parse = entry.Boxed;
             return true;
         }
         parse = null;
@@ -117,9 +132,9 @@ internal class SpanParser
 
     public bool TryGetParser<T>(int index, [NotNullWhen(true)] out ParseSpan<T>? parse)
     {
-        if (FieldParsers.TryGetValue(index, out var dlg) && dlg is ParseSpan<T>)
+        if (FieldParsers.TryGetValue(index, out var entry) && entry.Typed is ParseSpan<T> typed)
         {
-            parse = (ParseSpan<T>)dlg!;
+            parse = typed;
             return true;
         }
         parse = null;
@@ -128,8 +143,9 @@ internal class SpanParser
 
     public ParseSpan<T> GetParser<T>(int index)
     {
-        if (FieldParsers.TryGetValue(index, out var dlg))
+        if (FieldParsers.TryGetValue(index, out var entry))
         {
+            var dlg = entry.Typed;
             if (dlg is not ParseSpan<T>)
             {
                 if (dlg.GetType().IsGenericType && dlg.GetType().GetGenericTypeDefinition() == typeof(ParseSpan<>))
@@ -145,9 +161,9 @@ internal class SpanParser
 
     public bool TryGetParser(int index, [NotNullWhen(true)] out ParseSpan<object>? parse)
     {
-        if (FieldParsers.TryGetValue(index, out var dlg))
+        if (FieldParsers.TryGetValue(index, out var entry))
         {
-            parse = BoxParser(dlg);
+            parse = entry.Boxed;
             return true;
         }
         parse = null;
