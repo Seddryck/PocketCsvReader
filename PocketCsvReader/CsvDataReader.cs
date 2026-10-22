@@ -55,6 +55,25 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
 
     private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
 
+    private protected override bool TryGetDirectString(int i, out string value)
+    {
+        value = null!;
+        // Derived readers may override GetValueOrThrow to transform strings.
+        if (GetType() != typeof(CsvDataReader)) return false;
+        // ASCII can decode directly into the returned string. Multibyte text
+        // uses the pooled char cache to avoid GetString's separate UTF-8
+        // character-count pass, and to reuse decoding for repeated access.
+        var record = Record;
+        if (record is null || i < 0 || i >= record.ParsedFields.Length || !record.TryGetUtf8(i, out var bytes)
+            || Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
+            || Profile.Resource?.Sequences is { IsEmpty: false }
+            || (Profile.ParserOptimizations.UnescapeChars && record.ParsedFields[i].Value.IsEscaped)
+            || !Ascii.IsValid(bytes.Span))
+            return false;
+        value = Encoding.UTF8.GetString(bytes.Span);
+        return true;
+    }
+
     private protected override bool TryGetDirectValue<T>(int i, out T value)
     {
         value = default!;

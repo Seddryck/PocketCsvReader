@@ -107,6 +107,10 @@ public class Utf8InputTest
         byte[] bytes = [0xE2, 0x82, (byte)',', 0xFF, (byte)'\r', (byte)'\n'];
         Assert.That(Read(bytes, Profile(CsvInputMode.Utf8Bytes)),
             Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars))));
+        using var reader = new InspectingReader(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.CurrentRecord.Slice(0).ToString(), Is.EqualTo(Encoding.UTF8.GetString(bytes[..2])));
+        Assert.That(reader.CurrentRecord.Slice(1).ToString(), Is.EqualTo("�"));
     }
 
     [TestCase(CsvInputMode.Auto)]
@@ -257,6 +261,122 @@ public class Utf8InputTest
         using var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(text)), Profile(CsvInputMode.Utf8Bytes));
         Assert.That(reader.Read(), Is.True);
         Assert.That(() => reader.GetInt32(0), Throws.TypeOf(exception));
+    }
+
+    [Test]
+    public async Task PooledFieldDecodingResetsAcrossRecordsAndPreservesReturnedStrings()
+    {
+        var longText = string.Concat(Enumerable.Repeat("東京😀", 5000));
+        var csv = $"é,x,\"\"\r\n{longText},second,z\r\na,b,\r\n";
+        using var reader = new InspectingReader(new MemoryStream(Encoding.UTF8.GetBytes(csv)), Profile(CsvInputMode.Utf8Bytes, bufferSize: 17));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(2), Is.Empty);
+        var first = reader.GetString(0);
+        var firstField = reader.CurrentRecord.Slice(0);
+        Assert.That(reader.CurrentRecord.Slice(0).Equals(firstField), Is.True, "Repeated access should reuse the decoded field memory.");
+        Assert.That(reader.GetString(1), Is.EqualTo("x"));
+        Assert.That(reader.CurrentRecord.Slice(1).ToString(), Is.EqualTo("x"));
+        Assert.That(firstField.ToString(), Is.EqualTo("é"));
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetString(2), Is.EqualTo("z"));
+        Assert.That(reader.GetString(0), Is.EqualTo(longText));
+        Assert.That(reader.CurrentRecord.Slice(0).ToString(), Is.EqualTo(longText));
+        Assert.That(reader.GetString(1), Is.EqualTo("second"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(1), Is.EqualTo("b"));
+        Assert.That(reader.GetString(0), Is.EqualTo("a"));
+        Assert.That(reader.GetString(2), Is.Empty);
+        Assert.That(first, Is.EqualTo("é"));
+    }
+
+    [TestCase(17)]
+    [TestCase(128)]
+    [TestCase(4096)]
+    public void BulkScanningMatchesCharactersForGeneratedQuotedRecords(int bufferSize)
+    {
+        var random = new Random(326);
+        string[] fragments = ["abc", "é", "東京", "😀", "\"", "\\", ",", "\r\n", "#", "  "];
+        var csv = new StringBuilder();
+        for (int row = 0; row < 100; row++)
+        {
+            for (int column = 0; column < 8; column++)
+            {
+                if (column > 0) csv.Append(',');
+                var value = string.Concat(Enumerable.Range(0, random.Next(30)).Select(_ => fragments[random.Next(fragments.Length)]));
+                csv.Append('"').Append(value.Replace("\\", "\\\\").Replace("\"", "\"\"")).Append('"');
+            }
+            csv.Append("\r\n");
+        }
+        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+        var dialect = new DialectDescriptor(Header: false, EscapeChar: '\\');
+        Assert.That(Read(bytes, Profile(CsvInputMode.Utf8Bytes, dialect, bufferSize)),
+            Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars, dialect, bufferSize))));
+    }
+
+    [TestCase("ordinary|text,more||last,row||", "||", true)]
+    [TestCase("abcENx,defENDghi,jklEND", "END", true)]
+    [TestCase("abc\\,def,ghi\r\n", "\r\n", false)]
+    public void BulkScanningRetainsPartialTerminatorsAndEscapes(string csv, string terminator, bool quoted)
+    {
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: terminator, EscapeChar: '\\', QuoteChar: quoted ? '"' : null);
+        foreach (int size in new[] { 1, 7, 4096 })
+            Assert.That(Read(bytes, Profile(CsvInputMode.Utf8Bytes, dialect, size)),
+                Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars, dialect, size))));
+    }
+
+    [TestCase("\"a\"ordinary,b\r\n")]
+    [TestCase("\"a\"東京,b\r\n")]
+    [TestCase("\"unterminated")]
+    public void BulkScanningDoesNotHideMalformedQuotes(string csv)
+    {
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        Assert.That(() => Read(bytes, Profile(CsvInputMode.Utf8Bytes)), Throws.TypeOf<InvalidDataException>());
+        Assert.That(() => Read(bytes, Profile(CsvInputMode.DecodedChars)), Throws.TypeOf<InvalidDataException>());
+    }
+
+    [Test]
+    public void DirectStringDecodingHonorsCustomPoolsAndUnescaping()
+    {
+        int calls = 0;
+        var profile = Profile(CsvInputMode.Utf8Bytes);
+        profile.ParserOptimizations = profile.ParserOptimizations with
+        {
+            PoolString = text => { calls++; return text.ToString().ToUpperInvariant(); }
+        };
+        using var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes("é,\"a\"\"b\"\r\n")), profile);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("É"));
+        Assert.That(reader.GetString(1), Is.EqualTo("A\"B"));
+        Assert.That(calls, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void WideCharacterViewsTranslateOffsetsIncludingEmptyAndQuotedFields()
+    {
+        var csv = string.Concat(Enumerable.Repeat("東京,\"😀\",,\"\",é,", 20)) + "last\r\n";
+        using var reader = new InspectingReader(new MemoryStream(Encoding.UTF8.GetBytes(csv)), Profile(CsvInputMode.Utf8Bytes));
+        Assert.That(reader.Read(), Is.True);
+        var record = reader.CurrentRecord;
+        var text = record.Span;
+        for (int i = 0; i < record.FieldSpans.Length; i++)
+        {
+            var field = record.FieldSpans[i].Value;
+            Assert.That(text.Slice(field.Start, field.Length).ToString(), Is.EqualTo(reader.GetRawString(i).Trim('"')));
+        }
+    }
+
+    [Test]
+    public void DirectStringDecodingPreservesDerivedReaderValueOverrides()
+    {
+        using var reader = new TransformingReader(new MemoryStream(Encoding.UTF8.GetBytes("original\r\n")), Profile(CsvInputMode.Utf8Bytes));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("transformed"));
+    }
+
+    private sealed class TransformingReader(Stream stream, CsvProfile profile) : CsvDataReader(stream, profile)
+    {
+        protected override NullableSpan GetValueOrThrow(int ordinal) => new("transformed".AsSpan());
     }
 
     private sealed class InspectingReader(Stream stream, CsvProfile profile) : CsvDataReader(stream, profile)

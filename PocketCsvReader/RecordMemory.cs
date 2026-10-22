@@ -15,7 +15,8 @@ public class RecordMemory
     internal ReadOnlyMemory<char> CharacterMemoryOrDefault => _memory;
     private readonly ReadOnlyMemory<byte> _utf8;
     private readonly bool _isUtf8;
-    private string?[]? _decodedFields;
+    internal bool IsUtf8 => _isUtf8;
+    private readonly Utf8FieldBuffer? _decodedFields;
     private RecordMemory? _characters;
 
     internal bool TryGetUtf8(int ordinal, out ReadOnlyMemory<byte> value)
@@ -38,22 +39,36 @@ public class RecordMemory
         if (!_isUtf8) return this;
         if (_characters is not null) return _characters;
         var text = Encoding.UTF8.GetString(_utf8.Span);
-        var fields = _fields.Select(field => field with
+        var fields = new FieldSpan[_fields.Length];
+        int byteOffset = 0, charOffset = 0;
+        for (int i = 0; i < fields.Length; i++)
         {
-            Value = field.Value with
+            var field = _fields[i];
+            var value = field.Value;
+            // Parsed fields occur in input order. Count each gap/value once
+            // instead of rescanning the record prefix for every column.
+            // Unstarted empty fields have the default zero offset.
+            int start = value.Start < byteOffset
+                ? Encoding.UTF8.GetCharCount(_utf8.Span[..value.Start])
+                : charOffset + Encoding.UTF8.GetCharCount(_utf8.Span.Slice(byteOffset, value.Start - byteOffset));
+            int length = Encoding.UTF8.GetCharCount(_utf8.Span.Slice(value.Start, value.Length));
+            fields[i] = field with { Value = value with { Start = start, Length = length } };
+            if (value.Start >= byteOffset)
             {
-                Start = Encoding.UTF8.GetCharCount(_utf8.Span[..field.Value.Start]),
-                Length = Encoding.UTF8.GetCharCount(_utf8.Span.Slice(field.Value.Start, field.Value.Length))
+                byteOffset = value.Start + value.Length;
+                charOffset = start + length;
             }
-        }).ToArray();
+        }
         return _characters = new RecordMemory(text.AsMemory(), fields);
     }
 
-    internal RecordMemory(ReadOnlyMemory<byte> utf8, FieldSpan[] fields)
+    internal RecordMemory(ReadOnlyMemory<byte> utf8, FieldSpan[] fields, Utf8FieldBuffer decodedFields)
     {
         _utf8 = utf8;
         _fields = fields;
         _isUtf8 = true;
+        _decodedFields = decodedFields;
+        decodedFields.Reset(utf8.Length, fields.Length);
     }
 
     private readonly static RecordMemory empty = new([], []);
@@ -90,9 +105,7 @@ public class RecordMemory
     {
         if (_isUtf8)
         {
-            _decodedFields ??= new string?[_fields.Length];
-            var field = _fields[i].Value;
-            return (_decodedFields[i] ??= Encoding.UTF8.GetString(_utf8.Span.Slice(field.Start, field.Length))).AsMemory();
+            return _decodedFields!.Decode(_utf8.Span, _fields[i].Value, i);
         }
         return Span.Length > 0 ? Span.Slice(FieldSpans[i].Value.Start, FieldSpans[i].Value.Length) : throw new InvalidOperationException();
     }

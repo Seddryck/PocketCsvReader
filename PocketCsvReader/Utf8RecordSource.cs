@@ -17,12 +17,20 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
     private bool _disposed;
     private readonly List<FieldSpan> _fields = new();
     private int _length;
+    private readonly Utf8FieldBuffer _decodedFields = new();
+    private readonly SearchValues<byte> _syntax;
 
     public Utf8RecordSource(Stream stream, CsvProfile profile)
     {
         Profile = profile;
         _stream = stream;
         _parser = FieldParserFactory.Create(profile.Dialect);
+        var dialect = profile.Dialect;
+        var syntax = dialect.LineTerminator.Select(c => (byte)c).ToList();
+        syntax.Add((byte)dialect.Delimiter);
+        foreach (char? c in new[] { dialect.QuoteChar, dialect.EscapeChar, dialect.CommentChar, dialect.SkipInitialSpace ? ' ' : (char?)null })
+            if (c.HasValue) syntax.Add((byte)c.Value);
+        _syntax = SearchValues.Create(syntax.Distinct().ToArray());
         _readSize = profile.ParserOptimizations.BufferSize;
         if (_readSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(profile), "Buffer size must be positive.");
@@ -103,7 +111,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
                         fields.Add(_parser.Result);
                     else if (end != ParserState.Eof)
                         throw new InvalidDataException("Invalid character End-of-File.");
-                    result = new(true, new RecordMemory(_record.AsMemory(0, length), fields.ToArray()),
+                    result = new(true, new RecordMemory(_record.AsMemory(0, length), fields.ToArray(), _decodedFields),
                         end == ParserState.Eof ? RecordState.Eof : RecordState.Record);
                     _parser.Reset(true);
                     _length = 0;
@@ -120,15 +128,22 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
                 continue;
             if (state == ParserState.Error)
                 throw new InvalidDataException($"Invalid byte '{value}' at position {length}.");
-            if (length == _record.Length)
-            {
-                var larger = ArrayPool<byte>.Shared.Rent(checked(length * 2));
-                _record.CopyTo(larger, 0);
-                ArrayPool<byte>.Shared.Return(_record);
-                _record = larger;
-            }
+            EnsureRecordCapacity(length + 1, length);
             _record[length++] = value;
             _position++;
+            if (state == ParserState.Continue && !_syntax.Contains(value))
+            {
+                // The first payload byte establishes or resumes the value state.
+                // Further bytes without CSV syntax cannot change that state.
+                // Scan/copy them in bulk, including opaque multibyte UTF-8 text.
+                var remaining = _input.AsSpan(_position, _available - _position);
+                int run = remaining.IndexOfAny(_syntax);
+                if (run < 0) run = remaining.Length;
+                EnsureRecordCapacity(checked(length + run), length);
+                remaining[..run].CopyTo(_record.AsSpan(length));
+                length += run;
+                _position += run;
+            }
             if (state is ParserState.Field or ParserState.Record or ParserState.Header)
             {
                 fields.Add(_parser.Result);
@@ -137,7 +152,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
             if (state is ParserState.Record or ParserState.Header or ParserState.Comment)
             {
                 result = new(false, state == ParserState.Comment ? RecordMemory.Empty
-                    : new RecordMemory(_record.AsMemory(0, length), fields.ToArray()),
+                    : new RecordMemory(_record.AsMemory(0, length), fields.ToArray(), _decodedFields),
                     state == ParserState.Comment ? RecordState.Comment : RecordState.Record);
                 _parser.Reset(true);
                 _length = 0;
@@ -147,12 +162,22 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>
         }
     }
 
+    private void EnsureRecordCapacity(int capacity, int length)
+    {
+        if (capacity <= _record.Length) return;
+        var larger = ArrayPool<byte>.Shared.Rent(Math.Max(capacity, checked(_record.Length * 2)));
+        _record.AsSpan(0, length).CopyTo(larger);
+        ArrayPool<byte>.Shared.Return(_record);
+        _record = larger;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         ArrayPool<byte>.Shared.Return(_input);
         ArrayPool<byte>.Shared.Return(_record);
+        _decodedFields.Dispose();
         _stream.Dispose();
     }
 }

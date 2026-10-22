@@ -167,7 +167,14 @@ public abstract string GetRawString(int i);
     protected bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
     public string GetString(int i)
-        => StringMapper.Map(GetValueOrThrow(i))!;
+        => _record?.IsUtf8 == true && TryGetDirectString(i, out var value)
+            ? value : StringMapper.Map(GetValueOrThrow(i))!;
+
+    private protected virtual bool TryGetDirectString(int i, out string value)
+    {
+        value = null!;
+        return false;
+    }
 
     protected virtual IFormatDescriptor GetFormat(int i)
     {
