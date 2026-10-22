@@ -12,14 +12,17 @@ internal static class DataReaderMaterializer
             return table;
 
         var fieldCount = reader.FieldCount;
+        var hasRowNumber = reader is CsvDataReader { HasRowNumber: true }
+            or CsvBatchDataReader { HasRowNumber: true };
         for (var index = 0; index < fieldCount; index++)
-            table.Columns.Add(reader.GetName(index));
+            table.Columns.Add(reader.GetName(index), hasRowNumber && index == 0 ? typeof(int) : typeof(string));
 
         do
         {
             var row = table.NewRow();
             for (var index = 0; index < fieldCount; index++)
-                row[index] = reader.IsDBNull(index) ? DBNull.Value : reader.GetString(index);
+                row[index] = reader.IsDBNull(index) ? DBNull.Value
+                    : hasRowNumber && index == 0 ? reader.GetValue(index) : reader.GetString(index);
             table.Rows.Add(row);
         } while (reader.Read());
 

@@ -40,6 +40,39 @@ The `CsvReaderBuilder` allows you to specify a `DialectDescriptor` using the `Wi
    var csvReader = csvReaderBuilder.Build();
    ```
 
+## Generated row-number column
+
+Row numbering is disabled by default. Enable it with `WithRowNumber()` to prepend
+an `int` column named `rowNumber`, or supply another name:
+
+```csharp
+var reader = new CsvReaderBuilder().WithRowNumber().Build();
+var custom = new CsvReaderBuilder().WithRowNumber("recordId").Build();
+var disabled = new CsvReaderBuilder().WithoutRowNumber().Build();
+```
+
+The last builder call wins. For direct profile configuration, set
+`profile.RowNumber = new RowNumberOptions()` or `new RowNumberOptions("recordId")`;
+set it to `null` to disable the feature. Configure the profile before creating a reader.
+Null, empty, and whitespace column names are rejected.
+
+The generated column appears at index zero in data readers, `DbDataReader` adapters,
+data tables, dictionaries, object arrays, string arrays, and synchronous/asynchronous
+object mapping. Constructor-based object mapping requires an extra first parameter
+for the number; custom span mappers receive it as their first field. Data tables and
+parsed outputs expose an integer; string arrays expose its decimal string.
+
+Numbering starts at one for each reader, continues across all files within a batch,
+and counts only returned data records. Headers, comments, and skipped records do not
+consume numbers, and multiline records receive one number. Source schema indexes
+continue to refer to the original source columns. Source position metadata remains
+relative to the input file. Numbering throws on `Int32` overflow.
+
+A generated-column name that exactly matches a source column name (using ordinal,
+case-sensitive comparison, as in reader name lookups) raises `InvalidDataException`
+asking the caller to choose another name. General duplicate source-header behavior
+is unchanged.
+
 ## Class `DialectDescriptorBuilder`
 
 The `DialectDescriptorBuilder` class allows you to configure a CSV dialect descriptor that defines the structure and rules for parsing CSV files.

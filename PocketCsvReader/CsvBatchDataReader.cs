@@ -14,6 +14,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private bool _isClosed = false;
     private int fileCount = 0;
     private int _readInProgress;
+    internal bool HasRowNumber => Profile.RowNumber is not null;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
         : this(streams.Select<Stream, Func<Stream>>(x => () => x), profile)
@@ -30,7 +31,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private void MoveNext()
     {
         fileCount++;
-        var fields = Current?.Fields;
+        var fields = Current?.SourceHeaders;
+        var rowNumber = Current?.CurrentRowNumber ?? 0;
 
         Current?.Dispose();
         _currentStream?.Dispose();
@@ -38,7 +40,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (Streams.MoveNext())
         {
             _currentStream = Streams.Current.Invoke();
-            Current = new CsvDataReader(_currentStream, Profile);
+            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber };
         }
         else
         {
@@ -98,7 +100,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private async ValueTask MoveNextAsync()
     {
         fileCount++;
-        var fields = Current?.Fields;
+        var fields = Current?.SourceHeaders;
+        var rowNumber = Current?.CurrentRowNumber ?? 0;
 
         if (Current is not null)
             await Current.DisposeAsync().ConfigureAwait(false);
@@ -108,7 +111,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (Streams.MoveNext())
         {
             _currentStream = Streams.Current.Invoke();
-            Current = new CsvDataReader(_currentStream, Profile);
+            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber };
         }
         else
         {

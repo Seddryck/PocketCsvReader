@@ -89,7 +89,9 @@ public abstract class BaseRawRecord<P> where P : IProfile
         return typeof(object);
     }
 
-    protected FieldDescriptor GetFieldDescriptor(int i)
+    protected virtual int GetSchemaOrdinal(int i) => i;
+
+    protected virtual FieldDescriptor GetFieldDescriptor(int i)
     {
         if (Profile.Schema is null)
             throw new InvalidOperationException("Schema is not defined.");
@@ -107,6 +109,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
 
         if (Profile.Schema.IsMatchingByIndex)
         {
+            i = GetSchemaOrdinal(i);
             if (i < Profile.Schema.Fields.Length)
                 return Profile.Schema.Fields[i];
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
@@ -115,7 +118,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
         throw new NotImplementedException("Schema matching is not defined.");
     }
 
-    protected bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
+    protected virtual bool TryGetFieldDescriptor(int i, [NotNullWhen(true)] out FieldDescriptor? field)
     {
         if (Profile.Schema is null)
         {
@@ -132,6 +135,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
 
         if (Profile.Schema.IsMatchingByIndex)
         {
+            i = GetSchemaOrdinal(i);
             field = i < Profile.Schema.Fields.Length
                         ? Profile.Schema.Fields[i] : null;
             return field is not null;

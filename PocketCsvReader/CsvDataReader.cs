@@ -8,6 +8,12 @@ using PocketCsvReader.FieldParsing;
 namespace PocketCsvReader;
 public class CsvDataReader : BaseDataReader<CsvProfile>
 {
+    private readonly RowNumberOptions? _rowNumberOptions;
+    private readonly RowNumberRecord? _rowNumberRecord;
+    private static readonly FieldDescriptor RowNumberField = new(typeof(int), DataSourceTypeName: "integer");
+    internal bool HasRowNumber => _rowNumberOptions is not null;
+    internal int CurrentRowNumber { get; set; }
+
     protected new RecordParser RecordParser => (RecordParser)base.RecordParser!;
 
     public CsvDataReader(Stream stream, CsvProfile profile)
@@ -16,7 +22,30 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
 
     internal CsvDataReader(Stream stream, CsvProfile profile, bool leaveOpen)
         : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString), leaveOpen)
-    { }
+    {
+        _rowNumberOptions = profile.RowNumber;
+        if (_rowNumberOptions is not null)
+            _rowNumberRecord = new RowNumberRecord();
+    }
+
+    protected override int GetSchemaOrdinal(int i) => HasRowNumber ? i - 1 : i;
+
+    protected override FieldDescriptor GetFieldDescriptor(int i)
+        => HasRowNumber && i == 0 ? RowNumberField : base.GetFieldDescriptor(i);
+
+    protected override bool TryGetFieldDescriptor(int i,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out FieldDescriptor? field)
+    {
+        if (HasRowNumber && i == 0)
+        {
+            field = RowNumberField;
+            return true;
+        }
+        return base.TryGetFieldDescriptor(i, out field);
+    }
+
+    public override object GetValue(int i)
+        => HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
 
     internal T MapCurrent<T>(SpanMapper<T> mapper)
     {
@@ -77,6 +106,11 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     private protected override bool TryGetDirectValue<T>(int i, out T value)
     {
         value = default!;
+        if (HasRowNumber && i == 0 && typeof(T) == typeof(int))
+        {
+            value = (T)(object)CurrentRowNumber;
+            return true;
+        }
         // Custom parsers, formats, and sanitizers retain their existing char path.
         if (Profile.Schema is not null || Profile.Parsers is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
@@ -105,6 +139,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the field index is outside the range of available and expected fields.</exception>
     protected override NullableSpan GetValueOrThrow(int i)
     {
+        if (HasRowNumber && i == 0)
+            return new NullableSpan(Record!.Slice(0).Span);
         if (i < Record!.ParsedFields.Length)
         {
             var sanitizer = GetSanitizer(i, Profile.ParserOptimizations);
@@ -156,7 +192,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.ParsedFields!.Length)], "field_");
 
         Record = rawRecord.AsMemory();
-        HandleUnexpectedFields(Fields!.Length);
+        CompleteRecord();
         return true;
     }
 
@@ -188,7 +224,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.ParsedFields!.Length)], "field_");
 
         Record = result.Record;
-        HandleUnexpectedFields(Fields!.Length);
+        CompleteRecord();
         return true;
     }
 
@@ -210,13 +246,35 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             }
         }
         int unnamedFieldIndex = 0;
-        Fields = (Profile.Dialect.Header
+        var fields = (Profile.Dialect.Header
                 ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
                 : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
+        SetHeaders(fields);
     }
 
     internal void SetHeaders(string[] headers)
-        => Fields = headers;
+    {
+        if (_rowNumberOptions is null)
+        {
+            Fields = headers;
+            return;
+        }
+        if (headers.Contains(_rowNumberOptions.ColumnName, StringComparer.Ordinal))
+            throw new InvalidDataException($"The generated row-number column '{_rowNumberOptions.ColumnName}' conflicts with a source column. Choose another name using WithRowNumber(columnName) or RowNumberOptions.");
+        Fields = [_rowNumberOptions.ColumnName, .. headers];
+    }
+
+    internal string[]? SourceHeaders => HasRowNumber ? Fields?[1..] : Fields;
+
+    private void CompleteRecord()
+    {
+        HandleUnexpectedFields(Fields!.Length - (HasRowNumber ? 1 : 0));
+        if (_rowNumberRecord is not null)
+        {
+            CurrentRowNumber = checked(CurrentRowNumber + 1);
+            Record = _rowNumberRecord.Prepend(Record!, CurrentRowNumber, Profile.Dialect.Delimiter);
+        }
+    }
 
     /// <summary>
     /// Throws an exception if the current record contains more fields than the expected count.

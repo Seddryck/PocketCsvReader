@@ -167,7 +167,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     protected virtual object GetMissingField()
         => string.Empty;
 
-    public object GetValue(int i)
+    public virtual object GetValue(int i)
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
