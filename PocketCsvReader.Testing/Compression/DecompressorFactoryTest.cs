@@ -19,6 +19,8 @@ public class DecompressorFactoryTest
         Assert.That(keys, Does.Contain("zz"));
         Assert.That(keys, Does.Contain("deflate"));
         Assert.That(keys, Does.Contain("zip"));
+        Assert.That(keys, Does.Contain("brotli"));
+        Assert.That(keys, Does.Contain("br"));
     }
 
     [Test]
@@ -78,10 +80,11 @@ public class DecompressorFactoryTest
     {
         var factory = DecompressorFactory.Buffered();
         var compressions = factory.GetSupportedCompressions();
-        Assert.That(compressions, Has.Length.EqualTo(3));
+        Assert.That(compressions, Has.Length.EqualTo(4));
         Assert.That(compressions, Does.Contain("gz"));
         Assert.That(compressions, Does.Contain("deflate"));
         Assert.That(compressions, Does.Contain("zip"));
+        Assert.That(compressions, Does.Contain("brotli"));
     }
 
     [Test]

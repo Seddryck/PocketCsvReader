@@ -11,5 +11,6 @@ public enum CompressionFormat
     None = 0,
     Gzip = 1,
     Deflate = 2,
-    Zip = 3
+    Zip = 3,
+    Brotli = 4
 }

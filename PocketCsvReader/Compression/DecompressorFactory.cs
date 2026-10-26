@@ -66,6 +66,8 @@ public class DecompressorFactory
                 factory.AddAlias("gz", "gzip");
                 factory.AddOrReplace("deflate", DeflateDecompressor.Streaming());
                 factory.AddAlias("deflate", "zz", "def");
+                factory.AddOrReplace("brotli", BrotliDecompressor.Streaming());
+                factory.AddAlias("brotli", "br");
                 factory.AddOrReplace("zip", ZipDecompressor.Streaming());
                 factory.AddAlias("zip", "zipfile");
             });
@@ -76,6 +78,8 @@ public class DecompressorFactory
                 factory.AddAlias("gz", "gzip");
                 factory.AddOrReplace("deflate", DeflateDecompressor.Buffered());
                 factory.AddAlias("deflate", "zz", "def");
+                factory.AddOrReplace("brotli", BrotliDecompressor.Buffered());
+                factory.AddAlias("brotli", "br");
                 factory.AddOrReplace("zip", ZipDecompressor.Buffered());
                 factory.AddAlias("zip", "zipfile");
             });
