@@ -120,6 +120,35 @@ The delegate is called synchronously without an intermediate string. Nullable/re
 - `GetArray(int)` returns a field as an array of `object`.
 - `GetArrayItem<T>(int fieldIndex, int itemIndex)` retrieves a single array element. Out-of-bound access in arrays raises `ArgumentOutOfRangeException`.
 
+Declare a one-dimensional CLR array type in the schema to have `GetValue()` (and
+the indexers or `GetValues()`) return a typed array automatically:
+
+```csharp
+var reader = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n")
+        .WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']')))
+    .WithSchema(s => s.Named().WithField<int[]>("Scores").WithField<string[]>("Tags"))
+    .Build();
+using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(
+    "Scores,Tags\n[10|20|30],[a|b]\n"));
+using var data = reader.ToDataReader(stream);
+while (data.Read())
+{
+    int[] scores = (int[])data.GetValue(0);
+    string[] tags = (string[])data.GetValue(1);
+}
+```
+
+Indexed schemas also accept `WithField<int[]>()` or `WithField(typeof(int[]))`.
+`GetFieldType()` reports the declared array type. `GetValue()` calls the existing
+`GetArray<T>()` path, including runtime element parsers, decoded elements, null
+elements, and conversion errors. Empty, null, and missing fields follow that
+path's existing behavior; declaring an array does not turn a scalar field into
+an array. Explicit `GetArray<T>()` reads still work without a schema. Enumerable
+types are not array declarations; multidimensional arrays are unsupported.
+Explicit field or runtime parsers for the entire array take precedence. For
+example, a `byte[]` field with a Base64 parser continues to decode the whole field.
+
 ### Checking for Nulls
 
 Most accessors return non-nullable types and expect a valid value. Use `IsDBNull(int)` to check if a field is null before reading.
