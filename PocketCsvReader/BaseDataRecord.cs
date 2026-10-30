@@ -17,6 +17,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     private SpanParser Parser { get; } = new();
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<P>, int, object>> ArrayReaders = new();
     private Dictionary<int, ISanitizer>? _sanitizers;
     private SanitizerFactory? _sanitizerFactory;
 
@@ -171,6 +172,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
+        if (TryGetFieldDescriptor(i, out var field) && field.RuntimeType.IsArray)
+            return ArrayReaders.GetOrAdd(field.RuntimeType, CreateArrayReader)(this, i);
         if (i >= CurrentFieldSpans!.Length)
             return GetMissingField();
 
@@ -194,6 +197,19 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     protected virtual object GetNullValue(int i)
         => throw new InvalidCastException($"Field index '{i}' is null.");
+
+    private static Func<BaseDataRecord<P>, int, object> CreateArrayReader(Type arrayType)
+    {
+        if (!arrayType.IsSZArray)
+            throw new NotSupportedException("Schema arrays must be one-dimensional, zero-based arrays.");
+
+        // Close and bind once per element type, then use the same typed path as explicit reads.
+        return typeof(BaseDataRecord<P>).GetMethod(nameof(ReadArray), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(arrayType.GetElementType()!)
+            .CreateDelegate<Func<BaseDataRecord<P>, int, object>>();
+    }
+
+    private static object ReadArray<T>(BaseDataRecord<P> record, int i) => record.GetArray<T>(i);
 
     private ParseSpan<object>? ResolveValueParser(int i)
     {
