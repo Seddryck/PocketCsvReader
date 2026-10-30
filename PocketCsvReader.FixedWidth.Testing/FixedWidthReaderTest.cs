@@ -8,6 +8,25 @@ namespace PocketCsvReader.FixedWidth.Testing;
 public class FixedWidthReaderTest
 {
     [Test]
+    public void ToDynamic_ExposesNamedTypedRecords()
+    {
+        using var stream = Text("001Ada\n002Bob\n");
+        var rows = new FixedWidthReaderBuilder()
+            .WithLineTerminator("\n")
+            .WithField("Id", 0, 3, FixedWidthPadding.Left, '0')
+            .WithField("Name", 3, 3, FixedWidthPadding.None)
+            .WithSchema(schema => schema.Indexed().WithField<int>().WithField<string>())
+            .Build().ToDynamic(stream).ToArray();
+
+        dynamic first = rows[0];
+        dynamic second = rows[1];
+        Assert.That((object)first.Id, Is.TypeOf<int>().And.EqualTo(1));
+        Assert.That((object)first.Name, Is.EqualTo("Ada"));
+        Assert.That((object)second.Name, Is.EqualTo("Bob"));
+        Assert.That(stream.CanRead, Is.False);
+    }
+
+    [Test]
     public async Task ToDbDataReader_ExposesFixedWidthRecords()
     {
         await using var reader = new FixedWidthReaderBuilder()
