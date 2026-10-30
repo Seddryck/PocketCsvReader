@@ -146,6 +146,8 @@ elements, and conversion errors. Empty, null, and missing fields follow that
 path's existing behavior; declaring an array does not turn a scalar field into
 an array. Explicit `GetArray<T>()` reads still work without a schema. Enumerable
 types are not array declarations; multidimensional arrays are unsupported.
+Explicit field or runtime parsers for the entire array take precedence. For
+example, a `byte[]` field with a Base64 parser continues to decode the whole field.
 
 ### Checking for Nulls
 

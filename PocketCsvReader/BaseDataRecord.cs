@@ -172,7 +172,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (TryGetFieldDescriptor(i, out var field) && field.RuntimeType.IsArray)
+        if (TryGetFieldDescriptor(i, out var field) && field.RuntimeType.IsArray
+            && !HasCustomParser(field) && !Parser.TryGetParser(field.RuntimeType, out _))
             return ArrayReaders.GetOrAdd(field.RuntimeType, CreateArrayReader)(this, i);
         if (i >= CurrentFieldSpans!.Length)
             return GetMissingField();
@@ -203,13 +204,14 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         if (!arrayType.IsSZArray)
             throw new NotSupportedException("Schema arrays must be one-dimensional, zero-based arrays.");
 
-        // Close and bind once per element type, then use the same typed path as explicit reads.
-        return typeof(BaseDataRecord<P>).GetMethod(nameof(ReadArray), BindingFlags.NonPublic | BindingFlags.Static)!
-            .MakeGenericMethod(arrayType.GetElementType()!)
-            .CreateDelegate<Func<BaseDataRecord<P>, int, object>>();
+        // Close and bind the public typed path once per element type.
+        Expression<Func<BaseDataRecord<P>, int, object>> template = (record, index) => record.GetArray<object>(index);
+        var call = (MethodCallExpression)template.Body;
+        var elementType = arrayType.GetElementType() ?? throw new ArgumentException("An array element type is required.", nameof(arrayType));
+        var method = call.Method.GetGenericMethodDefinition().MakeGenericMethod(elementType);
+        return Expression.Lambda<Func<BaseDataRecord<P>, int, object>>(
+            Expression.Call(template.Parameters[0], method, template.Parameters[1]), template.Parameters).Compile();
     }
-
-    private static object ReadArray<T>(BaseDataRecord<P> record, int i) => record.GetArray<T>(i);
 
     private ParseSpan<object>? ResolveValueParser(int i)
     {

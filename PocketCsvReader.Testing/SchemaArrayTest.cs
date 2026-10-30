@@ -71,6 +71,30 @@ public class SchemaArrayTest
         Assert.That(reader.GetValue(0), Is.EqualTo(reader.GetArray<int?>(0)));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void GetValue_ExplicitFieldArrayParserTakesPrecedence(bool spanParser)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed().WithField<byte[]>(field => spanParser
+            ? field.WithParser((ReadOnlySpan<char> text) => Convert.FromBase64String(text.ToString()))
+            : field.WithParser(Convert.FromBase64String)).Build();
+        using var reader = Reader("AQI=\nAwQ=", schema);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetValue(0), Is.TypeOf<byte[]>().And.EqualTo(new byte[] { 1, 2 }));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetValue(0), Is.EqualTo(new byte[] { 3, 4 }));
+    }
+
+    [Test]
+    public void GetValue_ExplicitRuntimeArrayParserTakesPrecedence()
+    {
+        var parsers = new RuntimeParsersDescriptor();
+        parsers.AddParser<byte[]>(Convert.FromBase64String);
+        using var reader = Reader("AQI=", new SchemaDescriptorBuilder().Indexed().WithField<byte[]>().Build(), parsers);
+        reader.Read();
+        Assert.That(reader.GetValue(0), Is.TypeOf<byte[]>().And.EqualTo(new byte[] { 1, 2 }));
+    }
+
     [Test]
     public void GetValue_CustomArraySyntaxAndEscapingMatchesTypedRead()
     {
