@@ -1,45 +1,10 @@
 [
   {
-    "Path": "PocketCsvReader.FixedWidth/FixedWidthDataReader.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(rawRecord.Span,rawRecord.FieldSpans)",
-    "Count": 1,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
-  },
-  {
     "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
     "Rule": "PA002",
-    "Code": "newRecordMemory(finalRecord.AsSpan(),_fieldSpans)",
+    "Code": "newRecordMemory(memory,_fieldSpans)",
     "Count": 1,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(value.AsSpan(),_fieldSpans)",
-    "Count": 1,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
-    "Rule": "PA002",
-    "Code": "newRecordSpan(finalRecord.AsSpan(),_fieldSpans)",
-    "Count": 1,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
-    "Rule": "PA002",
-    "Code": "newRecordSpan(value.AsSpan(),_fieldSpans)",
-    "Count": 1,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
-    "Rule": "PA004",
-    "Code": "_record.ToString()",
-    "Count": 4,
-    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+    "Reason": "Reviewed async result wrapper: memory is ReadOnlyMemory<char> borrowing the parser input buffer or bounded pooled spill array, and _fieldSpans is reused. The internal constructor copies neither characters nor metadata. Both remain valid until the next read or disposal; RecordReadResult requires the RecordMemory wrapper. Ownership/reuse and warmed raw-read allocation tests cover this path."
   },
   {
     "Path": "PocketCsvReader.Json/JsonRecordParser.cs",

@@ -76,7 +76,7 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
             return false;
         }
 
-        Record = new RecordMemory(rawRecord.Span, rawRecord.FieldSpans);
+        Record = rawRecord.AsMemory();
         RowCount++;
         return true;
     }
