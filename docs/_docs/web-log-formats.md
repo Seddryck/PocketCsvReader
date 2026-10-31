@@ -1,10 +1,10 @@
 ---
 title: Web log formats
-subtitle: Read Common Log Format and W3C Extended Log Format files
+subtitle: Read Common, Combined, and W3C Extended Log Format files
 tags: [usage]
 ---
 
-Install the `PocketCsvReader.WebLogs` extension to parse Common Log Format (CLF) and W3C Extended Log Format files.
+Install the `PocketCsvReader.WebLogs` extension to parse Common Log Format (CLF), Combined Log Format, and W3C Extended Log Format files.
 
 ## Common Log Format
 
@@ -44,6 +44,25 @@ Timestamps are parsed using the CLF pattern `dd/MMM/yyyy:HH:mm:ss zzz` and invar
 
 Both filename and `Stream` overloads return `IEnumerable<CommonLog>`. Records are parsed as enumeration advances; the reader disposes its input when enumeration completes, fails, or the enumerator is disposed early. As with `To<T>()`, the filename overload opens the file when called, so enumerate the result and dispose the enumerator (for example, with `foreach`). The existing `To<T>()` remains available for custom models and mappers.
 
+## Combined Log Format
+
+Select `CombinedLogReader` for the nine-field Combined format: the seven CLF fields followed by quoted `Referrer` and `UserAgent` fields. `CommonLogReader` continues to require exactly seven fields.
+
+```csharp
+using PocketCsvReader.WebLogs;
+
+using var reader = new CombinedLogReader().ToDataReader("access.log");
+while (reader.Read())
+    Console.WriteLine(reader.GetString(reader.GetOrdinal("UserAgent")));
+
+foreach (CombinedLog entry in new CombinedLogReader().ToCombinedLog("access.log"))
+    Console.WriteLine($"{entry.Timestamp}: {entry.Referrer} ({entry.UserAgent})");
+```
+
+`CombinedLog` exposes the same nullable properties and invariant conversions as `CommonLog`, plus nullable string `Referrer` and `UserAgent` properties. `ToCombinedLog(string filename)` and `ToCombinedLog(Stream stream)` return `IEnumerable<CombinedLog>` with the same streaming and disposal behavior as `ToCommonLog()`, including disposal on completion, conversion failure, or early exit. Timestamp offsets are preserved, and invalid typed values throw `FormatException` or `OverflowException` during enumeration.
+
+Requests, referrers, and user agents retain spaces and backslash-escaped quote syntax, as in the CLF reader. Use `"-"` for missing quoted fields. Typed `CombinedLog` output converts these to null; generic and tabular outputs preserve quoted hyphens, matching existing CLF behavior. Unquoted hyphens become null. Malformed records throw `InvalidDataException` with the format name and physical line number.
+
 ## W3C Extended Log Format
 
 `W3cExtendedLogReader` discovers column names from the required `#Fields:` directive and retains directives such as `#Software`, `#Version`, and `#Date` as metadata.
@@ -66,7 +85,7 @@ Data records must have the number of fields declared by `#Fields:`. Repeated ide
 
 ## Fluent configuration
 
-Use `CommonLogReaderBuilder` or `W3cExtendedLogReaderBuilder` when you need the shared PocketCsvReader schema, resource, parser, or optimization settings.
+Use `CommonLogReaderBuilder`, `CombinedLogReaderBuilder`, or `W3cExtendedLogReaderBuilder` when you need the shared PocketCsvReader schema, resource, parser, or optimization settings. A custom `WebLogProfile` passed to `CombinedLogReader` must select `WebLogFormat.Combined`.
 
 ```csharp
 using PocketCsvReader.WebLogs.Configuration;
@@ -76,7 +95,7 @@ var reader = new W3cExtendedLogReaderBuilder()
     .Build();
 ```
 
-Both readers support `ToDataReader`, `ToDataTable`, `ToArrayString`, and `To<T>`.
+All three readers support `ToDataReader`, `ToDataTable`, `ToArrayString`, and `To<T>`.
 
 ## Streaming storage
 

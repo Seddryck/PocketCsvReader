@@ -11,7 +11,7 @@ public class WebLogBufferingTests
 
     [Test, Combinatorial]
     public async Task RecordsAcrossBuffers_PreserveValuesAndEof(
-        [Values] WebLogFormat format,
+        [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format,
         [Values(1, 7, 64, 4096)] int bufferSize,
         [Values("\n", "\r\n", "\r")] string newline,
         [Values] bool asynchronous)
@@ -104,7 +104,7 @@ public class WebLogBufferingTests
 
     [Test, Combinatorial]
     public async Task AsyncOnlyForwardStream_UsesAsyncIoAndStreamsBeforeEof(
-        [Values] WebLogFormat format, [Values] bool trackPosition)
+        [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool trackPosition)
     {
         var input = Prefix(format, "\r\n") + string.Concat(Enumerable.Repeat(Line(format, "/path") + "\r\n", 10000));
         var stream = new ForwardStream(input, asyncOnly: true);
@@ -136,7 +136,7 @@ public class WebLogBufferingTests
 
     [Test, Combinatorial]
     public async Task Positions_SkipDirectivesAndBlankLinesAndIncludeTerminators(
-        [Values] WebLogFormat format, [Values] bool asynchronous)
+        [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool asynchronous)
     {
         var prefix = " \r\n" + Prefix(format, "\r\n");
         var first = Line(format, "/first") + "\r\n";
@@ -160,7 +160,7 @@ public class WebLogBufferingTests
 
     [Test, Combinatorial]
     public async Task EmptyOrBlankInput_HasNoRecords(
-        [Values] WebLogFormat format, [Values("", " \r\n\t\n\r")] string input, [Values] bool asynchronous)
+        [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values("", " \r\n\t\n\r")] string input, [Values] bool asynchronous)
     {
         using var reader = CreateReader(format, 1).ToDataReader(Text(input));
         Assert.That(await Read(reader, asynchronous), Is.False);
@@ -168,7 +168,7 @@ public class WebLogBufferingTests
 
     [Test, Combinatorial]
     public async Task MalformedRecord_PreservesLineNumberAndDiagnostic(
-        [Values] WebLogFormat format, [Values] bool asynchronous)
+        [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool asynchronous)
     {
         var broken = format == WebLogFormat.Common
             ? "127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] \"unfinished"

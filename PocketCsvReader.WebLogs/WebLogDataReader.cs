@@ -15,6 +15,8 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
     {
         if (profile.Format == WebLogFormat.Common)
             Fields = [.. WebLogRecordSource.CommonFields];
+        else if (profile.Format == WebLogFormat.Combined)
+            Fields = [.. WebLogRecordSource.CombinedFields];
     }
 
     protected override IRecordSource<WebLogProfile> CreateRecordSource(StreamReader reader, WebLogProfile profile)
