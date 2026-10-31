@@ -14,6 +14,7 @@ namespace PocketCsvReader;
 /// <remarks>The parser must consume the span during the call and must not retain it.</remarks>
 public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
 internal delegate bool TryParseSpan<T>(ReadOnlySpan<char> span, out T value);
+internal delegate bool ValidateSpan(ReadOnlySpan<char> span);
 internal class SpanParser
 {
     internal class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null, Delegate? tryParse = null, Func<Delegate?>? tryFactory = null)
@@ -22,6 +23,15 @@ internal class SpanParser
         private ParseSpan<object>? _boxed = boxed;
         private Delegate? _tryParse = tryParse;
         private Func<Delegate?>? _tryFactory = tryFactory;
+        private ValidateSpan? _validate;
+
+        internal bool IsValid(ReadOnlySpan<char> span) => (_validate ??= CreateValidator())(span);
+
+        protected virtual ValidateSpan CreateValidator()
+            => typeof(ParserEntry).GetMethod(nameof(Validate), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .MakeGenericMethod(Typed.GetType().GenericTypeArguments[0]).CreateDelegate<ValidateSpan>(this);
+
+        private bool Validate<T>(ReadOnlySpan<char> span) => GetTryParser<T>()(span, out _);
 
         internal TryParseSpan<T> GetTryParser<T>()
         {
@@ -79,6 +89,8 @@ internal class SpanParser
         : ParserEntry(parse, tryParse: tryParse, tryFactory: tryFactory)
     {
         protected override ParseSpan<object> CreateBoxed() => span => ((ParseSpan<T>)Typed)(span)!;
+        protected override ValidateSpan CreateValidator() => Validate;
+        private bool Validate(ReadOnlySpan<char> span) => GetTryParser<T>()(span, out _);
     }
 
     private Dictionary<Type, ParserEntry> TypeParsers { get; } = new();
@@ -87,6 +99,12 @@ internal class SpanParser
     public void ClearFieldParsers() => FieldParsers.Clear();
 
     internal void BindFieldParser(int index, ParserEntry parser) => FieldParsers[index] = parser;
+
+    internal bool TryGetEntry(Type type, [NotNullWhen(true)] out ParserEntry? entry)
+        => TypeParsers.TryGetValue(type, out entry);
+
+    internal bool TryGetEntry(int index, [NotNullWhen(true)] out ParserEntry? entry)
+        => FieldParsers.TryGetValue(index, out entry);
 
     internal static Delegate Adapt(Type type, Configuration.ParseFunction parse)
     {

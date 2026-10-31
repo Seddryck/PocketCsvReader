@@ -47,6 +47,15 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     public override object GetValue(int i)
         => HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
 
+    /// <inheritdoc />
+    public override bool IsValid(int i)
+    {
+        if (!HasRowNumber || i != 0)
+            return base.IsValid(i);
+        EnsureValidationRecord();
+        return true;
+    }
+
     internal T MapCurrent<T>(SpanMapper<T> mapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
