@@ -75,7 +75,7 @@ internal class TypeParserLocator<T> : ITypeParserLocator
         => parameters.Length == expected.Length + 1
             && (parameters[0].ParameterType == typeof(ReadOnlySpan<char>) || parameters[0].ParameterType == typeof(string))
             && parameters.Skip(1).Select((parameter, index) => parameter.ParameterType.IsAssignableFrom(expected[index])
-                || parameter.ParameterType == typeof(ReadOnlySpan<char>) && expected[index] == typeof(string)).All(x => x);
+                || (parameter.ParameterType == typeof(ReadOnlySpan<char>) && expected[index] == typeof(string))).All(x => x);
 
     private MethodInfo FindMethod(Type[] expected)
     {

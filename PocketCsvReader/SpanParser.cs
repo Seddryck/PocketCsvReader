@@ -291,7 +291,7 @@ internal class SpanParser
 
     private static bool IsConversionFailure(Exception exception)
         => exception is FormatException or OverflowException or InvalidCastException
-            || exception is System.Reflection.TargetInvocationException { InnerException: { } inner } && IsConversionFailure(inner);
+            || (exception is System.Reflection.TargetInvocationException { InnerException: { } inner } && IsConversionFailure(inner));
 
     private static readonly Lazy<SpanParser> _defaultParser = new(() => new());
 
