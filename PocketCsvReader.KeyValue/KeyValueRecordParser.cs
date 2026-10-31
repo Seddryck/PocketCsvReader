@@ -5,30 +5,42 @@ namespace PocketCsvReader.KeyValue;
 
 internal static class KeyValueRecordParser
 {
-    public static FieldSpan[] Parse(string record, KeyValueFormat format)
-        => format switch
-        {
-            KeyValueFormat.Ltsv => ParseLtsv(record),
-            KeyValueFormat.Logfmt => ParseLogfmt(record),
-            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
-        };
+    public static FieldSpan[] Parse(ReadOnlySpan<char> record, KeyValueFormat format)
+    {
+        var fields = new List<FieldSpan>();
+        Parse(record, format, fields);
+        return [.. fields];
+    }
 
-    private static FieldSpan[] ParseLtsv(string record)
+    public static void Parse(ReadOnlySpan<char> record, KeyValueFormat format, List<FieldSpan> fields)
+    {
+        fields.Clear();
+        switch (format)
+        {
+            case KeyValueFormat.Ltsv: ParseLtsv(record, fields); break;
+            case KeyValueFormat.Logfmt: ParseLogfmt(record, fields); break;
+            default: throw new ArgumentOutOfRangeException(nameof(format), format, null);
+        }
+    }
+
+    private static void ParseLtsv(ReadOnlySpan<char> record, List<FieldSpan> fields)
     {
         if (record.Length == 0)
-            return [];
+            return;
 
-        var fields = new List<FieldSpan>();
         var fieldStart = 0;
         while (fieldStart <= record.Length)
         {
-            var fieldEnd = record.IndexOf('\t', fieldStart);
+            var fieldEnd = record[fieldStart..].IndexOf('\t');
             if (fieldEnd < 0)
                 fieldEnd = record.Length;
+            else
+                fieldEnd += fieldStart;
 
-            var separator = record.IndexOf(':', fieldStart, fieldEnd - fieldStart);
+            var separator = record.Slice(fieldStart, fieldEnd - fieldStart).IndexOf(':');
             if (separator < 0)
                 throw SyntaxError("An LTSV field must contain ':'", fieldStart);
+            separator += fieldStart;
             if (separator == fieldStart)
                 throw SyntaxError("An LTSV label cannot be empty", fieldStart);
 
@@ -43,18 +55,16 @@ internal static class KeyValueRecordParser
                 break;
             fieldStart = fieldEnd + 1;
         }
-        return [.. fields];
     }
 
-    private static FieldSpan[] ParseLogfmt(string record)
+    private static void ParseLogfmt(ReadOnlySpan<char> record, List<FieldSpan> fields)
     {
-        var fields = new List<FieldSpan>();
         var position = 0;
         while (true)
         {
             SkipWhitespace(record, ref position);
             if (position == record.Length)
-                return [.. fields];
+                return;
 
             var labelStart = position;
             while (position < record.Length && IsIdentifierChar(record[position]))
@@ -97,7 +107,7 @@ internal static class KeyValueRecordParser
         }
     }
 
-    private static FieldSpan ParseQuotedLogfmtValue(string record, SpanInfo label, ref int position)
+    private static FieldSpan ParseQuotedLogfmtValue(ReadOnlySpan<char> record, SpanInfo label, ref int position)
     {
         var quoteStart = position++;
         var valueStart = position;
@@ -126,7 +136,7 @@ internal static class KeyValueRecordParser
                 {
                     try
                     {
-                        decoded = JsonSerializer.Deserialize<string>(record.Substring(quoteStart, position - quoteStart));
+                        decoded = JsonSerializer.Deserialize<string>(record.Slice(quoteStart, position - quoteStart));
                     }
                     catch (JsonException exception)
                     {
@@ -154,13 +164,13 @@ internal static class KeyValueRecordParser
     private static bool IsWhitespace(char value)
         => value <= ' ';
 
-    private static void SkipWhitespace(string record, ref int position)
+    private static void SkipWhitespace(ReadOnlySpan<char> record, ref int position)
     {
         while (position < record.Length && IsWhitespace(record[position]))
             position++;
     }
 
-    private static void ValidateLtsvLabel(string record, int start, int length)
+    private static void ValidateLtsvLabel(ReadOnlySpan<char> record, int start, int length)
     {
         for (var index = start; index < start + length; index++)
         {
@@ -175,7 +185,7 @@ internal static class KeyValueRecordParser
         }
     }
 
-    private static void ValidateLtsvValue(string record, int start, int length)
+    private static void ValidateLtsvValue(ReadOnlySpan<char> record, int start, int length)
     {
         for (var index = start; index < start + length; index++)
         {

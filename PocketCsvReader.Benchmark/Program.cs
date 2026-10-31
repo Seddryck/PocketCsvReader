@@ -12,6 +12,11 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        if (args is ["--keyvalue-buffering-matrix"])
+        {
+            KeyValueBuffering.RunMatrix();
+            return;
+        }
         if (args is ["--position-tracking-matrix"])
         {
             PositionTracking.RunMatrix();

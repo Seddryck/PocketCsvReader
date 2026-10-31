@@ -4,41 +4,68 @@ namespace PocketCsvReader.KeyValue;
 
 internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPositionSource
 {
-    private readonly PositionedLineReader _reader;
-    PositionTracker? IPositionSource.Tracker => _reader.Tracker;
-    public RecordPosition? CurrentPosition => _reader.Tracker?.CurrentPosition;
+    private readonly BufferedRecordReader _reader;
+    private readonly PositionTracker? _position;
+    private readonly List<FieldSpan> _scratchFields = [];
+    // Borrowed character and metadata storage is valid until the next read.
+    private FieldSpan[] _fields = [];
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
 
     public KeyValueProfile Profile { get; }
 
     public KeyValueRecordSource(StreamReader reader, KeyValueProfile profile)
-        => (_reader, Profile) = (new PositionedLineReader(reader, profile.ParserOptimizations.BufferSize, profile.TrackPosition), profile);
+    {
+        Profile = profile;
+        if (profile.TrackPosition) _position = new();
+        _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
+    }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
-        var line = _reader.ReadLine();
-        if (line is null)
+        BeginRead();
+        var line = _reader.ReadLineFrame();
+        if (line is not { } captured)
         {
-            record = new RecordSpan([], []);
+            record = RecordSpan.FromMemory(ReadOnlyMemory<char>.Empty, []);
             recordState = RecordState.Eof;
             return true;
         }
 
-        _reader.Tracker?.CompleteRecord();
-        var fields = KeyValueRecordParser.Parse(line, Profile.Format);
-        record = new RecordSpan(line.AsSpan(), fields);
+        Parse(captured.Memory.Span);
+        record = RecordSpan.FromMemory(captured.Memory, _fields);
         recordState = RecordState.Record;
-        return _reader.Peek() < 0;
+        // Discover EOF on the next read; lookahead could refill and invalidate this view.
+        return false;
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
-        var line = await _reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-        if (line is null)
+        cancellationToken.ThrowIfCancellationRequested();
+        BeginRead();
+        var line = await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false);
+        if (line is not { } captured)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
-        _reader.Tracker?.CompleteRecord();
-        var fields = KeyValueRecordParser.Parse(line, Profile.Format);
-        return new(false, new RecordMemory(line.AsSpan(), fields), RecordState.Record);
+        Parse(captured.Memory.Span);
+        return new(false, new RecordMemory(captured.Memory, _fields), RecordState.Record);
+    }
+
+    private void BeginRead()
+    {
+        _reader.BeginOperation();
+        _position?.BeginRecord();
+    }
+
+    private void Parse(ReadOnlySpan<char> line)
+    {
+        _position?.CompleteRecord();
+        KeyValueRecordParser.Parse(line, Profile.Format, _scratchFields);
+        if (_fields.Length != _scratchFields.Count)
+            _fields = new FieldSpan[_scratchFields.Count];
+        _scratchFields.CopyTo(_fields);
+        // Do not retain decoded strings in both temporary and returned storage.
+        _scratchFields.Clear();
     }
 
     public void Dispose() => _reader.Dispose();
