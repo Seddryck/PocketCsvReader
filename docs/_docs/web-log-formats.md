@@ -24,6 +24,26 @@ while (reader.Read())
 
 The parser recognizes bracketed timestamps and quoted request lines. A hyphen (`-`) is returned as a null value.
 
+### Built-in typed records
+
+Use `ToCommonLog()` to stream `CommonLog` records without defining a custom model:
+
+```csharp
+foreach (var entry in new CommonLogReader().ToCommonLog("access.log"))
+{
+    DateTimeOffset? timestamp = entry.Timestamp;
+    int? status = entry.StatusCode;
+    long? bytes = entry.ResponseBytes;
+    Console.WriteLine($"{timestamp}: {entry.Request} ({status}, {bytes} bytes)");
+}
+```
+
+`CommonLog` exposes `RemoteHost`, `Identity`, `AuthenticatedUser`, and `Request` as nullable strings, `Timestamp` as `DateTimeOffset?`, `StatusCode` as `int?`, and `ResponseBytes` as `long?`. Missing values represented by `-` become null; a missing timestamp uses `[-]` and a missing request uses `"-"` to retain CLF delimiters.
+
+Timestamps are parsed using the CLF pattern `dd/MMM/yyyy:HH:mm:ss zzz` and invariant culture, preserving the original UTC offset (for example, `-0700`). Numbers also use invariant culture. Invalid typed values throw `FormatException`; numbers outside their target type's range throw `OverflowException` during enumeration.
+
+Both filename and `Stream` overloads return `IEnumerable<CommonLog>`. Records are parsed as enumeration advances; the reader disposes its input when enumeration completes, fails, or the enumerator is disposed early. As with `To<T>()`, the filename overload opens the file when called, so enumerate the result and dispose the enumerator (for example, with `foreach`). The existing `To<T>()` remains available for custom models and mappers.
+
 ## W3C Extended Log Format
 
 `W3cExtendedLogReader` discovers column names from the required `#Fields:` directive and retains directives such as `#Software`, `#Version`, and `#Date` as metadata.
