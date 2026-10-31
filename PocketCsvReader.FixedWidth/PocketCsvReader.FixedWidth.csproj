@@ -6,6 +6,7 @@
     <Description>PocketCsvReader.FixedWidth extends PocketCsvReader with single-pass, lazy field parsing for fixed-width text files.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PocketCsvReader.FixedWidth.Testing" />
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
   </ItemGroup>
 </Project>
