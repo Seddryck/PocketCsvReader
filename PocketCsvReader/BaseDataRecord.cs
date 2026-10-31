@@ -225,7 +225,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     private ParseSpan<object>? ResolveFieldParser(int i, FieldDescriptor field)
     {
         if (HasCustomParser(field))
-            return RegisterFieldParser(i, field);
+            return RegisterFieldParser(i, field).Boxed;
         if (!Parser.TryGetParser(field.RuntimeType, out ParseSpan<object>? parse)
             && Nullable.GetUnderlyingType(field.RuntimeType) is { } underlyingType)
             Parser.TryGetParser(underlyingType, out parse);
@@ -235,7 +235,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     private static bool HasCustomParser(FieldDescriptor field)
         => field.SpanParse is not null || field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
-    private ParseSpan<object> RegisterFieldParser(int i, FieldDescriptor field)
+    private SpanParser.ParserEntry RegisterFieldParser(int i, FieldDescriptor field)
     {
         var key = (field, field.RuntimeType);
         if (!_schemaParsers.TryGetValue(key, out var entry))
@@ -246,7 +246,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             else if (field.RuntimeType == typeof(string))
             {
                 ParseSpan<string> parse = span => span.ToString();
-                entry = new(parse, span => parse(span));
+                entry = SpanParser.CreateEntry(parse);
             }
             else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
                 entry = CreateParser(field.RuntimeType, field);
@@ -256,7 +256,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             _schemaParsers.Add(key, entry);
         }
         Parser.BindFieldParser(i, entry);
-        return entry.Boxed;
+        return entry;
     }
 
     private void RegisterFormattedParser(int i, Type type, FieldDescriptor field)
@@ -529,21 +529,6 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
     }
 
-    private static Delegate? LiftTryParser(Type type, Type parseType, Delegate? tryParse)
-    {
-        if (tryParse is null || type == parseType)
-            return tryParse;
-
-        var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
-        var value = Expression.Parameter(type.MakeByRefType(), "value");
-        var parsed = Expression.Variable(parseType, "parsed");
-        var call = Expression.Invoke(Expression.Constant(tryParse), span, parsed);
-        var body = Expression.Block([parsed], Expression.Condition(call,
-            Expression.Block(Expression.Assign(value, Expression.Convert(parsed, type)), Expression.Constant(true)),
-            Expression.Block(Expression.Assign(value, Expression.Default(type)), Expression.Constant(false))));
-        return Expression.Lambda(typeof(TryParseSpan<>).MakeGenericType(type), body, span, value).Compile();
-    }
-
     /// <summary>
     /// Creates cached parsing delegates for the specified type using the field's format descriptor.
     /// </summary>
@@ -563,18 +548,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             ?? throw new InvalidOperationException());
 
         var parameters = GetParameters(field.Format).ToArray();
-        var parse = locator.LocateSpanParser(parameters);
-        if (type == parseType)
-            return SpanParser.CreateEntry(type, parse, locator.LocateTryParser(parameters));
-
-        // Lift the underlying typed span parser to Nullable<T> without boxing or string conversion.
-        var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
-        var invokeFunc = Expression.Invoke(Expression.Constant(parse), spanParam);
-        var castResult = Expression.Convert(invokeFunc, type);
-
-        var delegateType = typeof(ParseSpan<>).MakeGenericType(type);
-        var lambda = Expression.Lambda(delegateType, castResult, spanParam);
-        return SpanParser.CreateEntry(type, lambda.Compile(), LiftTryParser(type, parseType, locator.LocateTryParser(parameters)));
+        return locator.CreateEntry(type, parameters);
 
         static IEnumerable<object> GetParameters(object? format)
         {

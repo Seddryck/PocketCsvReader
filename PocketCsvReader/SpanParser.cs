@@ -16,17 +16,27 @@ public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
 internal delegate bool TryParseSpan<T>(ReadOnlySpan<char> span, out T value);
 internal class SpanParser
 {
-    internal sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null, Delegate? tryParse = null)
+    internal class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null, Delegate? tryParse = null, Func<Delegate?>? tryFactory = null)
     {
         public Delegate Typed { get; } = typed;
         private ParseSpan<object>? _boxed = boxed;
         private Delegate? _tryParse = tryParse;
+        private Func<Delegate?>? _tryFactory = tryFactory;
 
         internal TryParseSpan<T> GetTryParser<T>()
         {
             if (Typed is not ParseSpan<T> parse)
                 throw new InvalidOperationException($"Parser is not a ParseSpan<{typeof(T).Name}>.");
-            return (TryParseSpan<T>)(_tryParse ??= FindTryParser(parse) ?? CreateFallback(parse));
+            if (_tryParse is null)
+            {
+                var resolved = _tryFactory is null ? FindTryParser(parse) : _tryFactory();
+                if (resolved is not null && resolved is not TryParseSpan<T>)
+                    throw new InvalidOperationException($"Validation parser is not a TryParseSpan<{typeof(T).Name}>.");
+                _tryParse = resolved ?? CreateFallback(parse);
+                // The cached delegate (including a Parse-only fallback) replaces the resolution plan.
+                _tryFactory = null;
+            }
+            return (TryParseSpan<T>)_tryParse;
         }
 
         private static TryParseSpan<T>? FindTryParser<T>(ParseSpan<T> parse)
@@ -60,7 +70,15 @@ internal class SpanParser
             };
 
         // Runtime registrations compile the adapter only when object access is first needed.
-        public ParseSpan<object> Boxed => _boxed ??= Typed as ParseSpan<object> ?? BoxParser(Typed);
+        public ParseSpan<object> Boxed => _boxed ??= Typed as ParseSpan<object> ?? CreateBoxed();
+
+        protected virtual ParseSpan<object> CreateBoxed() => BoxParser(Typed);
+    }
+
+    private sealed class TypedParserEntry<T>(ParseSpan<T> parse, TryParseSpan<T>? tryParse)
+        : ParserEntry(parse, tryParse: tryParse)
+    {
+        protected override ParseSpan<object> CreateBoxed() => span => ((ParseSpan<T>)Typed)(span)!;
     }
 
     private Dictionary<Type, ParserEntry> TypeParsers { get; } = new();
@@ -105,7 +123,7 @@ internal class SpanParser
     public void Register<T>(ParseSpan<T> parse, TryParseSpan<T>? tryParse = null)
     {
         ArgumentNullException.ThrowIfNull(parse);
-        TypeParsers[typeof(T)] = new(parse, span => parse(span)!, tryParse);
+        TypeParsers[typeof(T)] = new TypedParserEntry<T>(parse, tryParse);
     }
 
     public void Register(Type type, Delegate dlg, Delegate? tryParse = null)
@@ -121,10 +139,13 @@ internal class SpanParser
         return new(dlg, tryParse: tryParse);
     }
 
+    internal static ParserEntry CreateEntry<T>(ParseSpan<T> parse)
+        => new TypedParserEntry<T>(parse, null);
+
     public void Register<T>(int index, ParseSpan<T> parse, TryParseSpan<T>? tryParse = null)
     {
         ArgumentNullException.ThrowIfNull(parse);
-        FieldParsers[index] = new(parse, span => parse(span)!, tryParse);
+        FieldParsers[index] = new TypedParserEntry<T>(parse, tryParse);
     }
 
     public void Register(int index, Type type, Delegate dlg, Delegate? tryParse = null)

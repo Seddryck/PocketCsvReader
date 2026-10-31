@@ -12,6 +12,7 @@ internal interface ITypeParserLocator
 {
     Delegate LocateSpanParser(object[] parameters);
     Delegate? LocateTryParser(object[] parameters);
+    SpanParser.ParserEntry CreateEntry(Type type, object[] parameters);
 }
 
 internal class TypeParserLocator<T> : ITypeParserLocator
@@ -30,17 +31,27 @@ internal class TypeParserLocator<T> : ITypeParserLocator
     public ParseSpan<T> LocateSpanParser(object[] parameters)
     {
         var method = FindMethod(parameters.Select(x => x.GetType()).ToArray());
+        return CompileParser(method, parameters);
+    }
+
+    private static ParseSpan<T> CompileParser(MethodInfo method, object[] parameters)
+    {
         var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
         return Expression.Lambda<ParseSpan<T>>(Expression.Call(method, BindArguments(method, parameters, span)), span).Compile();
     }
 
     public Delegate? LocateTryParser(object[] parameters)
     {
-        // Keep the selected format/options, preferring a span overload for each operation.
         var parse = FindMethod(parameters.Select(x => x.GetType()).ToArray());
+        return CompileTryParser(parse, parameters);
+    }
+
+    private static Delegate? CompileTryParser(MethodInfo parse, object[] parameters)
+    {
+        // Keep the selected format/options, preferring a span overload for each operation.
         var arguments = parse.GetParameters();
         var expected = parameters.Take(arguments.Length - 1).Select(x => x.GetType()).ToArray();
-        var method = Target.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+        var method = typeof(T).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             .Where(x => x.Name == (parse.Name == "ParseExact" ? "TryParseExact" : "TryParse") && x.ReturnType == typeof(bool))
             .Where(x => x.GetParameters() is var p && p.Length == arguments.Length + 1
                 && p[^1].IsOut && p[^1].ParameterType == typeof(T).MakeByRefType()
@@ -54,6 +65,37 @@ internal class TypeParserLocator<T> : ITypeParserLocator
         var value = Expression.Parameter(typeof(T).MakeByRefType(), "value");
         var call = Expression.Call(method, BindArguments(method, parameters, span, hasOutput: true).Append(value));
         return Expression.Lambda<TryParseSpan<T>>(call, span, value).Compile();
+    }
+
+    public SpanParser.ParserEntry CreateEntry(Type type, object[] parameters)
+    {
+        // Snapshot the arguments and select Parse once; validation reuses this plan on first demand.
+        var snapshot = parameters.ToArray();
+        var method = FindMethod(snapshot.Select(x => x.GetType()).ToArray());
+        var parse = CompileParser(method, snapshot);
+        if (type == typeof(T))
+            return new(parse, tryFactory: () => CompileTryParser(method, snapshot));
+        if (Nullable.GetUnderlyingType(type) != typeof(T))
+            throw new ArgumentException("The requested parser type must match the locator or its nullable type.", nameof(type));
+
+        var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+        var lifted = Expression.Lambda(typeof(ParseSpan<>).MakeGenericType(type),
+            Expression.Convert(Expression.Invoke(Expression.Constant(parse), span), type), span).Compile();
+        return new(lifted, tryFactory: () => LiftTryParser(type, CompileTryParser(method, snapshot)));
+    }
+
+    private static Delegate? LiftTryParser(Type type, Delegate? tryParse)
+    {
+        if (tryParse is null)
+            return null;
+        var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+        var value = Expression.Parameter(type.MakeByRefType(), "value");
+        var parsed = Expression.Variable(typeof(T), "parsed");
+        var call = Expression.Invoke(Expression.Constant(tryParse), span, parsed);
+        var body = Expression.Block([parsed], Expression.Condition(call,
+            Expression.Block(Expression.Assign(value, Expression.Convert(parsed, type)), Expression.Constant(true)),
+            Expression.Block(Expression.Assign(value, Expression.Default(type)), Expression.Constant(false))));
+        return Expression.Lambda(typeof(TryParseSpan<>).MakeGenericType(type), body, span, value).Compile();
     }
 
     private static IEnumerable<Expression> BindArguments(MethodInfo method, object[] parameters, ParameterExpression span, bool hasOutput = false)

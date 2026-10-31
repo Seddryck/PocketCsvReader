@@ -20,6 +20,8 @@ public class ParserResolution
     private byte[] _dateBytes = null!;
     private TryDate _tryDate = null!;
     private TryFieldDate _tryFieldDate = null!;
+    private Func<BaseDataRecord<CsvProfile>, object> _getParser = null!;
+    private MethodInfo _fieldTryMethod = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -53,10 +55,11 @@ public class ParserResolution
             || CustomSpanDate() != new DateTime(2026, 2, 28) || !ValidDateValidation() || InvalidDateValidation())
             throw new InvalidOperationException("Benchmark inputs did not produce the expected results.");
 
-        var fieldParser = typeof(BaseDataRecord<CsvProfile>).GetProperty("Parser", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(_date)!;
-        _tryFieldDate = parserType.GetMethods().Single(m => m.Name == "TryParse" && m.GetParameters().Length == 3)
-            .MakeGenericMethod(typeof(DateTime)).CreateDelegate<TryFieldDate>(fieldParser);
+        _getParser = typeof(BaseDataRecord<CsvProfile>).GetProperty("Parser", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetGetMethod(nonPublic: true)!.CreateDelegate<Func<BaseDataRecord<CsvProfile>, object>>();
+        _fieldTryMethod = parserType.GetMethods().Single(m => m.Name == "TryParse" && m.GetParameters().Length == 3)
+            .MakeGenericMethod(typeof(DateTime));
+        _tryFieldDate = BindFieldValidation(_date);
         if (!ValidFormattedDateValidation() || InvalidFormattedDateValidation())
             throw new InvalidOperationException("Formatted validation produced an unexpected result.");
     }
@@ -89,6 +92,25 @@ public class ParserResolution
         using var reader = Open(_dateBytes, _dateProfile);
         return reader.GetDateTime(0);
     }
+
+    // Cumulative first-use costs per new reader, not just the warmed validation/boxing call.
+    [Benchmark]
+    public bool FirstFormattedDateValidation()
+    {
+        using var reader = Open(_dateBytes, _dateProfile);
+        reader.GetDateTime(0);
+        return BindFieldValidation(reader)(0, "2026-02-28", out _);
+    }
+
+    [Benchmark]
+    public object FirstBoxedFormattedDate()
+    {
+        using var reader = Open(_dateBytes, _dateProfile);
+        return reader.GetValue(0);
+    }
+
+    private TryFieldDate BindFieldValidation(CsvDataReader reader)
+        => _fieldTryMethod.CreateDelegate<TryFieldDate>(_getParser(reader));
 
     [Benchmark]
     public bool ValidDateValidation() => _tryDate("2026-02-28", out _);
