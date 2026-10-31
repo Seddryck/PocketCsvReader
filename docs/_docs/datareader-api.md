@@ -7,6 +7,47 @@ The [`IDataReader` interface](https://learn.microsoft.com/en-us/dotnet/api/syste
 
 This behavior matches the use case for reading delimited files, where you typically want to iterate through rows sequentially.
 
+## Validating cells
+
+PocketCsvReader readers expose `IsValid(int i)` and `IsValid(string name)` on
+the current row. They return whether a cell can be read using the type reported
+by `GetFieldType(i)` and the configured parser, format, culture, and sanitization
+rules. CSV batch readers expose the same overloads. These methods are additions
+to the concrete readers; the standard `IDataReader` and `DbDataReader` interfaces
+do not define them.
+
+```csharp
+// With a DateTime column configured as yyyy-MM-dd:
+while (reader.Read())
+{
+    if (reader.IsValid("date"))
+        Console.WriteLine(reader.GetDateTime(reader.GetOrdinal("date")));
+    else
+        Console.WriteLine($"Invalid date: {reader.GetString(reader.GetOrdinal("date"))}");
+}
+```
+
+`2026-02-28` is valid and `2026-02-31` is invalid for that date format. The latter
+is valid in a string column. Validation reuses cached `TryParse` delegates where
+available; Parse-only custom parsers use a cached fallback for conversion failures.
+It does not advance the reader, cache cell values, initialize boxed parsing
+wrappers, or replace a getter's existing parser binding. A custom parser still
+runs on each validation call and should avoid side effects.
+
+Null and missing cells follow the existing `GetValue` behavior rather than a new
+nullability policy. A sanitized CSV null that `GetValue` rejects is invalid, even
+for a nullable declared type; a JSON null returned as `DBNull.Value` is valid.
+A missing cell whose getter returns a default value is valid. When a getter
+returns unparsed text, including schema-free fields, that text is valid.
+Schema arrays without a whole-array parser validate their elements using cached
+element parsers; null elements retain the array getter's default-value behavior.
+
+Expected conversion failures return `false`. Invalid ordinals or names, calls
+before a successful `Read`/`ReadAsync` or after end-of-file/close/disposal,
+configuration errors, and unexpected parser failures still throw. Getter behavior
+is unchanged: an invalid cell can return `false` from `IsValid` and still throw
+when subsequently retrieved.
+
 ## Obtaining an IDataReader
 
 For delimited files like `file.csv`, the most straightforward way to obtain an `IDataReader` is through the `CsvReader` class, using the `ToDataReader(string filename)` method (or an overload that accepts a stream). Dialect configuration (e.g., delimiters and line terminators), encoding, and compression are provided through a `CsvProfile` object.

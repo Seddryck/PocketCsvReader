@@ -18,6 +18,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<P>, int, object>> ArrayReaders = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<P>, int, bool>> ArrayValidators = new();
     private Dictionary<int, ISanitizer>? _sanitizers;
     private SanitizerFactory? _sanitizerFactory;
 
@@ -168,6 +169,98 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     protected virtual object GetMissingField()
         => string.Empty;
 
+    /// <summary>Checks whether the current cell can be read using its declared schema and parsing rules.</summary>
+    /// <returns>False for conversion failures; true for readable values, including unparsed text.</returns>
+    /// <remarks>
+    /// Reuses cached TryParse delegates without advancing the reader or populating getter bindings.
+    /// Null and missing cells follow GetValue: readable null/default values are valid, rejected nulls are not.
+    /// Usage errors, invalid configuration, and unexpected parser failures propagate.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The ordinal is outside the current record.</exception>
+    /// <exception cref="InvalidOperationException">No current record is available.</exception>
+    public virtual bool IsValid(int i)
+    {
+        EnsureValidationRecord();
+        if (i < 0 || i >= FieldCount)
+            throw new ArgumentOutOfRangeException(nameof(i), i, "Field index is out of range.");
+
+        TryGetFieldDescriptor(i, out var field);
+        if (field is not null && field.RuntimeType.IsArray && !HasCustomParser(field)
+            && !Parser.TryGetEntry(field.RuntimeType, out _))
+            return ArrayValidators.GetOrAdd(field.RuntimeType, CreateArrayValidator)(this, i);
+        return IsValidScalar(i, field);
+    }
+
+    private bool IsValidScalar(int i, FieldDescriptor? field)
+    {
+        if (i >= CurrentFieldSpans!.Length)
+        {
+            _ = GetMissingField();
+            return true;
+        }
+
+        var value = GetValueOrThrow(i);
+        if (!value.HasValue)
+        {
+            try { _ = GetNullValue(i); return true; }
+            catch (InvalidCastException) { return false; }
+        }
+
+        return ResolveValidationEntry(i, field)?.IsValid(value.Value) ?? true;
+    }
+
+    private SpanParser.ParserEntry? ResolveValidationEntry(int i, FieldDescriptor? field)
+    {
+        SpanParser.ParserEntry? entry;
+        if (field is null)
+            Parser.TryGetEntry(i, out entry);
+        else if (HasCustomParser(field))
+            entry = GetSchemaParser(i, field);
+        else if (!Parser.TryGetEntry(field.RuntimeType, out entry)
+            && Nullable.GetUnderlyingType(field.RuntimeType) is { } underlyingType)
+            Parser.TryGetEntry(underlyingType, out entry);
+        return entry;
+    }
+
+    /// <summary>Validates the named current cell using the same rules as <see cref="IsValid(int)"/>.</summary>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The name does not exist in the current record.</exception>
+    /// <exception cref="InvalidOperationException">No current record is available.</exception>
+    public bool IsValid(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        EnsureValidationRecord();
+        return IsValid(GetOrdinal(name));
+    }
+
+    protected virtual void EnsureValidationRecord()
+    {
+        if (CurrentFieldSpans is null)
+            throw new InvalidOperationException("No current record is available.");
+    }
+
+    private static Func<BaseDataRecord<P>, int, bool> CreateArrayValidator(Type arrayType)
+    {
+        if (!arrayType.IsSZArray)
+            throw new NotSupportedException("Schema arrays must be one-dimensional, zero-based arrays.");
+        var method = typeof(BaseDataRecord<P>).GetMethod(nameof(IsValidArray), BindingFlags.Instance | BindingFlags.NonPublic)!
+            .MakeGenericMethod(arrayType.GetElementType()!);
+        return method.CreateDelegate<Func<BaseDataRecord<P>, int, bool>>();
+    }
+
+    private bool IsValidArray<T>(int i)
+    {
+        var field = GetArrayField(i);
+        if (!field.HasValue)
+            return true;
+        if (!Parser.TryGetTryParser<T>(i, out var validate) && !Parser.TryGetTryParser(out validate))
+            throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+        foreach (var child in field.Value.Children!)
+            if (!child.Value.IsNull && !validate(GetFieldSpan(child), out _))
+                return false;
+        return true;
+    }
+
     public virtual object GetValue(int i)
     {
         if (i >= FieldCount)
@@ -237,26 +330,35 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
     private SpanParser.ParserEntry RegisterFieldParser(int i, FieldDescriptor field)
     {
+        var entry = GetSchemaParser(i, field);
+        Parser.BindFieldParser(i, entry);
+        return entry;
+    }
+
+    private SpanParser.ParserEntry GetSchemaParser(int i, FieldDescriptor field)
+    {
         var key = (field, field.RuntimeType);
         if (!_schemaParsers.TryGetValue(key, out var entry))
         {
-            if (field.SpanParse is not null || field.Parse is not null)
-                entry = SpanParser.CreateEntry(field.RuntimeType,
-                    field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
-            else if (field.RuntimeType == typeof(string))
-            {
-                ParseSpan<string> parse = span => span.ToString();
-                entry = SpanParser.CreateEntry(parse);
-            }
-            else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
-                entry = CreateParser(field.RuntimeType, field);
-            else
-                throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
-
+            entry = CreateSchemaParser(i, field);
             _schemaParsers.Add(key, entry);
         }
-        Parser.BindFieldParser(i, entry);
         return entry;
+    }
+
+    private SpanParser.ParserEntry CreateSchemaParser(int i, FieldDescriptor field)
+    {
+        if (field.SpanParse is not null || field.Parse is not null)
+            return SpanParser.CreateEntry(field.RuntimeType,
+                field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
+        if (field.RuntimeType == typeof(string))
+        {
+            ParseSpan<string> parse = span => span.ToString();
+            return SpanParser.CreateEntry(parse);
+        }
+        if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
+            return CreateParser(field.RuntimeType, field);
+        throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
     }
 
     private void RegisterFormattedParser(int i, Type type, FieldDescriptor field)
