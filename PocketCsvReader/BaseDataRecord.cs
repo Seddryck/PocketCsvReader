@@ -188,6 +188,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         if (field is not null && field.RuntimeType.IsArray && !HasCustomParser(field)
             && !Parser.TryGetEntry(field.RuntimeType, out _))
             return ArrayValidators.GetOrAdd(field.RuntimeType, CreateArrayValidator)(this, i);
+        return IsValidScalar(i, field);
+    }
+
+    private bool IsValidScalar(int i, FieldDescriptor? field)
+    {
         if (i >= CurrentFieldSpans!.Length)
         {
             _ = GetMissingField();
@@ -201,6 +206,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             catch (InvalidCastException) { return false; }
         }
 
+        return ResolveValidationEntry(i, field)?.IsValid(value.Value) ?? true;
+    }
+
+    private SpanParser.ParserEntry? ResolveValidationEntry(int i, FieldDescriptor? field)
+    {
         SpanParser.ParserEntry? entry;
         if (field is null)
             Parser.TryGetEntry(i, out entry);
@@ -209,7 +219,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         else if (!Parser.TryGetEntry(field.RuntimeType, out entry)
             && Nullable.GetUnderlyingType(field.RuntimeType) is { } underlyingType)
             Parser.TryGetEntry(underlyingType, out entry);
-        return entry?.IsValid(value.Value) ?? true;
+        return entry;
     }
 
     /// <summary>Validates the named current cell using the same rules as <see cref="IsValid(int)"/>.</summary>
@@ -330,22 +340,25 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         var key = (field, field.RuntimeType);
         if (!_schemaParsers.TryGetValue(key, out var entry))
         {
-            if (field.SpanParse is not null || field.Parse is not null)
-                entry = SpanParser.CreateEntry(field.RuntimeType,
-                    field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
-            else if (field.RuntimeType == typeof(string))
-            {
-                ParseSpan<string> parse = span => span.ToString();
-                entry = SpanParser.CreateEntry(parse);
-            }
-            else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
-                entry = CreateParser(field.RuntimeType, field);
-            else
-                throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
-
+            entry = CreateSchemaParser(i, field);
             _schemaParsers.Add(key, entry);
         }
         return entry;
+    }
+
+    private SpanParser.ParserEntry CreateSchemaParser(int i, FieldDescriptor field)
+    {
+        if (field.SpanParse is not null || field.Parse is not null)
+            return SpanParser.CreateEntry(field.RuntimeType,
+                field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
+        if (field.RuntimeType == typeof(string))
+        {
+            ParseSpan<string> parse = span => span.ToString();
+            return SpanParser.CreateEntry(parse);
+        }
+        if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
+            return CreateParser(field.RuntimeType, field);
+        throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
     }
 
     private void RegisterFormattedParser(int i, Type type, FieldDescriptor field)
