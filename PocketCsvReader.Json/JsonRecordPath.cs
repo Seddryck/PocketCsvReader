@@ -130,11 +130,11 @@ internal sealed class JsonRecordPath(string?[] segments)
         return true;
     }
 
-    public IEnumerable<ReadOnlyMemory<char>> Select(ReadOnlyMemory<char> json, char[] whitespaces, FieldSpan[]? parsedFields = null)
+    public IEnumerable<ReadOnlyMemory<char>> Select(ReadOnlyMemory<char> json, char[] whitespaces, FieldSpan[]? parsedFields = null, bool jsonc = false)
     {
         // Parse once, then enumerate matches lazily. The caller retains the captured frame
         // until enumeration ends; matches are slices rather than a materialized result list.
-        var fields = parsedFields ?? JsonRecordParser.Parse(json.Span, whitespaces);
+        var fields = parsedFields ?? JsonRecordParser.Parse(json.Span, whitespaces, jsonc);
         var start = 0;
         while (start < json.Length && Array.IndexOf(whitespaces, json.Span[start]) >= 0)
             start++;

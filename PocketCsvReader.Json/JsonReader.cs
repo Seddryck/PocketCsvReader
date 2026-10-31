@@ -32,6 +32,7 @@ public class JsonReader : FlatFileReader<JsonProfile, JsonDataReader>
             throw new ArgumentOutOfRangeException(nameof(bufferSize), "The parser buffer size must be positive.");
 
         return new JsonProfile(
+            profile.Jsonc,
             profile.Schema,
             profile.Resource,
             profile.Parsers,

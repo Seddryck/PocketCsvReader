@@ -14,6 +14,8 @@ public class JsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    /// <summary>Accept JSON comments and trailing commas. Strict JSON is the default.</summary>
+    public bool Jsonc { get; }
     public string? RecordPath { get; }
     internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
 
@@ -25,7 +27,20 @@ public class JsonProfile : IProfile
         IEnumerable<string>? projectedProperties = null,
         bool orderedProjection = false,
         string? recordPath = null)
+        : this(false, schema, resource, parsers, parserOptimizations, projectedProperties, orderedProjection, recordPath)
+    { }
+
+    public JsonProfile(
+        bool jsonc,
+        SchemaDescriptor? schema = null,
+        ResourceDescriptor? resource = null,
+        RuntimeParsersDescriptor? parsers = null,
+        ParserOptimizationOptions? parserOptimizations = null,
+        IEnumerable<string>? projectedProperties = null,
+        bool orderedProjection = false,
+        string? recordPath = null)
     {
+        Jsonc = jsonc;
         RecordPath = recordPath;
         ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;

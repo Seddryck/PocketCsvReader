@@ -18,6 +18,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     private IEnumerator<ReadOnlyMemory<char>>? _matches;
     private DocumentState _state;
     private bool _needsArrayElement;
+    private JsonCommentScanner _trivia;
 
     public JsonProfile Profile { get; }
 
@@ -34,9 +35,10 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
             : new ProjectedJsonValueFramer(
                 profile.ProjectedProperties,
                 _projectedFields!,
-                profile.OrderedProjection);
+                profile.OrderedProjection,
+                profile.Jsonc);
         _valueFramer = _projectedValueFramer is null
-            ? new JsonValueFramer()
+            ? new JsonValueFramer(Profile.Jsonc)
             : _projectedValueFramer;
     }
 
@@ -109,14 +111,15 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
             if (first < 0)
                 throw Error("A JSON value was expected");
             _position?.BeginRecord();
-            var framer = new JsonValueFramer();
+            var recordStart = _cursor.Position;
+            var framer = new JsonValueFramer(Profile.Jsonc);
             framer.Prepare((char)first, _cursor.Position);
             var capture = _cursor.ReadFrame(framer) ?? throw Error("The JSON value is incomplete");
             _cursor.Protect(capture);
             CompleteSingleRoot(framer.Delimiter);
             _selectionInput = capture.Memory;
             _selectionStart = _position?.PendingPosition ?? default;
-            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
+            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces, ParseFields(capture.Memory, recordStart), Profile.Jsonc).GetEnumerator();
         }
         if (TrySelectRow(out var row))
         {
@@ -136,7 +139,8 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
             if (first < 0)
                 throw Error("A JSON value was expected");
             _position?.BeginRecord();
-            var framer = new JsonValueFramer();
+            var recordStart = _cursor.Position;
+            var framer = new JsonValueFramer(Profile.Jsonc);
             framer.Prepare((char)first, _cursor.Position);
             var capture = await _cursor.ReadFrameAsync(framer, cancellationToken).ConfigureAwait(false)
                 ?? throw Error("The JSON value is incomplete");
@@ -144,7 +148,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
             await CompleteSingleRootAsync(framer.Delimiter, cancellationToken).ConfigureAwait(false);
             _selectionInput = capture.Memory;
             _selectionStart = _position?.PendingPosition ?? default;
-            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces).GetEnumerator();
+            _matches = Profile.ParsedRecordPath!.Select(capture.Memory, JsonWhitespaces, ParseFields(capture.Memory, recordStart), Profile.Jsonc).GetEnumerator();
         }
         return TrySelectRow(out var row)
             ? new(false, row, RecordState.Record)
@@ -183,7 +187,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     {
         try
         {
-            return JsonRecordParser.Parse(json.Span, JsonWhitespaces);
+            return JsonRecordParser.Parse(json.Span, JsonWhitespaces, Profile.Jsonc);
         }
         catch (InvalidDataException exception)
         {
@@ -201,7 +205,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         {
             try
             {
-                JsonRecordParser.MaterializeProjectedValues(json.Span, JsonWhitespaces, _projectedFields!);
+                JsonRecordParser.MaterializeProjectedValues(json.Span, JsonWhitespaces, _projectedFields!, Profile.Jsonc);
             }
             catch (InvalidDataException exception)
             {
@@ -247,7 +251,13 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         if (first < 0)
             throw Error("The top-level array is incomplete");
         if (first == ']')
-            throw Error("A JSON array cannot end with a trailing comma");
+        {
+            if (!Profile.Jsonc)
+                throw Error("A JSON array cannot end with a trailing comma");
+            _cursor.Read();
+            CompleteDocument();
+            return -1;
+        }
         return first;
     }
 
@@ -286,7 +296,13 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         if (first < 0)
             throw Error("The top-level array is incomplete");
         if (first == ']')
-            throw Error("A JSON array cannot end with a trailing comma");
+        {
+            if (!Profile.Jsonc)
+                throw Error("A JSON array cannot end with a trailing comma");
+            await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
+            await CompleteDocumentAsync(cancellationToken).ConfigureAwait(false);
+            return -1;
+        }
         return first;
     }
 
@@ -310,6 +326,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
     private bool CompleteSingleRoot(int delimiter)
     {
+        delimiter = BeginDelimiterTrivia(delimiter);
         if (delimiter >= 0 && !IsJsonWhitespace((char)delimiter))
             throw Error($"Unexpected character '{(char)delimiter}' after the root value");
         CompleteDocument();
@@ -318,6 +335,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
     private bool CompleteArrayElement(int delimiter)
     {
+        delimiter = BeginDelimiterTrivia(delimiter);
         var next = delimiter >= 0 && !IsJsonWhitespace((char)delimiter)
             ? delimiter
             : ReadNonWhitespace();
@@ -339,6 +357,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
     private async ValueTask<bool> CompleteSingleRootAsync(int delimiter, CancellationToken cancellationToken)
     {
+        delimiter = BeginDelimiterTrivia(delimiter);
         if (delimiter >= 0 && !IsJsonWhitespace((char)delimiter))
             throw Error($"Unexpected character '{(char)delimiter}' after the root value");
         await CompleteDocumentAsync(cancellationToken).ConfigureAwait(false);
@@ -347,6 +366,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
     private async ValueTask<bool> CompleteArrayElementAsync(int delimiter, CancellationToken cancellationToken)
     {
+        delimiter = BeginDelimiterTrivia(delimiter);
         var next = delimiter >= 0 && !IsJsonWhitespace((char)delimiter)
             ? delimiter
             : await ReadNonWhitespaceAsync(cancellationToken).ConfigureAwait(false);
@@ -382,10 +402,33 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         _state = DocumentState.Complete;
     }
 
+    // Scalar framing consumes its first delimiter. Retain a consumed slash so
+    // the same trivia scanner can finish the comment across refills.
+    private int BeginDelimiterTrivia(int delimiter)
+    {
+        if (Profile.Jsonc && delimiter == '/')
+        {
+            _trivia.TryConsume('/', _cursor.Position - 1);
+            return -1;
+        }
+        return delimiter;
+    }
+
+    private bool ConsumeTrivia(int current)
+    {
+        if (current < 0)
+        {
+            if (Profile.Jsonc) _trivia.CompleteAtEof();
+            return false;
+        }
+        return (Profile.Jsonc && _trivia.TryConsume((char)current, _cursor.Position))
+            || IsJsonWhitespace((char)current);
+    }
+
     private int PeekNonWhitespace()
     {
         int current;
-        while ((current = _cursor.Peek()) >= 0 && IsJsonWhitespace((char)current))
+        while (ConsumeTrivia(current = _cursor.Peek()))
             _cursor.Read();
         return current;
     }
@@ -399,8 +442,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     private async ValueTask<int> PeekNonWhitespaceAsync(CancellationToken cancellationToken)
     {
         int current;
-        while ((current = await _cursor.PeekAsync(cancellationToken).ConfigureAwait(false)) >= 0
-               && IsJsonWhitespace((char)current))
+        while (ConsumeTrivia(current = await _cursor.PeekAsync(cancellationToken).ConfigureAwait(false)))
         {
             await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -442,7 +484,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         Complete
     }
 
-    private sealed class JsonValueFramer : IJsonValueFramer
+    private sealed class JsonValueFramer(bool jsonc) : IJsonValueFramer
     {
         private char[] _openings = new char[16];
         private char _first;
@@ -452,6 +494,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         private bool _inString;
         private bool _escaping;
         private ValueKind _kind;
+        private JsonCommentScanner _comments;
 
         public int Delimiter { get; private set; }
 
@@ -463,6 +506,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
         public void Reset()
         {
+            _comments = default;
             _depth = 0;
             _total = 0;
             _inString = _first == '"';
@@ -502,6 +546,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
         public FrameScanResult CompleteAtEof()
         {
+            if (jsonc) _comments.CompleteAtEof();
             if (_total == 0)
                 return default;
             if (_kind == ValueKind.Scalar)
@@ -514,7 +559,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         private bool TryCompleteScalar(char current, out int contentLength)
         {
             contentLength = _total - 1;
-            if (!IsJsonWhitespace(current) && current is not (',' or ']'))
+            if (!IsJsonWhitespace(current) && current is not (',' or ']') && !(jsonc && current == '/'))
                 return false;
 
             Delimiter = current;
@@ -525,6 +570,9 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         {
             if (_inString)
                 return ProcessStringCharacter(current);
+
+            if (jsonc && _comments.TryConsume(current, _startPosition + _total - 1))
+                return false;
 
             return ProcessStructuralCharacter(current);
         }

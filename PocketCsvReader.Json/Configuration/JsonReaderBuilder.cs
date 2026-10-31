@@ -7,6 +7,14 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
     private string[]? _projectedProperties;
     private bool _orderedProjection;
     private string? _recordPath;
+    private bool _jsonc;
+
+    /// <summary>Enables line/block comments and trailing commas.</summary>
+    public JsonReaderBuilder WithJsonc()
+    {
+        _jsonc = true;
+        return this;
+    }
 
     /// <summary>Selects the nodes exposed as rows using the supported JSONPath subset.</summary>
     public JsonReaderBuilder WithRecordPath(string path)
@@ -42,6 +50,7 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
 
     public JsonReader Build()
         => new(new JsonProfile(
+            _jsonc,
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
