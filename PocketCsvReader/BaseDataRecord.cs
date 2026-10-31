@@ -330,9 +330,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             return default!;
 
         var locator = new TypeParserLocator<T>();
-        var func = locator.Locate([pattern, format ?? CultureInfo.InvariantCulture]);
+        var func = locator.LocateSpanParser([pattern, format ?? CultureInfo.InvariantCulture]);
 
-        return func(GetValueOrThrow(i).Value.ToString());
+        return func(GetValueOrThrow(i).Value);
     }
 
     /// <summary>Parses a sanitized field synchronously without materializing a string.</summary>
@@ -563,13 +563,13 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             ?? throw new InvalidOperationException());
 
         var parameters = GetParameters(field.Format).ToArray();
-        var func = locator.Locate(parameters); // Func<string, object>
+        var parse = locator.LocateSpanParser(parameters);
+        if (type == parseType)
+            return SpanParser.CreateEntry(type, parse, locator.LocateTryParser(parameters));
 
-        // Build: (ReadOnlySpan<char> span) => (T)func(span.ToString())
+        // Lift the underlying typed span parser to Nullable<T> without boxing or string conversion.
         var spanParam = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
-        var funcConst = Expression.Constant(func);
-        var toStringCall = Expression.Call(spanParam, typeof(ReadOnlySpan<char>).GetMethod("ToString", Type.EmptyTypes)!);
-        var invokeFunc = Expression.Invoke(funcConst, toStringCall);
+        var invokeFunc = Expression.Invoke(Expression.Constant(parse), spanParam);
         var castResult = Expression.Convert(invokeFunc, type);
 
         var delegateType = typeof(ParseSpan<>).MakeGenericType(type);
