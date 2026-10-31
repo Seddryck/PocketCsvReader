@@ -43,7 +43,7 @@ public class CommonLogComparison
         var clf = new StringBuilder();
         for (var i = 0; i < RecordCount; i++)
         {
-            var host = $"192.0.2.{i % 254 + 1}";
+            var host = $"192.0.2.{(i % 254) + 1}";
             var user = i % 3 == 0 ? "-" : $"user{i % 100}";
             var timestamp = i % 2 == 0 ? "10/Oct/2000:13:55:36 -0700" : "11/Oct/2000:09:15:00 +0530";
             var request = $"GET /items/{i % 1000}?page={i % 10} HTTP/1.1";

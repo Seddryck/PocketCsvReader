@@ -75,6 +75,33 @@ public class WebLogBufferingTests
         });
     }
 
+    [TestCase(WebLogFormat.Common)]
+    [TestCase(WebLogFormat.W3cExtended)]
+    public void RawParsing_StaysWithinWarmedAllocationBudget(WebLogFormat format)
+    {
+        const int rows = 10000;
+        var line = Line(format, "/" + new string('x', 512)) + "\n";
+        var data = Encoding.UTF8.GetBytes(Prefix(format, "\n") + string.Concat(Enumerable.Repeat(line, rows)));
+        ReadAll(); // Warm JIT and shared pools; input generation is also outside measurement.
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var count = ReadAll();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.That(count, Is.EqualTo(rows));
+        // 64 bytes/row allows reader/schema setup and occasional cross-buffer segment bookkeeping.
+        // A ~570-character line string/copy or a fresh seven-field scratch array exceeds this budget.
+        Assert.That(allocated, Is.LessThan(64L * rows), $"Allocated {allocated} bytes for {rows} raw {format} records.");
+
+        int ReadAll()
+        {
+            using var text = new StreamReader(new MemoryStream(data));
+            using var source = new WebLogRecordSource(text, new WebLogProfile(format));
+            var count = 0;
+            while (!source.IsEndOfFile(out _, out _)) count++;
+            return count;
+        }
+    }
+
     [Test, Combinatorial]
     public async Task AsyncOnlyForwardStream_UsesAsyncIoAndStreamsBeforeEof(
         [Values] WebLogFormat format, [Values] bool trackPosition)

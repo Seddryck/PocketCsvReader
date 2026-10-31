@@ -120,45 +120,10 @@
   },
   {
     "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA001",
-    "Code": "_reader.ReadLine()",
-    "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA001",
-    "Code": "_reader.ReadLineAsync(cancellationToken)",
-    "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
     "Rule": "PA002",
-    "Code": "newRecordMemory(line,spans)",
+    "Code": "newRecordMemory(captured.Memory,_fields)",
     "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordSpan(line,spans)",
-    "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA003",
-    "Code": "newList<FieldSpan>()",
-    "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
-  },
-  {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA003",
-    "Code": "newList<FieldSpan>(CommonFields.Length)",
-    "Count": 1,
-    "Reason": "Existing CLF/W3C line strings, record copies, or per-row field lists; retained for a separate parser migration."
+    "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable schema field array until the next read or disposal; no character or field-array copy. The RecordReadResult contract requires a RecordMemory wrapper."
   },
   {
     "Path": "PocketCsvReader/BaseRawRecord.cs",
