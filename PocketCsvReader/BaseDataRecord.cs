@@ -81,8 +81,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         try
         {
-            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
-                return value;
+            if (Parser.TryGetParser<T>(i, out var parse))
+                return parse(GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is TemporalFormatDescriptor))
             {
@@ -105,8 +105,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     {
         try
         {
-            if (Parser.TryParse<Guid>(i, GetValueOrThrow(i), out var value))
-                return value;
+            if (Parser.TryGetParser<Guid>(i, out var parse))
+                return parse(GetValueOrThrow(i));
 
             return ParseAndOptionallyCache<Guid>(i);
         }
@@ -139,8 +139,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         if (TryGetDirectValue<T>(i, out var direct)) return direct;
         try
         {
-            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
-                return value;
+            if (Parser.TryGetParser<T>(i, out var parse))
+                return parse(GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is NumericFormatDescriptor))
             {
@@ -249,7 +249,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
                 entry = new(parse, span => parse(span));
             }
             else if ((field.Format is not null && field.Format is not NoneFormatDescriptor) || field.RuntimeType != typeof(object))
-                entry = new(CreateParser(field.RuntimeType, field));
+                entry = CreateParser(field.RuntimeType, field);
             else
                 throw new ArgumentException($"Field descriptor for index '{i}' is missing both the Parse function and the Format property.");
 
@@ -264,7 +264,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         var key = (field, type);
         if (!_schemaParsers.TryGetValue(key, out var entry))
         {
-            entry = new(CreateParser(type, field));
+            entry = CreateParser(type, field);
             _schemaParsers.Add(key, entry);
         }
         Parser.BindFieldParser(i, entry);
@@ -290,8 +290,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             return default!;
         try
         {
-            if (Parser.TryParse<T>(i, GetValueOrThrow(i), out var value))
-                return value;
+            if (Parser.TryGetParser<T>(i, out var parse))
+                return parse(GetValueOrThrow(i));
             if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
             {
                 RegisterFieldParser(i, field);
@@ -529,17 +529,32 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
     }
 
+    private static Delegate? LiftTryParser(Type type, Type parseType, Delegate? tryParse)
+    {
+        if (tryParse is null || type == parseType)
+            return tryParse;
+
+        var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
+        var value = Expression.Parameter(type.MakeByRefType(), "value");
+        var parsed = Expression.Variable(parseType, "parsed");
+        var call = Expression.Invoke(Expression.Constant(tryParse), span, parsed);
+        var body = Expression.Block([parsed], Expression.Condition(call,
+            Expression.Block(Expression.Assign(value, Expression.Convert(parsed, type)), Expression.Constant(true)),
+            Expression.Block(Expression.Assign(value, Expression.Default(type)), Expression.Constant(false))));
+        return Expression.Lambda(typeof(TryParseSpan<>).MakeGenericType(type), body, span, value).Compile();
+    }
+
     /// <summary>
-    /// Creates a delegate that parses a <see cref="ReadOnlySpan{char}"/> into the specified type using the field's format descriptor.
+    /// Creates cached parsing delegates for the specified type using the field's format descriptor.
     /// </summary>
     /// <param name="type">The target type to parse to.</param>
     /// <param name="field">The field descriptor containing format information.</param>
-    /// <returns>A delegate that parses a span into the specified type.</returns>
+    /// <returns>A cache entry containing the throwing parser and its matching TryParse delegate, when available.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the parser locator cannot be instantiated.</exception>
-    private Delegate CreateParser(Type type, FieldDescriptor field)
+    private SpanParser.ParserEntry CreateParser(Type type, FieldDescriptor field)
     {
         if (Profile.Parsers?.TryCreateFormattedParser(type, field.Format, out var parser) is true)
-            return parser!;
+            return SpanParser.CreateEntry(type, parser!);
 
         // Nullable<T> has no Parse methods. Parse T, then lift the result to Nullable<T>.
         var parseType = Nullable.GetUnderlyingType(type) ?? type;
@@ -559,7 +574,7 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
 
         var delegateType = typeof(ParseSpan<>).MakeGenericType(type);
         var lambda = Expression.Lambda(delegateType, castResult, spanParam);
-        return lambda.Compile();
+        return SpanParser.CreateEntry(type, lambda.Compile(), LiftTryParser(type, parseType, locator.LocateTryParser(parameters)));
 
         static IEnumerable<object> GetParameters(object? format)
         {

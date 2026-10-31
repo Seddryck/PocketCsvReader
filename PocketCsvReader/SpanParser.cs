@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -13,12 +13,51 @@ namespace PocketCsvReader;
 /// <summary>Parses a span synchronously without creating an intermediate string.</summary>
 /// <remarks>The parser must consume the span during the call and must not retain it.</remarks>
 public delegate T ParseSpan<T>(ReadOnlySpan<char> span);
+internal delegate bool TryParseSpan<T>(ReadOnlySpan<char> span, out T value);
 internal class SpanParser
 {
-    internal sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null)
+    internal sealed class ParserEntry(Delegate typed, ParseSpan<object>? boxed = null, Delegate? tryParse = null)
     {
         public Delegate Typed { get; } = typed;
         private ParseSpan<object>? _boxed = boxed;
+        private Delegate? _tryParse = tryParse;
+
+        internal TryParseSpan<T> GetTryParser<T>()
+        {
+            if (Typed is not ParseSpan<T> parse)
+                throw new InvalidOperationException($"Parser is not a ParseSpan<{typeof(T).Name}>.");
+            return (TryParseSpan<T>)(_tryParse ??= FindTryParser(parse) ?? CreateFallback(parse));
+        }
+
+        private static TryParseSpan<T>? FindTryParser<T>(ParseSpan<T> parse)
+        {
+            // A direct static Parse method can opt into its matching TryParse without
+            // replacing custom lambdas or parsers that capture their own behavior.
+            var method = parse.Method;
+            if (!method.IsStatic || method.Name != "Parse" || method.DeclaringType is null
+                || method.GetParameters() is not [{ ParameterType: var input }] || input != typeof(ReadOnlySpan<char>))
+                return null;
+            var candidate = method.DeclaringType.GetMethod("TryParse",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                null, [typeof(ReadOnlySpan<char>), typeof(T).MakeByRefType()], null);
+            return candidate is { ReturnType: var result } && result == typeof(bool) && candidate.GetParameters()[1].IsOut
+                ? candidate.CreateDelegate<TryParseSpan<T>>() : null;
+        }
+
+        private static TryParseSpan<T> CreateFallback<T>(ParseSpan<T> parse)
+            => (ReadOnlySpan<char> span, out T value) =>
+            {
+                try
+                {
+                    value = parse(span);
+                    return true;
+                }
+                catch (Exception ex) when (IsConversionFailure(ex))
+                {
+                    value = default!;
+                    return false;
+                }
+            };
 
         // Runtime registrations compile the adapter only when object access is first needed.
         public ParseSpan<object> Boxed => _boxed ??= Typed as ParseSpan<object> ?? BoxParser(Typed);
@@ -42,48 +81,54 @@ internal class SpanParser
 
     public SpanParser()
     {
-        Register(s => s.ToString());
-        Register(s => s[0]);
-        Register(Guid.Parse);
-        Register(bool.Parse);
-        Register((s) => byte.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => short.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => int.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => long.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => decimal.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => float.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => double.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => DateTime.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => DateOnly.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => TimeOnly.Parse(s, CultureInfo.InvariantCulture));
-        Register((s) => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture));
+        Register<string>(s => s.ToString(), (ReadOnlySpan<char> s, out string value) => { value = s.ToString(); return true; });
+        Register<char>(s => s[0], (ReadOnlySpan<char> s, out char value) => { value = s.IsEmpty ? default : s[0]; return !s.IsEmpty; });
+        Register<Guid>(Guid.Parse, Guid.TryParse);
+        Register<bool>(bool.Parse, bool.TryParse);
+        RegisterInvariant<byte>();
+        RegisterInvariant<short>();
+        RegisterInvariant<int>();
+        RegisterInvariant<long>();
+        RegisterInvariant<decimal>();
+        RegisterInvariant<float>();
+        RegisterInvariant<double>();
+        RegisterInvariant<DateTime>();
+        RegisterInvariant<DateOnly>();
+        RegisterInvariant<TimeOnly>();
+        RegisterInvariant<DateTimeOffset>();
     }
 
-    public void Register<T>(ParseSpan<T> parse)
+    private void RegisterInvariant<T>() where T : ISpanParsable<T>
+        => Register<T>(s => T.Parse(s, CultureInfo.InvariantCulture),
+            (ReadOnlySpan<char> s, out T value) => T.TryParse(s, CultureInfo.InvariantCulture, out value!));
+
+    public void Register<T>(ParseSpan<T> parse, TryParseSpan<T>? tryParse = null)
     {
         ArgumentNullException.ThrowIfNull(parse);
-        TypeParsers[typeof(T)] = new(parse, span => parse(span)!);
+        TypeParsers[typeof(T)] = new(parse, span => parse(span)!, tryParse);
     }
 
-    public void Register(Type type, Delegate dlg)
-        => TypeParsers[type] = CreateEntry(type, dlg);
+    public void Register(Type type, Delegate dlg, Delegate? tryParse = null)
+        => TypeParsers[type] = CreateEntry(type, dlg, tryParse);
 
-    internal static ParserEntry CreateEntry(Type type, Delegate dlg)
+    internal static ParserEntry CreateEntry(Type type, Delegate dlg, Delegate? tryParse = null)
     {
         ArgumentNullException.ThrowIfNull(dlg);
         if (!IsParseSpan(dlg, out var parseType) || type != parseType)
             throw new ArgumentException("Unexpected delegate.", nameof(dlg));
-        return new(dlg);
+        if (tryParse is not null && tryParse.GetType() != typeof(TryParseSpan<>).MakeGenericType(type))
+            throw new ArgumentException("Unexpected TryParse delegate.", nameof(tryParse));
+        return new(dlg, tryParse: tryParse);
     }
 
-    public void Register<T>(int index, ParseSpan<T> parse)
+    public void Register<T>(int index, ParseSpan<T> parse, TryParseSpan<T>? tryParse = null)
     {
         ArgumentNullException.ThrowIfNull(parse);
-        FieldParsers[index] = new(parse, span => parse(span)!);
+        FieldParsers[index] = new(parse, span => parse(span)!, tryParse);
     }
 
-    public void Register(int index, Type type, Delegate dlg)
-        => FieldParsers[index] = CreateEntry(type, dlg);
+    public void Register(int index, Type type, Delegate dlg, Delegate? tryParse = null)
+        => FieldParsers[index] = CreateEntry(type, dlg, tryParse);
 
     public void CacheTypeParser<T>(int index)
     {
@@ -203,27 +248,50 @@ internal class SpanParser
         throw new InvalidOperationException($"No parser registered for field with index {index}");
     }
 
-    public bool TryParse<T>(int index, ReadOnlySpan<char> span, [NotNullWhen(true)] out T? value)
+    internal bool TryGetTryParser<T>(int index, [NotNullWhen(true)] out TryParseSpan<T>? parse)
     {
-        if (TryGetParser<T>(index, out var parse))
+        if (FieldParsers.TryGetValue(index, out var entry) && entry.Typed is ParseSpan<T>)
         {
-            value = parse(span)!;
+            parse = entry.GetTryParser<T>();
             return true;
         }
+        parse = null;
+        return false;
+    }
+
+    internal bool TryGetTryParser<T>([NotNullWhen(true)] out TryParseSpan<T>? parse)
+    {
+        if (TypeParsers.TryGetValue(typeof(T), out var entry))
+        {
+            parse = entry.GetTryParser<T>();
+            return true;
+        }
+        parse = null;
+        return false;
+    }
+
+    /// <summary>Tries the registered field parser; missing parsers and conversion failures return false.</summary>
+    /// <remarks>Does not fall back to a type parser. Unexpected parser and configuration errors propagate.</remarks>
+    public bool TryParse<T>(int index, ReadOnlySpan<char> span, out T? value)
+    {
+        if (TryGetTryParser<T>(index, out var parse) && parse(span, out value))
+            return true;
         value = default;
         return false;
     }
 
-    public bool TryParse<T>(ReadOnlySpan<char> span, [NotNullWhen(true)] out T? value)
+    /// <summary>Tries the registered type parser; missing parsers and conversion failures return false.</summary>
+    public bool TryParse<T>(ReadOnlySpan<char> span, out T? value)
     {
-        if (TryGetParser<T>(out var parse))
-        {
-            value = parse(span)!;
+        if (TryGetTryParser<T>(out var parse) && parse(span, out value))
             return true;
-        }
         value = default;
         return false;
     }
+
+    private static bool IsConversionFailure(Exception exception)
+        => exception is FormatException or OverflowException or InvalidCastException
+            || exception is System.Reflection.TargetInvocationException { InnerException: { } inner } && IsConversionFailure(inner);
 
     private static readonly Lazy<SpanParser> _defaultParser = new(() => new());
 
