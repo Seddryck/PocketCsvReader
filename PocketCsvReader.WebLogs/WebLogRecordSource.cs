@@ -13,6 +13,8 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         "ResponseBytes"
     ];
 
+    internal static readonly string[] CombinedFields = [.. CommonFields, "Referrer", "UserAgent"];
+
     private readonly BufferedRecordReader _reader;
     private readonly PositionTracker? _position;
     PositionTracker? IPositionSource.Tracker => _position;
@@ -32,10 +34,10 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         if (profile.TrackPosition) _position = new();
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         Profile = profile;
-        if (profile.Format == WebLogFormat.Common)
+        if (profile.Format is WebLogFormat.Common or WebLogFormat.Combined)
         {
-            Fields = [.. CommonFields];
-            _fields = new FieldSpan[CommonFields.Length];
+            Fields = [.. profile.Format == WebLogFormat.Combined ? CombinedFields : CommonFields];
+            _fields = new FieldSpan[Fields.Length];
         }
     }
 
@@ -106,7 +108,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         }
 
         _position?.CompleteRecord();
-        if (Profile.Format == WebLogFormat.Common)
+        if (Profile.Format is WebLogFormat.Common or WebLogFormat.Combined)
             ParseCommon(line);
         else
             ParseW3c(line);
@@ -169,10 +171,15 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         _fields[4] = ReadDelimited(line, ref offset, '"', '"', 5);
         _fields[5] = ReadToken(line, ref offset);
         _fields[6] = ReadToken(line, ref offset);
+        if (Profile.Format == WebLogFormat.Combined)
+        {
+            _fields[7] = ReadDelimited(line, ref offset, '"', '"', 8);
+            _fields[8] = ReadDelimited(line, ref offset, '"', '"', 9);
+        }
         SkipWhitespace(line, ref offset);
 
         if (offset != line.Length)
-            throw Invalid($"expected a {CommonFields.Length}-field Common Log Format record");
+            throw Invalid($"expected a {Fields!.Length}-field {FormatName()} record");
     }
 
     private FieldSpan ReadToken(ReadOnlySpan<char> line, ref int offset)
@@ -204,6 +211,8 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
 
         var field = new FieldSpan(start, offset - start, prefix == '"', false);
         offset++;
+        if (offset < line.Length && !char.IsWhiteSpace(line[offset]))
+            throw Invalid($"expected whitespace after field {fieldNumber}");
         return field;
     }
 
@@ -217,7 +226,12 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         => new($"Invalid {FormatName()} record at line {_lineNumber}: {reason}.");
 
     private string FormatName()
-        => Profile.Format == WebLogFormat.Common ? "Common Log Format" : "W3C Extended Log Format";
+        => Profile.Format switch
+        {
+            WebLogFormat.Common => "Common Log Format",
+            WebLogFormat.Combined => "Combined Log Format",
+            _ => "W3C Extended Log Format"
+        };
 
     public void Dispose() => _reader.Dispose();
 }
