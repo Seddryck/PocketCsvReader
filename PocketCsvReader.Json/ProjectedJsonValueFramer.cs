@@ -41,7 +41,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private int _nextProjectedOrdinal;
     private int _remainingProjectedFields;
     private bool _complete;
-    private readonly bool _jsonc;
+    private readonly bool _allowComments;
+    private readonly bool _allowTrailingCommas;
     private JsonCommentScanner _comments;
 
     public int Delimiter { get; private set; }
@@ -51,12 +52,14 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         IReadOnlyList<string> projectedProperties,
         FieldSpan[] fields,
         bool orderedProjection = false,
-        bool jsonc = false)
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
         _projectedProperties = projectedProperties;
         _fields = fields;
         _orderedProjection = orderedProjection;
-        _jsonc = jsonc;
+        _allowComments = allowComments;
+        _allowTrailingCommas = allowTrailingCommas;
         if (orderedProjection)
             return;
 
@@ -152,7 +155,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             return true;
         }
 
-        if (_jsonc && _comments.TryConsume(current, _startPosition + _position))
+        if (_allowComments && _comments.TryConsume(current, _startPosition + _position))
             return true;
 
         if (IsWhitespace(current))
@@ -177,7 +180,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                 return true;
 
             case ContainerState.Property:
-                if (_jsonc && current == '}')
+                if (_allowTrailingCommas && current == '}')
                     return CloseContainer(ContainerKind.Object);
                 if (current != '"')
                     throw Error("A JSON property name was expected");
@@ -218,7 +221,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                 return BeginValue(ref frame, current);
 
             case ContainerState.Value:
-                if (_jsonc && current == ']')
+                if (_allowTrailingCommas && current == ']')
                     return CloseContainer(ContainerKind.Array);
                 return BeginValue(ref frame, current);
 
@@ -775,7 +778,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         var canClose = frame.Kind == ContainerKind.Object
             ? frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
             : frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd;
-        canClose |= _jsonc && (frame.Kind == ContainerKind.Object
+        canClose |= _allowTrailingCommas && (frame.Kind == ContainerKind.Object
             ? frame.State == ContainerState.Property
             : frame.State == ContainerState.Value);
         if (!canClose)
@@ -817,7 +820,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         => value is ' ' or '\t' or '\r' or '\n';
 
     private bool IsValueDelimiter(char value)
-        => IsWhitespace(value) || value is ',' or ']' or '}' || (_jsonc && value == '/');
+        => IsWhitespace(value) || value is ',' or ']' or '}' || (_allowComments && value == '/');
 
     private static int HexValue(char value)
         => value switch

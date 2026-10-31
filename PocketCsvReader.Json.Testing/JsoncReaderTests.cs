@@ -17,8 +17,8 @@ public class JsoncReaderTests
     [Test]
     public void Profile_DefaultAndExistingConstructorRemainStrict()
     {
-        Assert.That(new JsonProfile().Jsonc, Is.False);
-        using var reader = new JsonReader(new JsonProfile(jsonc: true), bufferSize: 1)
+        Assert.That(new JsonProfile().AllowComments, Is.False);
+        using var reader = new JsonReader(new JsonProfile(allowComments: true, allowTrailingCommas: true), bufferSize: 1)
             .ToDataReader(Input("/* before */ {\"id\":1,} // eof"));
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetInt32(0), Is.EqualTo(1));
@@ -186,7 +186,7 @@ public class JsoncReaderTests
         // allows buffer-crossing bookkeeping but catches per-row field arrays or text copies.
         var row = "{\"id\":1,\"ignored\":\"" + new string('x', 2048) + "\",/* comment */},";
         var content = Encoding.UTF8.GetBytes("[" + string.Concat(Enumerable.Repeat(row, 1000)) + "]");
-        var profile = new JsonProfile(jsonc: true, projectedProperties: ["id"]);
+        var profile = new JsonProfile(allowComments: true, allowTrailingCommas: true, projectedProperties: ["id"]);
         for (var pass = 0; pass < 2; pass++)
         {
             using var text = new StreamReader(new MemoryStream(content));
@@ -212,7 +212,7 @@ public class JsoncReaderTests
     {
         const string content = "[{\"id\":\"first\",/* comment */},{\"id\":\"next\",},]";
         using var text = new StreamReader(Input(content));
-        using var source = new JsonRecordSource(text, new JsonProfile(jsonc: true, projectedProperties: ["id"]));
+        using var source = new JsonRecordSource(text, new JsonProfile(allowComments: true, allowTrailingCommas: true, projectedProperties: ["id"]));
         source.IsEndOfFile(out var first, out _);
         var fields = first.FieldSpans;
         var retainedValue = first.Slice(0).ToString();

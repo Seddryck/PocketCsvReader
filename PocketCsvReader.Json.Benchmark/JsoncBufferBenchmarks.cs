@@ -26,7 +26,7 @@ public class JsoncBufferBenchmarks
         row += Jsonc ? ",/* end */},// next\n" : "},";
         var rows = string.Concat(Enumerable.Repeat(row, 1000));
         _input = Encoding.UTF8.GetBytes("[" + (Jsonc ? rows : rows[..^1]) + "]");
-        _reader = new JsonReader(new JsonProfile(jsonc: Jsonc), BufferSize);
+        _reader = new JsonReader(new JsonProfile(allowComments: Jsonc, allowTrailingCommas: Jsonc), BufferSize);
         if (ReadRows() != 1000) throw new InvalidOperationException("Incorrect row count.");
     }
 

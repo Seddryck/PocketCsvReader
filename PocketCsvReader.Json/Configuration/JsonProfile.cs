@@ -14,33 +14,38 @@ public class JsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
-    /// <summary>Accept JSON comments and trailing commas. Strict JSON is the default.</summary>
-    public bool Jsonc { get; }
+    /// <summary>Accept line and block comments. Disabled by default.</summary>
+    public bool AllowComments { get; }
+    /// <summary>Accept a single trailing comma in objects and arrays. Disabled by default.</summary>
+    public bool AllowTrailingCommas { get; }
     public string? RecordPath { get; }
     internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
 
+    // Retain the original constructor signature for existing compiled consumers.
     public JsonProfile(
-        SchemaDescriptor? schema = null,
-        ResourceDescriptor? resource = null,
-        RuntimeParsersDescriptor? parsers = null,
-        ParserOptimizationOptions? parserOptimizations = null,
-        IEnumerable<string>? projectedProperties = null,
-        bool orderedProjection = false,
-        string? recordPath = null)
-        : this(false, schema, resource, parsers, parserOptimizations, projectedProperties, orderedProjection, recordPath)
+        SchemaDescriptor? schema,
+        ResourceDescriptor? resource,
+        RuntimeParsersDescriptor? parsers,
+        ParserOptimizationOptions? parserOptimizations,
+        IEnumerable<string>? projectedProperties,
+        bool orderedProjection,
+        string? recordPath)
+        : this(schema, resource, parsers, parserOptimizations, projectedProperties, orderedProjection, recordPath, false, false)
     { }
 
     public JsonProfile(
-        bool jsonc,
         SchemaDescriptor? schema = null,
         ResourceDescriptor? resource = null,
         RuntimeParsersDescriptor? parsers = null,
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
         bool orderedProjection = false,
-        string? recordPath = null)
+        string? recordPath = null,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
-        Jsonc = jsonc;
+        AllowComments = allowComments;
+        AllowTrailingCommas = allowTrailingCommas;
         RecordPath = recordPath;
         ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;

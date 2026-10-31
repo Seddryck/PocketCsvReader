@@ -2,7 +2,9 @@
 
 Measured on 2026-10-31 using Windows 11 x64, Intel Core Ultra 9 275HX, .NET 10.0.14, BenchmarkDotNet 0.15.8, and SDK 11.0.100-rc.2.26504.105. Short runs use one launch, one warmup, and three measured iterations. These are local comparative measurements, not a throughput guarantee; confidence intervals are wide with only three iterations.
 
-## Strict JSON before and after
+## Initial JSONC implementation: strict JSON before and after
+
+The initial measurements in this section and the buffer-size section describe commit `f8e1806`, before the independent options were introduced.
 
 The baseline is `origin/main` at `3b0c9dd`, before any parser changes. `JsonParserBenchmarks` parses 50,000 flat objects with 8–12 properties, projecting `name`, `amount`, and `count`. Setup verifies identical aggregate results across all variants. JSONC fixtures add block comments, line comments between objects, and object/root-array trailing commas. Input generation is outside the measurement.
 
@@ -43,3 +45,17 @@ dotnet run --project PocketCsvReader.Json.Benchmark -c Release -f net10.0 -- --f
 Extra comment text changes buffer-crossing frequency, so small buffers show additional existing capture bookkeeping allocations. The large-record/large-buffer timing samples had particularly wide confidence intervals. These figures include general-parser field metadata, not full-document normalization or retained document storage.
 
 The JSONC regression suite separately checks raw projected parsing against a warmed budget of 64 bytes per record with 2 KiB of skipped text, reused field metadata and character storage, and first-row delivery before the complete non-seekable document is read. Comments retain original source offsets and raw composite text. Record-path selection retains its existing complete-document capture; ordinary top-level arrays stream one element at a time.
+
+## Independent options revision
+
+Reran the six projection variants after replacing the combined flag with independent `AllowComments` and `AllowTrailingCommas` settings, using the same workload and short-job parameters. The builder shorthand sets both to `true`.
+
+| Input | AllowComments | AllowTrailingCommas | Ordered projection | Normal projection | Allocated per document |
+| --- | --- | --- | ---: | ---: | ---: |
+| Strict JSON | false | false | 21.95 ms | 29.91 ms | 2.32 MB |
+| Strict JSON | true | true | 23.54 ms | 34.19 ms | 2.32 MB |
+| JSONC | true | true | 27.57 ms | 34.78 ms | 2.32 MB |
+
+Allocations remained unchanged in this comparison. The three-iteration timing intervals were wide, especially for normal projection and opt-in on strict input, so differences from earlier samples cannot be attributed precisely to the option split. Raw allocation and ownership regression tests also passed on all three target frameworks. The eight buffer-size cases above were not rerun for this revision.
+
+Reproduce with the projection command above and `--artifacts BenchmarkDotNet.Artifacts/jsonc/independent-options`.

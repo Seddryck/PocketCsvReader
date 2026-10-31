@@ -7,12 +7,24 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
     private string[]? _projectedProperties;
     private bool _orderedProjection;
     private string? _recordPath;
-    private bool _jsonc;
+    private bool _allowComments;
+    private bool _allowTrailingCommas;
 
     /// <summary>Enables line/block comments and trailing commas.</summary>
     public JsonReaderBuilder WithJsonc()
+        => WithComments().WithTrailingCommas();
+
+    /// <summary>Enables or disables line and block comments independently of trailing commas.</summary>
+    public JsonReaderBuilder WithComments(bool allowComments = true)
     {
-        _jsonc = true;
+        _allowComments = allowComments;
+        return this;
+    }
+
+    /// <summary>Enables or disables trailing commas independently of comments.</summary>
+    public JsonReaderBuilder WithTrailingCommas(bool allowTrailingCommas = true)
+    {
+        _allowTrailingCommas = allowTrailingCommas;
         return this;
     }
 
@@ -50,12 +62,13 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
 
     public JsonReader Build()
         => new(new JsonProfile(
-            _jsonc,
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
             BuildParserOptimizations(),
             _projectedProperties,
             _orderedProjection,
-            _recordPath));
+            _recordPath,
+            _allowComments,
+            _allowTrailingCommas));
 }

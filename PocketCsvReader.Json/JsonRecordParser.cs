@@ -11,18 +11,28 @@ internal ref struct JsonRecordParser
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
     private int _position;
-    private readonly bool _jsonc;
+    private readonly bool _allowComments;
+    private readonly bool _allowTrailingCommas;
 
-    private JsonRecordParser(ReadOnlySpan<char> json, char[] whitespaces, bool jsonc = false)
+    private JsonRecordParser(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
         _json = json;
-        _jsonc = jsonc;
+        _allowComments = allowComments;
+        _allowTrailingCommas = allowTrailingCommas;
         _whitespaces = whitespaces;
     }
 
-    public static FieldSpan[] Parse(ReadOnlySpan<char> json, char[] whitespaces, bool jsonc = false)
+    public static FieldSpan[] Parse(
+        ReadOnlySpan<char> json,
+        char[] whitespaces,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
-        var parser = new JsonRecordParser(json, whitespaces, jsonc);
+        var parser = new JsonRecordParser(json, whitespaces, allowComments, allowTrailingCommas);
         return parser.ParseRoot();
     }
 
@@ -172,7 +182,8 @@ internal ref struct JsonRecordParser
         ReadOnlySpan<char> json,
         char[] whitespaces,
         FieldSpan[] fields,
-        bool jsonc = false)
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
         for (var ordinal = 0; ordinal < fields.Length; ordinal++)
         {
@@ -185,7 +196,7 @@ internal ref struct JsonRecordParser
             if (!field.Value.IsEscaped && !isComposite)
                 continue;
 
-            var parser = new JsonRecordParser(json, whitespaces, jsonc)
+            var parser = new JsonRecordParser(json, whitespaces, allowComments, allowTrailingCommas)
             {
                 _position = valueStart
             };
@@ -246,7 +257,7 @@ internal ref struct JsonRecordParser
 
             Expect(',');
             SkipWhitespace();
-            if (_jsonc && Current == '}')
+            if (_allowTrailingCommas && Current == '}')
             {
                 _position++;
                 return [.. fields];
@@ -386,7 +397,7 @@ internal ref struct JsonRecordParser
 
             Expect(',');
             SkipWhitespace();
-            if (_jsonc && Current == ']')
+            if (_allowTrailingCommas && Current == ']')
             {
                 _position++;
                 return new FieldSpan(CompletedSpan(start, _position - start), default, [.. children]);
@@ -582,14 +593,14 @@ internal ref struct JsonRecordParser
         var comments = new JsonCommentScanner();
         while (!IsEnd)
         {
-            if (_jsonc && comments.TryConsume(Current, _position))
+            if (_allowComments && comments.TryConsume(Current, _position))
                 _position++;
             else if (IsJsonWhitespace(Current))
                 _position++;
             else
                 break;
         }
-        if (_jsonc) comments.CompleteAtEof();
+        if (_allowComments) comments.CompleteAtEof();
     }
 
     private bool IsJsonWhitespace(char value)
