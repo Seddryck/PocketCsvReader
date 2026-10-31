@@ -77,3 +77,9 @@ var reader = new W3cExtendedLogReaderBuilder()
 ```
 
 Both readers support `ToDataReader`, `ToDataTable`, `ToArrayString`, and `To<T>`.
+
+## Streaming storage
+
+CLF and W3C readers frame records over shared pooled character buffers and reuse field metadata for their fixed result schema. A record contained in one buffer is read as a view over that memory; a record spanning buffers is consolidated once into pooled storage. The current record's character memory and metadata are valid until the next read or reader disposal. Strings and typed objects returned to callers own their materialized values and remain valid after the reader advances.
+
+Synchronous and asynchronous reads use the same framing and field-parsing logic. W3C directive names and values remain retained strings, and string/object output still allocates the values required by the public API.
