@@ -1,0 +1,7 @@
+Format,Scenario,MeanUs,StdDevUs,AllocatedBytes,Checksum
+Ltsv,Simple,51.36,7.51,27928,25088
+Ltsv,Escaped,64.31,0.34,36240,29184
+Ltsv,CrossBuffer,3236.58,87.77,8469352,4215808
+Logfmt,Simple,65.58,1.18,27568,25088
+Logfmt,Escaped,117.06,1.83,56720,27648
+Logfmt,CrossBuffer,3265.01,80.58,8469352,4215808

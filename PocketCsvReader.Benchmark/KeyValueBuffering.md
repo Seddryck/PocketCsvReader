@@ -8,7 +8,13 @@ dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --keyval
 
 Measured on Windows x64, .NET 10 (SDK 11.0.100-rc.2.26504.105), comparing
 `3b0c9dd` with this implementation. The identical harness was added before
-changing the parser and run on both versions.
+changing the parser and run on both versions. The table was re-measured after
+the CI complexity refactor: the original parser and record-source files were
+temporarily restored from `3b0c9dd` for the before build, then the implementation
+was restored for the after build. Both runs used identical harness and core
+sources. Raw outputs are retained in `KeyValueBuffering.before.csv` and
+`KeyValueBuffering.after.csv`. Allocations reproduced the initial measurements;
+elapsed times vary with host load.
 
 Each operation creates a memory stream and data reader, consumes 512 records,
 reads the integer ID and materializes the message string, then disposes the
@@ -25,14 +31,14 @@ literal JSON escape text (`\n\"ok\"`): logfmt decodes this text, while LTSV
 preserves it literally as required by its grammar. CrossBuffer messages contain
 8192 `x` characters, so every record spans multiple buffers.
 
-| Format | Case | Before us | After us | Before bytes | After bytes | Allocation reduction |
-|---|---|---:|---:|---:|---:|---:|
-| LTSV | Simple | 64.24 +/- 3.81 | 45.59 +/- 0.35 | 354,656 | 27,928 | 92.1% |
-| LTSV | Escaped | 67.82 +/- 1.22 | 46.78 +/- 0.56 | 379,232 | 36,240 | 90.4% |
-| LTSV | CrossBuffer | 2622.87 +/- 223.40 | 1716.44 +/- 52.10 | 25,499,928 | 8,469,352 | 66.8% |
-| logfmt | Simple | 80.73 +/- 1.42 | 57.14 +/- 0.68 | 358,752 | 27,568 | 92.3% |
-| logfmt | Escaped | 129.07 +/- 1.14 | 99.55 +/- 0.51 | 432,480 | 56,720 | 86.9% |
-| logfmt | CrossBuffer | 2938.04 +/- 79.77 | 2504.24 +/- 40.34 | 25,499,928 | 8,469,352 | 66.8% |
+| Format | Case | Before us | After us | Time after/before | Before bytes | After bytes | Allocation reduction |
+|---|---|---:|---:|---:|---:|---:|---:|
+| LTSV | Simple | 68.68 +/- 8.85 | 51.36 +/- 7.51 | 0.748 | 354,656 | 27,928 | 92.1% |
+| LTSV | Escaped | 84.26 +/- 1.78 | 64.31 +/- 0.34 | 0.763 | 379,232 | 36,240 | 90.4% |
+| LTSV | CrossBuffer | 4364.46 +/- 65.87 | 3236.58 +/- 87.77 | 0.742 | 25,499,928 | 8,469,352 | 66.8% |
+| logfmt | Simple | 88.93 +/- 1.19 | 65.58 +/- 1.18 | 0.737 | 358,752 | 27,568 | 92.3% |
+| logfmt | Escaped | 155.16 +/- 3.19 | 117.06 +/- 1.83 | 0.754 | 432,480 | 56,720 | 86.9% |
+| logfmt | CrossBuffer | 4187.38 +/- 176.51 | 3265.01 +/- 80.58 | 0.780 | 25,499,928 | 8,469,352 | 66.8% |
 
 The contained-record path borrows the shared character buffer. Records crossing
 buffers use the existing shared pooled capture/coalescing path, released at the

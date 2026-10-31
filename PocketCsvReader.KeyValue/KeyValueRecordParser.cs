@@ -5,13 +5,6 @@ namespace PocketCsvReader.KeyValue;
 
 internal static class KeyValueRecordParser
 {
-    public static FieldSpan[] Parse(ReadOnlySpan<char> record, KeyValueFormat format)
-    {
-        var fields = new List<FieldSpan>();
-        Parse(record, format, fields);
-        return [.. fields];
-    }
-
     public static void Parse(ReadOnlySpan<char> record, KeyValueFormat format, List<FieldSpan> fields)
     {
         fields.Clear();
@@ -66,45 +59,45 @@ internal static class KeyValueRecordParser
             if (position == record.Length)
                 return;
 
-            var labelStart = position;
-            while (position < record.Length && IsIdentifierChar(record[position]))
-                position++;
-            if (labelStart == position)
-                throw SyntaxError("A logfmt key was expected", position);
-
-            var label = new SpanInfo(labelStart, position - labelStart);
-            if (position == record.Length || IsWhitespace(record[position]))
-            {
-                fields.Add(new FieldSpan(new SpanInfo(position, 0), label));
-                continue;
-            }
-
-            if (record[position] != '=')
-                throw SyntaxError("A logfmt key must be followed by '=' or whitespace", position);
-            position++;
-
-            if (position == record.Length || IsWhitespace(record[position]))
-            {
-                fields.Add(new FieldSpan(new SpanInfo(position, 0), label));
-                continue;
-            }
-
-            if (record[position] == '"')
-            {
-                fields.Add(ParseQuotedLogfmtValue(record, label, ref position));
-                continue;
-            }
-
-            var valueStart = position;
-            while (position < record.Length && IsIdentifierChar(record[position]))
-                position++;
-            if (valueStart == position)
-                throw SyntaxError("A logfmt value was expected", position);
-            if (position < record.Length && !IsWhitespace(record[position]))
-                throw SyntaxError("An invalid character was found in a logfmt value", position);
-
-            fields.Add(new FieldSpan(new SpanInfo(valueStart, position - valueStart), label));
+            fields.Add(ParseLogfmtField(record, ref position));
         }
+    }
+
+    private static FieldSpan ParseLogfmtField(ReadOnlySpan<char> record, ref int position)
+    {
+        var labelStart = position;
+        while (position < record.Length && IsIdentifierChar(record[position]))
+            position++;
+        if (labelStart == position)
+            throw SyntaxError("A logfmt key was expected", position);
+
+        var label = new SpanInfo(labelStart, position - labelStart);
+        if (position == record.Length || IsWhitespace(record[position]))
+            return new FieldSpan(new SpanInfo(position, 0), label);
+
+        if (record[position] != '=')
+            throw SyntaxError("A logfmt key must be followed by '=' or whitespace", position);
+        position++;
+        return ParseLogfmtValue(record, label, ref position);
+    }
+
+    private static FieldSpan ParseLogfmtValue(ReadOnlySpan<char> record, SpanInfo label, ref int position)
+    {
+        if (position == record.Length || IsWhitespace(record[position]))
+            return new FieldSpan(new SpanInfo(position, 0), label);
+
+        if (record[position] == '"')
+            return ParseQuotedLogfmtValue(record, label, ref position);
+
+        var valueStart = position;
+        while (position < record.Length && IsIdentifierChar(record[position]))
+            position++;
+        if (valueStart == position)
+            throw SyntaxError("A logfmt value was expected", position);
+        if (position < record.Length && !IsWhitespace(record[position]))
+            throw SyntaxError("An invalid character was found in a logfmt value", position);
+
+        return new FieldSpan(new SpanInfo(valueStart, position - valueStart), label);
     }
 
     private static FieldSpan ParseQuotedLogfmtValue(ReadOnlySpan<char> record, SpanInfo label, ref int position)

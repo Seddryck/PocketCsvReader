@@ -136,11 +136,68 @@ public class BufferedKeyValueTests
         Assert.That(stream.Disposed, Is.True);
     }
 
+    [Test]
+    public void RawParsingStaysWithinWarmedAllocationBudget([Values(false, true)] bool logfmt)
+    {
+        const int rows = 10_000;
+        string value = new('x', 512);
+        string line = logfmt ? $"id=42 message={value} active\n" : $"id:42\tmessage:{value}\tactive:\n";
+        byte[] data = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat(line, rows)));
+        ReadAll(); // Warm JIT and shared pools; input generation is outside measurement.
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int count = ReadAll();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(count, Is.EqualTo(rows));
+        // 64 bytes/row permits setup and occasional cross-buffer bookkeeping.
+        // A >500-character line copy or a new three-field array/list on every row exceeds it.
+        Assert.That(allocated, Is.LessThan(64L * rows), $"Allocated {allocated} bytes for {rows} raw records.");
+
+        int ReadAll()
+        {
+            using var text = new StreamReader(new MemoryStream(data));
+            using var source = new KeyValueRecordSource(text, new KeyValueProfile(logfmt ? KeyValueFormat.Logfmt : KeyValueFormat.Ltsv));
+            int count = 0;
+            while (!source.IsEndOfFile(out _, out _)) count++;
+            return count;
+        }
+    }
+
+    [Test]
+    public async Task ReturnsFirstRecordBeforeConsumingDocument([Values(false, true)] bool logfmt, [Values(false, true)] bool async)
+    {
+        string line = logfmt ? "a=hello\n" : "a:hello\n";
+        using var stream = new ChunkedStream(string.Concat(Enumerable.Repeat(line, 10_000)), async);
+        using var reader = Build(logfmt, 31).ToDataReader(stream);
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("hello"));
+        Assert.That(stream.BytesRead, Is.LessThan(Encoding.UTF8.GetByteCount(line) * 10_000));
+    }
+
+    [TestCase("", 0)]
+    [TestCase("\n", 1)]
+    [TestCase("\r", 1)]
+    [TestCase("\r\n", 1)]
+    public async Task EmptyInputAndFinalEmptyRecord(string content, int expected)
+    {
+        foreach (bool logfmt in new[] { false, true })
+        foreach (bool async in new[] { false, true })
+        {
+            using var reader = Build(logfmt, 1).ToDataReader(new ChunkedStream(content, async));
+            int count = 0;
+            while (async ? await reader.ReadAsync() : reader.Read())
+            {
+                Assert.That(reader.FieldCount, Is.Zero);
+                count++;
+            }
+            Assert.That(count, Is.EqualTo(expected));
+        }
+    }
     // Non-seekable short reads also split UTF-8 scalars. Async mode fails on any sync I/O.
     private sealed class ChunkedStream(string text, bool asyncOnly) : Stream
     {
         private readonly MemoryStream _inner = new(Encoding.UTF8.GetBytes(text));
         public bool Disposed { get; private set; }
+        public long BytesRead => _inner.Position;
         public override bool CanRead => !Disposed;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
