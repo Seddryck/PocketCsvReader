@@ -13,10 +13,13 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         "ResponseBytes"
     ];
 
-    private readonly PositionedLineReader _reader;
-    PositionTracker? IPositionSource.Tracker => _reader.Tracker;
-    public RecordPosition? CurrentPosition => _reader.Tracker?.CurrentPosition;
+    private readonly BufferedRecordReader _reader;
+    private readonly PositionTracker? _position;
+    PositionTracker? IPositionSource.Tracker => _position;
+    public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private readonly List<W3cDirective> _directives = [];
+    // Character memory and field metadata belong to the current record until the next read.
+    private FieldSpan[] _fields = [];
     private int _lineNumber;
     private bool _completed;
 
@@ -26,10 +29,14 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
 
     public WebLogRecordSource(StreamReader reader, WebLogProfile profile)
     {
-        _reader = new PositionedLineReader(reader, profile.ParserOptimizations.BufferSize, profile.TrackPosition);
+        if (profile.TrackPosition) _position = new();
+        _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         Profile = profile;
         if (profile.Format == WebLogFormat.Common)
+        {
             Fields = [.. CommonFields];
+            _fields = new FieldSpan[CommonFields.Length];
+        }
     }
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
@@ -43,8 +50,10 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
 
         while (true)
         {
-            var line = _reader.ReadLine();
-            if (line is null)
+            _reader.BeginOperation();
+            _position?.BeginRecord();
+            var line = _reader.ReadLineFrame();
+            if (line is not { } captured)
             {
                 _completed = true;
                 record = new RecordSpan([], []);
@@ -52,21 +61,10 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
                 return true;
             }
 
-            _lineNumber++;
-            if (string.IsNullOrWhiteSpace(line))
+            if (!ParseLine(captured.Memory.Span))
                 continue;
 
-            if (Profile.Format == WebLogFormat.W3cExtended && line.StartsWith('#'))
-            {
-                ParseDirective(line);
-                continue;
-            }
-
-            _reader.Tracker?.CompleteRecord();
-            var spans = Profile.Format == WebLogFormat.Common
-                ? ParseCommon(line)
-                : ParseW3c(line);
-            record = new RecordSpan(line, spans);
+            record = RecordSpan.FromMemory(captured.Memory, _fields);
             recordState = RecordState.Record;
             return false;
         }
@@ -74,44 +72,56 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_completed)
             return new(true, RecordMemory.Empty, RecordState.Eof);
 
         while (true)
         {
-            var line = await _reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            if (line is null)
+            _reader.BeginOperation();
+            _position?.BeginRecord();
+            var line = await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false);
+            if (line is not { } captured)
             {
                 _completed = true;
                 return new(true, RecordMemory.Empty, RecordState.Eof);
             }
 
-            _lineNumber++;
-            if (string.IsNullOrWhiteSpace(line))
+            if (!ParseLine(captured.Memory.Span))
                 continue;
 
-            if (Profile.Format == WebLogFormat.W3cExtended && line.StartsWith('#'))
-            {
-                ParseDirective(line);
-                continue;
-            }
-
-            _reader.Tracker?.CompleteRecord();
-            var spans = Profile.Format == WebLogFormat.Common
-                ? ParseCommon(line)
-                : ParseW3c(line);
-            return new(false, new RecordMemory(line, spans), RecordState.Record);
+            return new(false, new RecordMemory(captured.Memory, _fields), RecordState.Record);
         }
     }
 
-    private void ParseDirective(string line)
+    private bool ParseLine(ReadOnlySpan<char> line)
+    {
+        _lineNumber++;
+        if (line.IsWhiteSpace())
+            return false;
+        if (Profile.Format == WebLogFormat.W3cExtended && line[0] == '#')
+        {
+            ParseDirective(line);
+            return false;
+        }
+
+        _position?.CompleteRecord();
+        if (Profile.Format == WebLogFormat.Common)
+            ParseCommon(line);
+        else
+            ParseW3c(line);
+        return true;
+    }
+
+    private void ParseDirective(ReadOnlySpan<char> line)
     {
         var separator = line.IndexOf(':');
         if (separator <= 1)
             return;
 
-        var name = line[1..separator].Trim();
-        var value = line[(separator + 1)..].Trim();
+        // Directive strings are retained public metadata, rather than temporary row storage.
+        var name = line[1..separator].Trim().ToString();
+        var value = line[(separator + 1)..].Trim().ToString();
         _directives.Add(new W3cDirective(name, value, _lineNumber));
 
         if (!name.Equals("Fields", StringComparison.OrdinalIgnoreCase))
@@ -123,55 +133,49 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         if (Fields is not null && !Fields.SequenceEqual(fields, StringComparer.Ordinal))
             throw Invalid("a #Fields directive changes the schema after it was established");
         Fields = fields;
+        if (_fields.Length != fields.Length)
+            _fields = new FieldSpan[fields.Length];
     }
 
-    private FieldSpan[] ParseW3c(string line)
+    private void ParseW3c(ReadOnlySpan<char> line)
     {
         if (Fields is null)
             throw Invalid("a data record appears before the required #Fields directive");
 
-        var spans = ParseWhitespaceSeparated(line);
-        if (spans.Length != Fields.Length)
-            throw Invalid($"expected {Fields.Length} fields but found {spans.Length}");
-        return spans;
-    }
-
-    private FieldSpan[] ParseCommon(string line)
-    {
-        var spans = new List<FieldSpan>(CommonFields.Length);
         var offset = 0;
-
-        AddToken(line, ref offset, spans);
-        AddToken(line, ref offset, spans);
-        AddToken(line, ref offset, spans);
-        AddDelimited(line, ref offset, '[', ']', spans);
-        AddDelimited(line, ref offset, '"', '"', spans);
-        AddToken(line, ref offset, spans);
-        AddToken(line, ref offset, spans);
-        SkipWhitespace(line, ref offset);
-
-        if (spans.Count != CommonFields.Length || offset != line.Length)
-            throw Invalid($"expected a {CommonFields.Length}-field Common Log Format record");
-        return spans.ToArray();
-    }
-
-    private static FieldSpan[] ParseWhitespaceSeparated(string line)
-    {
-        var spans = new List<FieldSpan>();
-        var offset = 0;
+        var count = 0;
         while (true)
         {
             SkipWhitespace(line, ref offset);
-            if (offset >= line.Length)
-                return spans.ToArray();
-            var start = offset;
-            while (offset < line.Length && !char.IsWhiteSpace(line[offset]))
-                offset++;
-            spans.Add(new FieldSpan(start, offset - start));
+            if (offset == line.Length)
+                break;
+            var field = ReadToken(line, ref offset);
+            if (count < _fields.Length)
+                _fields[count] = field;
+            count++;
         }
+        if (count != Fields.Length)
+            throw Invalid($"expected {Fields.Length} fields but found {count}");
     }
 
-    private void AddToken(string line, ref int offset, ICollection<FieldSpan> spans)
+    private void ParseCommon(ReadOnlySpan<char> line)
+    {
+        var offset = 0;
+
+        _fields[0] = ReadToken(line, ref offset);
+        _fields[1] = ReadToken(line, ref offset);
+        _fields[2] = ReadToken(line, ref offset);
+        _fields[3] = ReadDelimited(line, ref offset, '[', ']', 4);
+        _fields[4] = ReadDelimited(line, ref offset, '"', '"', 5);
+        _fields[5] = ReadToken(line, ref offset);
+        _fields[6] = ReadToken(line, ref offset);
+        SkipWhitespace(line, ref offset);
+
+        if (offset != line.Length)
+            throw Invalid($"expected a {CommonFields.Length}-field Common Log Format record");
+    }
+
+    private FieldSpan ReadToken(ReadOnlySpan<char> line, ref int offset)
     {
         SkipWhitespace(line, ref offset);
         var start = offset;
@@ -179,14 +183,14 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
             offset++;
         if (start == offset)
             throw Invalid("a required field is missing");
-        spans.Add(new FieldSpan(start, offset - start));
+        return new FieldSpan(start, offset - start);
     }
 
-    private void AddDelimited(string line, ref int offset, char prefix, char suffix, ICollection<FieldSpan> spans)
+    private FieldSpan ReadDelimited(ReadOnlySpan<char> line, ref int offset, char prefix, char suffix, int fieldNumber)
     {
         SkipWhitespace(line, ref offset);
         if (offset >= line.Length || line[offset] != prefix)
-            throw Invalid($"expected '{prefix}' at field {spans.Count + 1}");
+            throw Invalid($"expected '{prefix}' at field {fieldNumber}");
 
         var start = ++offset;
         while (offset < line.Length)
@@ -196,13 +200,14 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
             offset++;
         }
         if (offset >= line.Length)
-            throw Invalid($"field {spans.Count + 1} is missing its closing '{suffix}'");
+            throw Invalid($"field {fieldNumber} is missing its closing '{suffix}'");
 
-        spans.Add(new FieldSpan(start, offset - start, prefix == '"', false));
+        var field = new FieldSpan(start, offset - start, prefix == '"', false);
         offset++;
+        return field;
     }
 
-    private static void SkipWhitespace(string line, ref int offset)
+    private static void SkipWhitespace(ReadOnlySpan<char> line, ref int offset)
     {
         while (offset < line.Length && char.IsWhiteSpace(line[offset]))
             offset++;

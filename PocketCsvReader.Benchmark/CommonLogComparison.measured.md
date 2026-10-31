@@ -6,8 +6,8 @@ Intel Core Ultra 9 275HX 2.70GHz, 1 CPU, 24 logical and 24 physical cores
   [Host]             : .NET 10.0.14 (10.0.14, 10.0.1426.52326), X64 RyuJIT x86-64-v3
   ShortRun-.NET 10.0 : .NET 10.0.14 (10.0.14, 10.0.1426.52326), X64 RyuJIT x86-64-v3
 
-Job=ShortRun-.NET 10.0  PowerPlanMode=00000000-0000-0000-0000-000000000000  Runtime=.NET 10.0  
-IterationCount=3  LaunchCount=1  WarmupCount=3  
+Job=ShortRun-.NET 10.0  PowerPlanMode=00000000-0000-0000-0000-000000000000  Runtime=.NET 10.0
+IterationCount=3  LaunchCount=1  WarmupCount=3
 
 ```
 | Method         | Categories | RecordCount | Mean       | Error      | StdDev    | Ratio | RatioSD | Gen0      | Gen1    | Allocated | Alloc Ratio |

@@ -134,6 +134,10 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     #region composite
     public int FieldCount => Current?.FieldCount ?? 0;
     public object GetValue(int i) => Current!.GetValue(i);
+    /// <summary>Validates the current cell with the active reader's schema and cached parsers.</summary>
+    public bool IsValid(int i) => (Current ?? throw new InvalidOperationException("No current record is available.")).IsValid(i);
+    /// <summary>Validates the named current cell with the active reader's schema and cached parsers.</summary>
+    public bool IsValid(string name) => (Current ?? throw new InvalidOperationException("No current record is available.")).IsValid(name);
     public string GetName(int i) => Current!.GetName(i);
     public int GetOrdinal(string name) => Current!.GetOrdinal(name);
     public Type GetFieldType(int i) => Current!.GetFieldType(i);

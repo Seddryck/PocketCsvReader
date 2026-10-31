@@ -22,6 +22,24 @@ env:
   DOTNET_NO_WORKLOAD_UPDATE_NOTIFICATION: 1
 
 jobs:
+  parser-architecture:
+    name: Check parser allocation patterns
+    runs-on: windows-2025
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test the allocation guard
+        run: dotnet run --project .github/tools/ParserAllocationGuard --configuration Release -- --self-test
+
+      - name: Review parser allocation patterns
+        run: dotnet run --project .github/tools/ParserAllocationGuard --configuration Release --no-build -- .
+
   version:
     name: Calculate version
     runs-on: windows-2025
@@ -216,6 +234,7 @@ jobs:
   package:
     name: Package ${{ matrix.package.name }}
     needs:
+      - parser-architecture
       - version
       - coverage
       - coverage-threshold

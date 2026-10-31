@@ -17,7 +17,9 @@ Two groups separate costs:
 
 Setup checks every typed record for equality, separately checks timestamp offsets, verifies both row counts, and compares typed checksums before any timing. Filesystem I/O, data generation, and correctness checks are excluded. Stream/reader initialization, typed record allocation, and disposal are included in each operation.
 
-## Local measurements
+## Original local measurements
+
+These measurements predate the web-log buffer reuse change. See [the before/after buffering comparison](WebLogBuffering.md) for fresh measurements on the optimized implementation.
 
 Measured on 2026-10-31 against production source `3257b6b` with this benchmark added: BenchmarkDotNet 0.15.8, Windows 11 x64, Intel Core Ultra 9 275HX, .NET 10.0.14, concurrent workstation GC. The installed build SDK was 11.0.100-rc.2.26504.105. One process launch, three warmup iterations, and three measured iterations were used per case; the benchmark runner leaves the machine power plan unchanged.
 

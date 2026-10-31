@@ -1,0 +1,184 @@
+[
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthDataReader.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(rawRecord.Span,rawRecord.FieldSpans)",
+    "Count": 1,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(finalRecord.AsSpan(),_fieldSpans)",
+    "Count": 1,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(value.AsSpan(),_fieldSpans)",
+    "Count": 1,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
+    "Rule": "PA002",
+    "Code": "newRecordSpan(finalRecord.AsSpan(),_fieldSpans)",
+    "Count": 1,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
+    "Rule": "PA002",
+    "Code": "newRecordSpan(value.AsSpan(),_fieldSpans)",
+    "Count": 1,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.FixedWidth/FixedWidthRecordParser.cs",
+    "Rule": "PA004",
+    "Code": "_record.ToString()",
+    "Count": 4,
+    "Reason": "Existing fixed-width record materialization and copies; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.Json/JsonRecordParser.cs",
+    "Rule": "PA003",
+    "Code": "newList<FieldSpan>()",
+    "Count": 2,
+    "Reason": "General JSON parsing discovers variable and nested shapes; existing per-object/array metadata lists. Projection and stable-shape paths reuse storage where applicable."
+  },
+  {
+    "Path": "PocketCsvReader.Json/JsonRecordPath.cs",
+    "Rule": "PA004",
+    "Code": "name.ToString()",
+    "Count": 1,
+    "Reason": "Decodes an escaped path property name once while configuring a JSON record selector, not a complete input record."
+  },
+  {
+    "Path": "PocketCsvReader.Json/JsonRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(capture.Memory,fields)",
+    "Count": 1,
+    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected JSON memory, valid until the next read; no character copy."
+  },
+  {
+    "Path": "PocketCsvReader.Json/JsonRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(json,GetFields(json,0))",
+    "Count": 1,
+    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected JSON memory, valid until the next read; no character copy."
+  },
+  {
+    "Path": "PocketCsvReader.KeyValue/KeyValueRecordParser.cs",
+    "Rule": "PA003",
+    "Code": "newList<FieldSpan>()",
+    "Count": 2,
+    "Reason": "Existing LTSV/logfmt line strings, record copies, or per-row field lists; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
+    "Rule": "PA001",
+    "Code": "_reader.ReadLine()",
+    "Count": 1,
+    "Reason": "Existing LTSV/logfmt line strings, record copies, or per-row field lists; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
+    "Rule": "PA001",
+    "Code": "_reader.ReadLineAsync(cancellationToken)",
+    "Count": 1,
+    "Reason": "Existing LTSV/logfmt line strings, record copies, or per-row field lists; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(line.AsSpan(),fields)",
+    "Count": 1,
+    "Reason": "Existing LTSV/logfmt line strings, record copies, or per-row field lists; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordSpan(line.AsSpan(),fields)",
+    "Count": 1,
+    "Reason": "Existing LTSV/logfmt line strings, record copies, or per-row field lists; retained for a separate parser migration."
+  },
+  {
+    "Path": "PocketCsvReader.Ndjson/NdjsonRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(parsed.Value.Memory,parsed.Value.Fields)",
+    "Count": 1,
+    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected NDJSON memory, valid until the next read; no character copy."
+  },
+  {
+    "Path": "PocketCsvReader.Ndjson/NdjsonRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(selected.Memory,selected.Fields)",
+    "Count": 1,
+    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected NDJSON memory, valid until the next read; no character copy."
+  },
+  {
+    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(captured.Memory,_fields)",
+    "Count": 1,
+    "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable schema field array until the next read or disposal; no character or field-array copy. The RecordReadResult contract requires a RecordMemory wrapper."
+  },
+  {
+    "Path": "PocketCsvReader/BaseRawRecord.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(CurrentRecordMemory,CurrentFieldSpans)",
+    "Count": 1,
+    "Reason": "Core wrapper lazily borrows current record memory and field spans; current-row lifetime is preserved."
+  },
+  {
+    "Path": "PocketCsvReader/PositionedLineReader.cs",
+    "Rule": "PA001",
+    "Code": "_reader.ReadLine()",
+    "Count": 1,
+    "Reason": "Existing string-returning compatibility wrapper used by unmigrated line readers; new parsers should use BufferedRecordReader directly."
+  },
+  {
+    "Path": "PocketCsvReader/PositionedLineReader.cs",
+    "Rule": "PA001",
+    "Code": "_reader.ReadLineAsync(cancellationToken)",
+    "Count": 1,
+    "Reason": "Existing string-returning compatibility wrapper used by unmigrated line readers; new parsers should use BufferedRecordReader directly."
+  },
+  {
+    "Path": "PocketCsvReader/RecordMemory.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(text.AsMemory(),fields)",
+    "Count": 1,
+    "Reason": "Core representation conversion: UTF-8 view retains its owner; character decoding materializes text only when character access is requested, then borrows its memory."
+  },
+  {
+    "Path": "PocketCsvReader/RecordMemory.cs",
+    "Rule": "PA002",
+    "Code": "newRecordSpan(this)",
+    "Count": 1,
+    "Reason": "Core representation conversion: UTF-8 view retains its owner; character decoding materializes text only when character access is requested, then borrows its memory."
+  },
+  {
+    "Path": "PocketCsvReader/RecordSpan.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(_memory,FieldSpans)",
+    "Count": 1,
+    "Reason": "Core wrapper conversion borrows the existing ReadOnlyMemory and field array without copying characters."
+  },
+  {
+    "Path": "PocketCsvReader/RowNumberRecord.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(_buffer.AsMemory(0,offset+record.Span.Length),fields)",
+    "Count": 1,
+    "Reason": "Reviewed memory-backed internal constructor over the reusable buffer containing the generated row number and original record."
+  },
+  {
+    "Path": "PocketCsvReader/Utf8RecordSource.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(_record.AsMemory(0,length),fields.ToArray(),_decodedFields)",
+    "Count": 2,
+    "Reason": "Reviewed UTF-8 internal constructor: pooled byte memory with copied field metadata and a reusable decoding buffer; no whole-record character materialization."
+  }
+]

@@ -18,7 +18,7 @@ public class Program
             return;
         }
         if (args.Length > 0)
-            BenchmarkSwitcher.FromTypes([typeof(CustomParsing), typeof(ChrononuensisParsing), typeof(Utf8Input), typeof(PositionTracking), typeof(CharacterRecordParsing), typeof(CommonLogComparison)]).Run(args,
+            BenchmarkSwitcher.FromTypes([typeof(CustomParsing), typeof(ChrononuensisParsing), typeof(Utf8Input), typeof(PositionTracking), typeof(CharacterRecordParsing), typeof(CommonLogComparison), typeof(WebLogBuffering)]).Run(args,
                 ManualConfig.Create(DefaultConfig.Instance).AddJob(Job.Default.DontEnforcePowerPlan().AsDefault()));
         else
             BenchmarkRunner.Run<ToDataReader>();

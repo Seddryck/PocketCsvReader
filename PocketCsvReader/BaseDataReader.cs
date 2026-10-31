@@ -120,6 +120,12 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
 
     protected abstract bool ReadCore();
 
+    protected override void EnsureValidationRecord()
+    {
+        if (!_hasCurrentRecord || _isClosed || _disposed)
+            throw new InvalidOperationException("No current record is available.");
+    }
+
     public async Task<bool> ReadAsync(CancellationToken cancellationToken = default)
     {
         EnterRead();

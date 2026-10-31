@@ -25,15 +25,16 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
     public override string GetRawString(int i)
     {
         ValidateOrdinal(i);
-        return Record!.Slice(i).ToString();
+        var field = CurrentFieldSpans![i].Value;
+        return CurrentRecordMemory.Span.Slice(field.Start, field.Length).ToString();
     }
 
     protected override NullableSpan GetValueOrThrow(int i)
     {
         ValidateOrdinal(i);
-        var field = Record!.FieldSpans[i];
+        var field = CurrentFieldSpans![i].Value;
         return GetSanitizer(i, Profile.ParserOptimizations)
-            .Sanitize(Record.Slice(i).Span, field.Value.IsEscaped, field.Value.WasQuoted);
+            .Sanitize(CurrentRecordMemory.Span.Slice(field.Start, field.Length), field.IsEscaped, field.WasQuoted);
     }
 
     protected override bool ReadCore()
@@ -46,7 +47,7 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
             return false;
         }
 
-        Record = record.AsMemory();
+        SetRecord(record.Memory, record.FieldSpans);
         RowCount++;
         return true;
     }
@@ -69,7 +70,7 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
 
     private void ValidateOrdinal(int i)
     {
-        if (Record is null)
+        if (CurrentFieldSpans is null)
             throw new InvalidOperationException("Read must be called before accessing field values.");
         if (i < 0 || i >= FieldCount)
             throw new ArgumentOutOfRangeException(nameof(i), $"Field index '{i}' is out of range.");
