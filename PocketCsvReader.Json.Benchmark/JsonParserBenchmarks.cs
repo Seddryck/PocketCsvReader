@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using PocketCsvReader.Json.Configuration;
@@ -21,6 +22,12 @@ public class JsonParserBenchmarks
             .Property("amount")
             .Property("count"))
         .Build();
+    private readonly JsonReader _jsoncOrderedReader = new JsonReaderBuilder().WithJsonc()
+        .WithOrderedProjection(p => p.Property("name").Property("amount").Property("count")).Build();
+    private readonly JsonReader _jsoncUnorderedReader = new JsonReaderBuilder().WithJsonc()
+        .WithProjection(p => p.Property("name").Property("amount").Property("count")).Build();
+    private byte[] _consistentOrderJsonc = null!;
+    private byte[] _randomOrderJsonc = null!;
     private byte[] _consistentOrderJson = null!;
     private byte[] _randomOrderJson = null!;
 
@@ -30,11 +37,17 @@ public class JsonParserBenchmarks
         _consistentOrderJson = CreateJsonArray(randomizePropertyOrder: false);
         _randomOrderJson = CreateJsonArray(randomizePropertyOrder: true);
 
+        _consistentOrderJsonc = AddJsoncTrivia(_consistentOrderJson);
+        _randomOrderJsonc = AddJsoncTrivia(_randomOrderJson);
         var expected = SystemTextJsonConsistentOrder();
         if (expected.Objects != ObjectCount
             || expected != PocketCsvReaderJsonConsistentOrder()
             || expected != SystemTextJsonRandomOrder()
-            || expected != PocketCsvReaderJsonRandomOrder())
+            || expected != PocketCsvReaderJsonRandomOrder()
+            || expected != PocketCsvReaderJsoncConsistentOrder()
+            || expected != PocketCsvReaderJsoncRandomOrder()
+            || expected != JsoncEnabledOnStrictConsistentOrder()
+            || expected != JsoncEnabledOnStrictRandomOrder())
         {
             throw new InvalidOperationException("The benchmark parsers returned different values.");
         }
@@ -134,6 +147,30 @@ public class JsonParserBenchmarks
     [Benchmark]
     public ParsedValues PocketCsvReaderJsonRandomOrder()
         => ReadWithPocketCsvReader(_randomOrderJson, _unorderedPocketCsvReader);
+
+    [Benchmark]
+    public ParsedValues PocketCsvReaderJsoncConsistentOrder()
+        => ReadWithPocketCsvReader(_consistentOrderJsonc, _jsoncOrderedReader);
+
+    [Benchmark]
+    public ParsedValues PocketCsvReaderJsoncRandomOrder()
+        => ReadWithPocketCsvReader(_randomOrderJsonc, _jsoncUnorderedReader);
+
+    [Benchmark]
+    public ParsedValues JsoncEnabledOnStrictConsistentOrder()
+        => ReadWithPocketCsvReader(_consistentOrderJson, _jsoncOrderedReader);
+
+    [Benchmark]
+    public ParsedValues JsoncEnabledOnStrictRandomOrder()
+        => ReadWithPocketCsvReader(_randomOrderJson, _jsoncUnorderedReader);
+
+    private static byte[] AddJsoncTrivia(byte[] json)
+    {
+        // This generated fixture contains only flat objects and no braces in strings.
+        var text = Encoding.UTF8.GetString(json).Replace("}", ",/* object end */}")
+            .Replace("},{", "},// next object\n{");
+        return Encoding.UTF8.GetBytes("/* root */" + text[..^1] + ",]// eof");
+    }
 
     private static ParsedValues ReadWithPocketCsvReader(byte[] json, JsonReader jsonReader)
     {

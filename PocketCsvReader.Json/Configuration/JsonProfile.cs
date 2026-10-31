@@ -14,8 +14,24 @@ public class JsonProfile : IProfile
     public ParserOptimizationOptions ParserOptimizations { get; }
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
+    /// <summary>Accept line and block comments. Disabled by default.</summary>
+    public bool AllowComments { get; }
+    /// <summary>Accept a single trailing comma in objects and arrays. Disabled by default.</summary>
+    public bool AllowTrailingCommas { get; }
     public string? RecordPath { get; }
     internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }
+
+    // Retain the original constructor signature for existing compiled consumers.
+    public JsonProfile(
+        SchemaDescriptor? schema,
+        ResourceDescriptor? resource,
+        RuntimeParsersDescriptor? parsers,
+        ParserOptimizationOptions? parserOptimizations,
+        IEnumerable<string>? projectedProperties,
+        bool orderedProjection,
+        string? recordPath)
+        : this(schema, resource, parsers, parserOptimizations, projectedProperties, orderedProjection, recordPath, false, false)
+    { }
 
     public JsonProfile(
         SchemaDescriptor? schema = null,
@@ -24,8 +40,12 @@ public class JsonProfile : IProfile
         ParserOptimizationOptions? parserOptimizations = null,
         IEnumerable<string>? projectedProperties = null,
         bool orderedProjection = false,
-        string? recordPath = null)
+        string? recordPath = null,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
+        AllowComments = allowComments;
+        AllowTrailingCommas = allowTrailingCommas;
         RecordPath = recordPath;
         ParsedRecordPath = recordPath is null ? null : PocketCsvReader.Json.JsonRecordPath.Parse(recordPath);
         Schema = schema;

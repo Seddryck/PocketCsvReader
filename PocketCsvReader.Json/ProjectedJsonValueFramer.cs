@@ -41,6 +41,9 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private int _nextProjectedOrdinal;
     private int _remainingProjectedFields;
     private bool _complete;
+    private readonly bool _allowComments;
+    private readonly bool _allowTrailingCommas;
+    private JsonCommentScanner _comments;
 
     public int Delimiter { get; private set; }
     public bool RequiresValueMaterialization { get; private set; }
@@ -48,11 +51,15 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     public ProjectedJsonValueFramer(
         IReadOnlyList<string> projectedProperties,
         FieldSpan[] fields,
-        bool orderedProjection = false)
+        bool orderedProjection = false,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
         _projectedProperties = projectedProperties;
         _fields = fields;
         _orderedProjection = orderedProjection;
+        _allowComments = allowComments;
+        _allowTrailingCommas = allowTrailingCommas;
         if (orderedProjection)
             return;
 
@@ -90,6 +97,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         _nextProjectedOrdinal = 0;
         _remainingProjectedFields = _fields.Length;
         _complete = false;
+        _comments = default;
         Delimiter = -1;
         RequiresValueMaterialization = false;
     }
@@ -132,7 +140,10 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     }
 
     public FrameScanResult CompleteAtEof()
-        => throw Error("The JSON value is incomplete");
+    {
+        _comments.CompleteAtEof();
+        throw Error("The JSON value is incomplete");
+    }
 
     private bool Process(char current)
     {
@@ -143,6 +154,9 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
             Push(ContainerKind.Object, _position, -1, default, null);
             return true;
         }
+
+        if (_allowComments && _comments.TryConsume(current, _startPosition + _position))
+            return true;
 
         if (IsWhitespace(current))
             return true;
@@ -166,6 +180,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                 return true;
 
             case ContainerState.Property:
+                if (_allowTrailingCommas && current == '}')
+                    return CloseContainer(ContainerKind.Object);
                 if (current != '"')
                     throw Error("A JSON property name was expected");
                 BeginString(isProperty: true, ordinal: -1, default, null);
@@ -205,6 +221,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                 return BeginValue(ref frame, current);
 
             case ContainerState.Value:
+                if (_allowTrailingCommas && current == ']')
+                    return CloseContainer(ContainerKind.Array);
                 return BeginValue(ref frame, current);
 
             case ContainerState.CommaOrEnd:
@@ -757,10 +775,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (frame.Kind != expected)
             throw Error($"Unexpected character '{(expected == ContainerKind.Object ? '}' : ']')}'");
 
-        var canClose = frame.Kind == ContainerKind.Object
-            ? frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
-            : frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd;
-        if (!canClose)
+        if (!CanCloseContainer(frame))
             throw Error("A JSON value or property is incomplete");
 
         _depth--;
@@ -786,6 +801,16 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         return true;
     }
 
+    private bool CanCloseContainer(in ContainerFrame frame)
+    {
+        if (frame.Kind == ContainerKind.Object)
+            return frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
+                || (_allowTrailingCommas && frame.State == ContainerState.Property);
+
+        return frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd
+            || (_allowTrailingCommas && frame.State == ContainerState.Value);
+    }
+
     private void CompleteParentValue()
     {
         ref var parent = ref _stack[_depth - 1];
@@ -798,8 +823,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private static bool IsWhitespace(char value)
         => value is ' ' or '\t' or '\r' or '\n';
 
-    private static bool IsValueDelimiter(char value)
-        => IsWhitespace(value) || value is ',' or ']' or '}';
+    private bool IsValueDelimiter(char value)
+        => IsWhitespace(value) || value is ',' or ']' or '}' || (_allowComments && value == '/');
 
     private static int HexValue(char value)
         => value switch

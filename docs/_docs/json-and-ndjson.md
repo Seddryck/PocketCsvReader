@@ -3,7 +3,7 @@ title: JSON and NDJSON
 tags: [formats]
 ---
 
-PocketCsvReader provides separate extension packages for standard JSON documents and newline-delimited JSON streams. Both reuse the same strict JSON grammar and expose records through the usual `IDataReader`, string-array, and `DataTable` entry points.
+PocketCsvReader provides separate extension packages for standard JSON documents and newline-delimited JSON streams. Both default to the same strict JSON grammar and expose records through the usual `IDataReader`, string-array, and `DataTable` entry points.
 
 ## Standard JSON documents
 
@@ -26,7 +26,7 @@ while (reader.Read())
 
 A root object produces one labeled row. A root array produces one row per element. Object elements expose their properties as labeled fields; primitive, array, and null elements use field ordinal zero. The reader accepts pretty printing and the four JSON whitespace characters, and it streams array elements without loading the complete document.
 
-JSON is strict: comments, custom record separators, trailing commas, and content after the root value are rejected.
+JSON is strict by default: comments, custom record separators, trailing commas, and content after the root value are rejected.
 
 When only part of each object is needed, configure a projection. Unselected properties are validated but are not materialized, and selected properties are exposed in projection order regardless of their input order:
 
@@ -42,6 +42,38 @@ var json = new JsonReaderBuilder()
 ```
 
 Use `WithOrderedProjection` only when the selected properties are guaranteed to occur in projection order. It avoids general property lookup, but a record whose selected properties are reordered is rejected.
+
+## JSON with comments (JSONC)
+
+Opt in to JSONC using the existing `PocketCsvReader.Json` package:
+
+```csharp
+var json = new JsonReaderBuilder()
+    .WithJsonc()
+    .WithRecordPath("$.customers[*]")
+    .Build();
+
+using var rows = json.ToDataReader("customers.jsonc");
+```
+
+```jsonc
+{
+  // Customers
+  "customers": [
+    { "id": 1, "name": "Alice", },
+    /* Second customer */
+    { "id": 2, "name": "Bob", },
+  ],
+}
+```
+
+This returns the same two rows as strict JSON without comments or trailing commas. `WithJsonc()` enables both `//` line comments (through newline or EOF) and `/* ... */` block comments, plus a single trailing comma before `}` or `]`. Comments may appear anywhere whitespace is allowed, including before and after the root. Comment markers inside strings remain literal text; block comments do not nest. Malformed commas, incomplete block comments, invalid strings/numbers, and additional root values still throw `InvalidDataException` with position information.
+
+Profiles expose independent, read-only `AllowComments` and `AllowTrailingCommas` settings. For example, `new JsonProfile(allowComments: true)` accepts comments while continuing to reject trailing commas, and `new JsonProfile(allowTrailingCommas: true)` permits trailing commas while continuing to reject comments. Set both to `true` for JSONC. The builder offers `WithComments(bool allowComments = true)` and `WithTrailingCommas(bool allowTrailingCommas = true)`; `WithJsonc()` is shorthand for enabling both. Both settings default to `false`, and either can be disabled again after `WithJsonc()`. The existing profile constructor remains available. The file extension never changes the dialect automatically.
+
+JSONC works with root objects, streamed top-level arrays, nested values, normal and ordered projection, record paths, and both synchronous and asynchronous reads. Framing retains comment state across buffer boundaries and preserves offsets into the original input; it does not strip comments or normalize the document. Raw composite values therefore retain their original comments and commas. As with strict JSON, record-path selection captures the complete document before enumerating matches; without a record path, top-level array elements stream independently.
+
+NDJSON retains its existing line framing and optional comment configuration. Its JSON values remain strict; `WithJsonc()` applies only to the JSON reader.
 
 ## Newline-delimited JSON
 

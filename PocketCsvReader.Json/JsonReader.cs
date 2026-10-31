@@ -38,6 +38,8 @@ public class JsonReader : FlatFileReader<JsonProfile, JsonDataReader>
             profile.ParserOptimizations with { BufferSize = bufferSize },
             profile.ProjectedProperties,
             profile.OrderedProjection,
-            profile.RecordPath);
+            profile.RecordPath,
+            profile.AllowComments,
+            profile.AllowTrailingCommas);
     }
 }

@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PocketCsvReader.Ndjson" />
+    <InternalsVisibleTo Include="PocketCsvReader.Json.Testing" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
