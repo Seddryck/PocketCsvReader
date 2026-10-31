@@ -76,6 +76,17 @@ Repository-specific workflows are defined under `.github/skills/`.
 
 When a task matches an existing skill, read and follow that skill before making changes.
 
+## Parser architecture
+
+For new formats and substantial parser or record-source rewrites, follow [file-parser-design](.github/skills/file-parser-design/SKILL.md) before implementation.
+
+* Use reusable input buffers and span/memory-based field parsing. Preserve a memory-backed path for complete records already in a buffer.
+* Reuse temporary field storage. For fixed schemas, reuse field metadata where the reader's current-record lifetime allows it; for variable schemas, separate reusable scratch storage from any required owned output.
+* Document who owns record memory and metadata, and when those views become invalid. Materialized output objects must remain independently valid.
+* Avoid per-row line strings, whole-record `StringBuilder` materialization, and accidental copies through public `RecordSpan`/`RecordMemory` span constructors. Existing extension readers are not automatically suitable architecture examples.
+* Add ownership/reuse checks, boundary and async-I/O tests, and a warmed raw-parsing allocation budget appropriate to the new format. Run them for every supported target framework. Keep required output allocations separate from parser overhead.
+* Run `dotnet run --project .github/tools/ParserAllocationGuard -c Release -- .`. New findings require a design review; do not automatically expand its exception list. See the skill for the checked reference and exception policy.
+
 ## Pull requests
 
 For every completed implementation:

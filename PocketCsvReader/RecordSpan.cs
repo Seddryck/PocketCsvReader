@@ -20,6 +20,11 @@ public readonly ref struct RecordSpan
     /// </summary>
     /// <param name="span">The span of characters representing the entire CSV record.</param>
     /// <param name="fieldSpans">An array of <see cref="FieldSpan"/> structs indicating the positions and lengths of each field within the record.</param>
+    /// <remarks>
+    /// Copies the characters into a new array; the field metadata array is retained without copying.
+    /// Internal streaming parsers with an established memory lifetime should use FromMemory instead
+    /// to avoid copying an already buffered record.
+    /// </remarks>
     public RecordSpan(ReadOnlySpan<char> span, FieldSpan[] fieldSpans)
         : this(new ReadOnlyMemory<char>(span.ToArray()), fieldSpans)
     { }

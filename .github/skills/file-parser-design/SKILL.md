@@ -7,12 +7,15 @@ description: Design, implement, or review a PocketCsvReader parser for a new fil
 
 Build new format readers as extensions of PocketCsvReader's parsing architecture, not as standalone stream-processing implementations. Preserve correctness first, then preserve the zero-copy and bounded-allocation behavior that existing abstractions make possible.
 
+For implementation details and executable safeguards, read [the buffered-source reference](references/buffered-source.md). The compiled example is `PocketCsvReader.Testing/BufferedSourceExampleTest.cs`; adapt its lifecycle and storage ownership to the requested grammar rather than copying an existing allocation-heavy extension.
+
 ## Establish the design from repository evidence
 
 Before writing a new parser, inspect the current versions of:
 
 - `IRecordSource<TProfile>` and `BaseRecordParser<TProfile>`;
 - `IBufferReader`, `StreamBuffer`, `SingleBuffer`, and `DoubleBuffer`;
+- `BufferedRecordReader`, `IRecordFramer`, and `CapturedRecord` for format-independent framing;
 - `RecordSpan` and `RecordMemory`, including their ownership-oriented internal constructors;
 - `BaseDataReader<TProfile>` and the closest existing format implementation;
 - parser optimization settings, tests, benchmarks, and package boundaries relevant to the new format.
@@ -70,6 +73,10 @@ Prefer a field parser over `ReadOnlySpan<char>` or `ReadOnlyMemory<char>`. A cla
 Formats with quoted strings must track quote, escape, delimiter, and nesting state. That syntax handling is required; allocating a managed string for every token is not.
 
 Represent unescaped values as spans into the record. Allocate decoded text only when escapes, normalization, or an existing public result type requires it. A temporary builder limited to an escaped value can be reasonable; a builder for every complete record is not the default.
+
+### Reuse temporary field metadata
+
+Create scratch field storage once per parser and clear or overwrite it between records. A fixed schema normally needs one exact-size `FieldSpan[]`, valid until the reader advances. Variable or nested schemas may need reusable growable scratch storage and an owned result array when the public lifetime requires it. Do not add a per-row `List<FieldSpan>` followed by `ToArray()` merely because another parser uses that pattern.
 
 ### Share grammar between sync and async paths
 
@@ -134,6 +141,17 @@ Add focused tests appropriate to the format, including:
 
 Run focused tests for every supported target framework before broader validation. When the implementation introduces a new hot path or replaces an established parser, add or run an allocation/performance benchmark with representative small, cross-buffer, and large records. Report benchmarks as comparative evidence, not as a universal performance guarantee.
 
+Include a warmed allocation-budget test of raw parsing without `GetString()`, object mapping, or input generation inside measurement. Choose a documented budget that catches a full-record string/copy and repeated scratch-array allocation for the representative workload; do not copy another format's numeric limit blindly. For a fixed schema, also assert storage identity across reads and validate that owned output values survive reader advancement. These behavioral checks complement the source guard, which cannot prove allocation behavior.
+
+Run the source guard and its self-tests before the PR:
+
+```shell
+dotnet run --project .github/tools/ParserAllocationGuard -c Release -- --self-test
+dotnet run --project .github/tools/ParserAllocationGuard -c Release -- .
+```
+
+Exceptions identify exact normalized expressions, files, and occurrence counts with a reason. Existing debt is a migration inventory, not permission to repeat the pattern. Add an exception only after reviewing the actual ownership or materialization requirement, and document that decision in the PR. Remove exceptions when their occurrences disappear. There is no automatic exception-update mode; `--inventory` only prints findings for inspection.
+
 ## Pre-PR review gate
 
 Do not open or finalize the pull request until the review can answer yes to all applicable questions:
@@ -142,11 +160,14 @@ Do not open or finalize the pull request until the review can answer yes to all 
 - Is there a zero-copy path for records already contained in parser-owned memory?
 - Is a cross-buffer record copied no more than once before consumption?
 - Does the field parser accept span- or memory-backed input rather than requiring a complete-record string?
+- Is temporary field metadata reused, with required owned output distinguished from scratch storage?
 - Are escaped strings the only ordinary values that require decoding allocations?
 - Do sync and async entry points use the same framing and grammar state?
 - Is current-record memory valid until the reader advances?
 - Is memory bounded by the active record rather than the whole document?
 - Are format-specific concerns confined to the format package?
 - Do focused tests cover buffer boundaries, malformed input, streaming, and async I/O?
+- Do ownership/reuse and raw-allocation regression tests pass on every supported target framework?
+- Does the source guard pass without unexplained new exceptions?
 
 If an answer is no, either revise the design or explain the concrete format/API constraint in the pull request. Convenience or similarity to another allocation-heavy parser is not sufficient evidence.
