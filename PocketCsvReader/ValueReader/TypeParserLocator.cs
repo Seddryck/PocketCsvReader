@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Globalization;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -17,6 +18,11 @@ internal interface ITypeParserLocator
 
 internal class TypeParserLocator<T> : ITypeParserLocator
 {
+    private delegate T NumericParser(ReadOnlySpan<char> text, NumberStyles styles, IFormatProvider culture);
+    private delegate T TemporalParser(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern, IFormatProvider culture, DateTimeStyles styles);
+    private delegate bool NumericTryParser(ReadOnlySpan<char> text, NumberStyles styles, IFormatProvider culture, out T value);
+    private delegate bool TemporalTryParser(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern, IFormatProvider culture, DateTimeStyles styles, out T value);
+
     private Type Target { get; set; }
 
     public TypeParserLocator()
@@ -36,6 +42,24 @@ internal class TypeParserLocator<T> : ITypeParserLocator
 
     private static ParseSpan<T> CompileParser(MethodInfo method, object[] parameters)
     {
+        // Bind common signatures directly; expression compilation is reserved for other shapes.
+        if (HasSignature(method, typeof(ReadOnlySpan<char>)))
+            return method.CreateDelegate<ParseSpan<T>>();
+        if (HasSignature(method, typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider)))
+        {
+            var parse = method.CreateDelegate<NumericParser>();
+            var styles = (NumberStyles)parameters[0];
+            var culture = (IFormatProvider)parameters[1];
+            return text => parse(text, styles, culture);
+        }
+        if (HasSignature(method, typeof(ReadOnlySpan<char>), typeof(ReadOnlySpan<char>), typeof(IFormatProvider), typeof(DateTimeStyles)))
+        {
+            var parse = method.CreateDelegate<TemporalParser>();
+            var pattern = (string)parameters[0];
+            var culture = (IFormatProvider)parameters[1];
+            var styles = (DateTimeStyles)parameters[2];
+            return text => parse(text, pattern.AsSpan(), culture, styles);
+        }
         var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
         return Expression.Lambda<ParseSpan<T>>(Expression.Call(method, BindArguments(method, parameters, span)), span).Compile();
     }
@@ -61,11 +85,31 @@ internal class TypeParserLocator<T> : ITypeParserLocator
         if (method is null)
             return null;
 
+        if (HasSignature(method, typeof(ReadOnlySpan<char>), typeof(T).MakeByRefType()))
+            return method.CreateDelegate<TryParseSpan<T>>();
+        if (HasSignature(method, typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()))
+        {
+            var safe = method.CreateDelegate<NumericTryParser>();
+            var styles = (NumberStyles)parameters[0];
+            var culture = (IFormatProvider)parameters[1];
+            return (TryParseSpan<T>)((ReadOnlySpan<char> text, out T value) => safe(text, styles, culture, out value));
+        }
+        if (HasSignature(method, typeof(ReadOnlySpan<char>), typeof(ReadOnlySpan<char>), typeof(IFormatProvider), typeof(DateTimeStyles), typeof(T).MakeByRefType()))
+        {
+            var safe = method.CreateDelegate<TemporalTryParser>();
+            var pattern = (string)parameters[0];
+            var culture = (IFormatProvider)parameters[1];
+            var styles = (DateTimeStyles)parameters[2];
+            return (TryParseSpan<T>)((ReadOnlySpan<char> text, out T value) => safe(text, pattern.AsSpan(), culture, styles, out value));
+        }
         var span = Expression.Parameter(typeof(ReadOnlySpan<char>), "span");
         var value = Expression.Parameter(typeof(T).MakeByRefType(), "value");
         var call = Expression.Call(method, BindArguments(method, parameters, span, hasOutput: true).Append(value));
         return Expression.Lambda<TryParseSpan<T>>(call, span, value).Compile();
     }
+
+    private static bool HasSignature(MethodInfo method, params Type[] signature)
+        => method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(signature);
 
     public SpanParser.ParserEntry CreateEntry(Type type, object[] parameters)
     {
@@ -74,7 +118,7 @@ internal class TypeParserLocator<T> : ITypeParserLocator
         var method = FindMethod(snapshot.Select(x => x.GetType()).ToArray());
         var parse = CompileParser(method, snapshot);
         if (type == typeof(T))
-            return new(parse, tryFactory: () => CompileTryParser(method, snapshot));
+            return SpanParser.CreateEntry(parse, () => CompileTryParser(method, snapshot));
         if (Nullable.GetUnderlyingType(type) != typeof(T))
             throw new ArgumentException("The requested parser type must match the locator or its nullable type.", nameof(type));
 

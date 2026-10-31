@@ -75,8 +75,8 @@ internal class SpanParser
         protected virtual ParseSpan<object> CreateBoxed() => BoxParser(Typed);
     }
 
-    private sealed class TypedParserEntry<T>(ParseSpan<T> parse, TryParseSpan<T>? tryParse)
-        : ParserEntry(parse, tryParse: tryParse)
+    private sealed class TypedParserEntry<T>(ParseSpan<T> parse, TryParseSpan<T>? tryParse, Func<Delegate?>? tryFactory = null)
+        : ParserEntry(parse, tryParse: tryParse, tryFactory: tryFactory)
     {
         protected override ParseSpan<object> CreateBoxed() => span => ((ParseSpan<T>)Typed)(span)!;
     }
@@ -139,8 +139,8 @@ internal class SpanParser
         return new(dlg, tryParse: tryParse);
     }
 
-    internal static ParserEntry CreateEntry<T>(ParseSpan<T> parse)
-        => new TypedParserEntry<T>(parse, null);
+    internal static ParserEntry CreateEntry<T>(ParseSpan<T> parse, Func<Delegate?>? tryFactory = null)
+        => new TypedParserEntry<T>(parse, null, tryFactory);
 
     public void Register<T>(int index, ParseSpan<T> parse, TryParseSpan<T>? tryParse = null)
     {
