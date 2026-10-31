@@ -153,6 +153,37 @@ await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellati
 
 The sequence is lazy, forward-only, and uses the same parser, mapping, profile, and bad-data behavior as the synchronous API. Cancellation is forwarded to the underlying asynchronous I/O. File inputs are closed when enumeration ends; caller-provided streams are left open.
 
+### 5. Reading as Dynamic Objects
+
+Use `ToDynamic(filename)` or `ToDynamic(stream)` to read each record as an independent
+`System.Dynamic.ExpandoObject`, without defining a model type. For a file with
+`Name,City` headers:
+
+```csharp
+var dynamicReader = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .Build();
+
+foreach (dynamic record in dynamicReader.ToDynamic("people.csv"))
+{
+    Console.WriteLine($"{record.Name}: {record.City}");
+    var fields = (IDictionary<string, object?>)record;
+    Console.WriteLine(fields["City"]);
+}
+```
+
+Dictionary access also supports names containing spaces or punctuation. Names come
+from the underlying `IDataReader`, including generated names for headerless or
+unnamed fields. Values retain configured schema and parser types; untyped fields
+remain strings and database nulls become C# `null`. Duplicate names, compared
+ordinally, throw `System.Data.DuplicateNameException` before yielding the affected
+record, consistent with `ToDataTable()`; names are never silently overwritten or renamed.
+
+The shared reader abstraction obtains records through `ToDataReader()` and supports
+other formats such as fixed-width files. Enumeration is lazy and disposes the reader
+and its input stream on completion, failure, or early exit. Returned objects remain
+usable after enumeration ends. Empty input returns an empty sequence.
+
 ## Error Handling
 
 The following exceptions may be thrown:

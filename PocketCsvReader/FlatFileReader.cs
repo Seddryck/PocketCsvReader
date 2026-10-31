@@ -57,6 +57,31 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return MaterializeStringArrays(() => ToDataReader(stream));
     }
 
+    /// <summary>Lazily reads independently owned dynamic objects keyed by the reader's field names.</summary>
+    /// <remarks>Each row is a System.Dynamic.ExpandoObject. Values use the configured parsers;
+    /// database nulls become null. Duplicate names (compared ordinally) throw
+    /// DuplicateNameException before yielding the row. Enumeration owns and disposes
+    /// the underlying IDataReader, including its input stream.</remarks>
+    public IEnumerable<dynamic> ToDynamic(string filename)
+    {
+        CheckFileExists(filename);
+        return MaterializeDynamic(() => ToDataReader(filename));
+    }
+
+    /// <inheritdoc cref="ToDynamic(string)"/>
+    public IEnumerable<dynamic> ToDynamic(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return MaterializeDynamic(() => ToDataReader(stream));
+    }
+
+    private static IEnumerable<dynamic> MaterializeDynamic(Func<TDataReader> createReader)
+    {
+        using var reader = createReader();
+        foreach (var row in DataReaderMaterializer.ToDynamic(reader))
+            yield return row;
+    }
+
     /// <summary>Lazily reads independently owned dictionaries keyed by the reader's field names.</summary>
     /// <remarks>Values use the configured parsers; database nulls become null. Duplicate names
     /// (compared ordinally) throw InvalidDataException. Enumeration owns and disposes the reader.</remarks>

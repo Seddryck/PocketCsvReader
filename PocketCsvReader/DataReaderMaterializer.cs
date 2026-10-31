@@ -1,9 +1,28 @@
 using System.Data;
+using System.Dynamic;
 
 namespace PocketCsvReader;
 
 internal static class DataReaderMaterializer
 {
+    public static IEnumerable<dynamic> ToDynamic(IDataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        while (reader.Read())
+        {
+            IDictionary<string, object?> row = new ExpandoObject();
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                var name = reader.GetName(index);
+                if (!row.TryAdd(name, null))
+                    throw new DuplicateNameException($"Duplicate field name '{name}' cannot be materialized as a dynamic object.");
+            }
+            for (var index = 0; index < reader.FieldCount; index++)
+                row[reader.GetName(index)] = ReadValue(reader, index);
+            yield return (ExpandoObject)row;
+        }
+    }
+
     public static DataTable ToDataTable(IDataReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
