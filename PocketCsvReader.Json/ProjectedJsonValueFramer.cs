@@ -775,13 +775,7 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         if (frame.Kind != expected)
             throw Error($"Unexpected character '{(expected == ContainerKind.Object ? '}' : ']')}'");
 
-        var canClose = frame.Kind == ContainerKind.Object
-            ? frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
-            : frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd;
-        canClose |= _allowTrailingCommas && (frame.Kind == ContainerKind.Object
-            ? frame.State == ContainerState.Property
-            : frame.State == ContainerState.Value);
-        if (!canClose)
+        if (!CanCloseContainer(frame))
             throw Error("A JSON value or property is incomplete");
 
         _depth--;
@@ -805,6 +799,16 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         }
         CompleteParentValue();
         return true;
+    }
+
+    private bool CanCloseContainer(in ContainerFrame frame)
+    {
+        if (frame.Kind == ContainerKind.Object)
+            return frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
+                || (_allowTrailingCommas && frame.State == ContainerState.Property);
+
+        return frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd
+            || (_allowTrailingCommas && frame.State == ContainerState.Value);
     }
 
     private void CompleteParentValue()

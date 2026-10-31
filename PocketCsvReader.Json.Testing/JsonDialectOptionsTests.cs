@@ -18,40 +18,8 @@ public class JsonDialectOptionsTests
         [Values(false, true)] bool async,
         [Values(false, true)] bool useProfile)
     {
-        var comment = inputComments ? "/* delimiters } ] */ // line\r\n" : "";
-        var comma = inputTrailingCommas ? "," : "";
-        var row = "{\"id\":" + comment + "1,\"items\":[1,2" + comma + "],"
-            + "\"ignored\":{\"nested\":[true" + comma + "]" + comma + "}" + comma + "}";
-        var rows = "[" + comment + row + "," + comment + row + comma + "]";
-        var content = comment + (root switch
-        {
-            0 => row,
-            1 => rows,
-            _ => "{\"rows\":" + rows + comma + "}"
-        }) + comment;
-        var path = root == 2 ? "$.rows[*]" : null;
-        JsonReader json;
-        if (useProfile)
-        {
-            var profile = new JsonProfile(
-                projectedProperties: projection == 0 ? null : ["id", "items"],
-                orderedProjection: projection == 2,
-                recordPath: path,
-                allowComments: allowComments,
-                allowTrailingCommas: allowTrailingCommas);
-            // The buffer-size constructor must retain both independent settings.
-            json = new JsonReader(profile, bufferSize: 1);
-        }
-        else
-        {
-            var builder = new JsonReaderBuilder()
-                .WithComments(allowComments).WithTrailingCommas(allowTrailingCommas)
-                .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 1, ReadAhead: false));
-            if (projection == 1) builder.WithProjection(p => p.Property("items").Property("id"));
-            if (projection == 2) builder.WithOrderedProjection(p => p.Property("id").Property("items"));
-            if (path is not null) builder.WithRecordPath(path);
-            json = builder.Build();
-        }
+        var content = CreateDocument(inputComments, inputTrailingCommas, root);
+        var json = CreateJsonReader(allowComments, allowTrailingCommas, projection, root, useProfile);
         using var reader = json.ToDataReader(Input(content));
         if ((inputComments && !allowComments) || (inputTrailingCommas && !allowTrailingCommas))
         {
@@ -129,6 +97,48 @@ public class JsonDialectOptionsTests
         Assert.That(async ? await both.ReadAsync() : both.Read(), Is.True);
         Assert.That(both.GetInt32(0), Is.EqualTo(1));
         Assert.That(async ? await both.ReadAsync() : both.Read(), Is.False);
+    }
+
+    private static string CreateDocument(bool inputComments, bool inputTrailingCommas, int root)
+    {
+        var comment = inputComments ? "/* delimiters } ] */ // line\r\n" : "";
+        var comma = inputTrailingCommas ? "," : "";
+        var row = "{\"id\":" + comment + "1,\"items\":[1,2" + comma + "],"
+            + "\"ignored\":{\"nested\":[true" + comma + "]" + comma + "}" + comma + "}";
+        var rows = "[" + comment + row + "," + comment + row + comma + "]";
+        return comment + (root switch
+        {
+            0 => row,
+            1 => rows,
+            _ => "{\"rows\":" + rows + comma + "}"
+        }) + comment;
+    }
+
+    private static JsonReader CreateJsonReader(
+        bool allowComments, bool allowTrailingCommas, int projection, int root, bool useProfile)
+    {
+        var path = root == 2 ? "$.rows[*]" : null;
+        if (useProfile)
+        {
+            var profile = new JsonProfile(
+                projectedProperties: projection == 0 ? null : ["id", "items"],
+                orderedProjection: projection == 2,
+                recordPath: path,
+                allowComments: allowComments,
+                allowTrailingCommas: allowTrailingCommas);
+            // The buffer-size constructor must retain both independent settings.
+            return new JsonReader(profile, bufferSize: 1);
+        }
+        else
+        {
+            var builder = new JsonReaderBuilder()
+                .WithComments(allowComments).WithTrailingCommas(allowTrailingCommas)
+                .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 1, ReadAhead: false));
+            if (projection == 1) builder.WithProjection(p => p.Property("items").Property("id"));
+            if (projection == 2) builder.WithOrderedProjection(p => p.Property("id").Property("items"));
+            if (path is not null) builder.WithRecordPath(path);
+            return builder.Build();
+        }
     }
 
     private static MemoryStream Input(string content) => new(Encoding.UTF8.GetBytes(content));
