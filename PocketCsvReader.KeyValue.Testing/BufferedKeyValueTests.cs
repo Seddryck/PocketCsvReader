@@ -170,4 +170,3 @@ public class BufferedKeyValueTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
-
