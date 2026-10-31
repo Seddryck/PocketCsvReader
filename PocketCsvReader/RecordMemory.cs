@@ -79,6 +79,11 @@ public class RecordMemory
     /// </summary>
     /// <param name="span">The character data representing the entire CSV record.</param>
     /// <param name="fieldSpans">An array of <see cref="FieldSpan"/> structs containing positional information for each field.</param>
+    /// <remarks>
+    /// Copies the characters into a new array; the field metadata array is retained without copying.
+    /// Internal streaming parsers should use the memory-backed constructor or convert an existing
+    /// RecordSpan view with AsMemory when the current-record lifetime permits borrowed storage.
+    /// </remarks>
     public RecordMemory(ReadOnlySpan<char> span, FieldSpan[] fieldSpans)
     {
         _memory = new ReadOnlyMemory<char>(span.ToArray());
