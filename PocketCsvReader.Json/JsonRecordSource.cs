@@ -15,6 +15,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
+    private readonly JsonFieldBuffer _fieldBuffer = new();
     private IEnumerator<ReadOnlyMemory<char>>? _matches;
     private DocumentState _state;
     private bool _needsArrayElement;
@@ -198,7 +199,10 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     {
         try
         {
-            return JsonRecordParser.Parse(json.Span, JsonWhitespaces, Profile.AllowComments, Profile.AllowTrailingCommas);
+            // Record-path enumeration retains its tree across selected rows. Keep that
+            // metadata independently owned rather than overwriting it on the next match.
+            return JsonRecordParser.Parse(json.Span, JsonWhitespaces, Profile.AllowComments, Profile.AllowTrailingCommas,
+                Profile.ParsedRecordPath is null ? _fieldBuffer : null);
         }
         catch (InvalidDataException exception)
         {

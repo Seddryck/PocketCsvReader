@@ -14,6 +14,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
+    private readonly JsonFieldBuffer _fieldBuffer = new();
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
     private IEnumerator<ReadOnlyMemory<char>>? _matches;
     private StableJsonShape? _stableShape;
@@ -161,7 +162,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
             return ParseStableCandidate(record);
 
         if (_projectedValueFramer is null)
-            return new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces));
+            return new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces,
+                buffer: Profile.ParsedRecordPath is null ? _fieldBuffer : null));
 
         var projectedRecord = Trim(record);
         _projectedValueFramer.Prepare(projectedRecord.Span[0], 0);
