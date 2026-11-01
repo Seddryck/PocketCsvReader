@@ -1,11 +1,12 @@
 using System.Buffers;
+using System.Runtime.InteropServices;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
 
 // Only ASCII syntax is supported. Non-ASCII payload bytes are opaque to the
 // shared state machine; all offsets are byte offsets until a field is requested.
-internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSource
+internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSource, ICurrentRecordSource
 {
     public CsvProfile Profile { get; }
     private readonly Stream _stream;
@@ -13,14 +14,16 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly byte[] _input;
     private readonly int _readSize;
     private readonly List<FieldSpan> _fields = new();
+    private readonly FieldMetadataBuffer _publishedFields = new();
+    bool ICurrentRecordSource.SupportsCurrentRecord => true;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
     private readonly PositionTracker? _positionTracker;
     private byte[] _record;
     private int _position;
     private int _available;
-    private bool _disposed;
     private int _length;
+    private bool _disposed;
     PositionTracker? IPositionSource.Tracker => _positionTracker;
     public RecordPosition? CurrentPosition => _positionTracker?.CurrentPosition;
 
@@ -55,49 +58,63 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
+        var result = ReadResult(borrowFields: false);
+        record = result.Record.Materialize().AsRecordSpan();
+        recordState = result.State;
+        return result.IsEndOfFile;
+    }
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadResult(borrowFields: true);
+
+    private CurrentRecordResult ReadResult(bool borrowFields)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        RecordReadResult result;
-        while (!TryRead(false, out result))
+        CurrentRecordResult result;
+        while (!TryRead(false, borrowFields, out result))
         {
             _available = _stream.Read(_input, 0, _readSize);
             _position = 0;
             if (_available == 0)
             {
-                TryRead(true, out result);
+                TryRead(true, borrowFields, out result);
                 break;
             }
         }
-        record = result.Record.AsRecordSpan();
-        recordState = result.State;
-        return result.IsEndOfFile;
+        return result;
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+        => (await ReadResultAsync(borrowFields: false, cancellationToken).ConfigureAwait(false)).Materialize();
+
+    ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
+        => ReadResultAsync(borrowFields: true, cancellationToken);
+
+    private async ValueTask<CurrentRecordResult> ReadResultAsync(bool borrowFields, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
-        RecordReadResult result;
-        while (!TryRead(false, out result))
+        CurrentRecordResult result;
+        while (!TryRead(false, borrowFields, out result))
         {
             _available = await _stream.ReadAsync(_input.AsMemory(0, _readSize), cancellationToken).ConfigureAwait(false);
             _position = 0;
             if (_available == 0)
             {
-                TryRead(true, out result);
+                TryRead(true, borrowFields, out result);
                 return result;
             }
         }
         return result;
     }
 
-    private bool TryRead(bool eof, out RecordReadResult result)
+    private bool TryRead(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
-        if (_positionTracker is null) return TryReadCore(eof, out result);
+        if (_positionTracker is null) return TryReadCore(eof, borrowFields, out result);
         // Keep the grammar and IndexOfAny bulk copies identical in both modes.
         // Only enabled tracking searches the consumed spans for physical newlines.
         int start = _position;
         if (_length == 0) _positionTracker?.BeginRecord();
-        bool complete = TryReadCore(eof, out result);
+        bool complete = TryReadCore(eof, borrowFields, out result);
         if (_positionTracker is { } tracker)
         {
             tracker.Advance(_input.AsSpan(start, _position - start));
@@ -106,7 +123,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         return complete;
     }
 
-    private bool TryReadCore(bool eof, out RecordReadResult result)
+    private bool TryReadCore(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
         var fields = _fields;
         int length = _length;
@@ -124,7 +141,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
                 {
                     if (length == 0)
                     {
-                        result = new(true, RecordMemory.Empty, RecordState.Eof);
+                        result = new(true, default, RecordState.Eof);
                         return true;
                     }
                     var end = _parser.ParseEof(length);
@@ -132,7 +149,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
                         fields.Add(_parser.Result);
                     else if (end != ParserState.Eof)
                         throw new InvalidDataException("Invalid character End-of-File.");
-                    result = new(true, new RecordMemory(_record.AsMemory(0, length), fields.ToArray(), _decodedFields),
+                    result = new(true, PublishRecord(length, borrowFields),
                         end == ParserState.Eof ? RecordState.Eof : RecordState.Record);
                     _parser.Reset(true);
                     _length = 0;
@@ -172,8 +189,8 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
             }
             if (state is ParserState.Record or ParserState.Header or ParserState.Comment)
             {
-                result = new(false, state == ParserState.Comment ? RecordMemory.Empty
-                    : new RecordMemory(_record.AsMemory(0, length), fields.ToArray(), _decodedFields),
+                result = new(false, state == ParserState.Comment ? default
+                    : PublishRecord(length, borrowFields),
                     state == ParserState.Comment ? RecordState.Comment : RecordState.Record);
                 _parser.Reset(true);
                 _length = 0;
@@ -181,6 +198,14 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
                 return true;
             }
         }
+    }
+
+    private CurrentRecord PublishRecord(int length, bool borrowFields)
+    {
+        var scratch = CollectionsMarshal.AsSpan(_fields);
+        var fields = borrowFields ? _publishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
+        _decodedFields.Reset(length, fields.Length);
+        return new CurrentRecord(_record.AsMemory(0, length), fields, _decodedFields);
     }
 
     private void EnsureRecordCapacity(int capacity, int length)

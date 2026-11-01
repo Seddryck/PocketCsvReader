@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ParserSourceRoot Condition="'$(ParserSourceRoot)' == ''">$(MSBuildThisFileDirectory)..\..</ParserSourceRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader\PocketCsvReader.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.FixedWidth\PocketCsvReader.FixedWidth.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.WebLogs\PocketCsvReader.WebLogs.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.KeyValue\PocketCsvReader.KeyValue.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Ndjson\PocketCsvReader.Ndjson.csproj" />
+  </ItemGroup>
+</Project>

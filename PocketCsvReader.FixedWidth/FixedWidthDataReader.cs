@@ -26,13 +26,13 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
     public override string GetRawString(int i)
     {
         ValidateOrdinal(i);
-        return Record!.Slice(i).ToString();
+        return GetCurrentFieldMemory(i).ToString();
     }
 
     protected override NullableSpan GetValueOrThrow(int i)
     {
         ValidateOrdinal(i);
-        var span = Record!.Slice(i).Span;
+        var span = GetCurrentFieldMemory(i).Span;
         var layout = Profile.Descriptor.Fields[i];
         span = TrimPadding(span, layout.Padding, layout.PaddingChar);
 
@@ -76,7 +76,7 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
             return false;
         }
 
-        Record = rawRecord.AsMemory();
+        SetRecord(rawRecord.Memory, rawRecord.FieldSpans);
         RowCount++;
         return true;
     }
@@ -125,7 +125,7 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
 
     private void ValidateOrdinal(int i)
     {
-        if (Record is null)
+        if (CurrentFieldSpans is null)
             throw new InvalidOperationException("Read must be called before accessing field values.");
         if (i < 0 || i >= FieldCount)
             throw new ArgumentOutOfRangeException(nameof(i), $"Field index '{i}' is out of range.");

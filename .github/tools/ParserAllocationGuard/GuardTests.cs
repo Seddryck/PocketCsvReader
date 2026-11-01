@@ -21,6 +21,10 @@ internal static class GuardTests
             Rules("class P { StringBuilder record = new(); void Read() { record.ToString(); } }", "PA004");
             Rules("class P { void Read() { var record = new StringBuilder(); record.ToString(); } }", "PA004");
             Rules("class P { void Read() { new StringBuilder().ToString(); } }", "PA004");
+            Rules("class P { void Read() { Record = row.AsMemory(); } }", "PA005");
+            Rules("class P { void Read() { this.Record = row.AsMemory(); } }", "PA005");
+            Rules("class P { void Read() { var memory = input.AsMemory(); Record = RecordMemory.Empty; } }");
+            Rules("class P { RecordMemory Export() => row.AsMemory(); }");
             Rules("class P { void Read() { new RecordSpan([], []); new RecordMemory([], []); RecordSpan.FromMemory(memory, fields); reader.ReadLineFrame(); } }");
             Rules("class P { // reader.ReadLine(); new List<FieldSpan>();\n string note = \"new RecordSpan(line, fields)\"; string raw = \"\"\"reader.ReadLine();\"\"\"; }");
 

@@ -56,13 +56,6 @@
     "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable schema field array until the next read or disposal; no character or field-array copy. The RecordReadResult contract requires a RecordMemory wrapper."
   },
   {
-    "Path": "PocketCsvReader/BaseRawRecord.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(CurrentRecordMemory,CurrentFieldSpans)",
-    "Count": 1,
-    "Reason": "Core wrapper lazily borrows current record memory and field spans; current-row lifetime is preserved."
-  },
-  {
     "Path": "PocketCsvReader/PositionedLineReader.cs",
     "Rule": "PA001",
     "Code": "_reader.ReadLine()",
@@ -105,17 +98,24 @@
     "Reason": "Reviewed memory-backed internal constructor over the reusable buffer containing the generated row number and original record."
   },
   {
-    "Path": "PocketCsvReader/Utf8RecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(_record.AsMemory(0,length),fields.ToArray(),_decodedFields)",
-    "Count": 2,
-    "Reason": "Reviewed UTF-8 internal constructor: pooled byte memory with copied field metadata and a reusable decoding buffer; no whole-record character materialization."
-  },
-  {
     "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
     "Rule": "PA002",
     "Code": "newRecordMemory(captured.Memory,_fields)",
     "Count": 1,
     "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable current-record metadata array until the next read or disposal, without copying either. RecordReadResult requires this wrapper."
+  },
+  {
+    "Path": "PocketCsvReader/CurrentRecord.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(_utf8,fields,_decodedFields!)",
+    "Count": 1,
+    "Reason": "Reviewed explicit public/compatibility materialization boundary. Public RecordReadResult.Record and protected legacy Record access require a RecordMemory object; internal reader sync/async transport uses CurrentRecord without calling Materialize. Character/byte memory is borrowed without copying. Public source exports already own their top-level metadata; CSV legacy-wrapper access explicitly snapshots it through FieldMetadataBuffer.CopyOwned. Tests cover retained parser/mapper/wrapper metadata, borrowed array identity, wrapper absence and raw allocation budgets."
+  },
+  {
+    "Path": "PocketCsvReader/CurrentRecord.cs",
+    "Rule": "PA002",
+    "Code": "newRecordMemory(Characters,fields)",
+    "Count": 1,
+    "Reason": "Reviewed explicit public/compatibility materialization boundary. Public RecordReadResult.Record and protected legacy Record access require a RecordMemory object; internal reader sync/async transport uses CurrentRecord without calling Materialize. Character/byte memory is borrowed without copying. Public source exports already own their top-level metadata; CSV legacy-wrapper access explicitly snapshots it through FieldMetadataBuffer.CopyOwned. Tests cover retained parser/mapper/wrapper metadata, borrowed array identity, wrapper absence and raw allocation budgets."
   }
 ]

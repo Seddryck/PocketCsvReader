@@ -127,6 +127,24 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     protected abstract bool ReadCore();
 
+    // Prefer borrowed current-record transport. Public/custom sources retain their
+    // existing virtual entry points and ownership behavior through the fallback.
+    private protected CurrentRecordResult ReadSource()
+    {
+        if (RecordSource is ICurrentRecordSource { SupportsCurrentRecord: true } source)
+            return source.ReadCurrent();
+        var eof = RecordSource!.IsEndOfFile(out var record, out var state);
+        return new(eof, record.Current, state);
+    }
+
+    private protected async ValueTask<CurrentRecordResult> ReadSourceAsync(CancellationToken cancellationToken)
+    {
+        if (RecordSource is ICurrentRecordSource { SupportsCurrentRecord: true } source)
+            return await source.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+        return new(result.IsEndOfFile, result.Record.Current, result.State);
+    }
+
     protected override void EnsureValidationRecord()
     {
         if (!_hasCurrentRecord || _isClosed || _disposed)

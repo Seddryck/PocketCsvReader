@@ -99,6 +99,17 @@ internal static class Guard
         var findings = new List<Finding>();
         foreach (var node in root.DescendantNodes())
         {
+            // A public AsMemory conversion is legitimate at an API boundary, but
+            // assigning it to the reader's current Record eagerly wraps every row.
+            if (node is AssignmentExpressionSyntax assignment &&
+                (assignment.Left is IdentifierNameSyntax { Identifier.ValueText: "Record" } ||
+                 assignment.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Record" }) &&
+                assignment.Right is InvocationExpressionSyntax
+                {
+                    Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "AsMemory" },
+                    ArgumentList.Arguments.Count: 0
+                })
+                Add("PA005", assignment);
             if (node is InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax binding } conditional &&
                 binding.Name.Identifier.ValueText is "ReadLine" or "ReadLineAsync")
                 Add("PA001", conditional);

@@ -59,6 +59,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     internal T MapCurrent<T>(SpanMapper<T> mapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
+        // The compatibility Record getter snapshots borrowed metadata. A public
+        // mapper can therefore retain its IEnumerable<FieldSpan> after advancement.
         var record = (Record ?? throw new InvalidOperationException("No current record is available.")).AsCharacters();
         return mapper(record.Span.Span, record.FieldSpans);
     }
@@ -73,7 +75,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         => CsvStreamSource.CreateAsync(stream, profile, cancellationToken);
 
     public override int FieldCount =>
-        Record?.ParsedFields.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
+        CurrentFieldSpans?.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
 
     /// <summary>
         /// Returns the default value for a missing CSV field, using the profile's configured missing cell value if special value handling is enabled; otherwise, returns an empty string.
@@ -87,9 +89,9 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             /// <param name="i">The zero-based index of the field.</param>
             /// <returns>The raw field string, wrapped in quote characters if originally quoted; otherwise, the field value as a string.</returns>
     public override string GetRawString(int i)
-        => Record!.ParsedFields[i].Value.WasQuoted
-            ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
-            : Record!.Slice(i).ToString();
+        => CurrentFieldSpans![i].Value.WasQuoted
+            ? $"{Profile.Dialect.QuoteChar}{GetCurrentFieldMemory(i)}{Profile.Dialect.QuoteChar}"
+            : GetCurrentFieldMemory(i).ToString();
 
     private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
 
@@ -101,11 +103,11 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         // ASCII can decode directly into the returned string. Multibyte text
         // uses the pooled char cache to avoid GetString's separate UTF-8
         // character-count pass, and to reuse decoding for repeated access.
-        var record = Record;
-        if (record is null || i < 0 || i >= record.ParsedFields.Length || !record.TryGetUtf8(i, out var bytes)
+        var fields = CurrentFieldSpans;
+        if (fields is null || i < 0 || i >= fields.Length || !TryGetCurrentUtf8(i, out var bytes)
             || Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (Profile.ParserOptimizations.UnescapeChars && record.ParsedFields[i].Value.IsEscaped)
+            || (Profile.ParserOptimizations.UnescapeChars && fields[i].Value.IsEscaped)
             || !Ascii.IsValid(bytes.Span))
             return false;
         value = Encoding.UTF8.GetString(bytes.Span);
@@ -123,8 +125,8 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         // Custom parsers, formats, and sanitizers retain their existing char path.
         if (Profile.Schema is not null || Profile.Parsers is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || Record is null || i < 0 || i >= Record.ParsedFields.Length
-            || Record.ParsedFields[i].Value.IsEscaped || !Record.TryGetUtf8(i, out var memory))
+            || CurrentFieldSpans is null || i < 0 || i >= CurrentFieldSpans.Length
+            || CurrentFieldSpans[i].Value.IsEscaped || !TryGetCurrentUtf8(i, out var memory))
             return false;
         var bytes = memory.Span;
         if (typeof(T) == typeof(int) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out int integer, out int consumed) && consumed == bytes.Length)
@@ -149,15 +151,15 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     protected override NullableSpan GetValueOrThrow(int i)
     {
         if (HasRowNumber && i == 0)
-            return new NullableSpan(Record!.Slice(0).Span);
-        if (i < Record!.ParsedFields.Length)
+            return new NullableSpan(GetCurrentFieldMemory(0).Span);
+        if (i < CurrentFieldSpans!.Length)
         {
             var sanitizer = GetSanitizer(i, Profile.ParserOptimizations);
-            return sanitizer.Sanitize(Record!.Slice(i).Span, Record!.ParsedFields[i].Value.IsEscaped, Record!.ParsedFields[i].Value.WasQuoted);
+            return sanitizer.Sanitize(GetCurrentFieldMemory(i).Span, CurrentFieldSpans[i].Value.IsEscaped, CurrentFieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
             return new NullableSpan(GetMissingField().ToString().AsSpan());
-        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {Record.ParsedFields.Length} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {CurrentFieldSpans.Length} defined fields.");
     }
 
     /// <summary>
@@ -179,15 +181,17 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
             RegisterHeader(CsvHeaders.Read(RecordSource!), "field_");
 
-        RecordSpan rawRecord;
+        CurrentRecordResult result;
         RecordState state;
         do
         {
             if (IsEof)
                 return false;
 
-            IsEof = RecordSource!.IsEndOfFile(out rawRecord, out state);
-            if (IsEof && (rawRecord.ParsedFields?.Length ?? 0) == 0)
+            result = ReadSource();
+            IsEof = result.IsEndOfFile;
+            state = result.State;
+            if (IsEof && (result.Record.Fields?.Length ?? 0) == 0)
             {
                 Record = RecordMemory.Empty;
                 return false;
@@ -198,9 +202,9 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || state == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
-            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), rawRecord.ParsedFields!.Length)], "field_");
+            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.Fields!.Length)], "field_");
 
-        Record = rawRecord.AsMemory();
+        SetRecord(result.Record, copyMetadataOnMaterialization: true);
         CompleteRecord();
         return true;
     }
@@ -211,15 +215,15 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
             RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false), "field_");
 
-        RecordReadResult result;
+        CurrentRecordResult result;
         do
         {
             if (IsEof)
                 return false;
 
-            result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+            result = await ReadSourceAsync(cancellationToken).ConfigureAwait(false);
             IsEof = result.IsEndOfFile;
-            if (IsEof && (result.Record.ParsedFields?.Length ?? 0) == 0)
+            if (IsEof && (result.Record.Fields?.Length ?? 0) == 0)
             {
                 Record = RecordMemory.Empty;
                 return false;
@@ -230,9 +234,9 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || result.State == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
-            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.ParsedFields!.Length)], "field_");
+            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.Fields!.Length)], "field_");
 
-        Record = result.Record;
+        SetRecord(result.Record, copyMetadataOnMaterialization: true);
         CompleteRecord();
         return true;
     }
@@ -294,7 +298,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     /// </exception>
     private void HandleUnexpectedFields(int expectedLength)
     {
-        var length = Record!.ParsedFields.Length;
+        var length = CurrentFieldSpans!.Length;
         if (expectedLength < length)
         {
             var rowNumber = RowCount + (

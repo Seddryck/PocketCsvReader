@@ -14,6 +14,7 @@ public readonly ref struct RecordSpan
     private readonly FieldSpan[] _fields;
     public FieldSpan[] FieldSpans => _utf8Record?.FieldSpans ?? _fields;
     internal FieldSpan[] ParsedFields => _fields;
+    internal CurrentRecord Current => _utf8Record?.Current ?? new CurrentRecord(_memory, _fields);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RecordSpan"/> struct with the specified character span and field spans.
