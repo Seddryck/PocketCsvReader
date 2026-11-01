@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <ParserSourceRoot Condition="'$(ParserSourceRoot)' == ''">$(MSBuildThisFileDirectory)..\..</ParserSourceRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+    <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Ndjson\PocketCsvReader.Ndjson.csproj" />
+  </ItemGroup>
+</Project>
