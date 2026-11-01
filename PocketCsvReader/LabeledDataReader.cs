@@ -86,7 +86,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         Fields = [];
 
-        var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var result = await ReadSourceAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
         if (result.State == RecordState.Eof)
         {
@@ -94,9 +94,9 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
             return false;
         }
 
-        Record = result.Record;
+        SetRecord(result.Record);
         if (!HasStableLabelShape || RowCount == 0)
-            UpdateRowShape(result.Record.Span, result.Record.FieldSpans);
+            UpdateRowShape(result.Record.Characters, result.Record.Fields!);
         Fields = _rowShape.Labels;
 
         RowCount++;
