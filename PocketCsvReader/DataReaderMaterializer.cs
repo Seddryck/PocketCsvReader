@@ -40,8 +40,11 @@ internal static class DataReaderMaterializer
         {
             var row = table.NewRow();
             for (var index = 0; index < fieldCount; index++)
+            {
                 row[index] = reader.IsDBNull(index) ? DBNull.Value
                     : hasRowNumber && index == 0 ? reader.GetValue(index) : reader.GetString(index);
+            }
+
             table.Rows.Add(row);
         } while (reader.Read());
 

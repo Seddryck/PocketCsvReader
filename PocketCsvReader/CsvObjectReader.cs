@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -81,7 +81,7 @@ public class CsvObjectReader<T> : IDisposable
         {
             if (RowCount == 0 && Profile.Dialect.Header)
             {
-                var _ = RecordParser!.ReadHeaders();
+                _ = RecordParser!.ReadHeaders();
             }
             IsEof = RecordParser!.IsEndOfFile(out var value, out var state);
             if (state == RecordState.Comment)

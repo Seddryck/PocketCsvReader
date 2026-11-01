@@ -84,7 +84,7 @@ public struct ArrayParser : IParser
     /// <summary>
         /// Returns an error state when end-of-file is reached, indicating incomplete array parsing.
         /// </summary>
-        public ParserState ParseEof(int pos)
+    public ParserState ParseEof(int pos)
         => ParserState.Error;
 
     /// <summary>

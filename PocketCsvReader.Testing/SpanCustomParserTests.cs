@@ -16,9 +16,11 @@ public class SpanCustomParserTests
         var schema = new SchemaDescriptorBuilder().Indexed();
         var parsers = new RuntimeParsersDescriptorBuilder();
         if (field)
+        {
             schema.WithField<int>(f => legacy
                 ? f.WithParser(s => int.Parse(s, CultureInfo.InvariantCulture) + 1)
                 : f.WithParser(ParseNumber));
+        }
         else
         {
             schema.WithField<int>();
@@ -183,7 +185,8 @@ public class SpanCustomParserTests
 
     private sealed class ArrayRecord : BaseDataRecord<CsvProfile>
     {
-        public ArrayRecord(CsvProfile profile) : base(profile, new StringMapper(profile.ParserOptimizations.PoolString))
+        public ArrayRecord(CsvProfile profile)
+            : base(profile, new StringMapper(profile.ParserOptimizations.PoolString))
         {
             Fields = ["value"];
             Record = new RecordMemory("41", [new FieldSpan(new SpanInfo(0, 2), default,

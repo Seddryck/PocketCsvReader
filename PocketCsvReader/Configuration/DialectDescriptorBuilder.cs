@@ -49,33 +49,33 @@ public class DialectDescriptorBuilder
         /// </summary>
         /// <param name="nullSequence">The string to use for null values, or null to clear the setting.</param>
         /// <returns>The current builder instance for chaining.</returns>
-        public DialectDescriptorBuilder WithNullSequence(string? nullSequence)
+    public DialectDescriptorBuilder WithNullSequence(string? nullSequence)
         => (Descriptor = Descriptor with { NullSequence = nullSequence}, Builder: this).Builder;
     /// <summary>
         /// Removes the null sequence setting from the dialect configuration.
         /// </summary>
         /// <returns>The current builder instance for chaining.</returns>
-        public DialectDescriptorBuilder WithoutNullSequence()
+    public DialectDescriptorBuilder WithoutNullSequence()
         => WithNullSequence(null);
     /// <summary>
         /// Sets the string used to represent missing cells in the CSV dialect configuration.
         /// </summary>
         /// <param name="value">The string to use for missing cells.</param>
         /// <returns>The current builder instance for method chaining.</returns>
-        public DialectDescriptorBuilder WithMissingCell(string value)
+    public DialectDescriptorBuilder WithMissingCell(string value)
         => (Descriptor = Descriptor with { MissingCell = value }, Builder: this).Builder;
     /// <summary>
         /// Sets whether to skip initial whitespace after delimiters when parsing fields.
         /// </summary>
         /// <param name="skipInitialSpace">If true, leading spaces after delimiters are ignored; otherwise, they are preserved.</param>
         /// <returns>The current builder instance for chaining.</returns>
-        public DialectDescriptorBuilder WithSkipInitialSpace(bool skipInitialSpace = true)
+    public DialectDescriptorBuilder WithSkipInitialSpace(bool skipInitialSpace = true)
         => (Descriptor = Descriptor with { SkipInitialSpace = skipInitialSpace}, Builder: this).Builder;
     /// <summary>
         /// Disables skipping of initial spaces in fields during CSV parsing.
         /// </summary>
         /// <returns>The current builder instance for chaining.</returns>
-        public DialectDescriptorBuilder WithoutSkipInitialSpace()
+    public DialectDescriptorBuilder WithoutSkipInitialSpace()
         => WithSkipInitialSpace(false);
     public DialectDescriptorBuilder WithHeader(bool header = true)
     {
@@ -152,12 +152,18 @@ public class DialectDescriptorBuilder
             (descriptor.CommentChar, "comment character")
         };
         for (var i = 0; i < reserved.Count; i++)
-        for (var j = i + 1; j < reserved.Count; j++)
-            if (reserved[i].Value.HasValue && reserved[i].Value == reserved[j].Value)
+        {
+            for (var j = i + 1; j < reserved.Count; j++)
+            {
+                if (reserved[i].Value.HasValue && reserved[i].Value == reserved[j].Value)
                 throw new InvalidOperationException($"The {reserved[i].Name} and {reserved[j].Name} cannot use the same character.");
+            }
+        }
 
         foreach (var item in reserved.Where(item => item.Value.HasValue))
+        {
             if (descriptor.LineTerminator.Contains(item.Value!.Value))
                 throw new InvalidOperationException($"The {item.Name} cannot be part of the line terminator.");
+        }
     }
 }

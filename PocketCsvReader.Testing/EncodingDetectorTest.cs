@@ -1,4 +1,4 @@
-﻿using PocketCsvReader;
+using PocketCsvReader;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -19,7 +19,7 @@ namespace PocketCsvReader.Testing
         [TestCase("Utf16-LE", 2)]
         [TestCase("Utf8-BOM", 3)]
         [TestCase("Utf8", 0)]
-        public void GetStreamEncoding_Financial_CorrectEncodingInfo(string filename, int BomLength)
+        public void GetStreamEncoding_Financial_CorrectEncodingInfo(string filename, int bomLength)
         {
             using (var stream =
                     Assembly.GetExecutingAssembly()
@@ -30,7 +30,7 @@ namespace PocketCsvReader.Testing
                 var detector = new EncodingDetector();
                 var result = detector.GetStreamEncoding(stream);
                 Assert.That(result.Encoding.BodyName, Is.EqualTo(filename)!.Using(new EncodingComparer()));
-                Assert.That(result.BomBytesCount, Is.EqualTo(BomLength));
+                Assert.That(result.BomBytesCount, Is.EqualTo(bomLength));
             }
         }
 

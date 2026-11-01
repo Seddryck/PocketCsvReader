@@ -189,8 +189,10 @@ internal sealed class BufferedRecordReader : IDisposable
     {
         var capturedLength = (_segments?.Sum(segment => segment.Length) ?? 0) + _index - _captureStart;
         if (contentLength < 0 || contentLength > capturedLength)
+        {
             throw new InvalidOperationException(
                 $"The record framer returned content length {contentLength} for {capturedLength} captured characters.");
+        }
 
         CapturedRecord capture;
         if (contentLength == 0)

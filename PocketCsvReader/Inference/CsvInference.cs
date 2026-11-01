@@ -146,7 +146,8 @@ public sealed class CsvInference
         var candidates = new List<(DialectDescriptor Dialect, double Score)>();
 
         foreach (var delimiter in delimiters)
-        foreach (var quote in quotes)
+        {
+            foreach (var quote in quotes)
         {
             var candidate = options.Dialect with
             {
@@ -178,6 +179,7 @@ public sealed class CsvInference
             {
                 // Invalid candidates are expected while evaluating alternative dialects.
             }
+        }
         }
 
         if (candidates.Count == 0)

@@ -20,8 +20,11 @@ internal class FieldSanitizer : ISanitizer
 
         var result = new NullableSpan(buffer);
         foreach (var sanitizer in Sanitizers)
+        {
             if (result.HasValue)
                 result = sanitizer.Sanitize(result.Value, isEscapedField, wasQuotedField);
+        }
+
         return result;
     }
 }

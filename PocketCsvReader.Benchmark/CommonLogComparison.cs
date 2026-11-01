@@ -73,7 +73,8 @@ public class CommonLogComparison
         Console.WriteLine($"Equivalent input: {RecordCount:N0} rows; CSV {_csv.Length:N0} bytes; CLF {_clf.Length:N0} bytes.");
     }
 
-    [Benchmark(Baseline = true), BenchmarkCategory("Rows")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Rows")]
     public int CsvRows()
     {
         using var reader = _csvReader.ToDataReader(new MemoryStream(_csv, writable: false));
@@ -83,7 +84,8 @@ public class CommonLogComparison
         return count;
     }
 
-    [Benchmark, BenchmarkCategory("Rows")]
+    [Benchmark]
+    [BenchmarkCategory("Rows")]
     public int CommonLogRows()
     {
         using var reader = _commonReader.ToDataReader(new MemoryStream(_clf, writable: false));
@@ -93,10 +95,12 @@ public class CommonLogComparison
         return count;
     }
 
-    [Benchmark(Baseline = true), BenchmarkCategory("Typed")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Typed")]
     public long CsvTyped() => Consume(ReadCsvRecords());
 
-    [Benchmark, BenchmarkCategory("Typed")]
+    [Benchmark]
+    [BenchmarkCategory("Typed")]
     public long CommonLogTyped()
         => Consume(_commonReader.ToCommonLog(new MemoryStream(_clf, writable: false)));
 
@@ -104,6 +108,7 @@ public class CommonLogComparison
     {
         using var reader = _csvReader.ToDataReader(new MemoryStream(_csv, writable: false));
         while (reader.Read())
+        {
             yield return new CommonLog(
                 reader.GetFieldValue<string?>(0),
                 reader.GetFieldValue<string?>(1),
@@ -115,15 +120,19 @@ public class CommonLogComparison
                     int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture)),
                 reader.GetFieldValue<long?>(6, (ReadOnlySpan<char> value) =>
                     long.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture)));
+        }
     }
 
     private static long Consume(IEnumerable<CommonLog> entries)
     {
         long checksum = 0;
         foreach (var entry in entries)
+        {
             checksum += (entry.RemoteHost?.Length ?? 0) + (entry.Identity?.Length ?? 0) +
                 (entry.AuthenticatedUser?.Length ?? 0) + (entry.Request?.Length ?? 0) +
                 (entry.Timestamp?.Ticks ?? 0) + (entry.StatusCode ?? 0) + (entry.ResponseBytes ?? 0);
+        }
+
         return checksum;
     }
 }

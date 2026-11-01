@@ -68,7 +68,7 @@ namespace PocketCsvReader.Testing
                         Assert.That(row[2], Is.EqualTo("1"));
                         Assert.That(row[13], Does.StartWith("2018-"));
                     });
-                } 
+                }
             }
         }
 

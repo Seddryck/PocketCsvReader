@@ -7,9 +7,9 @@ namespace PocketCsvReader;
 /// before the next read or disposal. Independently materialized output values can outlive the source.
 /// New sources should use buffered framing and document their storage ownership.
 /// </remarks>
-public interface IRecordSource<out P> : IDisposable
+public interface IRecordSource<out TProfile> : IDisposable
 {
-    P Profile { get; }
+    TProfile Profile { get; }
     RecordPosition? CurrentPosition => null;
     bool IsEndOfFile(out RecordSpan record, out RecordState recordState);
     ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)

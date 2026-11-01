@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,8 +14,8 @@ internal class FieldEscaper
     protected char Delimiter { get; }
     protected bool DoubleQuote { get; }
 
-    public FieldEscaper(CsvProfile Profile, ArrayPool<char>? pool = null)
-        : this(Profile.Dialect.QuoteChar, Profile.Dialect.DoubleQuote, Profile.Dialect.EscapeChar, Profile.Dialect.Delimiter, pool)
+    public FieldEscaper(CsvProfile profile, ArrayPool<char>? pool = null)
+        : this(profile.Dialect.QuoteChar, profile.Dialect.DoubleQuote, profile.Dialect.EscapeChar, profile.Dialect.Delimiter, pool)
     { }
 
     public FieldEscaper(char? quoteChar, bool doubleQuote, char? escapeChar, char delimiter, ArrayPool<char>? pool = null)
@@ -51,7 +51,10 @@ internal class FieldEscaper
                     result[j++] = c;
             }
             else
+            {
                 result[j++] = c;
+            }
+
             i++;
         }
 

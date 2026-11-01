@@ -78,7 +78,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
     /// <summary>
         /// Returns the default value for a missing CSV field, using the profile's configured missing cell value if special value handling is enabled; otherwise, returns an empty string.
         /// </summary>
-        protected override object GetMissingField()
+    protected override object GetMissingField()
         => Profile.ParserOptimizations.HandleSpecialValues ? Profile.Dialect.MissingCell ?? string.Empty : string.Empty;
 
     /// <summary>
@@ -86,7 +86,7 @@ public class CsvDataReader : BaseDataReader<CsvProfile>
             /// </summary>
             /// <param name="i">The zero-based index of the field.</param>
             /// <returns>The raw field string, wrapped in quote characters if originally quoted; otherwise, the field value as a string.</returns>
-            public override string GetRawString(int i)
+    public override string GetRawString(int i)
         => Record!.ParsedFields[i].Value.WasQuoted
             ? $"{Profile.Dialect.QuoteChar}{Record!.Slice(i)}{Profile.Dialect.QuoteChar}"
             : Record!.Slice(i).ToString();

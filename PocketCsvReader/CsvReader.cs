@@ -7,7 +7,7 @@ using System.Text;
 namespace PocketCsvReader
 {
     /// <summary>
-    /// Provides functionality for reading and parsing CSV files or streams into various formats such as 
+    /// Provides functionality for reading and parsing CSV files or streams into various formats such as
     /// <see cref="DataTable"/>, <see cref="IDataReader"/>, or strongly-typed objects.
     /// </summary>
     /// <remarks>
@@ -102,7 +102,7 @@ namespace PocketCsvReader
         /// <summary>
         /// Opens a CSV file and provides an <see cref="IDataReader"/> for efficient record-by-record access.
         /// </summary>
-        /// <param name="filename">The full path of the CSV file to read.</param>
+        /// <param name="filenames">The full paths of the CSV files to read.</param>
         /// <returns>
         /// An <see cref="CsvDataReader"/> instance for sequential, read-only access to the CSV records and fields.
         /// </returns>
@@ -131,7 +131,7 @@ namespace PocketCsvReader
         /// Reads CSV data from a set of streams and provides an <see cref="IDataReader"/> for record-by-record access.
         /// </summary>
         /// <param name="streams">
-        /// The enumerable of <see cref="stream"/> containing the CSV data. The streams must be readable and positioned
+        /// The enumerable of <see cref="Stream"/> containing the CSV data. The streams must be readable and positioned
         /// at the start of the content.
         /// </param>
         /// <returns>

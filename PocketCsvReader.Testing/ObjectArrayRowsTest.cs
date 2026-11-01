@@ -133,11 +133,14 @@ public class ObjectArrayRowsTest
         var profile = new CsvProfile(new DialectDescriptorBuilder().WithoutHeader().WithLineTerminator("\r\n").Build());
         var diagnostics = new List<BadDataContext>();
         if (skip)
+        {
             profile.BadDataPolicy = new BadDataPolicy(context =>
             {
                 diagnostics.Add(context);
                 return BadDataAction.SkipRecord;
             }, 2);
+        }
+
         using var stream = Source("a,b\r\n\"bad\"x,z\r\nc,d");
         var rows = new CsvReader(profile).ToObjectArrays(stream);
         if (skip)
@@ -146,7 +149,9 @@ public class ObjectArrayRowsTest
             Assert.That(diagnostics, Has.Count.EqualTo(1));
         }
         else
+        {
             Assert.Throws<InvalidDataException>(() => rows.ToArray());
+        }
     }
 
     [Test]

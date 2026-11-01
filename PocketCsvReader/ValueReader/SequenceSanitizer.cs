@@ -15,9 +15,12 @@ internal class SequenceSanitizer : ISanitizer
 
     public NullableSpan Sanitize(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
     {
-        if (buffer.Length == 0 || !isEscapedField && !wasQuotedField)
+        if (buffer.Length == 0 || (!isEscapedField && !wasQuotedField))
+        {
             if (Sequences?.TryGetValue(buffer, out var value) ?? false)
                 return value;
+        }
+
         return buffer;
     }
 }

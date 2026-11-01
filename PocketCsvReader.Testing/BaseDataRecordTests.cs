@@ -110,7 +110,6 @@ public class BaseDataRecordTests
         Assert.That(value, Is.EqualTo(new YearMonth(2025, 1)));
     }
 
-
     [Test]
     [TestCase("yyyy-MM", "2025-01")]
     [TestCase("yyyy-M", "2025-1")]

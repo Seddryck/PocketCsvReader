@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -18,5 +18,6 @@ public record ParserOptimizationOptions
     bool LookupTableChar = true
 ) {
     /// <summary>Enables source positions. Disabled by default; configure before creating the reader.</summary>
+    /// <value>True to track source positions; otherwise false.</value>
     public bool TrackPosition { get; init; }
 }

@@ -251,51 +251,69 @@ internal sealed class ArrowColumnDefinition
         var type = Nullable.GetUnderlyingType(runtimeType) ?? runtimeType;
 
         if (type == typeof(bool))
+        {
             return Define(name, BooleanType.Default, ordinal, () =>
             {
                 var builder = new BooleanArray.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetBoolean(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(sbyte))
             return Define(name, Int8Type.Default, ordinal, () => Primitive<sbyte, Int8Array, Int8Array.Builder>(new Int8Array.Builder(), ordinal, record => Convert.ToSByte(record.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture)));
         if (type == typeof(byte))
             return Define(name, UInt8Type.Default, ordinal, () => Primitive<byte, UInt8Array, UInt8Array.Builder>(new UInt8Array.Builder(), ordinal, record => Convert.ToByte(record.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture)));
         if (type == typeof(short))
+        {
             return Define(name, Int16Type.Default, ordinal, () =>
             {
                 var builder = new Int16Array.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetInt16(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(ushort))
             return Define(name, UInt16Type.Default, ordinal, () => Primitive<ushort, UInt16Array, UInt16Array.Builder>(new UInt16Array.Builder(), ordinal, record => Convert.ToUInt16(record.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture)));
         if (type == typeof(int))
+        {
             return Define(name, Int32Type.Default, ordinal, () =>
             {
                 var builder = new Int32Array.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetInt32(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(uint))
             return Define(name, UInt32Type.Default, ordinal, () => Primitive<uint, UInt32Array, UInt32Array.Builder>(new UInt32Array.Builder(), ordinal, record => Convert.ToUInt32(record.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture)));
         if (type == typeof(long))
+        {
             return Define(name, Int64Type.Default, ordinal, () =>
             {
                 var builder = new Int64Array.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetInt64(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(ulong))
             return Define(name, UInt64Type.Default, ordinal, () => Primitive<ulong, UInt64Array, UInt64Array.Builder>(new UInt64Array.Builder(), ordinal, record => Convert.ToUInt64(record.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture)));
         if (type == typeof(float))
+        {
             return Define(name, FloatType.Default, ordinal, () =>
             {
                 var builder = new FloatArray.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetFloat(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(double))
+        {
             return Define(name, DoubleType.Default, ordinal, () =>
             {
                 var builder = new DoubleArray.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(record.GetDouble(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(decimal))
         {
             var arrowType = new Decimal128Type(38, 18);
@@ -306,23 +324,32 @@ internal sealed class ArrowColumnDefinition
             });
         }
         if (type == typeof(string) || type == typeof(char) || type == typeof(Guid))
+        {
             return Define(name, StringType.Default, ordinal, () =>
             {
                 var builder = new StringArray.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(Convert.ToString(record.GetValue(index), System.Globalization.CultureInfo.InvariantCulture)!), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(byte[]))
+        {
             return Define(name, BinaryType.Default, ordinal, () =>
             {
                 var builder = new BinaryArray.Builder();
                 return Writer(ordinal, (record, index) => builder.Append(((byte[])record.GetValue(index)).AsSpan()), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(DateOnly))
+        {
             return Define(name, Date32Type.Default, ordinal, () =>
             {
                 var builder = new Date32Array.Builder();
                 return Writer(ordinal, (record, index) => builder.Append((DateOnly)record.GetValue(index)), () => builder.AppendNull(), () => builder.Build());
             });
+        }
+
         if (type == typeof(DateTime))
         {
             var arrowType = new TimestampType(TimeUnit.Microsecond, TimeZoneInfo.Utc);

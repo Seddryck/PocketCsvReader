@@ -55,7 +55,9 @@ internal sealed class LabelRowShapeCache
                     return false;
             }
             else if (!record.Slice(field.Label.Start, field.Label.Length).SequenceEqual(labels[index]))
+            {
                 return false;
+            }
         }
 
         return true;

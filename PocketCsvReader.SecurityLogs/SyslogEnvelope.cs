@@ -57,7 +57,10 @@ internal static class SyslogEnvelope
             {
                 if (++position >= line.Length) break;
             }
-            else if (c == '"') quoted = !quoted;
+            else if (c == '"')
+            {
+                quoted = !quoted;
+            }
             else if (c == ']' && !quoted) { position++; return; }
         }
         throw new InvalidDataException("Unterminated syslog structured data.");

@@ -104,9 +104,9 @@ public class RecordMemory
         /// Returns the value portion of the field at the specified index as a slice of the record's character data.
         /// </summary>
         /// <param name="i">The zero-based index of the field.</param>
-        /// <returns>A <see cref="ReadOnlyMemory{char}"/> representing the field's value.</returns>
+        /// <returns>A <see cref="ReadOnlyMemory{T}"/> representing the field's value.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the record is empty.</exception>
-        public ReadOnlyMemory<char> Slice(int i)
+    public ReadOnlyMemory<char> Slice(int i)
     {
         if (_isUtf8)
         {
@@ -119,8 +119,8 @@ public class RecordMemory
         /// Returns a slice of the record's character data representing the label portion of the field at the specified index.
         /// </summary>
         /// <param name="i">The zero-based index of the field.</param>
-        /// <returns>A <see cref="ReadOnlyMemory{char}"/> containing the label of the specified field.</returns>
+        /// <returns>A <see cref="ReadOnlyMemory{T}"/> containing the label of the specified field.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the record is empty.</exception>
-        public ReadOnlyMemory<char> SliceLabel(int i)
+    public ReadOnlyMemory<char> SliceLabel(int i)
         => Span.Length > 0 ? Span.Slice(FieldSpans[i].Label.Start, FieldSpans[i].Label.Length) : throw new InvalidOperationException();
 }

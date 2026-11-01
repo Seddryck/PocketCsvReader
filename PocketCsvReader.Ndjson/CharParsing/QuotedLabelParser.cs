@@ -22,8 +22,6 @@ public readonly struct QuotedLabelParser : IParser
     /// </summary>
     /// <param name="ctx">The parser context managing field state and span.</param>
     /// <param name="controller">The state controller for managing parser transitions.</param>
-    /// <param name="delimiter">The character used to separate fields.</param>
-    /// <param name="lineTerminator">The string representing the line terminator.</param>
     /// <param name="quote">The character used for quoting fields.</param>
     /// <param name="escape">An optional character used for escaping within quoted fields.</param>
     public QuotedLabelParser(IParserContext ctx, INdjsonStateController controller, char quote, char? escape = null)

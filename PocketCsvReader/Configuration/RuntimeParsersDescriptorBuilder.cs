@@ -50,9 +50,14 @@ public class RuntimeParsersDescriptorBuilder
     {
         Descriptor = new RuntimeParsersDescriptor();
         if (_defaults is not null)
+        {
             foreach (var parser in _defaults)
+            {
                 if (!_types.ContainsKey(parser.Key))
                     parser.Value(Descriptor);
+            }
+        }
+
         foreach (var type in _types)
             type.Value(Descriptor);
         return Descriptor.Count > 0 ? Descriptor : null;

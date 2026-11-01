@@ -12,6 +12,7 @@ namespace PocketCsvReader;
 public interface IAsyncDataReader : IDataReader, IAsyncDisposable
 {
     /// <summary>The current record source position, when explicitly enabled.</summary>
+    /// <value>The current source position, or null when unavailable.</value>
     RecordPosition? CurrentPosition => null;
 
     /// <summary>Advances the reader to the next record asynchronously.</summary>

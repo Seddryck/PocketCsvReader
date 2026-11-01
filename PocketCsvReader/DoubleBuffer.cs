@@ -27,7 +27,9 @@ internal class DoubleBuffer : IBufferReader
             throw new InvalidOperationException();
 
         if (ReadAhead is null)
+        {
             CurrentBuffer.Read();
+        }
         else
         {
             ReadAhead.Wait();
@@ -43,7 +45,9 @@ internal class DoubleBuffer : IBufferReader
             throw new InvalidOperationException();
 
         if (ReadAhead is null)
+        {
             await CurrentBuffer.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
         else
         {
             await ReadAhead.WaitAsync(cancellationToken).ConfigureAwait(false);

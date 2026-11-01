@@ -104,8 +104,11 @@ public class JsonFieldBufferTests
         const string json = """{/*comment*/"name":"Ada","items":[1,2,],}""";
         var buffer = new JsonFieldBuffer();
         for (int i = 0; i < 3; i++)
+        {
             AssertFields(JsonRecordParser.Parse(json, Whitespace, true, true, buffer),
                 JsonRecordParser.Parse(json, Whitespace, true, true));
+        }
+
         Assert.Throws<InvalidDataException>(() => JsonRecordParser.Parse(json, Whitespace, buffer: buffer));
     }
 
@@ -121,7 +124,9 @@ public class JsonFieldBufferTests
                 AssertFields(actual[i].Children!, children);
             }
             else
+            {
                 Assert.That(actual[i].Children, Is.Null);
+            }
         }
     }
 }

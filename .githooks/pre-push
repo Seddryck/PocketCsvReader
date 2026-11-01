@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+cd "$repo_root"
+
+echo "Checking C# files with StyleCop"
+dotnet format PocketCsvReader.full.sln analyzers --verify-no-changes --no-restore

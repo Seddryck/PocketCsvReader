@@ -8,8 +8,10 @@ namespace PocketCsvReader.Benchmark;
 [ShortRunJob(RuntimeMoniker.Net10_0)]
 public class LazyJsonDecodingComparison
 {
-    [Params(false, true)] public bool Ndjson { get; set; }
-    [Params(false, true)] public bool AccessTimestamp { get; set; }
+    [Params(false, true)]
+    public bool Ndjson { get; set; }
+    [Params(false, true)]
+    public bool AccessTimestamp { get; set; }
     private JsonAllocationComparison _workload = null!;
 
     [GlobalSetup]
@@ -18,7 +20,7 @@ public class LazyJsonDecodingComparison
         _workload = new JsonAllocationComparison { Ndjson = Ndjson, Projection = false, EscapedTimestamp = true };
         _workload.Setup();
         if (_workload.ReadThreeValuesAndTimestamp() != _workload.ReadThreeValues()
-            + JsonAllocationComparison.RecordCount * "01/Nov/2026:12:34:56 +0000".Length)
+            + (JsonAllocationComparison.RecordCount * "01/Nov/2026:12:34:56 +0000".Length))
             throw new InvalidOperationException("Decoded timestamp checksum differs.");
     }
 
@@ -30,7 +32,8 @@ public class LazyJsonDecodingComparison
         Console.WriteLine("Format,AccessTimestamp,Records,WallMeanMs,WallStdDevMs,CpuMeanMs,AllocatedBytes,BytesPerRow");
         using var process = Process.GetCurrentProcess();
         foreach (bool ndjson in new[] { false, true })
-        foreach (bool access in new[] { false, true })
+        {
+            foreach (bool access in new[] { false, true })
         {
             var benchmark = new LazyJsonDecodingComparison { Ndjson = ndjson, AccessTimestamp = access };
             benchmark.Setup();
@@ -63,6 +66,7 @@ public class LazyJsonDecodingComparison
             double mean = wall.Average();
             double deviation = Math.Sqrt(wall.Sum(x => Math.Pow(x - mean, 2)) / (wall.Length - 1));
             Console.WriteLine(FormattableString.Invariant($"{(ndjson ? "NDJSON" : "JSON")},{access},{JsonAllocationComparison.RecordCount},{mean:F3},{deviation:F3},{cpu.Average():F3},{allocated.Average():F0},{allocated.Average() / JsonAllocationComparison.RecordCount:F2}"));
+        }
         }
     }
 }

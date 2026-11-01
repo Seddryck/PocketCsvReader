@@ -13,9 +13,12 @@ namespace PocketCsvReader.Benchmark;
 public class JsonAllocationComparison
 {
     public const int RecordCount = 50_000;
-    [Params(false, true)] public bool Ndjson { get; set; }
-    [Params(false, true)] public bool Projection { get; set; }
-    [Params(false, true)] public bool EscapedTimestamp { get; set; }
+    [Params(false, true)]
+    public bool Ndjson { get; set; }
+    [Params(false, true)]
+    public bool Projection { get; set; }
+    [Params(false, true)]
+    public bool EscapedTimestamp { get; set; }
     private byte[] _data = [];
     private Func<Stream, IDataReader> _open = null!;
     private int _requestOrdinal;
@@ -51,7 +54,7 @@ public class JsonAllocationComparison
             var row = Expected(i);
             string json = System.Text.Json.JsonSerializer.Serialize(new
             {
-                host = $"192.0.2.{i % 254 + 1}", identity = "-", user = $"user{i % 100}",
+                host = $"192.0.2.{(i % 254) + 1}", identity = "-", user = $"user{i % 100}",
                 timestamp = "01/Nov/2026:12:34:56 +0000", request = row.Request, status = row.Status, bytes = row.Bytes
             });
             // The original comparison used System.Text.Json's escaped plus sign.
@@ -108,8 +111,10 @@ public class JsonAllocationComparison
         Console.WriteLine("Format,Projection,EscapedTimestamp,Records,InputBytes,WallMeanMs,WallStdDevMs,CpuMeanMs,AllocatedBytes,BytesPerRow");
         using var process = Process.GetCurrentProcess();
         foreach (bool ndjson in new[] { false, true })
-        foreach (bool projection in new[] { false, true })
-        foreach (bool escaped in new[] { false, true })
+        {
+            foreach (bool projection in new[] { false, true })
+            {
+                foreach (bool escaped in new[] { false, true })
         {
             var benchmark = new JsonAllocationComparison { Ndjson = ndjson, Projection = projection, EscapedTimestamp = escaped };
             benchmark.Setup();
@@ -142,6 +147,8 @@ public class JsonAllocationComparison
             double mean = wall.Average();
             double deviation = Math.Sqrt(wall.Sum(x => Math.Pow(x - mean, 2)) / (wall.Length - 1));
             Console.WriteLine(FormattableString.Invariant($"{(ndjson ? "NDJSON" : "JSON")},{projection},{escaped},{RecordCount},{benchmark._data.Length},{mean:F3},{deviation:F3},{cpu.Average():F3},{allocated.Average():F0},{allocated.Average() / RecordCount:F2}"));
+        }
+            }
         }
     }
 }

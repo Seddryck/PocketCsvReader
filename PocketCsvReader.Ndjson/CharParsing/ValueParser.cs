@@ -30,7 +30,6 @@ public readonly struct ValueParser : IParser
     /// <param name="quote">Optional character used for quoting field values.</param>
     /// <param name="escape">Optional character used for escaping within quoted fields.</param>
     /// <param name="skipInitialSpace">Indicates whether to skip spaces following delimiters.</param>
-    /// <param name="doubleQuote">Indicates whether double quotes are used to escape quotes within quoted fields.</param>
     /// <param name="comment">Optional character indicating the start of a comment.</param>
     /// <param name="prefixArray">Optional character indicating the start of an array value.</param>
     public ValueParser(IParserContext ctx, INdjsonStateController controller, string lineTerminator, char delimiter,

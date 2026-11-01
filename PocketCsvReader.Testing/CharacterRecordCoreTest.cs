@@ -134,7 +134,8 @@ public class CharacterRecordCoreTest
     {
         byte[] bytes = [.. Encoding.UTF8.Preamble, .. Encoding.UTF8.GetBytes("\uFEFFvalue,1\r\n")];
         foreach (var mode in new[] { CsvInputMode.DecodedChars, CsvInputMode.Auto, CsvInputMode.Utf8Bytes })
-        foreach (bool explicitEncoding in new[] { false, true })
+        {
+            foreach (bool explicitEncoding in new[] { false, true })
         {
             var profile = new CsvProfile(new(Header: false), resource: explicitEncoding ? new(Encoding: "utf-8") : null)
             {
@@ -143,6 +144,7 @@ public class CharacterRecordCoreTest
             using var reader = new CsvDataReader(new MemoryStream(bytes), profile);
             Assert.That(asynchronous ? await reader.ReadAsync() : reader.Read(), Is.True);
             Assert.That(reader.GetString(0), Is.EqualTo("\uFEFFvalue"), $"{mode}, explicit: {explicitEncoding}");
+        }
         }
     }
 

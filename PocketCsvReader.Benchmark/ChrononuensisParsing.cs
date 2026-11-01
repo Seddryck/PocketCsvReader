@@ -13,8 +13,11 @@ namespace PocketCsvReader.Benchmark;
 [CategoriesColumn]
 public class ChrononuensisParsing
 {
-    private CsvDataReader _existing = null!, _legacy = null!, _integration = null!;
-    private CsvDataReader _number = null!, _numberEnabled = null!;
+    private CsvDataReader _existing = null!;
+    private CsvDataReader _legacy = null!;
+    private CsvDataReader _integration = null!;
+    private CsvDataReader _number = null!;
+    private CsvDataReader _numberEnabled = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -39,17 +42,23 @@ public class ChrononuensisParsing
         return reader;
     }
 
-    [Benchmark(Baseline = true), BenchmarkCategory("Temporal")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Temporal")]
     public YearMonth ExistingFormatted() => _existing.GetFieldValue<YearMonth>(0);
-    [Benchmark, BenchmarkCategory("Temporal")]
+    [Benchmark]
+    [BenchmarkCategory("Temporal")]
     public YearMonth LegacyString() => _legacy.GetFieldValue<YearMonth>(0);
-    [Benchmark, BenchmarkCategory("Temporal")]
+    [Benchmark]
+    [BenchmarkCategory("Temporal")]
     public YearMonth IntegrationSpan() => _integration.GetFieldValue<YearMonth>(0);
-    [Benchmark, BenchmarkCategory("Temporal")]
+    [Benchmark]
+    [BenchmarkCategory("Temporal")]
     public YearMonth DirectSpan() => YearMonth.Parse("2026-10".AsSpan(), CultureInfo.InvariantCulture);
-    [Benchmark(Baseline = true), BenchmarkCategory("Unaffected")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Unaffected")]
     public int NumberDisabled() => _number.GetFieldValue<int>(0);
-    [Benchmark, BenchmarkCategory("Unaffected")]
+    [Benchmark]
+    [BenchmarkCategory("Unaffected")]
     public int NumberEnabled() => _numberEnabled.GetFieldValue<int>(0);
 
     [GlobalCleanup]

@@ -2,7 +2,8 @@ using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.SecurityLogs;
 
-public enum SecurityLogFormat { Cef, Leef }
+public enum SecurityLogFormat { Cef,
+    Leef }
 
 public sealed class SecurityLogProfile : IProfile
 {
@@ -14,6 +15,7 @@ public sealed class SecurityLogProfile : IProfile
     public bool TrackPosition => ParserOptimizations.TrackPosition;
     public StreamInitializationOptions StreamInitialization => StreamInitializationOptions.ForwardOnly;
     /// <summary>Selected attribute keys, or null to discover them from the first record.</summary>
+    /// <value>The selected keys, or null for discovery.</value>
     public IReadOnlyList<string>? Attributes { get; }
 
     public SecurityLogProfile(SecurityLogFormat format, IEnumerable<string>? attributes = null,
@@ -37,8 +39,10 @@ public sealed class SecurityLogProfile : IProfile
     {
         var names = new HashSet<string>(SecurityLogParser.HeaderNames(format), StringComparer.Ordinal);
         foreach (var name in attributes)
+        {
             if (string.IsNullOrWhiteSpace(name) || name.Any(IsInvalidKeyCharacter) || !names.Add(name))
                 throw new ArgumentException("Attribute names must be nonempty, unique, and distinct from header names.", nameof(attributes));
+        }
     }
 
     private static bool IsInvalidKeyCharacter(char c) => char.IsWhiteSpace(c) || c is '=' or '|' or '\\';

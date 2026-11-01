@@ -9,7 +9,8 @@ public class WebLogBufferingTests
     private const string Header = "#Fields: host identity user timestamp request status bytes";
     private const string CommonTimestamp = "10/Oct/2000:13:55:36 -0700";
 
-    [Test, Combinatorial]
+    [Test]
+    [Combinatorial]
     public async Task RecordsAcrossBuffers_PreserveValuesAndEof(
         [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format,
         [Values(1, 7, 64, 4096)] int bufferSize,
@@ -102,7 +103,8 @@ public class WebLogBufferingTests
         }
     }
 
-    [Test, Combinatorial]
+    [Test]
+    [Combinatorial]
     public async Task AsyncOnlyForwardStream_UsesAsyncIoAndStreamsBeforeEof(
         [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool trackPosition)
     {
@@ -134,7 +136,8 @@ public class WebLogBufferingTests
         Assert.That(stream.Disposed, Is.True);
     }
 
-    [Test, Combinatorial]
+    [Test]
+    [Combinatorial]
     public async Task Positions_SkipDirectivesAndBlankLinesAndIncludeTerminators(
         [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool asynchronous)
     {
@@ -158,7 +161,8 @@ public class WebLogBufferingTests
         Assert.That(reader.CurrentPosition, Is.Null);
     }
 
-    [Test, Combinatorial]
+    [Test]
+    [Combinatorial]
     public async Task EmptyOrBlankInput_HasNoRecords(
         [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values("", " \r\n\t\n\r")] string input, [Values] bool asynchronous)
     {
@@ -166,7 +170,8 @@ public class WebLogBufferingTests
         Assert.That(await Read(reader, asynchronous), Is.False);
     }
 
-    [Test, Combinatorial]
+    [Test]
+    [Combinatorial]
     public async Task MalformedRecord_PreservesLineNumberAndDiagnostic(
         [Values(WebLogFormat.Common, WebLogFormat.W3cExtended)] WebLogFormat format, [Values] bool asynchronous)
     {

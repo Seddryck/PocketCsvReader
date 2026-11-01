@@ -9,7 +9,8 @@ internal sealed class Utf8FieldBuffer : IDisposable
 {
     private char[]? _characters;
     private int[]? _lengths;
-    private int _byteLength, _fieldCount;
+    private int _byteLength;
+    private int _fieldCount;
 
     public void Reset(int byteLength, int fieldCount)
     {

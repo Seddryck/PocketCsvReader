@@ -6,8 +6,10 @@ namespace PocketCsvReader.FixedWidth.Testing;
 
 public class PositionTrackingTest
 {
-    [TestCase(false, false)] [TestCase(false, true)]
-    [TestCase(true, false)] [TestCase(true, true)]
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
     public async Task TracksConfiguredRecords(bool enabled, bool async)
     {
         using var reader = new FixedWidthReaderBuilder().WithPositionTracking(enabled)

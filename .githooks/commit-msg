@@ -8,5 +8,5 @@ if ! type commitlint >/dev/null 2>/dev/null; then
     exit 2;
 fi
 
-commitlint lint --message $1
+commitlint --edit "$1"
 

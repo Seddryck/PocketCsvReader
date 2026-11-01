@@ -10,10 +10,10 @@ internal ref struct JsonRecordParser
         "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\");
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
-    private int _position;
     private readonly bool _allowComments;
     private readonly bool _allowTrailingCommas;
     private readonly JsonFieldBuffer? _fieldBuffer;
+    private int _position;
 
     private JsonRecordParser(
         ReadOnlySpan<char> json,
@@ -235,13 +235,20 @@ internal ref struct JsonRecordParser
             SkipWhitespace();
             FieldSpan[]? fields = null;
             if (scratch is null)
+            {
                 fields = Current == '{'
                     ? ParseObject(materializeLabels: true)
                     : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
+            }
             else if (Current == '{')
+            {
                 ParseObjectFields(materializeLabels: true, scratch);
+            }
             else
+            {
                 scratch.Add(ParseValue(allowObject: false, allowCompositeArrayItems: true));
+            }
+
             SkipWhitespace();
             if (!IsEnd)
                 throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
@@ -624,7 +631,7 @@ internal ref struct JsonRecordParser
 
     private void SkipWhitespace()
     {
-        var comments = new JsonCommentScanner();
+        var comments = default(JsonCommentScanner);
         while (!IsEnd)
         {
             if (_allowComments && comments.TryConsume(Current, _position))

@@ -49,11 +49,14 @@ public class JsonDialectOptionsTests
             new JsonProfile(null, null, null, null, null, false, null)
         };
         foreach (var profile in profiles)
+        {
             Assert.Multiple(() =>
             {
                 Assert.That(profile.AllowComments, Is.False);
                 Assert.That(profile.AllowTrailingCommas, Is.False);
             });
+        }
+
         var commentsOnly = new JsonProfile(allowComments: true);
         var trailingOnly = new JsonProfile(allowTrailingCommas: true);
         Assert.Multiple(() =>
@@ -82,10 +85,12 @@ public class JsonDialectOptionsTests
         {
             using var reader = builder.Build().ToDataReader(Input(text));
             if ((comments && !allowComments) || (trailing && !allowTrailingCommas))
+            {
                 await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 {
                     while (async ? await reader.ReadAsync() : reader.Read()) { }
                 });
+            }
             else
             {
                 Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);

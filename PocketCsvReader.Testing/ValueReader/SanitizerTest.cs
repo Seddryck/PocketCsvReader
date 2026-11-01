@@ -33,7 +33,6 @@ public class SanitizerTest
         yield return sanitizerFactory.Create(sequences, fieldEscaper);
     }
 
-
     [Test]
     [TestCaseSource(nameof(GetSanitizers))]
     public void Sanitize_NotQualified_CorrectString(ISanitizer sanitizer)
@@ -69,7 +68,9 @@ public class SanitizerTest
             Assert.That(value.Value.ToString(), Is.EqualTo(result));
         }
         else
+        {
             Assert.That(value.HasValue, Is.False);
+        }
     }
 
     [Test]
@@ -81,7 +82,6 @@ public class SanitizerTest
         Span<char> buffer = stackalloc char[64];
         item.AsSpan().CopyTo(buffer);
         buffer = buffer.Slice(0, item.Length);
-
 
         var sanitizerFactory = new SanitizerFactory(GetProfile());
         var sanitizer = sanitizerFactory.Create(null, null);
@@ -158,7 +158,6 @@ public class SanitizerTest
         Assert.That(value.HasValue, Is.True);
         Assert.That(value.Value.ToString(), Is.EqualTo(result));
     }
-
 
     [Test]
     [TestCase("`a``b`", "a`b")]

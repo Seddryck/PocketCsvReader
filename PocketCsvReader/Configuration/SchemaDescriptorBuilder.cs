@@ -69,7 +69,7 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
     public IndexedSchemaDescriptorBuilder WithNumberField<T>(Func<NumberFieldDescriptorBuilder, NumberFieldDescriptorBuilder>? func = null)
         => WithNumberField(typeof(T), func);
-    
+
     public IndexedSchemaDescriptorBuilder WithNumberField(Type type, Func<NumberFieldDescriptorBuilder, NumberFieldDescriptorBuilder>? func = null)
     {
         var builder = new NumberFieldDescriptorBuilder(type);
@@ -82,7 +82,6 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
     public IndexedSchemaDescriptorBuilder WithTemporalField(Type type, string name, Func<TemporalFieldDescriptorBuilder, TemporalFieldDescriptorBuilder>? func = null)
         => WithTemporalField(type, (builder) => (func?.Invoke(builder) ?? builder).WithName(name));
-
 
     public IndexedSchemaDescriptorBuilder WithTemporalField<T>(Func<TemporalFieldDescriptorBuilder, TemporalFieldDescriptorBuilder>? func = null)
         => WithTemporalField(typeof(T), func);
@@ -124,7 +123,6 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
     => WithCustomField(type, name, null);
     ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithCustomField(Type type, string name, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder> func)
         => WithCustomField(type, name, func);
-
 
     public SchemaDescriptor? Build()
     {

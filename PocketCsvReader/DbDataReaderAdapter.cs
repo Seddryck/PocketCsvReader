@@ -20,6 +20,7 @@ public sealed class DbDataReaderAdapter : DbDataReader
         => _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>Gets the wrapped PocketCsvReader reader.</summary>
+    /// <value>The reader supplied to the constructor.</value>
     public IAsyncDataReader InnerReader => _reader;
 
     public RecordPosition? CurrentPosition => _bufferedRecord || IsClosed ? null : _reader.CurrentPosition;
