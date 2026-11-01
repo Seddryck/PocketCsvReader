@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory)][string]$OutputPrefix,
     [string]$BeforeLabel = 'main-b359baf',
     [string]$AfterLabel = 'pr393',
-    [ValidateSet('CsvUtf8', 'CsvChars')][string]$Parser = 'CsvUtf8',
+    [ValidateSet('CsvUtf8', 'CsvChars', 'CsvCharsOptimized', 'CsvUtf8Optimized')][string]$Parser = 'CsvUtf8',
     [int]$Pairs = 4,
     [int]$Core = 2,
     [int]$WarmupSeconds = 5,

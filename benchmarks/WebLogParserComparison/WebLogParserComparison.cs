@@ -31,7 +31,9 @@ public class WebLogParserComparison
         CombinedLog,
         W3c,
         JsonProjected,
-        NdjsonProjected
+        NdjsonProjected,
+        CsvCharsOptimized,
+        CsvUtf8Optimized
     }
 
     [ParamsAllValues]
@@ -50,13 +52,28 @@ public class WebLogParserComparison
         _statusOrdinal = _requestOrdinal + 1;
         _bytesOrdinal = _requestOrdinal + 2;
         var options = new ParserOptimizationOptions(BufferSize: 4096, ReadAhead: false, RowCountAtStart: false);
+        bool optimizedCsv = Parser is LogParser.CsvCharsOptimized or LogParser.CsvUtf8Optimized;
+        bool utf8Csv = Parser is LogParser.CsvUtf8 or LogParser.CsvUtf8Optimized;
         _open = Parser switch
         {
-            LogParser.CsvChars or LogParser.CsvUtf8 => new CsvReaderBuilder()
-                .WithDialect(d => d.WithoutHeader().WithLineTerminator("\n"))
+            LogParser.CsvChars or LogParser.CsvUtf8 or LogParser.CsvCharsOptimized or LogParser.CsvUtf8Optimized => new CsvReaderBuilder()
+                .WithDialect(d =>
+                {
+                    d.WithoutHeader().WithLineTerminator("\n");
+                    // This generated workload has no quoted/escaped fields, comments,
+                    // special null tokens or incomplete rows. QuoteChar=null selects
+                    // the existing UnquotedFieldParser rather than the general grammar.
+                    return optimizedCsv
+                        ? d.WithoutQuoteChar().WithoutEscapeChar().WithoutDoubleQuote()
+                            .WithCommentChar((char?)null).WithoutCommentRows()
+                            .WithoutHeaderRepeat().WithoutSkipInitialSpace().WithoutNullSequence()
+                        : d;
+                })
                 .WithResource(r => r.WithEncoding("utf-8"))
-                .WithParserOptimizations(options)
-                .WithStreamInitialization(Parser == LogParser.CsvUtf8
+                .WithParserOptimizations(optimizedCsv
+                    ? options with { UnescapeChars = false, HandleSpecialValues = false, ExtendIncompleteRecords = false }
+                    : options)
+                .WithStreamInitialization(utf8Csv
                     ? StreamInitializationOptions.Utf8 : StreamInitializationOptions.ForwardOnly)
                 .Build().ToDataReader,
             LogParser.FixedWidth => new FixedWidthReaderBuilder()
@@ -110,6 +127,8 @@ public class WebLogParserComparison
             {
                 case LogParser.CsvChars:
                 case LogParser.CsvUtf8:
+                case LogParser.CsvCharsOptimized:
+                case LogParser.CsvUtf8Optimized:
                     data.AppendJoin(',', fields).Append('\n'); break;
                 case LogParser.FixedWidth:
                     int[] widths = [15, 2, 10, 26, 64, 4, 10];

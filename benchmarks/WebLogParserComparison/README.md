@@ -1,5 +1,8 @@
 # CSV storage reuse and full parser comparison
 
+The benchmark now also includes unquoted, optimized CSV in both input modes.
+See [the optimized CSV comparison](CSV-OPTIMIZED.md) for its settings and results.
+
 For the latest rebased W3C/Common/Combined investigation, see
 [the web-log allocation follow-up](WEBLOG-ALLOCATIONS.md).
 

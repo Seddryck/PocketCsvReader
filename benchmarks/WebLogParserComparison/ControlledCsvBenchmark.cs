@@ -12,7 +12,8 @@ public static class ControlledCsvBenchmark
     public static void RunWorker(WebLogParserComparison.LogParser parser, string label,
         int core, int warmupSeconds, int batches, int sampleSeconds)
     {
-        if (parser is not (WebLogParserComparison.LogParser.CsvChars or WebLogParserComparison.LogParser.CsvUtf8)
+        if (parser is not (WebLogParserComparison.LogParser.CsvChars or WebLogParserComparison.LogParser.CsvUtf8
+            or WebLogParserComparison.LogParser.CsvCharsOptimized or WebLogParserComparison.LogParser.CsvUtf8Optimized)
             || core is < 0 or > 62 || warmupSeconds < 1 || batches < 2 || sampleSeconds < 1)
             throw new ArgumentOutOfRangeException(nameof(parser), "Use a CSV mode, a valid core, and positive durations.");
         using var process = Process.GetCurrentProcess();
