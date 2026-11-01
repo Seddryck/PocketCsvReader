@@ -81,12 +81,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Chrononuens
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Chrononuensis.Testing", "PocketCsvReader.Chrononuensis.Testing\PocketCsvReader.Chrononuensis.Testing.csproj", "{A7B62315-BA36-4E41-911E-8F0C0AE75939}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.SecurityLogs", "PocketCsvReader.SecurityLogs\PocketCsvReader.SecurityLogs.csproj", "{0C744C2F-95F0-40B0-8451-887125D85C60}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.SecurityLogs.Testing", "PocketCsvReader.SecurityLogs.Testing\PocketCsvReader.SecurityLogs.Testing.csproj", "{592020AB-6A78-4AB7-86FD-56F879C062EB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0C744C2F-95F0-40B0-8451-887125D85C60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C744C2F-95F0-40B0-8451-887125D85C60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C744C2F-95F0-40B0-8451-887125D85C60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C744C2F-95F0-40B0-8451-887125D85C60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{592020AB-6A78-4AB7-86FD-56F879C062EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{592020AB-6A78-4AB7-86FD-56F879C062EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{592020AB-6A78-4AB7-86FD-56F879C062EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{592020AB-6A78-4AB7-86FD-56F879C062EB}.Release|Any CPU.Build.0 = Release|Any CPU
 		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{622D8798-D870-4A3B-BBB8-87297B7085BF}.Release|Any CPU.ActiveCfg = Release|Any CPU

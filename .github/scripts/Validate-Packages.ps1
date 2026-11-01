@@ -18,6 +18,7 @@ $packageIds = @(
     'PocketCsvReader.FixedWidth',
     'PocketCsvReader.KeyValue',
     'PocketCsvReader.WebLogs',
+    'PocketCsvReader.SecurityLogs',
     'PocketCsvReader.Chrononuensis'
 )
 

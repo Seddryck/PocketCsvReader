@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.SecurityLogs</PackageId>
+    <PackageTags>CEF LEEF Security SIEM logs DataReader DataTable Parser</PackageTags>
+    <Description>Streaming CEF and LEEF security event readers for PocketCsvReader.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>
