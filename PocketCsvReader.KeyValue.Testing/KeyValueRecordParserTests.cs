@@ -10,7 +10,7 @@ public class KeyValueRecordParserTests
     {
         const string record = "time:2026-09-29T12:00:00Z\tmessage:Login succeeded: user Ada\tempty:";
 
-        var fields = KeyValueRecordParser.Parse(record, KeyValueFormat.Ltsv);
+        var fields = Parse(record, KeyValueFormat.Ltsv);
 
         Assert.Multiple(() =>
         {
@@ -28,14 +28,14 @@ public class KeyValueRecordParserTests
     [TestCase("bad label:value")]
     [TestCase("valid:value\t")]
     public void Ltsv_RejectsInvalidRecords(string record)
-        => Assert.Throws<InvalidDataException>(() => KeyValueRecordParser.Parse(record, KeyValueFormat.Ltsv));
+        => Assert.Throws<InvalidDataException>(() => Parse(record, KeyValueFormat.Ltsv));
 
     [Test]
     public void Logfmt_ParsesReferenceGrammarForms()
     {
         const string record = "foo=bar a=14 baz=\"hello kitty\" cool%story=bro f %^asdf empty=";
 
-        var fields = KeyValueRecordParser.Parse(record, KeyValueFormat.Logfmt);
+        var fields = Parse(record, KeyValueFormat.Logfmt);
 
         Assert.Multiple(() =>
         {
@@ -55,7 +55,7 @@ public class KeyValueRecordParserTests
     {
         const string record = "message=\"line\\nquote \\\"ok\\\" \\\\ done\"";
 
-        var field = KeyValueRecordParser.Parse(record, KeyValueFormat.Logfmt).Single();
+        var field = Parse(record, KeyValueFormat.Logfmt).Single();
 
         Assert.Multiple(() =>
         {
@@ -70,8 +70,14 @@ public class KeyValueRecordParserTests
     [TestCase("message=raw=value")]
     [TestCase("message=\"bad\\q\"")]
     public void Logfmt_RejectsInvalidRecords(string record)
-        => Assert.Throws<InvalidDataException>(() => KeyValueRecordParser.Parse(record, KeyValueFormat.Logfmt));
+        => Assert.Throws<InvalidDataException>(() => Parse(record, KeyValueFormat.Logfmt));
 
+    private static FieldSpan[] Parse(string record, KeyValueFormat format)
+    {
+        var fields = new List<FieldSpan>();
+        KeyValueRecordParser.Parse(record.AsSpan(), format, fields);
+        return [.. fields];
+    }
     private static string SliceLabel(string record, FieldSpan field)
         => record.AsSpan(field.Label.Start, field.Label.Length).ToString();
 

@@ -5,30 +5,35 @@ namespace PocketCsvReader.KeyValue;
 
 internal static class KeyValueRecordParser
 {
-    public static FieldSpan[] Parse(string record, KeyValueFormat format)
-        => format switch
+    public static void Parse(ReadOnlySpan<char> record, KeyValueFormat format, List<FieldSpan> fields)
+    {
+        fields.Clear();
+        switch (format)
         {
-            KeyValueFormat.Ltsv => ParseLtsv(record),
-            KeyValueFormat.Logfmt => ParseLogfmt(record),
-            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
-        };
+            case KeyValueFormat.Ltsv: ParseLtsv(record, fields); break;
+            case KeyValueFormat.Logfmt: ParseLogfmt(record, fields); break;
+            default: throw new ArgumentOutOfRangeException(nameof(format), format, null);
+        }
+    }
 
-    private static FieldSpan[] ParseLtsv(string record)
+    private static void ParseLtsv(ReadOnlySpan<char> record, List<FieldSpan> fields)
     {
         if (record.Length == 0)
-            return [];
+            return;
 
-        var fields = new List<FieldSpan>();
         var fieldStart = 0;
         while (fieldStart <= record.Length)
         {
-            var fieldEnd = record.IndexOf('\t', fieldStart);
+            var fieldEnd = record[fieldStart..].IndexOf('\t');
             if (fieldEnd < 0)
                 fieldEnd = record.Length;
+            else
+                fieldEnd += fieldStart;
 
-            var separator = record.IndexOf(':', fieldStart, fieldEnd - fieldStart);
+            var separator = record.Slice(fieldStart, fieldEnd - fieldStart).IndexOf(':');
             if (separator < 0)
                 throw SyntaxError("An LTSV field must contain ':'", fieldStart);
+            separator += fieldStart;
             if (separator == fieldStart)
                 throw SyntaxError("An LTSV label cannot be empty", fieldStart);
 
@@ -43,61 +48,59 @@ internal static class KeyValueRecordParser
                 break;
             fieldStart = fieldEnd + 1;
         }
-        return [.. fields];
     }
 
-    private static FieldSpan[] ParseLogfmt(string record)
+    private static void ParseLogfmt(ReadOnlySpan<char> record, List<FieldSpan> fields)
     {
-        var fields = new List<FieldSpan>();
         var position = 0;
         while (true)
         {
             SkipWhitespace(record, ref position);
             if (position == record.Length)
-                return [.. fields];
+                return;
 
-            var labelStart = position;
-            while (position < record.Length && IsIdentifierChar(record[position]))
-                position++;
-            if (labelStart == position)
-                throw SyntaxError("A logfmt key was expected", position);
-
-            var label = new SpanInfo(labelStart, position - labelStart);
-            if (position == record.Length || IsWhitespace(record[position]))
-            {
-                fields.Add(new FieldSpan(new SpanInfo(position, 0), label));
-                continue;
-            }
-
-            if (record[position] != '=')
-                throw SyntaxError("A logfmt key must be followed by '=' or whitespace", position);
-            position++;
-
-            if (position == record.Length || IsWhitespace(record[position]))
-            {
-                fields.Add(new FieldSpan(new SpanInfo(position, 0), label));
-                continue;
-            }
-
-            if (record[position] == '"')
-            {
-                fields.Add(ParseQuotedLogfmtValue(record, label, ref position));
-                continue;
-            }
-
-            var valueStart = position;
-            while (position < record.Length && IsIdentifierChar(record[position]))
-                position++;
-            if (valueStart == position)
-                throw SyntaxError("A logfmt value was expected", position);
-            if (position < record.Length && !IsWhitespace(record[position]))
-                throw SyntaxError("An invalid character was found in a logfmt value", position);
-
-            fields.Add(new FieldSpan(new SpanInfo(valueStart, position - valueStart), label));
+            fields.Add(ParseLogfmtField(record, ref position));
         }
     }
 
-    private static FieldSpan ParseQuotedLogfmtValue(string record, SpanInfo label, ref int position)
+    private static FieldSpan ParseLogfmtField(ReadOnlySpan<char> record, ref int position)
+    {
+        var labelStart = position;
+        while (position < record.Length && IsIdentifierChar(record[position]))
+            position++;
+        if (labelStart == position)
+            throw SyntaxError("A logfmt key was expected", position);
+
+        var label = new SpanInfo(labelStart, position - labelStart);
+        if (position == record.Length || IsWhitespace(record[position]))
+            return new FieldSpan(new SpanInfo(position, 0), label);
+
+        if (record[position] != '=')
+            throw SyntaxError("A logfmt key must be followed by '=' or whitespace", position);
+        position++;
+        return ParseLogfmtValue(record, label, ref position);
+    }
+
+    private static FieldSpan ParseLogfmtValue(ReadOnlySpan<char> record, SpanInfo label, ref int position)
+    {
+        if (position == record.Length || IsWhitespace(record[position]))
+            return new FieldSpan(new SpanInfo(position, 0), label);
+
+        if (record[position] == '"')
+            return ParseQuotedLogfmtValue(record, label, ref position);
+
+        var valueStart = position;
+        while (position < record.Length && IsIdentifierChar(record[position]))
+            position++;
+        if (valueStart == position)
+            throw SyntaxError("A logfmt value was expected", position);
+        if (position < record.Length && !IsWhitespace(record[position]))
+            throw SyntaxError("An invalid character was found in a logfmt value", position);
+
+        return new FieldSpan(new SpanInfo(valueStart, position - valueStart), label);
+    }
+
+    private static FieldSpan ParseQuotedLogfmtValue(ReadOnlySpan<char> record, SpanInfo label, ref int position)
     {
         var quoteStart = position++;
         var valueStart = position;
@@ -126,7 +129,7 @@ internal static class KeyValueRecordParser
                 {
                     try
                     {
-                        decoded = JsonSerializer.Deserialize<string>(record.Substring(quoteStart, position - quoteStart));
+                        decoded = JsonSerializer.Deserialize<string>(record.Slice(quoteStart, position - quoteStart));
                     }
                     catch (JsonException exception)
                     {
@@ -154,13 +157,13 @@ internal static class KeyValueRecordParser
     private static bool IsWhitespace(char value)
         => value <= ' ';
 
-    private static void SkipWhitespace(string record, ref int position)
+    private static void SkipWhitespace(ReadOnlySpan<char> record, ref int position)
     {
         while (position < record.Length && IsWhitespace(record[position]))
             position++;
     }
 
-    private static void ValidateLtsvLabel(string record, int start, int length)
+    private static void ValidateLtsvLabel(ReadOnlySpan<char> record, int start, int length)
     {
         for (var index = start; index < start + length; index++)
         {
@@ -175,7 +178,7 @@ internal static class KeyValueRecordParser
         }
     }
 
-    private static void ValidateLtsvValue(string record, int start, int length)
+    private static void ValidateLtsvValue(ReadOnlySpan<char> record, int start, int length)
     {
         for (var index = start; index < start + length; index++)
         {
