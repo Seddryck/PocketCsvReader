@@ -10,3 +10,4 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("PocketCsvReader.FixedWidth")]
 [assembly: InternalsVisibleTo("PocketCsvReader.KeyValue")]
 [assembly: InternalsVisibleTo("PocketCsvReader.WebLogs")]
+[assembly: InternalsVisibleTo("PocketCsvReader.SecurityLogs")]

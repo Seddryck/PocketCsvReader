@@ -2,7 +2,7 @@
 
 ![Logo](https://raw.githubusercontent.com/Seddryck/PocketCsvReader/main/assets/PocketCsvReader-icon-256.png)
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as JSON, NDJSON, fixed-width, LTSV, logfmt, Common Log Format, and W3C Extended Log Format. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
+PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as JSON, NDJSON, fixed-width, LTSV, logfmt, Common Log Format, W3C Extended Log Format, CEF, and LEEF. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
 
 [About][] | [Install][] | [Quick-start][]
 
@@ -32,6 +32,8 @@ PocketCsvReader is a highly efficient and lightweight library tailored for parsi
 [![Top language](https://img.shields.io/github/languages/top/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/search?l=C%23)
 
 ## Install
+
+The optional `PocketCsvReader.SecurityLogs` package reads CEF and LEEF security events. See the [security log guide](docs/_docs/security-log-formats.md) for supported versions, syslog envelopes, and attribute selection.
 
 The optional `PocketCsvReader.Chrononuensis` package adds span parsers for ten temporal period types with `.WithParsers(options => options.UseChrononuensis())`. See the [supported types, formats, and precedence rules](docs/_docs/chrononuensis.md). The core package has no Chrononuensis dependency.
 

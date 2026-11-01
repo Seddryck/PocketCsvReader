@@ -104,6 +104,10 @@ jobs:
             artifact: web-logs
             project: PocketCsvReader.WebLogs.Testing/PocketCsvReader.WebLogs.Testing.csproj
             include: '[PocketCsvReader.WebLogs]*'
+          - name: PocketCsvReader.SecurityLogs
+            artifact: security-logs
+            project: PocketCsvReader.SecurityLogs.Testing/PocketCsvReader.SecurityLogs.Testing.csproj
+            include: '[PocketCsvReader.SecurityLogs]*'
           - name: PocketCsvReader.Chrononuensis
             artifact: chrononuensis
             project: PocketCsvReader.Chrononuensis.Testing/PocketCsvReader.Chrononuensis.Testing.csproj
@@ -264,6 +268,9 @@ jobs:
           - name: PocketCsvReader.WebLogs
             artifact: web-logs
             project: PocketCsvReader.WebLogs/PocketCsvReader.WebLogs.csproj
+          - name: PocketCsvReader.SecurityLogs
+            artifact: security-logs
+            project: PocketCsvReader.SecurityLogs/PocketCsvReader.SecurityLogs.csproj
           - name: PocketCsvReader.Chrononuensis
             artifact: chrononuensis
             project: PocketCsvReader.Chrononuensis/PocketCsvReader.Chrononuensis.csproj
