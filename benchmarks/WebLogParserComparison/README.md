@@ -7,12 +7,12 @@ consumed immediately in a checksum, rather than stored in a result list.
 
 ## Source and environment
 
-The parsers under test are revision `76e0b20f7c01f5be5d9a3d73aba00c0bbbe41e09`
-from PR #389, which adds reusable JSON metadata and escape-decoding storage.
-PR #389 was still open at measurement time; these are results for that revision,
-not the unoptimized `origin/main` revision `d404b26`. The benchmark is an independent
-project so it can compare source revisions through the `ParserSourceRoot` MSBuild
-property without merging their production changes into this benchmark branch.
+The benchmark branch was rebased onto `origin/main` at
+`b359baf1be3d2fcb278f7f05fb28a5acbc16f422`. This includes reusable JSON metadata
+and decoding storage (#389), plus on-demand string decoding (#392). Parser source
+is taken directly from this rebased checkout, with no external source override.
+The harness revision used for measurement is `326ceac779d57e12a2e1da45bea416fd087e86bb`;
+subsequent changes only refresh this report and its saved results.
 
 Measurements were taken on 2026-11-01, using Release builds, .NET 10.0.14, Windows
 11, x64, and the Intel Core Ultra 9 275HX. The SDK is 11.0.100-rc.2.26504.105.
@@ -48,21 +48,22 @@ Measurements were taken on 2026-11-01, using Release builds, .NET 10.0.14, Windo
 - Memory is cumulative allocation, not peak live memory or working set. MB in this
   report is decimal (1,000,000 bytes).
 
-The original run's raw matrix is preserved in `original.csv`. Comparing its timings
-with this later run is a historical comparison, not a controlled same-process A/B
-test. The current twelve cases are measured together using the same harness.
+The original run's raw matrix is preserved in `original.csv`; `previous.csv`
+preserves the prior run against the metadata-reuse changes before lazy decoding.
+Comparisons between sessions are historical, not controlled same-process A/B
+tests. The current twelve cases are measured together using the same harness.
 
 ## Reproduce
 
-Set `ParserSourceRoot` to a checkout of the exact parser revision to measure.
-Keep it set for BenchmarkDotNet so its generated build also uses that source.
-The environment variable below applies to the current PowerShell session only.
-Without it, the project uses the repository containing this benchmark.
+Run from this rebased repository root. Remove any prior source override so both
+the matrix and BenchmarkDotNet's generated build use the current checkout.
+The optional `ParserSourceRoot` property remains available for explicit comparisons
+against another source checkout, but was not set for this run.
 
 ```powershell
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
-$env:ParserSourceRoot = 'D:\users\seddr\Projects\PocketCsvReader\.worktrees\json-allocations'
-git -C $env:ParserSourceRoot rev-parse HEAD
+Remove-Item Env:ParserSourceRoot -ErrorAction SilentlyContinue
+git rev-parse HEAD
 dotnet build benchmarks/WebLogParserComparison/WebLogParserComparison.csproj -c Release
 dotnet benchmarks/WebLogParserComparison/bin/Release/net10.0/WebLogParserComparison.dll --validate
 dotnet benchmarks/WebLogParserComparison/bin/Release/net10.0/WebLogParserComparison.dll --matrix
@@ -80,69 +81,80 @@ in `optimized.csv`.
 
 | Parser | CPU (ms) | Wall mean (ms) | Wall SD (ms) | Allocated (MB) | Bytes/row |
 |---|---:|---:|---:|---:|---:|
-| Fixed-width | 10.326 | 10.406 | 0.556 | 8.367 | 167.35 |
-| LTSV | 14.412 | 14.511 | 1.326 | 4.569 | 91.37 |
-| W3C | 14.719 | 14.850 | 1.471 | 7.270 | 145.40 |
-| Common Log | 16.905 | 17.082 | 0.742 | 4.502 | 90.05 |
-| Combined Log | 19.372 | 19.473 | 1.163 | 4.561 | 91.22 |
-| CSV UTF-8 | 21.215 | 21.357 | 1.038 | 29.166 | 583.31 |
-| logfmt | 23.437 | 23.634 | 2.963 | 4.589 | 91.79 |
-| JSON projected | 24.519 | 24.779 | 0.831 | 4.612 | 92.24 |
-| CSV characters | 31.328 | 31.196 | 0.765 | 29.170 | 583.40 |
-| NDJSON projected | 37.569 | 37.487 | 2.831 | 4.614 | 92.28 |
-| JSON | 43.336 | 43.543 | 5.505 | 8.613 | 172.25 |
-| NDJSON | 45.101 | 45.389 | 4.136 | 8.615 | 172.29 |
+| Fixed-width | 8.738 | 8.753 | 0.144 | 8.367 | 167.35 |
+| LTSV | 9.841 | 9.869 | 0.107 | 4.569 | 91.37 |
+| W3C | 11.120 | 11.182 | 0.201 | 7.270 | 145.40 |
+| Common Log | 12.464 | 12.520 | 0.210 | 4.502 | 90.05 |
+| Combined Log | 14.418 | 14.413 | 0.311 | 4.561 | 91.22 |
+| logfmt | 16.090 | 16.109 | 0.105 | 4.589 | 91.79 |
+| CSV UTF-8 | 17.966 | 17.909 | 0.083 | 29.166 | 583.31 |
+| JSON projected | 19.687 | 19.685 | 0.171 | 4.612 | 92.24 |
+| CSV characters | 26.337 | 26.247 | 0.274 | 29.170 | 583.40 |
+| NDJSON projected | 28.954 | 29.028 | 0.126 | 4.614 | 92.28 |
+| JSON | 29.937 | 29.995 | 0.110 | 4.612 | 92.25 |
+| NDJSON | 31.635 | 31.793 | 1.248 | 4.614 | 92.28 |
 
-Fixed-width uses the least CPU in this run. Common Log allocates the least.
-Projected JSON/NDJSON allocate about 92 bytes/row, very close to the key/value
-and web-log parsers. Ordinary JSON/NDJSON allocate slightly more than fixed-width
-and far less than CSV, although their CPU cost is still higher on this workload.
+Fixed-width uses the least CPU in this run, while Common Log allocates the least.
+With on-demand string decoding on `main`, ordinary JSON and NDJSON no longer
+materialize the unused escaped timestamp. All four JSON configurations now
+allocate approximately **4.6 MB**, or **92 bytes/row**. Projection's allocation
+advantage has therefore disappeared on this workload. In this matrix, projection
+uses approximately **34% less CPU for JSON** and **8% less for NDJSON** compared
+with ordinary parsing. The independent BenchmarkDotNet run did not reproduce the
+NDJSON timing benefit, so that small gain should not be treated as reliable.
+Projection still validates skipped input.
 
-Within this run, projection reduces JSON CPU by about **43%** and NDJSON CPU by
-about **17%**, while reducing their allocation by about **46%** relative to
-ordinary optimized parsing. The non-projected paths still decode the unused
-escaped timestamp; projection avoids that materialization.
+The prior buffer-reuse-only run (`previous.csv`) allocated 8.613 MB for JSON and
+8.615 MB for NDJSON. Lazy decoding removes approximately 4 MB more per operation,
+a **46% reduction** in ordinary-parser allocation. Compared with the original
+77.4 MB results (`original.csv`), ordinary JSON/NDJSON now allocate about **94% less**.
+Other parsers' allocation totals are essentially unchanged.
 
-Compared with the original ordinary-parser allocation, JSON drops from 77.411 MB
-to 8.613 MB and NDJSON from 77.413 MB to 8.615 MB, both about **89% less**.
-Adding explicit projection brings both to approximately 4.6 MB, about **94% less**
-than their original non-projected allocation. Other parsers' allocation totals
-are essentially unchanged. The current timings are generally slower than the
-original session and the JSON cases have greater variance; the historical
-CPU differences should not be attributed solely to the optimization. Use the
-current run to compare parsers, with short-run timing uncertainty in mind.
+Current CPU timings are lower than in the prior session across many unchanged
+parsers too. Do not attribute the entire historical CPU change to lazy decoding;
+compare projection against ordinary parsing within this current run. Closely
+ranked configurations should be interpreted with short-run uncertainty in mind.
 
 ## Independent BenchmarkDotNet check
 
-All twelve .NET 10 ShortRun cases completed with MemoryDiagnoser. Allocation
-agrees with the matrix, including 8.21/8.22 MiB for ordinary JSON/NDJSON and
-approximately 4.4 MiB for both projected cases. The generated `optimized.bdn.md`
-and `optimized.bdn.csv` retain elapsed times, uncertainty, GC counts, and environment
-details. BenchmarkDotNet labels binary MiB as "MB"; the matrix table above uses
-decimal MB. Its elapsed time is not process CPU time, and should not be combined
-with CPU figures from the separate matrix to infer utilization. ShortRun's three
-measurement iterations give broad confidence intervals, especially for closely
-ranked parsers.
+All twelve .NET 10 ShortRun cases completed with MemoryDiagnoser. Allocations agree
+with the matrix: ordinary and projected JSON/NDJSON all allocate approximately
+4.4 MiB (4.6 decimal MB). The generated `optimized.bdn.md` and `.bdn.csv` preserve
+elapsed times, uncertainty, GC counts, and environment details.
 
-The JSON assembly used by the matrix matched the optimized source checkout's
-assembly by SHA-256 (`85B91655EA58621B3AEEFEA6E5D2FC404FFB7B69890401BEDF180E561E7AA31C`).
-The independently built BenchmarkDotNet cases' JSON allocation also confirms that
-they used the optimized path rather than the old 77 MB implementation.
+| JSON configuration | BenchmarkDotNet elapsed mean (ms) |
+|---|---:|
+| JSON | 28.768 |
+| JSON projected | 24.886 |
+| NDJSON | 28.964 |
+| NDJSON projected | 34.231 |
+
+JSON projection is faster in both measurement methods, although the size of the
+benefit differs. NDJSON projection is slower in this independent run despite a
+small CPU improvement in the matrix. Separate process/JIT histories and short-run
+variation mean projection is not a demonstrated general CPU win for NDJSON here.
+Its allocation is now effectively identical to ordinary lazy decoding.
+
+BenchmarkDotNet labels binary MiB as "MB"; the matrix uses decimal MB. Its elapsed
+time is not process CPU time, and should not be combined with CPU figures from
+the separate matrix to infer utilization. ShortRun's three measurement iterations
+give broad confidence intervals, especially for closely ranked parsers.
 
 ## Validation performed
 
-- `--validate`: all three returned values checked on each of 50,000 rows for
-  each of twelve cases (600,000 row checks).
-- `--matrix`: all twelve CPU/allocation cases completed; checksums validated
-  on every invocation.
-- BenchmarkDotNet: all twelve cases completed against the selected optimized source.
-- Comparison project Release build: succeeded on .NET 8, 9, and 10 with no warnings
-  or errors, referencing the selected optimized parser projects.
-- Full repository solution Release build: succeeded across its declared targets,
-  with seven warnings in existing core test/profiler code and dependencies.
+- `--validate`: all three returned values checked on 50,000 rows for each of
+  twelve cases (600,000 row checks).
+- `--matrix`: all twelve CPU/allocation cases completed; checksums checked on
+  every invocation.
+- BenchmarkDotNet: all twelve cases completed against this rebased checkout.
+- .NET 10 Release unit tests: JSON **1,155 passed**, NDJSON **310 passed**;
+  **1,465 total**, no failures or skips.
+- Comparison project Release build: succeeded for .NET 8, 9, and 10 with no
+  warnings or errors.
+- Full solution Release build: succeeded across declared targets; seven warnings
+  remain in existing core test/profiler code and dependencies.
+- Parser allocation guard: passed, with 19 reviewed occurrences.
 - `git diff --check`: passed.
-- Not run: unit test suites (this change only adds a benchmark/report), benchmarks
-  on .NET 8/9, other operating systems, disk-I/O benchmarks, or new workloads for
-  malformed input, missing values, Unicode/escaping variety, or nested JSON.
-  Production optimization regression tests were previously run separately in
-  PR #389; those earlier executions are not counted as tests run for this rerun.
+- Not run: the full repository test suite, unrelated parser unit test projects,
+  .NET 8/9 unit tests or benchmarks, other operating systems, disk-I/O benchmarks,
+  or new malformed-input, Unicode, missing-value, or nested-document workloads.

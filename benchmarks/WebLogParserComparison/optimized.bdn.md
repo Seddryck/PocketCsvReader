@@ -10,17 +10,17 @@ Job=ShortRun-.NET 10.0  PowerPlanMode=00000000-0000-0000-0000-000000000000  Runt
 IterationCount=3  LaunchCount=1  WarmupCount=3  
 
 ```
-| Method          | Parser          | Mean     | Error     | StdDev   | Gen0      | Gen1    | Allocated |
-|---------------- |---------------- |---------:|----------:|---------:|----------:|--------:|----------:|
-| **ReadThreeValues** | **CsvChars**        | **29.80 ms** | **13.795 ms** | **0.756 ms** | **1531.2500** | **31.2500** |  **27.82 MB** |
-| **ReadThreeValues** | **CsvUtf8**         | **18.45 ms** |  **8.194 ms** | **0.449 ms** | **1531.2500** |       **-** |  **27.81 MB** |
-| **ReadThreeValues** | **FixedWidth**      | **10.10 ms** | **13.389 ms** | **0.734 ms** |  **437.5000** |       **-** |   **7.98 MB** |
-| **ReadThreeValues** | **Ndjson**          | **36.66 ms** | **14.783 ms** | **0.810 ms** |  **384.6154** |       **-** |   **8.22 MB** |
-| **ReadThreeValues** | **Json**            | **35.53 ms** | **19.893 ms** | **1.090 ms** |  **400.0000** |       **-** |   **8.21 MB** |
-| **ReadThreeValues** | **Logfmt**          | **17.21 ms** |  **9.789 ms** | **0.537 ms** |  **218.7500** |       **-** |   **4.38 MB** |
-| **ReadThreeValues** | **Ltsv**            | **11.02 ms** | **16.972 ms** | **0.930 ms** |  **234.3750** |       **-** |   **4.36 MB** |
-| **ReadThreeValues** | **CommonLog**       | **14.55 ms** | **13.844 ms** | **0.759 ms** |  **234.3750** |       **-** |   **4.29 MB** |
-| **ReadThreeValues** | **CombinedLog**     | **17.17 ms** | **36.694 ms** | **2.011 ms** |  **234.3750** |       **-** |   **4.35 MB** |
-| **ReadThreeValues** | **W3c**             | **12.99 ms** | **17.177 ms** | **0.942 ms** |  **375.0000** |       **-** |   **6.93 MB** |
-| **ReadThreeValues** | **JsonProjected**   | **22.70 ms** |  **6.525 ms** | **0.358 ms** |  **218.7500** |       **-** |    **4.4 MB** |
-| **ReadThreeValues** | **NdjsonProjected** | **29.97 ms** |  **6.121 ms** | **0.336 ms** |  **187.5000** |       **-** |    **4.4 MB** |
+| Method          | Parser          | Mean      | Error      | StdDev    | Gen0      | Gen1    | Allocated |
+|---------------- |---------------- |----------:|-----------:|----------:|----------:|--------:|----------:|
+| **ReadThreeValues** | **CsvChars**        | **26.147 ms** |  **2.0706 ms** | **0.1135 ms** | **1531.2500** | **31.2500** |  **27.82 MB** |
+| **ReadThreeValues** | **CsvUtf8**         | **17.673 ms** |  **0.2347 ms** | **0.0129 ms** | **1531.2500** |       **-** |  **27.81 MB** |
+| **ReadThreeValues** | **FixedWidth**      |  **7.953 ms** |  **0.6492 ms** | **0.0356 ms** |  **437.5000** |       **-** |   **7.98 MB** |
+| **ReadThreeValues** | **Ndjson**          | **28.964 ms** |  **1.4080 ms** | **0.0772 ms** |  **218.7500** |       **-** |    **4.4 MB** |
+| **ReadThreeValues** | **Json**            | **28.768 ms** |  **2.8105 ms** | **0.1541 ms** |  **218.7500** |       **-** |    **4.4 MB** |
+| **ReadThreeValues** | **Logfmt**          | **16.466 ms** |  **1.3656 ms** | **0.0749 ms** |  **218.7500** |       **-** |   **4.38 MB** |
+| **ReadThreeValues** | **Ltsv**            | **12.043 ms** |  **0.9833 ms** | **0.0539 ms** |  **234.3750** |       **-** |   **4.36 MB** |
+| **ReadThreeValues** | **CommonLog**       | **13.683 ms** |  **7.8280 ms** | **0.4291 ms** |  **234.3750** |       **-** |   **4.29 MB** |
+| **ReadThreeValues** | **CombinedLog**     | **12.690 ms** |  **2.1963 ms** | **0.1204 ms** |  **234.3750** |       **-** |   **4.35 MB** |
+| **ReadThreeValues** | **W3c**             | **12.653 ms** |  **1.4908 ms** | **0.0817 ms** |  **375.0000** |       **-** |   **6.93 MB** |
+| **ReadThreeValues** | **JsonProjected**   | **24.886 ms** |  **5.1742 ms** | **0.2836 ms** |  **218.7500** |       **-** |    **4.4 MB** |
+| **ReadThreeValues** | **NdjsonProjected** | **34.231 ms** | **27.2324 ms** | **1.4927 ms** |  **200.0000** |       **-** |    **4.4 MB** |
