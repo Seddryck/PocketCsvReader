@@ -11,47 +11,60 @@ internal static class SyslogEnvelope
         if (line.StartsWith("CEF:") || line.StartsWith("LEEF:")) return 0;
         int position = 0;
         bool priority = line.StartsWith("<");
-        if (priority)
-        {
-            int end = line.IndexOf('>');
-            if (end is < 2 or > 4 || !int.TryParse(line[1..end], NumberStyles.None, CultureInfo.InvariantCulture, out int pri) || pri > 191)
-                throw new InvalidDataException("Invalid syslog priority.");
-            position = end + 1;
-        }
+        if (priority) position = ReadPriority(line);
 
         if (priority && line[position..].StartsWith("1 "))
-        {
-            position += 2;
-            // RFC 5424: timestamp hostname app-name procid msgid structured-data MSG.
-            var timestamp = Token(line, ref position);
-            if (!timestamp.SequenceEqual("-") && !DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-                throw new InvalidDataException("Invalid RFC 5424 timestamp.");
-            for (int i = 0; i < 4; i++) Token(line, ref position);
-            if (position < line.Length && line[position] == '-') position++;
-            else
-            {
-                if (position >= line.Length || line[position] != '[') throw new InvalidDataException("Missing syslog structured data.");
-                do
-                {
-                    bool quoted = false, closed = false;
-                    for (position++; position < line.Length; position++)
-                    {
-                        char c = line[position];
-                        if (c == '\\' && quoted)
-                        {
-                            if (++position >= line.Length) break;
-                        }
-                        else if (c == '"') quoted = !quoted;
-                        else if (c == ']' && !quoted) { position++; closed = true; break; }
-                    }
-                    if (!closed) throw new InvalidDataException("Unterminated syslog structured data.");
-                } while (position < line.Length && line[position] == '[');
-            }
-            if (position >= line.Length || line[position++] != ' ') throw new InvalidDataException("Missing syslog message separator.");
-            if (position < line.Length && line[position] == '\uFEFF') position++;
-            return position;
-        }
+            return ReadRfc5424(line, position + 2);
+        return ReadLegacyEnvelope(line, position);
+    }
 
+    private static int ReadPriority(ReadOnlySpan<char> line)
+    {
+        int end = line.IndexOf('>');
+        if (end is < 2 or > 4 || !int.TryParse(line[1..end], NumberStyles.None, CultureInfo.InvariantCulture, out int pri) || pri > 191)
+            throw new InvalidDataException("Invalid syslog priority.");
+        return end + 1;
+    }
+
+    private static int ReadRfc5424(ReadOnlySpan<char> line, int position)
+    {
+        // RFC 5424: timestamp hostname app-name procid msgid structured-data MSG.
+        var timestamp = Token(line, ref position);
+        if (!timestamp.SequenceEqual("-") && !DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            throw new InvalidDataException("Invalid RFC 5424 timestamp.");
+        for (int i = 0; i < 4; i++) Token(line, ref position);
+        SkipStructuredData(line, ref position);
+        if (position >= line.Length || line[position++] != ' ') throw new InvalidDataException("Missing syslog message separator.");
+        if (position < line.Length && line[position] == '\uFEFF') position++;
+        return position;
+    }
+
+    private static void SkipStructuredData(ReadOnlySpan<char> line, ref int position)
+    {
+        if (position < line.Length && line[position] == '-') { position++; return; }
+        if (position >= line.Length || line[position] != '[') throw new InvalidDataException("Missing syslog structured data.");
+        do { SkipStructuredDataElement(line, ref position); }
+        while (position < line.Length && line[position] == '[');
+    }
+
+    private static void SkipStructuredDataElement(ReadOnlySpan<char> line, ref int position)
+    {
+        bool quoted = false;
+        for (position++; position < line.Length; position++)
+        {
+            char c = line[position];
+            if (c == '\\' && quoted)
+            {
+                if (++position >= line.Length) break;
+            }
+            else if (c == '"') quoted = !quoted;
+            else if (c == ']' && !quoted) { position++; return; }
+        }
+        throw new InvalidDataException("Unterminated syslog structured data.");
+    }
+
+    private static int ReadLegacyEnvelope(ReadOnlySpan<char> line, int position)
+    {
         // RFC 3164-style timestamp and host, optionally followed by an application tag.
         if (line.Length - position < 16 || !IsLegacyTimestamp(line.Slice(position, 15)))
             throw new InvalidDataException("Expected a bare event, RFC 3164 timestamp/host, or RFC 5424 envelope.");
@@ -72,7 +85,7 @@ internal static class SyslogEnvelope
         return monthIndex >= 0 && monthIndex % 3 == 0 && timestamp[3] == ' ' && timestamp[6] == ' '
             && int.TryParse(timestamp.Slice(4, 2).TrimStart(), NumberStyles.None, CultureInfo.InvariantCulture, out int day)
             // RFC 3164 has no year: accept leap day without assuming the current year.
-            && day >= 1 && day <= DateTime.DaysInMonth(2000, monthIndex / 3 + 1)
+            && day >= 1 && day <= DateTime.DaysInMonth(2000, (monthIndex / 3) + 1)
             && TimeOnly.TryParseExact(timestamp[7..], "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
     }
 

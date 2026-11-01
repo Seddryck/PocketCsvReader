@@ -19,25 +19,7 @@ internal sealed class SecurityLogParser
         var prefix = cef ? "CEF:" : "LEEF:";
         if (!line[position..].StartsWith(prefix)) throw new InvalidDataException($"Expected {prefix} payload.");
         position += prefix.Length;
-        var names = HeaderNames(format);
-        for (int i = 0; i < names.Count; i++)
-        {
-            int start = position;
-            while (position < line.Length && line[position] != '|')
-            {
-                if (cef && line[position] == '\\')
-                {
-                    if (++position >= line.Length || line[position] is not ('\\' or '|'))
-                        throw new InvalidDataException("Invalid CEF header escape.");
-                }
-                position++;
-            }
-            if (position == line.Length) throw new InvalidDataException($"Missing header separator after {names[i]}.");
-            var raw = line.Slice(start, position - start);
-            Fields.Add(new FieldSpan(new SpanInfo(start, raw.Length), default,
-                DecodedValue: cef ? Decode(raw, header: true) : null, DecodedLabel: names[i]));
-            position++;
-        }
+        ParseHeaders(line, format, ref position);
         var version = line.Slice(Fields[0].Value.Start, Fields[0].Value.Length);
         if (cef)
         {
@@ -46,56 +28,105 @@ internal sealed class SecurityLogParser
         }
         else
         {
-            if (!version.SequenceEqual("1.0") && !version.SequenceEqual("2.0")) throw new InvalidDataException("Supported LEEF versions are 1.0 and 2.0.");
-            char delimiter = '\t';
-            if (version.SequenceEqual("2.0"))
-            {
-                int end = line[position..].IndexOf('|');
-                if (end < 0) throw new InvalidDataException("LEEF 2.0 requires a delimiter declaration followed by '|'.");
-                delimiter = ParseDelimiter(line.Slice(position, end));
-                position += end + 1;
-            }
+            var delimiter = ReadLeefDelimiter(line, version, ref position);
             ParseLeefAttributes(line, position, delimiter);
         }
+    }
+
+    private void ParseHeaders(ReadOnlySpan<char> line, SecurityLogFormat format, ref int position)
+    {
+        bool cef = format == SecurityLogFormat.Cef;
+        var names = HeaderNames(format);
+        for (int i = 0; i < names.Count; i++)
+        {
+            int start = position;
+            FindHeaderEnd(line, cef, ref position);
+            if (position == line.Length) throw new InvalidDataException($"Missing header separator after {names[i]}.");
+            var raw = line.Slice(start, position - start);
+            Fields.Add(new FieldSpan(new SpanInfo(start, raw.Length), default,
+                DecodedValue: cef ? Decode(raw, header: true) : null, DecodedLabel: names[i]));
+            position++;
+        }
+    }
+
+    private static void FindHeaderEnd(ReadOnlySpan<char> line, bool cef, ref int position)
+    {
+        while (position < line.Length && line[position] != '|')
+        {
+            if (cef && line[position] == '\\')
+            {
+                if (++position >= line.Length || line[position] is not ('\\' or '|'))
+                    throw new InvalidDataException("Invalid CEF header escape.");
+            }
+            position++;
+        }
+    }
+
+    private static char ReadLeefDelimiter(ReadOnlySpan<char> line, ReadOnlySpan<char> version, ref int position)
+    {
+        if (!version.SequenceEqual("1.0") && !version.SequenceEqual("2.0")) throw new InvalidDataException("Supported LEEF versions are 1.0 and 2.0.");
+        if (version.SequenceEqual("1.0")) return '\t';
+        int end = line[position..].IndexOf('|');
+        if (end < 0) throw new InvalidDataException("LEEF 2.0 requires a delimiter declaration followed by '|'.");
+        var delimiter = ParseDelimiter(line.Slice(position, end));
+        position += end + 1;
+        return delimiter;
+    }
+
+    private static void SkipSpaces(ReadOnlySpan<char> line, ref int position)
+    {
+        while (position < line.Length && line[position] == ' ') position++;
+    }
+
+    private static int ReadCefKey(ReadOnlySpan<char> line, ref int position)
+    {
+        int start = position;
+        while (position < line.Length && IsKeyChar(line[position])) position++;
+        if (position == start || position == line.Length || line[position] != '=')
+            throw new InvalidDataException("Expected a CEF extension key=value pair.");
+        return position - start;
+    }
+
+    private static bool TryFindNextCefKey(ReadOnlySpan<char> line, int position, out int key)
+    {
+        SkipSpaces(line, ref position);
+        key = position;
+        while (position < line.Length && IsKeyChar(line[position])) position++;
+        return position > key && position < line.Length && line[position] == '=';
+    }
+
+    private static int ReadCefValueEnd(ReadOnlySpan<char> line, ref int position)
+    {
+        while (position < line.Length)
+        {
+            char c = line[position];
+            if (c == '\\')
+            {
+                if (++position >= line.Length || line[position] is not ('\\' or '=' or 'n' or 'r'))
+                    throw new InvalidDataException("Invalid CEF extension escape.");
+            }
+            else if (c == '=') throw new InvalidDataException("An equals sign inside a CEF extension value must be escaped.");
+            else if (c == ' ' && TryFindNextCefKey(line, position, out int key))
+            {
+                int end = position;
+                position = key;
+                return end;
+            }
+            position++;
+        }
+        return line.Length;
     }
 
     private void ParseCefAttributes(ReadOnlySpan<char> line, int position)
     {
         while (position < line.Length)
         {
-            while (position < line.Length && line[position] == ' ') position++;
+            SkipSpaces(line, ref position);
             if (position == line.Length) return;
             int keyStart = position;
-            while (position < line.Length && IsKeyChar(line[position])) position++;
-            if (position == keyStart || position == line.Length || line[position] != '=')
-                throw new InvalidDataException("Expected a CEF extension key=value pair.");
-            int keyLength = position - keyStart;
+            int keyLength = ReadCefKey(line, ref position);
             int valueStart = ++position;
-            int valueEnd = line.Length;
-            while (position < line.Length)
-            {
-                char c = line[position];
-                if (c == '\\')
-                {
-                    if (++position >= line.Length || line[position] is not ('\\' or '=' or 'n' or 'r'))
-                        throw new InvalidDataException("Invalid CEF extension escape.");
-                }
-                else if (c == '=') throw new InvalidDataException("An equals sign inside a CEF extension value must be escaped.");
-                else if (c == ' ')
-                {
-                    int next = position;
-                    while (next < line.Length && line[next] == ' ') next++;
-                    int key = next;
-                    while (next < line.Length && IsKeyChar(line[next])) next++;
-                    if (next > key && next < line.Length && line[next] == '=')
-                    {
-                        valueEnd = position;
-                        position = key;
-                        break;
-                    }
-                }
-                position++;
-            }
+            int valueEnd = ReadCefValueEnd(line, ref position);
             AddAttribute(line, keyStart, keyLength, valueStart, valueEnd - valueStart, cef: true);
         }
     }
@@ -156,10 +187,7 @@ internal sealed class SecurityLogParser
                 if (c == '\\')
                 {
                     if (++i == value.Length) throw new InvalidDataException("Truncated CEF escape.");
-                    c = value[i];
-                    if (header ? c is not ('|' or '\\') : c is not ('=' or '\\' or 'n' or 'r'))
-                        throw new InvalidDataException("Invalid CEF escape.");
-                    if (!header) c = c switch { 'n' => '\n', 'r' => '\r', _ => c };
+                    c = DecodeEscape(value[i], header);
                 }
                 buffer[count++] = c;
             }
@@ -167,5 +195,18 @@ internal sealed class SecurityLogParser
             return new string(buffer, 0, count);
         }
         finally { ArrayPool<char>.Shared.Return(buffer); }
+    }
+
+    private static char DecodeEscape(char c, bool header)
+    {
+        if (header)
+            return c is '|' or '\\' ? c : throw new InvalidDataException("Invalid CEF escape.");
+        return c switch
+        {
+            '=' or '\\' => c,
+            'n' => '\n',
+            'r' => '\r',
+            _ => throw new InvalidDataException("Invalid CEF escape.")
+        };
     }
 }
