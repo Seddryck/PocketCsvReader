@@ -40,6 +40,13 @@ internal ref struct JsonRecordParser
         return parser.ParseRoot(buffer);
     }
 
+    internal static string DecodeString(ReadOnlySpan<char> quotedValue, JsonFieldBuffer buffer)
+    {
+        var parser = new JsonRecordParser(quotedValue, [], fieldBuffer: buffer);
+        var value = parser.ParseString();
+        return value.Decoded ?? quotedValue.Slice(value.Span.Start, value.Span.Length).ToString();
+    }
+
     public static FieldSpan[] ParseStableObjectValues(
         ReadOnlySpan<char> json,
         char[] whitespaces,
@@ -295,8 +302,9 @@ internal ref struct JsonRecordParser
     {
         if (Current == '"')
         {
-            var value = ParseString();
-            return new FieldSpan(value.Span, default, DecodedValue: value.Decoded);
+            // Validate every escape now; decoded storage is created by value access.
+            var value = SkipString();
+            return new FieldSpan(value.Span, default);
         }
 
         if (Current == '{')

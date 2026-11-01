@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Ndjson\PocketCsvReader.Ndjson.csproj" />
   </ItemGroup>
 </Project>

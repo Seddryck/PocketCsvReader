@@ -90,6 +90,19 @@ public class JsonAllocationComparison
         return checksum;
     }
 
+    public long ReadThreeValuesAndTimestamp()
+    {
+        if (Projection) throw new InvalidOperationException("Timestamp access requires the full schema.");
+        using var reader = _open(new MemoryStream(_data, writable: false));
+        long checksum = 0;
+        while (reader.Read())
+        {
+            var row = Project(reader);
+            checksum += row.Request.Length + row.Status + row.Bytes + reader.GetString(3).Length;
+        }
+        return checksum;
+    }
+
     public static void RunMatrix()
     {
         Console.WriteLine("Format,Projection,EscapedTimestamp,Records,InputBytes,WallMeanMs,WallStdDevMs,CpuMeanMs,AllocatedBytes,BytesPerRow");

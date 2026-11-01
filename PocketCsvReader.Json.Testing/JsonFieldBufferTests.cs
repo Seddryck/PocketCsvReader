@@ -45,7 +45,8 @@ public class JsonFieldBufferTests
         var buffer = new JsonFieldBuffer();
         var first = JsonRecordParser.Parse(json, Whitespace, buffer: buffer);
         string label = first[0].DecodedLabel!;
-        string value = first[0].DecodedValue!;
+        Assert.That(first[0].DecodedValue, Is.Null);
+        string value = JsonRecordParser.DecodeString(json.AsSpan().Slice(first[0].Value.Start - 1, first[0].Value.Length + 2), buffer);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1000; i++) JsonRecordParser.Parse(json, Whitespace, buffer: buffer);
         long reused = GC.GetAllocatedBytesForCurrentThread() - before;

@@ -118,12 +118,10 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
             throw new ArgumentOutOfRangeException(nameof(i),
                 $"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {fields.Length} defined fields.");
 
-        var field = fields[i];
+        ref var field = ref fields[i];
         if (field.Value.IsNull)
             return default;
-        if (field.DecodedValue is not null)
-            return field.DecodedValue.AsMemory();
-        return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
+        return GetFieldMemory(ref field);
     }
 
     private void ValidateOrdinal(int i)

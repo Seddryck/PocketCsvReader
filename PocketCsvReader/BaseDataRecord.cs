@@ -255,8 +255,9 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             return true;
         if (!Parser.TryGetTryParser<T>(i, out var validate) && !Parser.TryGetTryParser(out validate))
             throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
-        foreach (var child in field.Value.Children!)
-            if (!child.Value.IsNull && !validate(GetFieldSpan(child), out _))
+        var children = field.Value.Children!;
+        for (int j = 0; j < children.Length; j++)
+            if (!children[j].Value.IsNull && !validate(GetFieldSpan(ref children[j]), out _))
                 return false;
         return true;
     }
@@ -512,10 +513,10 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         var array = (T?[])Array.CreateInstance(typeof(T?), children.Length);
         for (int j = 0; j < children.Length; j++)
         {
-            var child = children[j];
+            ref var child = ref children[j];
             array[j] = child.Value.IsNull
                         ? default
-                        : parse(GetFieldSpan(child));
+                        : parse(GetFieldSpan(ref child));
         }
         return array;
     }
@@ -538,10 +539,10 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         var array = (object?[])Array.CreateInstance(typeof(object), children.Length);
         for (int j = 0; j < children.Length; j++)
         {
-            var child = children[j];
+            ref var child = ref children[j];
             array[j] = child.Value.IsNull
                 ? null
-                : parse(GetFieldSpan(child));
+                : parse(GetFieldSpan(ref child));
         }
         return array;
     }
@@ -572,10 +573,10 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             throw new ArgumentOutOfRangeException($"Field index '{i}' doesn't contain an item at position '{j}'.");
 
         var parse = ResolveArrayParser<T>(i);
-        var child = children[j];
+        ref var child = ref children[j];
         return child.Value.IsNull
                 ? default
-                : parse(GetFieldSpan(child));
+                : parse(GetFieldSpan(ref child));
     }
 
     private FieldSpan? GetArrayField(int i)
@@ -622,13 +623,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         return (ReadOnlySpan<char> span) => span.ToString();
     }
 
-    private ReadOnlySpan<char> GetFieldSpan(FieldSpan field)
+    private ReadOnlySpan<char> GetFieldSpan(ref FieldSpan field)
     {
-        if (field.DecodedValue is not null)
-            return field.DecodedValue.AsSpan();
         if (CurrentFieldSpans is null)
             throw new InvalidOperationException("Current record is not set.");
-        return CurrentRecordMemory.Span.Slice(field.Value.Start, field.Value.Length);
+        return GetFieldMemory(ref field).Span;
     }
 
     /// <summary>
