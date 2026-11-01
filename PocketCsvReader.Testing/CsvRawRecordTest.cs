@@ -29,7 +29,7 @@ public class BaseRawRecordTest
     public void GetDataTypeName_WithIndexedSchema_CorrectNames()
     {
         var schema = new SchemaDescriptorBuilder()
-                            .Indexed()   
+                            .Indexed()
                             .WithNumberField<decimal>((f) => f.WithDataSourceTypeName("number"))
                             .WithField<string>((f) => f.WithDataSourceTypeName("string"))
                             .Build();

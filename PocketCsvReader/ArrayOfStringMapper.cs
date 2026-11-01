@@ -16,7 +16,7 @@ internal class ArrayOfStringMapper
     private StringMapper StringMapper { get; }
 
     public ArrayOfStringMapper(StringMapper stringMapper)
-        => (StringMapper) = (stringMapper); 
+        => (StringMapper) = (stringMapper);
 
     public string?[] Map(ReadOnlySpan<char> span, IEnumerable<FieldSpan> fieldSpans)
     {

@@ -126,7 +126,6 @@ public class RecordParserTest
         Assert.That(values.Slice(0).ToString(), Is.EqualTo(expected));
     }
 
-
     [Test]
     [TestCase("abc;xyz;123", "123")]
     [TestCase("'abc';'xyz';'123'", "123")]
@@ -154,7 +153,6 @@ public class RecordParserTest
         Assert.That(values.FieldSpans, Has.Length.EqualTo(3));
         Assert.That(values.Slice(2).ToString(), Is.EqualTo(thirdToken));
     }
-
 
     [Test]
     [TestCase("abc+abc", "+", 1)]
@@ -286,7 +284,9 @@ public class RecordParserTest
         for (int i = 0; i < result; i++)
         {
             if (i < result - 1)
+            {
                 Assert.That(reader.IsEndOfFile(out var _, out var _), Is.False);
+            }
             else
             {
                 var eof = reader.IsEndOfFile(out var values, out var _);
@@ -328,7 +328,6 @@ public class RecordParserTest
 
             stream.Position = 0;
 
-
             using (var streamReader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 var reader = new RecordParser(streamReader, new CsvProfile(',', '\"', '\\', recordSeparator, false, false, bufferSize, string.Empty, string.Empty), ArrayPool<char>.Create(256, 5));
@@ -369,7 +368,6 @@ public class RecordParserTest
             }
         }
     }
-
 
     [Test]
     public void ReadNextRecord_NullField_NullValue()

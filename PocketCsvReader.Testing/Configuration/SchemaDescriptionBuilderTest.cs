@@ -91,7 +91,7 @@ public class SchemaDescriptionBuilderTest
         Assert.That(descriptor.Fields["foo"].Format, Is.TypeOf<NumericFormatDescriptor>());
         var formatInfo = (descriptor.Fields["foo"].Format as NumericFormatDescriptor)!.Culture as NumberFormatInfo;
         Assert.That(formatInfo!.NumberGroupSeparator, Is.EqualTo(","));
-        
+
         Assert.That(descriptor.Fields["bar"].RuntimeType, Is.EqualTo(typeof(DateTime)));
         Assert.That(descriptor.Fields["bar"].Name, Is.EqualTo("bar"));
         Assert.That(descriptor.Fields["bar"].Format, Is.TypeOf<TemporalFormatDescriptor>());

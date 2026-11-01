@@ -584,9 +584,9 @@ public class CsvDataReaderTest
         Assert.That(dataReader[1], Is.EqualTo((short)108));
         Assert.That(dataReader.GetInt32(1), Is.EqualTo(108));
         Assert.That(dataReader.GetInt64(1), Is.EqualTo((short)108));
-        Assert.That(dataReader.GetFloat(1), Is.EqualTo((float)108));
-        Assert.That(dataReader.GetDouble(1), Is.EqualTo((double)108));
-        Assert.That(dataReader.GetDecimal(1), Is.EqualTo((decimal)108));
+        Assert.That(dataReader.GetFloat(1), Is.EqualTo(108F));
+        Assert.That(dataReader.GetDouble(1), Is.EqualTo(108D));
+        Assert.That(dataReader.GetDecimal(1), Is.EqualTo(108M));
     }
 
     [Test]
@@ -931,7 +931,6 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetFieldType(1), Is.EqualTo(typeof(Chrononuensis.YearQuarter)));
         Assert.That(dataReader.GetValue(0), Is.EqualTo(new Chrononuensis.YearMonth(2025, 2)));
         Assert.That(dataReader.GetValue(1), Is.EqualTo(new Chrononuensis.YearQuarter(2025, 1)));
-
     }
 
     [Test]
@@ -979,6 +978,7 @@ public class CsvDataReaderTest
         {
             using var dataReader = new CsvDataReader(stream, profile);
             while (dataReader.Read())
+            {
                 Assert.Multiple(() =>
                 {
                     Assert.That(dataReader[0], Is.EqualTo("2018"));
@@ -986,6 +986,7 @@ public class CsvDataReaderTest
                     Assert.That(dataReader[2], Is.EqualTo("1"));
                     Assert.That(dataReader[13], Does.StartWith("2018-"));
                 });
+            }
         }
     }
 
@@ -1007,6 +1008,7 @@ public class CsvDataReaderTest
         {
             using var dataReader = new CsvDataReader(stream, profile);
             while (dataReader.Read())
+            {
                 Assert.Multiple(() =>
                 {
                     Assert.That(dataReader.GetString(0), Is.EqualTo("2018"));
@@ -1014,6 +1016,7 @@ public class CsvDataReaderTest
                     Assert.That(dataReader.GetString(2), Is.EqualTo("1"));
                     Assert.That(dataReader.GetString(13), Does.StartWith("2018-"));
                 });
+            }
         }
     }
 

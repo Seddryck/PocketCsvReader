@@ -60,8 +60,10 @@ public class PositionTracking
     {
         Console.WriteLine("Parser,Scenario,Tracking,MeanUs,StdDevUs,AllocatedBytes,RecordsPerSecond");
         foreach (var parser in new[] { CsvInputMode.DecodedChars, CsvInputMode.Utf8Bytes })
-        foreach (string scenario in new[] { "ShortSkipped", "WideUnicodeSkipped", "MultilineStrings", "Numeric", "WideStrings", "CustomNewlines", "CrossBuffer" })
-        foreach (bool tracking in typeof(ParserOptimizationOptions).GetProperty("TrackPosition") is null ? new[] { false } : new[] { false, true })
+        {
+            foreach (string scenario in new[] { "ShortSkipped", "WideUnicodeSkipped", "MultilineStrings", "Numeric", "WideStrings", "CustomNewlines", "CrossBuffer" })
+            {
+                foreach (bool tracking in typeof(ParserOptimizationOptions).GetProperty("TrackPosition") is null ? new[] { false } : new[] { false, true })
         {
             var benchmark = new PositionTracking { Parser = parser, Scenario = scenario, Tracking = tracking };
             benchmark.Setup();
@@ -83,6 +85,8 @@ public class PositionTracking
             double mean = samples.Average();
             double deviation = Math.Sqrt(samples.Sum(x => (x - mean) * (x - mean)) / (samples.Length - 1));
             Console.WriteLine(FormattableString.Invariant($"{parser},{scenario},{tracking},{mean:F2},{deviation:F2},{allocated / samples.Length},{2000 * 1e6 / mean:F0}"));
+        }
+            }
         }
     }
 }

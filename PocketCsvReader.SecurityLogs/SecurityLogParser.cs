@@ -105,7 +105,10 @@ internal sealed class SecurityLogParser
                 if (++position >= line.Length || line[position] is not ('\\' or '=' or 'n' or 'r'))
                     throw new InvalidDataException("Invalid CEF extension escape.");
             }
-            else if (c == '=') throw new InvalidDataException("An equals sign inside a CEF extension value must be escaped.");
+            else if (c == '=')
+            {
+                throw new InvalidDataException("An equals sign inside a CEF extension value must be escaped.");
+            }
             else if (c == ' ' && TryFindNextCefKey(line, position, out int key))
             {
                 int end = position;

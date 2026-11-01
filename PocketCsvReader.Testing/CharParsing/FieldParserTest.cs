@@ -156,7 +156,6 @@ public class FieldParserTest
         Assert.That(completed, Is.EqualTo(1));
     }
 
-
     [Test]
     [TestCase("foobar\r", "\r")]
     [TestCase("f\\\rbar\r", "\r")]

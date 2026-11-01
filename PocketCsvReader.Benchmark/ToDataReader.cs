@@ -53,7 +53,6 @@ public class ToDataReader
             .RuleFor(p => p.Year, (f, p) => p.DateOfBirth.Year)
             .RuleFor(p => p.Month, (f, p) => p.DateOfBirth.ToString("MMMM", CultureInfo.CurrentCulture));
 
-
         // Generate the list of records
         var records = faker.Generate(recordCount);
 
@@ -75,7 +74,6 @@ public class ToDataReader
         ReadFile(_filePath, _csvAssembly!);
     }
 
-
     private void LogResults(string version, long memoryUsed, long workingSetUsed)
     {
         string logFile = "BenchmarkResults.txt";
@@ -89,7 +87,7 @@ public class ToDataReader
 
         var csvProfile = Activator.CreateInstance(csvProfileType, ',', '\"', "\r\n", false);
         dynamic csvReader = Activator.CreateInstance(csvReaderType, csvProfile)!;
-        
+
         using (var stream = new FileStream(filePath, FileMode.Open))
         {
             using var reader = csvReader.ToDataReader(stream);

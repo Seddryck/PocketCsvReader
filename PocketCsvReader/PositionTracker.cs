@@ -12,8 +12,10 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
     public long PhysicalLine { get; private set; } = 1;
     public long RecordNumber { get; private set; }
     public RecordPosition? CurrentPosition { get; private set; }
-    private long _startOffset, _startLine;
-    private bool _previousCr, _startPreviousCr;
+    private long _startOffset;
+    private long _startLine;
+    private bool _previousCr;
+    private bool _startPreviousCr;
 
     public void BeginRecord()
     {
@@ -29,7 +31,7 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
     {
         long line = start.PhysicalLine;
         for (int i = 0; i < prefix.Length; i++)
-            if (prefix[i] == '\r' || prefix[i] == '\n' && (i == 0 ? !_startPreviousCr : prefix[i - 1] != '\r')) line++;
+            if (prefix[i] == '\r' || (prefix[i] == '\n' && (i == 0 ? !_startPreviousCr : prefix[i - 1] != '\r'))) line++;
         CurrentPosition = new(++RecordNumber, line, start.Offset + prefix.Length, unit);
     }
 
@@ -50,7 +52,7 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
     public void Advance(char value)
     {
         Offset++;
-        if (value == '\r' || value == '\n' && !_previousCr) PhysicalLine++;
+        if (value == '\r' || (value == '\n' && !_previousCr)) PhysicalLine++;
         _previousCr = value == '\r';
     }
 

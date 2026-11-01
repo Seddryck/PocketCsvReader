@@ -7,9 +7,10 @@ using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
-public abstract class BaseRawRecord<P> where P : IProfile
+public abstract class BaseRawRecord<TProfile>
+    where TProfile : IProfile
 {
-    protected P Profile { get; }
+    protected TProfile Profile { get; }
     protected StringMapper StringMapper { get; }
     public int RowCount { get; protected set; } = 0;
     public string[]? Fields { get; protected set; } = null;
@@ -29,10 +30,10 @@ public abstract class BaseRawRecord<P> where P : IProfile
     protected ReadOnlyMemory<char> CurrentRecordMemory { get; private set; }
     protected FieldSpan[]? CurrentFieldSpans { get; private set; }
 
-    protected BaseRawRecord(P profile, StringMapper stringMapper)
+    protected BaseRawRecord(TProfile profile, StringMapper stringMapper)
     {
         Profile = profile;
-        StringMapper = stringMapper;    
+        StringMapper = stringMapper;
     }
 
     protected void SetRecord(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
@@ -43,7 +44,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
     }
 
     public abstract int FieldCount { get; }
-    
+
     public virtual string GetName(int i)
         => Fields?[i] ?? throw new InvalidOperationException("Fields are not defined yet.");
 
@@ -166,7 +167,7 @@ public abstract class BaseRawRecord<P> where P : IProfile
 /// </summary>
 /// <param name="i">The zero-based index of the field.</param>
 /// <returns>The raw string representation of the field value.</returns>
-public abstract string GetRawString(int i);
+    public abstract string GetRawString(int i);
 
     protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;

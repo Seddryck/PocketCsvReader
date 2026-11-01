@@ -192,7 +192,8 @@ public class SecurityLogReaderTests
     {
         string line = Sample(format) + new string('é', 10000);
         foreach (int size in new[] { 1, 2, 7, 4096 })
-        foreach (string terminator in new[] { "\r\n", "\n", "\r" })
+        {
+            foreach (string terminator in new[] { "\r\n", "\n", "\r" })
         {
             string data = line + terminator + Sample(format);
             using var sync = Reader(format, size).ToDataReader(Text(data));
@@ -206,6 +207,7 @@ public class SecurityLogReaderTests
             }
             Assert.That(sync.Read(), Is.False);
             Assert.That(await asyncReader.ReadAsync(), Is.False);
+        }
         }
     }
 

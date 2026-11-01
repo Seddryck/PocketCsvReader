@@ -14,8 +14,10 @@ public static class KeyValueBuffering
     {
         Console.WriteLine("Format,Scenario,MeanUs,StdDevUs,AllocatedBytes,Checksum");
         foreach (bool logfmt in new[] { false, true })
-        foreach (string scenario in new[] { "Simple", "Escaped", "CrossBuffer" })
+        {
+            foreach (string scenario in new[] { "Simple", "Escaped", "CrossBuffer" })
             Measure(new Workload(logfmt, scenario));
+        }
     }
 
     private static void Measure(Workload workload)

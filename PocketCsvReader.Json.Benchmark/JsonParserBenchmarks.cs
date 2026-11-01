@@ -233,7 +233,7 @@ public class JsonParserBenchmarks
             writer.WriteStartArray();
             for (var index = 0; index < ObjectCount; index++)
             {
-                var attributeCount = 8 + index % 5;
+                var attributeCount = 8 + (index % 5);
                 var date = new DateOnly(2000, 1, 1).AddDays(index % 9_000);
                 var timestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(index);
                 var amount = decimal.Round((decimal)valueRandom.NextDouble() * 10_000m, 2);

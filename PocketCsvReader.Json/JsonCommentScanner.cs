@@ -43,5 +43,9 @@ internal struct JsonCommentScanner
             throw new InvalidDataException($"Incomplete JSON comment at position {_start}.");
     }
 
-    private enum CommentState { None, Slash, Line, Block, Star }
+    private enum CommentState { None,
+        Slash,
+        Line,
+        Block,
+        Star }
 }

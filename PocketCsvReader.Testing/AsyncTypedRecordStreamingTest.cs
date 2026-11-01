@@ -87,7 +87,7 @@ public class AsyncTypedRecordStreamingTest
 
         Assert.That(async () =>
         {
-            await foreach (var _ in new CsvReader(Profile()).ToAsync<Person>(stream))
+            await foreach (var person in new CsvReader(Profile()).ToAsync<Person>(stream))
             { }
         }, Throws.TypeOf<InvalidDataException>());
     }

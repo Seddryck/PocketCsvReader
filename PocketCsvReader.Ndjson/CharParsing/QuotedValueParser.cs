@@ -28,6 +28,7 @@ public readonly struct QuotedValueParser : IParser
     /// <param name="lineTerminator">The string representing the line terminator.</param>
     /// <param name="quote">The character used for quoting fields.</param>
     /// <param name="escape">An optional character used for escaping within quoted fields.</param>
+    /// <param name="objectSuffix">The character marking the end of an object.</param>
     public QuotedValueParser(IParserContext ctx, INdjsonStateController controller, char delimiter, string lineTerminator, char quote, char? escape, char objectSuffix)
         => (_ctx, _controller, _delimiter, _quote, _escape, _objectSuffix)
         = (ctx, controller, delimiter, quote, escape, objectSuffix);

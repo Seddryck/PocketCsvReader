@@ -18,9 +18,7 @@ public readonly struct RawLabelParser : IParser
     /// </summary>
     /// <param name="ctx">The parser context managing field and record state.</param>
     /// <param name="controller">The state controller for handling parser state transitions.</param>
-    /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
-    /// <param name="delimiter">The character used to separate fields.</param>
-    /// <param name="escape">An optional character used for escaping delimiters and line terminators within fields.</param>
+    /// <param name="separator">The character separating the label from its value.</param>
     public RawLabelParser(IParserContext ctx, INdjsonStateController controller, char separator)
         => (_ctx, _controller, _separator) = (ctx, controller, separator);
 

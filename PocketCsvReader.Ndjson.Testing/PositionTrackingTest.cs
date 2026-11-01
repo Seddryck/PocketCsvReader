@@ -6,8 +6,10 @@ namespace PocketCsvReader.Ndjson.Testing;
 
 public class PositionTrackingTest
 {
-    [TestCase(false, false)] [TestCase(false, true)]
-    [TestCase(true, false)] [TestCase(true, true)]
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
     public async Task CommentsBlankLinesAndUnicodeRecords(bool enabled, bool async)
     {
         const string prefix = "#skip\r\n\r\n";
@@ -22,7 +24,8 @@ public class PositionTrackingTest
         Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
         Assert.That(reader.CurrentPosition, Is.Null);
     }
-    [TestCase(false)] [TestCase(true)]
+    [TestCase(false)]
+    [TestCase(true)]
     public async Task SelectedRowsKeepTheirSourceOffsets(bool async)
     {
         const string prefix = "#skip\n{\"rows\":[";

@@ -115,8 +115,10 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         var fields = CurrentFieldSpans ?? throw new InvalidOperationException("Current record is not set.");
         if (i < 0 || i >= fields.Length)
+        {
             throw new ArgumentOutOfRangeException(nameof(i),
                 $"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {fields.Length} defined fields.");
+        }
 
         ref var field = ref fields[i];
         if (field.Value.IsNull)

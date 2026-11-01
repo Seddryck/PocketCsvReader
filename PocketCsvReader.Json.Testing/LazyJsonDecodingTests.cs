@@ -9,7 +9,8 @@ namespace PocketCsvReader.Json.Testing;
 
 [TestFixture(typeof(JsonProfile))]
 [TestFixture(typeof(NdjsonProfile))]
-public class LazyJsonDecodingTests<P> where P : IProfile
+public class LazyJsonDecodingTests<TProfile>
+    where TProfile : IProfile
 {
     [Test]
     public async Task ValuesDecodeOnAccessAndCachesReset(
@@ -101,7 +102,7 @@ public class LazyJsonDecodingTests<P> where P : IProfile
     public void DataTableMaterializationReceivesDecodedValues()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("""{"text":"line\nfeed"}"""));
-        var table = typeof(P) == typeof(NdjsonProfile)
+        var table = typeof(TProfile) == typeof(NdjsonProfile)
             ? new NdjsonReaderBuilder().Build().ToDataTable(stream)
             : new JsonReaderBuilder().Build().ToDataTable(stream);
         Assert.That(table.Rows[0]["text"], Is.EqualTo("line\nfeed"));
@@ -152,12 +153,12 @@ public class LazyJsonDecodingTests<P> where P : IProfile
         Assert.That(reader.GetString(0), Is.EqualTo("plain"));
     }
 
-    private static FieldSpan[] Fields(BaseDataReader<P> reader)
-        => (FieldSpan[])typeof(BaseRawRecord<P>).GetProperty("CurrentFieldSpans", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(reader)!;
+    private static FieldSpan[] Fields(BaseDataReader<TProfile> reader)
+        => (FieldSpan[])typeof(BaseRawRecord<TProfile>).GetProperty("CurrentFieldSpans", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(reader)!;
 
-    private static BaseDataReader<P> Open(string[] rows, string mode = "Default", PoolString? pool = null, SchemaDescriptor? schema = null)
+    private static BaseDataReader<TProfile> Open(string[] rows, string mode = "Default", PoolString? pool = null, SchemaDescriptor? schema = null)
     {
-        bool ndjson = typeof(P) == typeof(NdjsonProfile);
+        bool ndjson = typeof(TProfile) == typeof(NdjsonProfile);
         string content = mode == "Path" ? "{\"rows\":[" + string.Join(',', rows) + "]}"
             : ndjson ? string.Join('\n', rows) + "\n" : "[" + string.Join(',', rows) + "]";
         var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
@@ -169,7 +170,7 @@ public class LazyJsonDecodingTests<P> where P : IProfile
                 projectedProperties: projected, orderedProjection: mode == "Ordered", recordPath: mode == "Path" ? "$.rows[*]" : null))
             : new JsonDataReader(stream, new JsonProfile(schema: schema, parserOptimizations: options,
                 projectedProperties: projected, orderedProjection: mode == "Ordered", recordPath: mode == "Path" ? "$.rows[*]" : null));
-        return (BaseDataReader<P>)reader;
+        return (BaseDataReader<TProfile>)reader;
     }
 }
 

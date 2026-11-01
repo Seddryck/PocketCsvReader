@@ -138,7 +138,8 @@ public class SchemaArrayTest
 
     private sealed class ArrayRecord : BaseDataRecord<CsvProfile>
     {
-        public ArrayRecord(FieldSpan[] children, Type type) : base(
+        public ArrayRecord(FieldSpan[] children, Type type)
+            : base(
             new CsvProfile(new DialectDescriptorBuilder().Build(),
                 new SchemaDescriptorBuilder().Indexed().WithField(type).Build()), new StringMapper())
         {

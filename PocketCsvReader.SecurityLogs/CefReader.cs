@@ -2,9 +2,11 @@ namespace PocketCsvReader.SecurityLogs;
 
 public sealed class CefReader : SecurityLogReader
 {
-    public CefReader() : this(new SecurityLogProfile(SecurityLogFormat.Cef)) { }
+    public CefReader()
+        : this(new SecurityLogProfile(SecurityLogFormat.Cef)) { }
 
-    public CefReader(SecurityLogProfile profile) : base(EnsureFormat(profile)) { }
+    public CefReader(SecurityLogProfile profile)
+        : base(EnsureFormat(profile)) { }
 
     private static SecurityLogProfile EnsureFormat(SecurityLogProfile profile)
     {

@@ -12,7 +12,8 @@ namespace PocketCsvReader
             Status = status;
         }
 
-        public ProgressStatusEventArgs(string status, int current, int total) : this(status)
+        public ProgressStatusEventArgs(string status, int current, int total)
+            : this(status)
         {
             Status = status;
             Progress = new ProgressInfo { Current = current, Total = total };

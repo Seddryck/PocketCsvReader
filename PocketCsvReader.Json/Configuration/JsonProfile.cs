@@ -15,8 +15,10 @@ public class JsonProfile : IProfile
     public IReadOnlyList<string>? ProjectedProperties { get; }
     public bool OrderedProjection { get; }
     /// <summary>Accept line and block comments. Disabled by default.</summary>
+    /// <value>True to accept comments; otherwise false.</value>
     public bool AllowComments { get; }
     /// <summary>Accept a single trailing comma in objects and arrays. Disabled by default.</summary>
+    /// <value>True to accept trailing commas; otherwise false.</value>
     public bool AllowTrailingCommas { get; }
     public string? RecordPath { get; }
     internal PocketCsvReader.Json.JsonRecordPath? ParsedRecordPath { get; }

@@ -17,6 +17,8 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private readonly char[]? _propertyNameBuffer;
     private readonly FieldSpan[] _fields;
     private readonly bool _orderedProjection;
+    private readonly bool _allowComments;
+    private readonly bool _allowTrailingCommas;
     private ContainerFrame[] _stack = new ContainerFrame[16];
     private int _depth;
     private int _position;
@@ -41,8 +43,6 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private int _nextProjectedOrdinal;
     private int _remainingProjectedFields;
     private bool _complete;
-    private readonly bool _allowComments;
-    private readonly bool _allowTrailingCommas;
     private JsonCommentScanner _comments;
 
     public int Delimiter { get; private set; }
@@ -622,9 +622,14 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                         Consume(ref index);
                     }
                     else if (current is >= '0' and <= '9')
+                    {
                         throw Error("A JSON number cannot contain a leading zero");
+                    }
                     else
+                    {
                         CompleteNumberAtDelimiter(current);
+                    }
+
                     break;
 
                 case NumberState.Integer:
@@ -643,7 +648,10 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                         Consume(ref index);
                     }
                     else
+                    {
                         CompleteNumberAtDelimiter(current);
+                    }
+
                     break;
 
                 case NumberState.Dot:
@@ -664,7 +672,10 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
                         Consume(ref index);
                     }
                     else
+                    {
                         CompleteNumberAtDelimiter(current);
+                    }
+
                     break;
 
                 case NumberState.ExponentMark:
@@ -804,8 +815,10 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
     private bool CanCloseContainer(in ContainerFrame frame)
     {
         if (frame.Kind == ContainerKind.Object)
+        {
             return frame.State is ContainerState.PropertyOrEnd or ContainerState.CommaOrEnd
                 || (_allowTrailingCommas && frame.State == ContainerState.Property);
+        }
 
         return frame.State is ContainerState.ValueOrEnd or ContainerState.CommaOrEnd
             || (_allowTrailingCommas && frame.State == ContainerState.Value);
@@ -851,11 +864,31 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
         bool isNull = false)
         => new(start, length, wasQuoted, isEscaped, IsStarted: true, IsComplete: true, IsNull: isNull);
 
-    private enum TokenKind { None, String, Literal, Number }
-    private enum ContainerKind { Object, Array }
-    private enum ContainerState { PropertyOrEnd, Property, Colon, ValueOrEnd, Value, CommaOrEnd }
-    private enum NumberState { AfterMinus, Zero, Integer, Dot, Fraction, ExponentMark, ExponentSign, Exponent }
-    private enum StringEscapeState { None, AfterSlash, Unicode, LowSurrogateSlash, LowSurrogateU }
+    private enum TokenKind { None,
+        String,
+        Literal,
+        Number }
+    private enum ContainerKind { Object,
+        Array }
+    private enum ContainerState { PropertyOrEnd,
+        Property,
+        Colon,
+        ValueOrEnd,
+        Value,
+        CommaOrEnd }
+    private enum NumberState { AfterMinus,
+        Zero,
+        Integer,
+        Dot,
+        Fraction,
+        ExponentMark,
+        ExponentSign,
+        Exponent }
+    private enum StringEscapeState { None,
+        AfterSlash,
+        Unicode,
+        LowSurrogateSlash,
+        LowSurrogateU }
 
     private struct ContainerFrame(
         ContainerKind kind,

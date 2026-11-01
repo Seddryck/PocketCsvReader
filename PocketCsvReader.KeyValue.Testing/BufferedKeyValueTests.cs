@@ -21,7 +21,8 @@ public class BufferedKeyValueTests
             : $"id:1\tmessage:{expected}:suffix\tbare:\tempty:";
         string last = logfmt ? "message=done id=2 id=3" : "message:done\tid:2\tid:3";
         foreach (string ending in new[] { "\n", "\r\n", "\r" })
-        foreach (bool finalNewline in new[] { false, true })
+        {
+            foreach (bool finalNewline in new[] { false, true })
         {
             using var stream = new ChunkedStream(first + ending + ending + last + (finalNewline ? ending : ""), async);
             using var reader = Build(logfmt, bufferSize).ToDataReader(stream);
@@ -39,6 +40,7 @@ public class BufferedKeyValueTests
             Assert.That(reader.GetInt32(2), Is.EqualTo(3));
             Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
             Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
+        }
         }
     }
 
@@ -180,7 +182,8 @@ public class BufferedKeyValueTests
     public async Task EmptyInputAndFinalEmptyRecord(string content, int expected)
     {
         foreach (bool logfmt in new[] { false, true })
-        foreach (bool async in new[] { false, true })
+        {
+            foreach (bool async in new[] { false, true })
         {
             using var reader = Build(logfmt, 1).ToDataReader(new ChunkedStream(content, async));
             int count = 0;
@@ -190,6 +193,7 @@ public class BufferedKeyValueTests
                 count++;
             }
             Assert.That(count, Is.EqualTo(expected));
+        }
         }
     }
     // Non-seekable short reads also split UTF-8 scalars. Async mode fails on any sync I/O.

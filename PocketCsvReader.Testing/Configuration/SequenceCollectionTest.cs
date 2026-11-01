@@ -36,5 +36,4 @@ public class SequenceCollectionTest
         Assert.That(sequences.TryGetValue("foo", out sequence), Is.True);
         Assert.That(sequence.ToString(), Is.EqualTo("/"));
     }
-
 }

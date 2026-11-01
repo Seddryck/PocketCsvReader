@@ -136,11 +136,17 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
         var start = 0;
         var end = span.Length;
         if (padding is FixedWidthPadding.Left or FixedWidthPadding.Both)
+        {
             while (start < end && span[start] == paddingChar)
                 start++;
+        }
+
         if (padding is FixedWidthPadding.Right or FixedWidthPadding.Both)
+        {
             while (end > start && span[end - 1] == paddingChar)
                 end--;
+        }
+
         return span.Slice(start, end - start);
     }
 }

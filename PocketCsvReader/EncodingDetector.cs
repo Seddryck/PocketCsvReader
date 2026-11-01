@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -35,7 +35,8 @@ public class EncodingDetector : IEncodingDetector
     /// an appropriate encoding for the file.
     /// </summary>
     /// <param name="stream">The stream to analyze for the encoding</param>
-    /// <returns></returns>
+    /// <param name="mime">The optional MIME type used to select an encoding.</param>
+    /// <returns>The detected encoding and byte-order-mark length.</returns>
     public virtual EncodingInfo GetStreamEncoding(Stream stream, string? mime = null)
     {
         if (stream == null || !stream.CanRead)
@@ -88,7 +89,8 @@ public class EncodingDetector : IEncodingDetector
     /// an appropriate encoding for the file.
     /// </summary>
     /// <param name="filename"></param>
-    /// <returns></returns>
+    /// <param name="mime">The optional MIME type used to select an encoding.</param>
+    /// <returns>The detected encoding and byte-order-mark length.</returns>
     public virtual EncodingInfo GetFileEncoding(string filename, string? mime = null)
     {
         using (var stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 8, false))

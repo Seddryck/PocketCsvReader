@@ -19,10 +19,16 @@ public class PositionTrackingTest
     private static IEnumerable<TestCaseData> Modes()
     {
         foreach (var mode in new[] { CsvInputMode.DecodedChars, CsvInputMode.Utf8Bytes, CsvInputMode.Auto })
-        foreach (bool async in new[] { false, true })
-        foreach (int size in new[] { 1, 3, 64 })
-        foreach (bool ahead in new[] { false, true })
+        {
+            foreach (bool async in new[] { false, true })
+            {
+                foreach (int size in new[] { 1, 3, 64 })
+                {
+                    foreach (bool ahead in new[] { false, true })
             yield return new TestCaseData(mode, async, size, ahead);
+                }
+            }
+        }
     }
 
     private static long Offset(string prefix, CsvInputMode mode)
@@ -89,7 +95,8 @@ public class PositionTrackingTest
     public async Task BomNonSeekableAndCompressedInput(CsvInputMode mode, bool async)
     {
         foreach (bool bom in new[] { false, true })
-        foreach (bool compressed in new[] { false, true })
+        {
+            foreach (bool compressed in new[] { false, true })
         {
             byte[] bytes = [.. bom ? Encoding.UTF8.Preamble.ToArray() : [], .. Encoding.UTF8.GetBytes("é,1\r\n😀,2")];
             if (compressed)
@@ -104,6 +111,7 @@ public class PositionTrackingTest
             Assert.That(reader.CurrentPosition!.Value.Offset, Is.Zero);
             Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
             Assert.That(reader.CurrentPosition!.Value.Offset, Is.EqualTo(Offset("é,1\r\n", mode)));
+        }
         }
     }
 
@@ -250,7 +258,8 @@ public class PositionTrackingTest
         using var forced = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes("a\r\n")), profile);
         Assert.That(() => forced.Read(), Throws.TypeOf<NotSupportedException>());
     }
-    [TestCase(false)] [TestCase(true)]
+    [TestCase(false)]
+    [TestCase(true)]
     public async Task DisposingClearsCurrentPosition(bool async)
     {
         var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes("a\r\n")), Profile(CsvInputMode.Utf8Bytes));

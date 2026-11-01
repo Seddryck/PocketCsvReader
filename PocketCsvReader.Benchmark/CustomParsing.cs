@@ -14,8 +14,10 @@ public class CustomParsing
     [Params(false, true)]
     public bool FieldParser { get; set; }
 
-    private CsvDataReader _stringNumber = null!, _spanNumber = null!;
-    private CsvDataReader _stringDate = null!, _spanDate = null!;
+    private CsvDataReader _stringNumber = null!;
+    private CsvDataReader _spanNumber = null!;
+    private CsvDataReader _stringDate = null!;
+    private CsvDataReader _spanDate = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -46,13 +48,17 @@ public class CustomParsing
         return reader;
     }
 
-    [Benchmark(Baseline = true), BenchmarkCategory("Number")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Number")]
     public int StringNumber() => _stringNumber.GetFieldValue<int>(0);
-    [Benchmark, BenchmarkCategory("Number")]
+    [Benchmark]
+    [BenchmarkCategory("Number")]
     public int SpanNumber() => _spanNumber.GetFieldValue<int>(0);
-    [Benchmark(Baseline = true), BenchmarkCategory("Date")]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Date")]
     public DateOnly StringDate() => _stringDate.GetFieldValue<DateOnly>(0);
-    [Benchmark, BenchmarkCategory("Date")]
+    [Benchmark]
+    [BenchmarkCategory("Date")]
     public DateOnly SpanDate() => _spanDate.GetFieldValue<DateOnly>(0);
 
     [GlobalCleanup]

@@ -117,7 +117,6 @@ public class FieldParserTest
         Assert.That(parser.Result.Value.Length, Is.EqualTo(3));
     }
 
-
     [TestCase("foo;bar\r\n", 2)]
     [TestCase("foo;bar;brz\r\n", 3)]
     [TestCase("bar\r\n", 1)]
@@ -191,8 +190,11 @@ public class FieldParserTest
             new DialectDescriptor() { QuoteChar = '\'', Delimiter = ';', DoubleQuote = false, LineTerminator = "\r\n" });
         var result = string.Empty;
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
                 result = value.Substring(parser.Result.Value.Start, parser.Result.Value.Length);
+        }
+
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -205,8 +207,11 @@ public class FieldParserTest
             new DialectDescriptor() { QuoteChar = '\'', EscapeChar = '\\', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         var result = string.Empty;
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Error)
                 Assert.Pass();
+        }
+
         Assert.Fail();
     }
 
@@ -218,12 +223,14 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { QuoteChar = '`', EscapeChar = '%', DoubleQuote = true, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
             {
                 Assert.That(parser.Result.Value.Start, Is.EqualTo(1));
                 Assert.That(parser.Result.Value.Length, Is.EqualTo(5));
                 Assert.That(parser.Result.Value.IsEscaped, Is.True);
             }
+        }
     }
 
     [TestCase(@"`fo%`o`;")]
@@ -234,12 +241,14 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
             {
                 Assert.That(parser.Result.Value.Start, Is.EqualTo(1));
                 Assert.That(parser.Result.Value.Length, Is.EqualTo(5));
                 Assert.That(parser.Result.Value.IsEscaped, Is.True);
             }
+        }
     }
 
     [TestCase(@"fo%;o;")]
@@ -250,12 +259,14 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
             {
                 Assert.That(parser.Result.Value.Start, Is.EqualTo(0));
                 Assert.That(parser.Result.Value.Length, Is.EqualTo(5));
                 Assert.That(parser.Result.Value.IsEscaped, Is.True);
             }
+        }
     }
 
     [TestCase("foo;bar;", 4)]
@@ -266,8 +277,11 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field && i != value.Length - 1)
                 parser.Reset();
+        }
+
         Assert.That(parser.Result.Value.Start, Is.EqualTo(start));
         Assert.That(parser.Result.Value.Length, Is.EqualTo(3));
     }
@@ -280,8 +294,11 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field && i != value.Length - 1)
                 parser.Reset();
+        }
+
         Assert.That(parser.Result.Value.Start, Is.EqualTo(start));
         Assert.That(parser.Result.Value.Length, Is.EqualTo(3));
     }
@@ -294,12 +311,14 @@ public class FieldParserTest
         var parser = new FieldParser(
             new DialectDescriptor() { SkipInitialSpace = true, QuoteChar = '`', EscapeChar = '%', DoubleQuote = false, Delimiter = ';', LineTerminator = "\r\n" });
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field && i != value.Length - 1)
                 parser.Reset();
+        }
+
         Assert.That(parser.Result.Value.Start, Is.EqualTo(start));
         Assert.That(parser.Result.Value.Length, Is.EqualTo(value.Length - 7));
     }
-
 
     [TestCase("[foo,bar];", '[', ']', ',')]
     [TestCase("<foo\tbar>;", '<', '>', '\t')]
@@ -311,8 +330,11 @@ public class FieldParserTest
             new DialectDescriptor() { Header = false, Delimiter = ';', ArrayDelimiter = delimiter, ArrayPrefix = prefix, ArraySuffix = suffix });
         var result = string.Empty;
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
                 result = value.Substring(parser.Result.Value.Start, parser.Result.Value.Length);
+        }
+
         Assert.That(result, Does.StartWith("foo"));
         Assert.That(result, Does.EndWith("bar"));
     }
@@ -324,8 +346,11 @@ public class FieldParserTest
             new DialectDescriptor() { Header = false, Delimiter = ';', ArrayDelimiter = delimiter });
         var result = string.Empty;
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
                 result = value.Substring(parser.Result.Value.Start, parser.Result.Value.Length);
+        }
+
         Assert.That(result, Does.StartWith("foo"));
         Assert.That(result, Does.EndWith("bar"));
     }
@@ -338,8 +363,11 @@ public class FieldParserTest
             new DialectDescriptor() { QuoteChar = '\'', Delimiter = ';', ArrayDelimiter = ',', ArrayPrefix = '[', ArraySuffix = ']' });
         var result = string.Empty;
         for (int i = 0; i < value.Length; i++)
+        {
             if (parser.Parse(value[i], i) == ParserState.Field)
                 result = value.Substring(parser.Result.Value.Start, parser.Result.Value.Length);
+        }
+
         Assert.That(result, Is.EqualTo("foo"));
     }
 }

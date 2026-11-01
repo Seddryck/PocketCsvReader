@@ -12,17 +12,18 @@ using System.Linq.Expressions;
 using System.ComponentModel.Design;
 
 namespace PocketCsvReader;
-public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldValueReader where P : IProfile
+public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader
+    where TProfile : IProfile
 {
     private SpanParser Parser { get; } = new();
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<P>, int, object>> ArrayReaders = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<P>, int, bool>> ArrayValidators = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, object>> ArrayReaders = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, bool>> ArrayValidators = new();
     private Dictionary<int, ISanitizer>? _sanitizers;
     private SanitizerFactory? _sanitizerFactory;
 
-    protected BaseDataRecord(P profile, StringMapper stringMapper)
+    protected BaseDataRecord(TProfile profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
         foreach (var parser in profile.Parsers?.SpanParsers ?? [])
@@ -239,13 +240,13 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             throw new InvalidOperationException("No current record is available.");
     }
 
-    private static Func<BaseDataRecord<P>, int, bool> CreateArrayValidator(Type arrayType)
+    private static Func<BaseDataRecord<TProfile>, int, bool> CreateArrayValidator(Type arrayType)
     {
         if (!arrayType.IsSZArray)
             throw new NotSupportedException("Schema arrays must be one-dimensional, zero-based arrays.");
-        var method = typeof(BaseDataRecord<P>).GetMethod(nameof(IsValidArray), BindingFlags.Instance | BindingFlags.NonPublic)!
+        var method = typeof(BaseDataRecord<TProfile>).GetMethod(nameof(IsValidArray), BindingFlags.Instance | BindingFlags.NonPublic)!
             .MakeGenericMethod(arrayType.GetElementType()!);
-        return method.CreateDelegate<Func<BaseDataRecord<P>, int, bool>>();
+        return method.CreateDelegate<Func<BaseDataRecord<TProfile>, int, bool>>();
     }
 
     private bool IsValidArray<T>(int i)
@@ -257,8 +258,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
             throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
         var children = field.Value.Children!;
         for (int j = 0; j < children.Length; j++)
+        {
             if (!children[j].Value.IsNull && !validate(GetFieldSpan(ref children[j]), out _))
                 return false;
+        }
+
         return true;
     }
 
@@ -293,17 +297,17 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     protected virtual object GetNullValue(int i)
         => throw new InvalidCastException($"Field index '{i}' is null.");
 
-    private static Func<BaseDataRecord<P>, int, object> CreateArrayReader(Type arrayType)
+    private static Func<BaseDataRecord<TProfile>, int, object> CreateArrayReader(Type arrayType)
     {
         if (!arrayType.IsSZArray)
             throw new NotSupportedException("Schema arrays must be one-dimensional, zero-based arrays.");
 
         // Close and bind the public typed path once per element type.
-        Expression<Func<BaseDataRecord<P>, int, object>> template = (record, index) => record.GetArray<object>(index);
+        Expression<Func<BaseDataRecord<TProfile>, int, object>> template = (record, index) => record.GetArray<object>(index);
         var call = (MethodCallExpression)template.Body;
         var elementType = arrayType.GetElementType() ?? throw new ArgumentException("An array element type is required.", nameof(arrayType));
         var method = call.Method.GetGenericMethodDefinition().MakeGenericMethod(elementType);
-        return Expression.Lambda<Func<BaseDataRecord<P>, int, object>>(
+        return Expression.Lambda<Func<BaseDataRecord<TProfile>, int, object>>(
             Expression.Call(template.Parameters[0], method, template.Parameters[1]), template.Parameters).Compile();
     }
 
@@ -350,8 +354,11 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     private SpanParser.ParserEntry CreateSchemaParser(int i, FieldDescriptor field)
     {
         if (field.SpanParse is not null || field.Parse is not null)
+        {
             return SpanParser.CreateEntry(field.RuntimeType,
                 field.SpanParse ?? SpanParser.Adapt(field.RuntimeType, field.Parse!));
+        }
+
         if (field.RuntimeType == typeof(string))
         {
             ParseSpan<string> parse = span => span.ToString();
@@ -419,7 +426,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         return Parser.Parse<T>(i, GetValueOrThrow(i));
     }
 
-    public T GetFieldValue<T>(int i, IFormatProvider format) where T : IParsable<T>
+    public T GetFieldValue<T>(int i, IFormatProvider format)
+        where T : IParsable<T>
     {
         if (IsNullFieldValue<T>(i))
             return default!;
@@ -427,7 +435,8 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
         return T.Parse(GetValueOrThrow(i).Value.ToString(), format);
     }
 
-    public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format = null) where T : IParsable<T>
+    public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format = null)
+        where T : IParsable<T>
     {
         if (IsNullFieldValue<T>(i))
             return default!;
@@ -464,10 +473,12 @@ public abstract class BaseDataRecord<P> : BaseRawRecord<P>, IDataRecord, IFieldV
     public T GetFieldValue<T>(string name)
         => GetFieldValue<T>(GetOrdinal(name));
 
-    public T GetFieldValue<T>(string name, IFormatProvider format) where T : IParsable<T>
+    public T GetFieldValue<T>(string name, IFormatProvider format)
+        where T : IParsable<T>
         => GetFieldValue<T>(GetOrdinal(name), format);
 
-    public T GetFieldValue<T>(string name, string pattern, IFormatProvider? format = null) where T : IParsable<T>
+    public T GetFieldValue<T>(string name, string pattern, IFormatProvider? format = null)
+        where T : IParsable<T>
         => GetFieldValue<T>(GetOrdinal(name), pattern, format);
 
     public T GetFieldValue<T>(string name, Func<string, T> parse)

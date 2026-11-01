@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -14,15 +14,17 @@ using PocketCsvReader.FieldParsing;
 using PocketCsvReader.Compression;
 
 namespace PocketCsvReader;
-public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader where P : IProfile
+public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyncDataReader
+    where TProfile : IProfile
 {
     private bool _isClosed = false;
     private bool _initialized;
     private bool _hasCurrentRecord;
     /// <summary>The current record start, or null when tracking is disabled or no record is current.</summary>
+    /// <value>The current record start, or null when unavailable.</value>
     public RecordPosition? CurrentPosition => _hasCurrentRecord && !_disposed ? RecordSource?.CurrentPosition : null;
-    protected IRecordSource<P>? RecordSource { get; private set; }
-    protected BaseRecordParser<P>? RecordParser => RecordSource as BaseRecordParser<P>;
+    protected IRecordSource<TProfile>? RecordSource { get; private set; }
+    protected BaseRecordParser<TProfile>? RecordParser => RecordSource as BaseRecordParser<TProfile>;
     private Stream RawStream { get; }
     private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
@@ -31,7 +33,7 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
     protected bool IsEof { get; set; } = false;
     private int _readInProgress;
 
-    protected BaseDataReader(Stream stream, P profile, StringMapper stringMapper, bool leaveOpen = false)
+    protected BaseDataReader(Stream stream, TProfile profile, StringMapper stringMapper, bool leaveOpen = false)
         : base(profile, stringMapper)
     {
         RawStream = stream;
@@ -68,23 +70,28 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
             ProcessedStream = factory.GetDecompressor(Profile.Resource.Compression).Decompress(RawStream);
         }
         else
+        {
             ProcessedStream = RawStream;
+        }
     }
 
-    private IRecordSource<P> CreateCharacterSource()
+    private IRecordSource<TProfile> CreateCharacterSource()
     {
         // Let StreamReader consume its matching preamble once. Skipping it here
         // as well could discard a following U+FEFF that is actual field data.
         // A custom BOM length without a matching encoding preamble is skipped explicitly.
         if (FileEncoding!.BomBytesCount >= 0 && ProcessedStream!.CanSeek)
+        {
             ProcessedStream.Position = FileEncoding.BomBytesCount == FileEncoding.Encoding.Preamble.Length
                 ? 0 : FileEncoding.BomBytesCount;
+        }
+
         StreamReader = new StreamReader(ProcessedStream!, FileEncoding.Encoding,
             FileEncoding.BomBytesCount < 0, bufferSize: 1024, leaveOpen: true);
         return CreateRecordSource(StreamReader, Profile);
     }
 
-    private void CompleteInitialization(IRecordSource<P> source)
+    private void CompleteInitialization(IRecordSource<TProfile> source)
     {
         IsEof = false;
         RowCount = 0;
@@ -92,15 +99,15 @@ public abstract class BaseDataReader<P> : BaseDataRecord<P>, IAsyncDataReader wh
         _initialized = true;
     }
 
-    protected virtual IRecordSource<P> CreateRecordSource(StreamReader reader, P profile)
+    protected virtual IRecordSource<TProfile> CreateRecordSource(StreamReader reader, TProfile profile)
         => CreateRecordParser(reader, profile);
 
-    protected virtual IRecordSource<P>? CreateStreamRecordSource(Stream stream, P profile) => null;
+    protected virtual IRecordSource<TProfile>? CreateStreamRecordSource(Stream stream, TProfile profile) => null;
 
-    protected virtual ValueTask<IRecordSource<P>?> CreateStreamRecordSourceAsync(Stream stream, P profile, CancellationToken cancellationToken)
-        => ValueTask.FromResult<IRecordSource<P>?>(null);
+    protected virtual ValueTask<IRecordSource<TProfile>?> CreateStreamRecordSourceAsync(Stream stream, TProfile profile, CancellationToken cancellationToken)
+        => ValueTask.FromResult<IRecordSource<TProfile>?>(null);
 
-    protected virtual BaseRecordParser<P> CreateRecordParser(StreamReader reader, P profile)
+    protected virtual BaseRecordParser<TProfile> CreateRecordParser(StreamReader reader, TProfile profile)
         => throw new NotSupportedException("Override CreateRecordSource or CreateRecordParser to provide records.");
 
     public bool Read()

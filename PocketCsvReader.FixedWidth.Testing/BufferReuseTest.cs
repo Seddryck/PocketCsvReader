@@ -7,9 +7,12 @@ namespace PocketCsvReader.FixedWidth.Testing;
 
 public class BufferReuseTest
 {
-    [TestCase(false, "")] [TestCase(true, "")]
-    [TestCase(false, "Name")] [TestCase(true, "Name")]
-    [TestCase(false, "Name\r\n")] [TestCase(true, "Name\r\n")]
+    [TestCase(false, "")]
+    [TestCase(true, "")]
+    [TestCase(false, "Name")]
+    [TestCase(true, "Name")]
+    [TestCase(false, "Name\r\n")]
+    [TestCase(true, "Name\r\n")]
     public async Task EmptyAndHeaderOnlyInput_HasNoDataRecords(bool async, string content)
     {
         using var stream = new ChunkedStream(Encoding.UTF8.GetBytes(content), async);
@@ -34,10 +37,14 @@ public class BufferReuseTest
         Assert.That(reader.Read(), Is.False);
     }
 
-    [TestCase(false, 14)] [TestCase(true, 14)]
-    [TestCase(false, 15)] [TestCase(true, 15)]
-    [TestCase(false, 16)] [TestCase(true, 16)]
-    [TestCase(false, 129)] [TestCase(true, 129)]
+    [TestCase(false, 14)]
+    [TestCase(true, 14)]
+    [TestCase(false, 15)]
+    [TestCase(true, 15)]
+    [TestCase(false, 16)]
+    [TestCase(true, 16)]
+    [TestCase(false, 129)]
+    [TestCase(true, 129)]
     public async Task SplitRecordsAndTerminators_PreserveValuesAndPositions(bool async, int width)
     {
         var values = new[] { "😀" + new string('é', width - 2), new string('x', width), new string('y', width) };
@@ -61,7 +68,8 @@ public class BufferReuseTest
         Assert.That(stream.Disposed, Is.True);
     }
 
-    [TestCase(false)] [TestCase(true)]
+    [TestCase(false)]
+    [TestCase(true)]
     public async Task HeaderPaddingAndOverlappingTerminator_WorkAcrossRefills(bool async)
     {
         const string terminator = "ababac";
@@ -77,8 +85,10 @@ public class BufferReuseTest
         Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
     }
 
-    [TestCase(false, "ab", 2)] [TestCase(true, "ab", 2)]
-    [TestCase(false, "abcababax", 9)] [TestCase(true, "abcababax", 9)]
+    [TestCase(false, "ab", 2)]
+    [TestCase(true, "ab", 2)]
+    [TestCase(false, "abcababax", 9)]
+    [TestCase(true, "abcababax", 9)]
     public async Task PartialAndOverlappingTerminatorAtEof_IsRecordData(bool async, string value, int width)
     {
         using var stream = new ChunkedStream(Encoding.UTF8.GetBytes(value), async);
@@ -90,8 +100,10 @@ public class BufferReuseTest
         Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
     }
 
-    [TestCase(false, false)] [TestCase(true, false)]
-    [TestCase(false, true)] [TestCase(true, true)]
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
     public async Task InvalidWidthsAcrossRefills_KeepRecordNumberAndActualWidth(bool async, bool terminated)
     {
         var content = new string('a', 35) + "\r\n" + new string('b', 34) + (terminated ? "\r\n" : "");
@@ -103,8 +115,10 @@ public class BufferReuseTest
         Assert.That(error!.Message, Is.EqualTo("Fixed-width record 2 is too short: expected 35 characters but found 34."));
     }
 
-    [TestCase(false, false)] [TestCase(true, false)]
-    [TestCase(false, true)] [TestCase(true, true)]
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
     public async Task LongTail_IsCountedWithoutUnboundedSpillStorage(bool async, bool allowed)
     {
         var profile = new FixedWidthProfile(new FixedWidthDescriptor([new("Value", 0, 3)], LineTerminator: "\r\n", AllowTrailingCharacters: allowed), parserOptimizations: new(BufferSize: 16));
@@ -122,8 +136,10 @@ public class BufferReuseTest
         Assert.That(storage.Array!.Length, Is.LessThanOrEqualTo(16));
     }
 
-    [TestCase(false, 3)] [TestCase(true, 3)]
-    [TestCase(false, 128)] [TestCase(true, 128)]
+    [TestCase(false, 3)]
+    [TestCase(true, 3)]
+    [TestCase(false, 128)]
+    [TestCase(true, 128)]
     public async Task Parser_ReusesCharacterAndFieldArraysUntilDisposed(bool async, int width)
     {
         var profile = new FixedWidthProfile(new FixedWidthDescriptor([new("Value", 0, width)], LineTerminator: "\n"), parserOptimizations: new(BufferSize: 16));
@@ -144,7 +160,8 @@ public class BufferReuseTest
         Assert.That(() => Read(parser), Throws.TypeOf<ObjectDisposedException>());
     }
 
-    [TestCase(false)] [TestCase(true)]
+    [TestCase(false)]
+    [TestCase(true)]
     public async Task EarlyDisposal_AfterSpilledRecord_ClosesNonSeekableStream(bool async)
     {
         var stream = new ChunkedStream(Encoding.UTF8.GetBytes(new string('x', 128) + "\n" + new string('y', 128)), async);

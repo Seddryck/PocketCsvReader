@@ -15,7 +15,7 @@ public class ImmutableSequenceCollection : IEnumerable<KeyValuePair<ReadOnlyMemo
 
         public int GetHashCode(ReadOnlyMemory<char> obj)
         {
-            var hash = new HashCode();
+            var hash = default(HashCode);
             foreach (var c in obj.Span)
                 hash.Add(c);
             return hash.ToHashCode();

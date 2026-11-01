@@ -11,7 +11,8 @@ public class Utf8Input
     public string Scenario { get; set; } = "AsciiNumeric";
 
     private byte[] _data = [];
-    private CsvProfile _chars = null!, _bytes = null!;
+    private CsvProfile _chars = null!;
+    private CsvProfile _bytes = null!;
 
     [GlobalSetup]
     public void Setup()

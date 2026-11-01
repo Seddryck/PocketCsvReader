@@ -162,8 +162,10 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
             return ParseStableCandidate(record);
 
         if (_projectedValueFramer is null)
+        {
             return new ParsedRecord(record, JsonRecordParser.Parse(record.Span, Profile.Dialect.Whitespaces,
                 buffer: Profile.ParsedRecordPath is null ? _fieldBuffer : null));
+        }
 
         var projectedRecord = Trim(record);
         _projectedValueFramer.Prepare(projectedRecord.Span[0], 0);

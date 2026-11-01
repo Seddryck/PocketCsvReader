@@ -70,7 +70,7 @@ public interface IParserContext
     bool IsComplete { get; }
 
     ref FieldSpan Span { get; }
-    
+
     /// <summary>
     /// Resets the parsing context to its initial state, clearing any accumulated parsing data or state flags.
     /// </summary>

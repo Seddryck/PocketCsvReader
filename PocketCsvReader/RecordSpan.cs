@@ -50,9 +50,9 @@ public readonly ref struct RecordSpan
         /// Returns a span representing the characters of the specified field within the record.
         /// </summary>
         /// <param name="i">The zero-based index of the field to extract.</param>
-        /// <returns>A <see cref="ReadOnlySpan{char}"/> containing the field's characters.</returns>
+        /// <returns>A <see cref="ReadOnlySpan{T}"/> containing the field's characters.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the record span is empty.</exception>
-        public ReadOnlySpan<char> Slice(int i)
+    public ReadOnlySpan<char> Slice(int i)
         => _utf8Record is not null ? _utf8Record.Slice(i).Span
             : Span.Length > 0 ? Span.Slice(FieldSpans[i].Value.Start, FieldSpans[i].Value.Length) : throw new InvalidOperationException();
 

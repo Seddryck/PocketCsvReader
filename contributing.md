@@ -50,3 +50,29 @@ We love pull requests from everyone. By participating in this project, you agree
 
 * Write a good description of your issue in the ticket
 * Write tests.
+
+## Local Git hooks
+
+Enable the repository hooks after cloning (the setting applies only to this repository):
+
+```sh
+git config --local core.hooksPath .githooks
+```
+
+The hooks require the .NET SDK and the npm `@commitlint/cli` and
+`@commitlint/config-conventional` packages, with `commitlint` on `PATH`. On Windows they run
+with Bash bundled in Git for Windows. The `commit-msg` hook retains the existing
+Conventional Commit validation using `commitlint.config.cjs`.
+
+Before pushing, restore dependencies and build the full solution:
+
+```sh
+dotnet restore PocketCsvReader.full.sln
+dotnet build PocketCsvReader.full.sln --no-restore
+```
+
+The `pre-push` hook checks all reader, test, benchmark, and profiler projects with
+`dotnet format PocketCsvReader.full.sln analyzers --verify-no-changes --no-restore`.
+To apply available fixes, run
+`dotnet format PocketCsvReader.full.sln analyzers --no-restore`, then review the
+changes and fix any remaining diagnostics before pushing.

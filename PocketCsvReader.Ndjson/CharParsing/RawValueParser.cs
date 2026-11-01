@@ -20,9 +20,9 @@ public readonly struct RawValueParser : IParser
     /// </summary>
     /// <param name="ctx">The parser context managing field and record state.</param>
     /// <param name="controller">The state controller for handling parser state transitions.</param>
-    /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
     /// <param name="delimiter">The character used to separate fields.</param>
     /// <param name="escape">An optional character used for escaping delimiters and line terminators within fields.</param>
+    /// <param name="objectSuffix">The character marking the end of an object.</param>
     public RawValueParser(IParserContext ctx, INdjsonStateController controller, char delimiter, char? escape, char objectSuffix)
     => (_ctx, _controller, _delimiter, _escape, _objectSuffix) = (ctx, controller, delimiter, escape, objectSuffix);
 

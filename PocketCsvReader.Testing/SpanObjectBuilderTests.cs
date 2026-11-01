@@ -20,7 +20,8 @@ public class SpanObjectBuilderTests
 
     public class SpanObjectBuilderProxy<T> : SpanObjectBuilder<T>
     {
-        public SpanObjectBuilderProxy() : base() { }
+        public SpanObjectBuilderProxy()
+            : base() { }
         public T Instantiate(char[] array, FieldSpan[] fieldSpans)
             => base.Instantiate(array, fieldSpans);
     }
@@ -38,7 +39,6 @@ public class SpanObjectBuilderTests
         var result = instantiateMethod.Invoke(builder, [input.ToCharArray(), fieldSpans])!;
         Assert.That(type.GetProperty("value")!.GetValue(result), Is.EqualTo(output));
     }
-
 
     [TestCase("2024-12-12T16:12:13", typeof(DateTime), typeof(DateTimeBox))]
     [TestCase("2024-12-12", typeof(DateOnly), typeof(DateOnlyBox))]

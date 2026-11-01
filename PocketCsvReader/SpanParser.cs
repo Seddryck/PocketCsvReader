@@ -134,7 +134,8 @@ internal class SpanParser
         RegisterInvariant<DateTimeOffset>();
     }
 
-    private void RegisterInvariant<T>() where T : ISpanParsable<T>
+    private void RegisterInvariant<T>()
+        where T : ISpanParsable<T>
         => Register<T>(s => T.Parse(s, CultureInfo.InvariantCulture),
             (ReadOnlySpan<char> s, out T value) => T.TryParse(s, CultureInfo.InvariantCulture, out value!));
 

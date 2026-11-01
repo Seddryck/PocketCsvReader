@@ -11,9 +11,9 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>,
     PositionTracker? IPositionSource.Tracker => _position;
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private readonly char[] _buffer;
-    private char[]? _spill;
     private readonly FieldSpan[] _fieldSpans;
     private readonly int[] _terminatorFallback;
+    private char[]? _spill;
     private int _bufferOffset;
     private int _bufferLength;
     private int _spillLength;
@@ -104,7 +104,9 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>,
             var width = _recordLength + length - terminator.Length;
             ValidateRecord(width);
             if (_recordLength == 0)
+            {
                 memory = _buffer.AsMemory(start, (int)width);
+            }
             else
             {
                 PreserveFields(_buffer.AsSpan(start, length));

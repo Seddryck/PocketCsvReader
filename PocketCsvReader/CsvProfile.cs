@@ -19,6 +19,7 @@ public class CsvProfile : IProfile
 
     private RowNumberOptions? _rowNumber;
     /// <summary>Generated row-number column configuration, or null to disable it (the default).</summary>
+    /// <value>The generated column options, or null to disable it.</value>
     public RowNumberOptions? RowNumber
     {
         get => _rowNumber;
@@ -86,6 +87,7 @@ public class CsvProfile : IProfile
     public CsvProfile(DialectDescriptor dialect, SchemaDescriptor? schema = null, ResourceDescriptor? resource = null, RuntimeParsersDescriptor? parsers = null)
     {
         if (dialect.NullSequence is not null)
+        {
             resource = (resource ??= new ResourceDescriptor()) with
             {
                 Sequences = SequenceCollection
@@ -93,6 +95,7 @@ public class CsvProfile : IProfile
                     .Also(seq => seq.Add(dialect.NullSequence, null))
                     .ToImmutable()
             };
+        }
 
         Dialect = dialect;
         ParserOptimizations = new ParserOptimizationOptions();

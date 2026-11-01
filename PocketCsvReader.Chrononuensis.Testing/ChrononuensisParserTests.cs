@@ -44,7 +44,7 @@ public class ChrononuensisParserTests
     }
 
     [TestCaseSource(nameof(Periods))]
-    public void InvalidInput_PreservesFormatException(string _, object expected)
+    public void InvalidInput_PreservesFormatException(string input, object expected)
     {
         using var reader = Reader("invalid", expected.GetType());
         Assert.That(() => reader.GetValue(0), Throws.InstanceOf<FormatException>());

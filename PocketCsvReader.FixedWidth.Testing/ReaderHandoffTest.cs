@@ -8,8 +8,10 @@ namespace PocketCsvReader.FixedWidth.Testing;
 
 public class ReaderHandoffTest
 {
-    [TestCase(32, false)] [TestCase(32, true)]
-    [TestCase(8192, false)] [TestCase(8192, true)]
+    [TestCase(32, false)]
+    [TestCase(32, true)]
+    [TestCase(8192, false)]
+    [TestCase(8192, true)]
     public async Task WarmedRawReads_AllocateWrappersWithoutRecordCharacterCopies(int width, bool async)
     {
         const int warmup = 4;
@@ -64,8 +66,10 @@ public class ReaderHandoffTest
         Assert.That(reader.GetRawString(0), Is.EqualTo(new string('b', width)));
     }
 
-    [TestCase(3, false)] [TestCase(3, true)]
-    [TestCase(128, false)] [TestCase(128, true)]
+    [TestCase(3, false)]
+    [TestCase(3, true)]
+    [TestCase(128, false)]
+    [TestCase(128, true)]
     public async Task SuccessiveReadsAndFinalUnterminatedRecord_HaveEquivalentSyncAsyncOutputs(int width, bool header)
     {
         var values = Enumerable.Range(0, 4).Select(i => (i + 1).ToString().PadLeft(width, '0')).ToArray();

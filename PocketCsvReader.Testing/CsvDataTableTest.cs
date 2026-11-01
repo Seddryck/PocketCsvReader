@@ -66,7 +66,6 @@ public class CsvDataTableTest
             Assert.That(dataTable.Rows[3].ItemArray[1], Is.EqualTo("b"));
             Assert.That(dataTable.Rows[3].ItemArray[2], Is.EqualTo("?"));
 
-
             writer.Dispose();
         }
     }

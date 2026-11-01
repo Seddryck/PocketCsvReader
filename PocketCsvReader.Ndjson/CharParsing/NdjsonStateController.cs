@@ -24,8 +24,8 @@ class NdjsonStateController : INdjsonStateController, IParserStateController
     private readonly IParser? _arrayParser;
     private readonly IParser? _commentParser;
 
-    private IParser _currentParser;
     private readonly INdjsonStateController? _parentController;
+    private IParser _currentParser;
     private ParserStateFn _currentState;
     private IParser? _previousParser;
 
@@ -184,7 +184,7 @@ class NdjsonStateController : INdjsonStateController, IParserStateController
     /// <summary>
     /// Resets the controller and its parsers to the initial value parsing state.
     /// </summary>
-public void Reset()
+    public void Reset()
 {
     _lineTerminatorParser.Reset();
     if (_currentParser == _lineTerminatorParser || _currentParser == _objectPrefixParser)

@@ -39,8 +39,10 @@ public class Utf8InputTest
         var bytes = Encoding.UTF8.GetBytes(csv);
         var expected = Read(bytes, Profile(CsvInputMode.DecodedChars, dialect));
         foreach (int size in new[] { 1, 2, 3, 7, 4096 })
-        foreach (var mode in new[] { CsvInputMode.Utf8Bytes, CsvInputMode.Auto })
+        {
+            foreach (var mode in new[] { CsvInputMode.Utf8Bytes, CsvInputMode.Auto })
             Assert.That(Read(bytes, Profile(mode, dialect, size)), Is.EqualTo(expected), $"{mode}, buffer {size}");
+        }
     }
 
     [TestCase(CsvInputMode.Auto, false)]
@@ -321,8 +323,10 @@ public class Utf8InputTest
         var bytes = Encoding.UTF8.GetBytes(csv);
         var dialect = new DialectDescriptor(Header: false, LineTerminator: terminator, EscapeChar: '\\', QuoteChar: quoted ? '"' : null);
         foreach (int size in new[] { 1, 7, 4096 })
+        {
             Assert.That(Read(bytes, Profile(CsvInputMode.Utf8Bytes, dialect, size)),
                 Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars, dialect, size))));
+        }
     }
 
     [TestCase("\"a\"ordinary,b\r\n")]

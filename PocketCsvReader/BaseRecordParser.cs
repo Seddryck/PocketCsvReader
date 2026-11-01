@@ -6,17 +6,17 @@ using System.Text;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
-public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
+public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPositionSource
 {
-    public P Profile { get; }
+    public TProfile Profile { get; }
     protected IParser FieldParser { get; }
     protected IBufferReader Reader { get; }
     protected ReadOnlyMemory<char> Buffer { get; private set; }
     protected ArrayPool<char>? Pool { get; }
 
     private int? FieldsCount { get; set; }
-    private FieldSpan[] _fieldBuffer = new FieldSpan[20];
     private readonly PositionTracker? _position;
+    private FieldSpan[] _fieldBuffer = new FieldSpan[20];
     private int _trackedInBuffer;
     PositionTracker? IPositionSource.Tracker => _position;
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;
@@ -24,13 +24,13 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
     private int _errorCount;
 
     /// <summary>
-        /// Initializes a new instance of the <see cref="BaseRecordParser{P}"/> class with the specified parsing profile, buffer reader, optional character pool, and parser factory.
+        /// Initializes a new instance of the <see cref="BaseRecordParser{TProfile}"/> class with the specified parsing profile, buffer reader, optional character pool, and parser factory.
         /// </summary>
         /// <param name="profile">The parsing profile used to configure parsing behavior.</param>
         /// <param name="buffer">The buffer reader supplying character data for parsing.</param>
         /// <param name="pool">An optional array pool for efficient character buffer management.</param>
         /// <param name="parserFactory">A factory function that creates an <see cref="IParser"/> instance based on the provided profile.</param>
-        protected BaseRecordParser(P profile, IBufferReader buffer, ArrayPool<char>? pool, Func<P, IParser> parserFactory)
+    protected BaseRecordParser(TProfile profile, IBufferReader buffer, ArrayPool<char>? pool, Func<TProfile, IParser> parserFactory)
     {
         (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
         if (profile is IProfile { TrackPosition: true }) _position = new();
@@ -50,7 +50,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
     {
         _position?.BeginRecord();
         _trackedInBuffer = 0;
-        var context = new ReadContext();
+        var context = default(ReadContext);
         EnsureFieldCapacity(FieldsCount ?? 20);
         bool eof;
         while (!TryParseRecord(ref context, Reader.IsEof, out record, out recordState, out eof))
@@ -67,7 +67,7 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
         cancellationToken.ThrowIfCancellationRequested();
         _position?.BeginRecord();
         _trackedInBuffer = 0;
-        var context = new ReadContext();
+        var context = default(ReadContext);
         EnsureFieldCapacity(FieldsCount ?? 20);
         RecordReadResult result;
         while (!TryReadResult(ref context, Reader.IsEof, out result))
@@ -302,10 +302,10 @@ public abstract class BaseRecordParser<P> : IRecordSource<P>, IPositionSource
     /// <summary>
         /// Creates a <see cref="RecordSpan"/> from the specified character span and array of field spans.
         /// </summary>
-        /// <param name="span">The span of characters representing the entire record.</param>
+        /// <param name="memory">The span of characters representing the entire record.</param>
         /// <param name="fields">The array of parsed field spans within the record.</param>
         /// <returns>A <see cref="RecordSpan"/> containing the provided span and fields.</returns>
-        protected virtual RecordSpan CreateRecordSpan(ReadOnlyMemory<char> memory, FieldSpan[] fields)
+    protected virtual RecordSpan CreateRecordSpan(ReadOnlyMemory<char> memory, FieldSpan[] fields)
         => RecordSpan.FromMemory(memory, fields);
 
     private void AddField(ref int count, FieldSpan field)

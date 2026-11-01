@@ -19,7 +19,7 @@ public readonly struct CommentParser : IParser
         /// <param name="ctx">The parser context used to manage parsing state and values.</param>
         /// <param name="controller">The state controller responsible for managing parser state transitions.</param>
         /// <param name="lineTerminator">The string representing the line terminator sequence.</param>
-        public CommentParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
+    public CommentParser(IParserContext ctx, IParserStateController controller, string lineTerminator)
         => (_ctx, _controller, _lineTerminatorLength, _lineTerminatorChar) = (ctx, controller, lineTerminator.Length, lineTerminator[0]);
 
     /// <summary>

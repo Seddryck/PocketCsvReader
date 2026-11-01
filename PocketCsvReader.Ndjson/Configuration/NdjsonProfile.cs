@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Immutable;
 using System.Reflection;
 using PocketCsvReader.Configuration;
@@ -27,6 +27,7 @@ public class NdjsonProfile : IProfile
     /// later names are consumed as JSON syntax without being decoded or compared. Structural drift is rejected,
     /// while scalar leaf types may still vary.
     /// </summary>
+    /// <value>True to reuse the first object structure; otherwise false.</value>
     public bool StableObjectShape { get; }
 
     public NdjsonProfile(

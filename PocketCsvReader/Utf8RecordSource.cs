@@ -11,15 +11,16 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly Stream _stream;
     private readonly IParser _parser;
     private readonly byte[] _input;
-    private byte[] _record;
     private readonly int _readSize;
-    private int _position, _available;
-    private bool _disposed;
     private readonly List<FieldSpan> _fields = new();
-    private int _length;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
     private readonly PositionTracker? _positionTracker;
+    private byte[] _record;
+    private int _position;
+    private int _available;
+    private bool _disposed;
+    private int _length;
     PositionTracker? IPositionSource.Tracker => _positionTracker;
     public RecordPosition? CurrentPosition => _positionTracker?.CurrentPosition;
 

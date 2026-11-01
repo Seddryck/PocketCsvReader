@@ -158,8 +158,10 @@ internal sealed class JsonRecordPath(string?[] segments)
             yield break;
         }
         foreach (var child in SelectChildren(json, node, segments[depth]))
+        {
             foreach (var match in SelectNode(json, child, depth + 1))
                 yield return match;
+        }
     }
 
     private static IEnumerable<FieldSpan> SelectChildren(ReadOnlyMemory<char> json, FieldSpan node, string? name)
@@ -170,8 +172,11 @@ internal sealed class JsonRecordPath(string?[] segments)
         if (name is null)
         {
             if (kind == '[')
+            {
                 foreach (var child in node.Children)
                     yield return child;
+            }
+
             yield break;
         }
         if (kind == '{' && FindMember(json, node.Children, name) is { } member)
