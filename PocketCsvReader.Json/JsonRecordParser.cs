@@ -13,27 +13,31 @@ internal ref struct JsonRecordParser
     private int _position;
     private readonly bool _allowComments;
     private readonly bool _allowTrailingCommas;
+    private readonly JsonFieldBuffer? _fieldBuffer;
 
     private JsonRecordParser(
         ReadOnlySpan<char> json,
         char[] whitespaces,
         bool allowComments = false,
-        bool allowTrailingCommas = false)
+        bool allowTrailingCommas = false,
+        JsonFieldBuffer? fieldBuffer = null)
     {
         _json = json;
         _allowComments = allowComments;
         _allowTrailingCommas = allowTrailingCommas;
         _whitespaces = whitespaces;
+        _fieldBuffer = fieldBuffer;
     }
 
     public static FieldSpan[] Parse(
         ReadOnlySpan<char> json,
         char[] whitespaces,
         bool allowComments = false,
-        bool allowTrailingCommas = false)
+        bool allowTrailingCommas = false,
+        JsonFieldBuffer? buffer = null)
     {
-        var parser = new JsonRecordParser(json, whitespaces, allowComments, allowTrailingCommas);
-        return parser.ParseRoot();
+        var parser = new JsonRecordParser(json, whitespaces, allowComments, allowTrailingCommas, buffer);
+        return parser.ParseRoot(buffer);
     }
 
     public static FieldSpan[] ParseStableObjectValues(
@@ -215,29 +219,51 @@ internal ref struct JsonRecordParser
         }
     }
 
-    private FieldSpan[] ParseRoot()
+    private FieldSpan[] ParseRoot(JsonFieldBuffer? buffer)
     {
-        SkipWhitespace();
-        var fields = Current == '{'
-            ? ParseObject(materializeLabels: true)
-            : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
-        SkipWhitespace();
-        if (!IsEnd)
-            throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
-        return fields;
+        var scratch = buffer?.Scratch;
+        scratch?.Clear();
+        try
+        {
+            SkipWhitespace();
+            FieldSpan[]? fields = null;
+            if (scratch is null)
+                fields = Current == '{'
+                    ? ParseObject(materializeLabels: true)
+                    : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
+            else if (Current == '{')
+                ParseObjectFields(materializeLabels: true, scratch);
+            else
+                scratch.Add(ParseValue(allowObject: false, allowCompositeArrayItems: true));
+            SkipWhitespace();
+            if (!IsEnd)
+                throw new InvalidDataException($"Unexpected character '{Current}' at position {_position}.");
+            return buffer is null ? fields! : buffer.Complete();
+        }
+        finally
+        {
+            // Release decoded strings and nested metadata after success or failure.
+            scratch?.Clear();
+        }
     }
 
     private FieldSpan[] ParseObject(bool materializeLabels)
+    {
+        var fields = ParseObjectFields(materializeLabels, null);
+        return fields is null ? [] : [.. fields];
+    }
+
+    private List<FieldSpan>? ParseObjectFields(bool materializeLabels, List<FieldSpan>? fields)
     {
         Expect('{');
         SkipWhitespace();
         if (Current == '}')
         {
             _position++;
-            return [];
+            return fields;
         }
 
-        var fields = new List<FieldSpan>();
+        fields ??= new List<FieldSpan>();
         while (true)
         {
             var label = materializeLabels ? ParseString() : SkipString();
@@ -252,7 +278,7 @@ internal ref struct JsonRecordParser
             if (Current == '}')
             {
                 _position++;
-                return [.. fields];
+                return fields;
             }
 
             Expect(',');
@@ -260,7 +286,7 @@ internal ref struct JsonRecordParser
             if (_allowTrailingCommas && Current == '}')
             {
                 _position++;
-                return [.. fields];
+                return fields;
             }
         }
     }
@@ -416,7 +442,7 @@ internal ref struct JsonRecordParser
         {
             if (Current == '\\')
             {
-                decoded ??= new StringBuilder();
+                decoded ??= _fieldBuffer?.GetStringBuilder() ?? new StringBuilder();
                 decoded.Append(_json.Slice(segmentStart, _position - segmentStart));
                 _position++;
                 DecodeEscape(decoded);
