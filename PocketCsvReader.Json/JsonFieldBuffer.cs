@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.InteropServices;
 
 namespace PocketCsvReader.Json;
 
@@ -7,7 +8,7 @@ namespace PocketCsvReader.Json;
 internal sealed class JsonFieldBuffer
 {
     public List<FieldSpan> Scratch { get; } = [];
-    private FieldSpan[] _fields = [];
+    private readonly FieldMetadataBuffer _fields = new();
     private StringBuilder? _decodedString;
 
     public StringBuilder GetStringBuilder()
@@ -22,9 +23,6 @@ internal sealed class JsonFieldBuffer
 
     public FieldSpan[] Complete()
     {
-        if (_fields.Length != Scratch.Count)
-            _fields = new FieldSpan[Scratch.Count];
-        Scratch.CopyTo(_fields);
-        return _fields;
+        return _fields.PublishBorrowed(CollectionsMarshal.AsSpan(Scratch));
     }
 }

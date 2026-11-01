@@ -16,6 +16,8 @@ public class RecordMemory
     private readonly ReadOnlyMemory<byte> _utf8;
     private readonly bool _isUtf8;
     internal bool IsUtf8 => _isUtf8;
+    internal CurrentRecord Current => _isUtf8
+        ? new(_utf8, _fields, _decodedFields!) : new(_memory, _fields);
     private readonly Utf8FieldBuffer? _decodedFields;
     private RecordMemory? _characters;
 

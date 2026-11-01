@@ -24,6 +24,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     /// <value>The current record start, or null when unavailable.</value>
     public RecordPosition? CurrentPosition => _hasCurrentRecord && !_disposed ? RecordSource?.CurrentPosition : null;
     protected IRecordSource<TProfile>? RecordSource { get; private set; }
+    private ICurrentRecordSource? _currentRecordSource;
     protected BaseRecordParser<TProfile>? RecordParser => RecordSource as BaseRecordParser<TProfile>;
     private Stream RawStream { get; }
     private Stream? ProcessedStream { get; set; }
@@ -96,6 +97,9 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         IsEof = false;
         RowCount = 0;
         RecordSource = source;
+        // Source capability is fixed for this reader's lifetime. Do the type and
+        // eligibility checks once, rather than on every synchronous/async row.
+        _currentRecordSource = source is ICurrentRecordSource { SupportsCurrentRecord: true } current ? current : null;
         _initialized = true;
     }
 
@@ -126,6 +130,29 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     }
 
     protected abstract bool ReadCore();
+
+    // Prefer borrowed current-record transport. Public/custom sources retain their
+    // existing virtual entry points and ownership behavior through the fallback.
+    private protected CurrentRecordResult ReadSource()
+    {
+        if (_currentRecordSource is { } source)
+            return source.ReadCurrent();
+        var eof = RecordSource!.IsEndOfFile(out var record, out var state);
+        return new(eof, record.Current, state);
+    }
+
+    private protected ValueTask<CurrentRecordResult> ReadSourceAsync(CancellationToken cancellationToken)
+    {
+        if (_currentRecordSource is { } source)
+            return source.ReadCurrentAsync(cancellationToken);
+        return ReadPublicSourceAsync(cancellationToken);
+    }
+
+    private async ValueTask<CurrentRecordResult> ReadPublicSourceAsync(CancellationToken cancellationToken)
+    {
+        var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+        return new(result.IsEndOfFile, result.Record.Current, result.State);
+    }
 
     protected override void EnsureValidationRecord()
     {

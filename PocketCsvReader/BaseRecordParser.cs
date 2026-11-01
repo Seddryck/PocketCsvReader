@@ -6,7 +6,7 @@ using System.Text;
 using PocketCsvReader.CharParsing;
 
 namespace PocketCsvReader;
-public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPositionSource
+public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPositionSource, ICurrentRecordSource
 {
     public TProfile Profile { get; }
     protected IParser FieldParser { get; }
@@ -15,6 +15,25 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
     protected ArrayPool<char>? Pool { get; }
 
     private int? FieldsCount { get; set; }
+    private readonly FieldMetadataBuffer _publishedFields = new();
+    private bool _borrowFields;
+    // Unknown subclasses may override public reads or retain their results.
+    protected virtual bool SupportsBorrowedRecords => false;
+    bool ICurrentRecordSource.SupportsCurrentRecord => SupportsBorrowedRecords;
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent()
+    {
+        _borrowFields = true;
+        try
+        {
+            var eof = IsEndOfFile(out var record, out var state);
+            return new(eof, record.Current, state);
+        }
+        finally { _borrowFields = false; }
+    }
+
+    ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
+        => ReadResultAsync(borrowFields: true, cancellationToken);
     private readonly PositionTracker? _position;
     private FieldSpan[] _fieldBuffer = new FieldSpan[20];
     private int _trackedInBuffer;
@@ -63,29 +82,37 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
 
     /// <summary>Reads asynchronously only when the shared character parser needs another buffer.</summary>
     public virtual async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+        => (await ReadResultAsync(borrowFields: false, cancellationToken).ConfigureAwait(false)).Materialize();
+
+    private async ValueTask<CurrentRecordResult> ReadResultAsync(bool borrowFields, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _position?.BeginRecord();
-        _trackedInBuffer = 0;
-        var context = default(ReadContext);
-        EnsureFieldCapacity(FieldsCount ?? 20);
-        RecordReadResult result;
-        while (!TryReadResult(ref context, Reader.IsEof, out result))
+        _borrowFields = borrowFields;
+        try
         {
-            Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            _position?.BeginRecord();
             _trackedInBuffer = 0;
+            var context = default(ReadContext);
+            EnsureFieldCapacity(FieldsCount ?? 20);
+            CurrentRecordResult result;
+            while (!TryReadResult(ref context, Reader.IsEof, out result))
+            {
+                Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                _trackedInBuffer = 0;
+            }
+            return result;
         }
-        return result;
+        finally { _borrowFields = false; }
     }
 
-    private bool TryReadResult(ref ReadContext context, bool endOfInput, out RecordReadResult result)
+    private bool TryReadResult(ref ReadContext context, bool endOfInput, out CurrentRecordResult result)
     {
         if (!TryParseRecord(ref context, endOfInput, out var record, out var state, out var eof))
         {
             result = default;
             return false;
         }
-        result = new(eof, state == RecordState.Record ? record.AsMemory() : RecordMemory.Empty, state);
+        result = new(eof, state == RecordState.Record ? record.Current : default, state);
         return true;
     }
 
@@ -322,11 +349,8 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
     }
 
     private FieldSpan[] CopyFields(int count)
-    {
-        var fields = new FieldSpan[count];
-        _fieldBuffer.AsSpan(0, count).CopyTo(fields);
-        return fields;
-    }
+        => _borrowFields ? _publishedFields.PublishBorrowed(_fieldBuffer.AsSpan(0, count))
+            : FieldMetadataBuffer.CopyOwned(_fieldBuffer.AsSpan(0, count));
 
     private BadDataAction GetBadDataAction(Exception exception, string offendingInput, long offset, int fieldIndex)
     {

@@ -15,20 +15,33 @@ public abstract class BaseRawRecord<TProfile>
     public int RowCount { get; protected set; } = 0;
     public string[]? Fields { get; protected set; } = null;
     private RecordMemory? _record;
+    private CurrentRecord _current;
+    private bool _copyMetadataOnMaterialization;
     protected RecordMemory? Record
     {
-        get => _record ?? (CurrentFieldSpans is null
-            ? null
-            : _record = new RecordMemory(CurrentRecordMemory, CurrentFieldSpans));
+        get => _record ?? (CurrentFieldSpans is null ? null : _record = _current.Materialize(_copyMetadataOnMaterialization));
         set
         {
             _record = value;
-            CurrentRecordMemory = value?.CharacterMemoryOrDefault ?? default;
-            CurrentFieldSpans = value?.ParsedFields;
+            _current = value?.Current ?? default;
+            _copyMetadataOnMaterialization = false;
         }
     }
-    protected ReadOnlyMemory<char> CurrentRecordMemory { get; private set; }
-    protected FieldSpan[]? CurrentFieldSpans { get; private set; }
+    protected ReadOnlyMemory<char> CurrentRecordMemory => _current.IsUtf8 ? Record!.Span : _current.Characters;
+    protected FieldSpan[]? CurrentFieldSpans => _current.Fields;
+
+    /// <summary>Reads a field without constructing a public record wrapper.</summary>
+    protected ReadOnlyMemory<char> GetCurrentFieldMemory(int ordinal) => _current.Slice(ordinal);
+
+    private protected bool TryGetCurrentUtf8(int ordinal, out ReadOnlyMemory<byte> value)
+        => _current.TryGetUtf8(ordinal, out value);
+
+    private protected void SetRecord(CurrentRecord record, bool copyMetadataOnMaterialization = false)
+    {
+        _record = null;
+        _current = record;
+        _copyMetadataOnMaterialization = copyMetadataOnMaterialization;
+    }
 
     protected BaseRawRecord(TProfile profile, StringMapper stringMapper)
     {
@@ -38,9 +51,7 @@ public abstract class BaseRawRecord<TProfile>
 
     protected void SetRecord(ReadOnlyMemory<char> memory, FieldSpan[] fieldSpans)
     {
-        _record = null;
-        CurrentRecordMemory = memory;
-        CurrentFieldSpans = fieldSpans;
+        SetRecord(new CurrentRecord(memory, fieldSpans));
     }
 
     public abstract int FieldCount { get; }
@@ -172,7 +183,7 @@ public abstract class BaseRawRecord<TProfile>
     protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
     public string GetString(int i)
-        => _record?.IsUtf8 == true && TryGetDirectString(i, out var value)
+        => _current.IsUtf8 && TryGetDirectString(i, out var value)
             ? value : GetStringValue(i);
 
     protected virtual string GetStringValue(int i)

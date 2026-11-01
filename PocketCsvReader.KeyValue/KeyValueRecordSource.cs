@@ -1,4 +1,5 @@
 using PocketCsvReader.KeyValue.Configuration;
+using System.Runtime.InteropServices;
 
 namespace PocketCsvReader.KeyValue;
 
@@ -7,6 +8,7 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     private readonly BufferedRecordReader _reader;
     private readonly PositionTracker? _position;
     private readonly List<FieldSpan> _scratchFields = [];
+    private readonly FieldMetadataBuffer _metadata = new();
     // Borrowed character and metadata storage is valid until the next read.
     private FieldSpan[] _fields = [];
     PositionTracker? IPositionSource.Tracker => _position;
@@ -61,9 +63,7 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     {
         _position?.CompleteRecord();
         KeyValueRecordParser.Parse(line, Profile.Format, _scratchFields);
-        if (_fields.Length != _scratchFields.Count)
-            _fields = new FieldSpan[_scratchFields.Count];
-        _scratchFields.CopyTo(_fields);
+        _fields = _metadata.PublishBorrowed(CollectionsMarshal.AsSpan(_scratchFields));
         // Do not retain decoded strings in both temporary and returned storage.
         _scratchFields.Clear();
     }

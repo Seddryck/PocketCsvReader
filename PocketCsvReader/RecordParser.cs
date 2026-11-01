@@ -9,6 +9,9 @@ using PocketCsvReader.CharParsing;
 namespace PocketCsvReader;
 public class RecordParser : BaseRecordParser<CsvProfile>
 {
+    // Public parser calls still publish owned metadata. Unknown subclasses retain
+    // their virtual read behavior unless they explicitly opt in to borrowed reads.
+    protected override bool SupportsBorrowedRecords => GetType() == typeof(RecordParser);
     public RecordParser(StreamReader reader, CsvProfile profile)
         : this(reader, profile, ArrayPool<char>.Shared)
     { }

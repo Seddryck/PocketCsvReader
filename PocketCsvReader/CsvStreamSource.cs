@@ -76,6 +76,7 @@ internal static class CsvStreamSource
 
     private sealed class OwnedCharacterSource : RecordParser
     {
+        protected override bool SupportsBorrowedRecords => true;
         private readonly StreamReader _reader;
         public OwnedCharacterSource(Stream stream, Encoding encoding, CsvProfile profile)
             : this(new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false), profile) { }

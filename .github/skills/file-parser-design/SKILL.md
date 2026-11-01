@@ -1,6 +1,6 @@
 ---
 name: file-parser-design
-description: Design, implement, or review a PocketCsvReader parser for a new file format while preserving the repository's buffered span-based architecture, memory ownership, bounded allocations, and sync/async behavior. Use for new formats and substantial record-source rewrites; do not use for small parsing fixes that leave those architectural concerns unchanged.
+description: Design or review PocketCsvReader format readers and substantial parser/storage allocation rewrites while preserving buffering, ownership, bounded allocations, and sync/async behavior. Use for new formats, shared reader handoff changes, or repeated allocation fixes; exclude small grammar fixes that leave these architectural concerns unchanged.
 ---
 
 # File parser design
@@ -17,6 +17,7 @@ Before writing a new parser, inspect the current versions of:
 - `IBufferReader`, `StreamBuffer`, `SingleBuffer`, and `DoubleBuffer`;
 - `BufferedRecordReader`, `IRecordFramer`, and `CapturedRecord` for format-independent framing;
 - `RecordSpan` and `RecordMemory`, including their ownership-oriented internal constructors;
+- `CurrentRecord`, `ICurrentRecordSource`, and `FieldMetadataBuffer` for borrowed reader-internal transport and explicit metadata publication;
 - `BaseDataReader<TProfile>` and the closest existing format implementation;
 - parser optimization settings, tests, benchmarks, and package boundaries relevant to the new format.
 
@@ -74,9 +75,43 @@ Formats with quoted strings must track quote, escape, delimiter, and nesting sta
 
 Represent unescaped values as spans into the record. Allocate decoded text only when escapes, normalization, or an existing public result type requires it. A temporary builder limited to an escaped value can be reasonable; a builder for every complete record is not the default.
 
+An escaped value does not by itself require eager decoding: validate its syntax
+during parsing, then decode/cache its logical value when the consumer requests it.
+Unused escaped values should not allocate decoded strings. Labels needed for schema
+matching or configuration can have different materialization requirements; keep
+that distinction explicit. See the JSON lazy-decoding tests for retained values,
+arrays, repeated access, and malformed unused input.
+
 ### Reuse temporary field metadata
 
 Create scratch field storage once per parser and clear or overwrite it between records. A fixed schema normally needs one exact-size `FieldSpan[]`, valid until the reader advances. Variable or nested schemas may need reusable growable scratch storage and an owned result array when the public lifetime requires it. Do not add a per-row `List<FieldSpan>` followed by `ToArray()` merely because another parser uses that pattern.
+
+Use the shared core `FieldMetadataBuffer.PublishBorrowed` for next-read storage and
+`CopyOwned` for independently retained top-level metadata. CSV, JSON, and key/value
+sources use this same publication boundary; do not recreate their allocation fixes
+as another format-local array-copy helper. Inspect recent fixes and the common
+consumer/base classes before choosing where a repeated lifecycle problem belongs.
+
+### Avoid wrappers on the internal reader path
+
+Borrowed character/byte memory and field metadata do not require a heap record
+object. In repository source packages, use `ICurrentRecordSource`/`CurrentRecord`
+where both sync and async reads can return current-record views. `BaseDataReader`
+provides `ReadSource`/`ReadSourceAsync`; `BaseRawRecord` stores the view and exposes
+`GetCurrentFieldMemory` without forcing its lazy compatibility `Record` wrapper.
+Use `SetRecord` with borrowed memory/view storage rather than calling `AsMemory`
+on every synchronous row. Do not access `Record` merely to check field count or
+obtain one field; doing so can silently reintroduce an 80-byte wrapper per row.
+
+Public `RecordReadResult.Record`, retained mapper metadata, compatibility APIs,
+and complete-record mapping may legitimately require wrappers or owned arrays.
+Keep those allocations at the explicit public/materialization boundary. Preserve
+virtual overrides of unknown subclasses: borrowed reads must be an explicit safe
+opt-in, not a bypass of their public read behavior. Third-party public sources
+continue through the compatible fallback; no internal interface is required of them.
+Resolve a lifetime-stable source capability once during reader initialization;
+avoid repeating interface/type/eligibility probes on every row or adding an async
+forwarding state machine where the borrowed source's `ValueTask` can be returned directly.
 
 ### Share grammar between sync and async paths
 
@@ -143,6 +178,23 @@ Run focused tests for every supported target framework before broader validation
 
 Include a warmed allocation-budget test of raw parsing without `GetString()`, object mapping, or input generation inside measurement. Choose a documented budget that catches a full-record string/copy and repeated scratch-array allocation for the representative workload; do not copy another format's numeric limit blindly. For a fixed schema, also assert storage identity across reads and validate that owned output values survive reader advancement. These behavioral checks complement the source guard, which cannot prove allocation behavior.
 
+Measure read-only rows, then numeric access, then selected strings separately.
+This distinguishes parser-owned metadata/wrappers from required output strings
+and unused-value decoding. Test borrowed array identity and absence of forced
+wrappers on the reader path, but also retain public parser/mapper metadata across
+advancement to verify that an optimization has not weakened its ownership contract.
+Run the raw allocation budget for both sync and async transport where applicable.
+`CsvStorageReuseTests` is the compiled example of this dual borrowed/owned contract.
+
+A wrapper-free synchronous path does not prove that async reads are allocation-free.
+Check each transport at the reader handoff, including formats sharing one source.
+Web logs use the shared current-record transport for Common, Combined, and W3C;
+their public async source API still materializes its required compatibility wrapper.
+Keep projection transformations separate in allocation reports: reconstructing a
+request from a W3C URI can create both a URI string and a final request string even
+when raw parsing reuses all field metadata. Do not attribute those output costs to
+lazy parsing or change returned values merely to improve a parser comparison.
+
 Run the source guard and its self-tests before the PR:
 
 ```shell
@@ -161,6 +213,7 @@ Do not open or finalize the pull request until the review can answer yes to all 
 - Is a cross-buffer record copied no more than once before consumption?
 - Does the field parser accept span- or memory-backed input rather than requiring a complete-record string?
 - Is temporary field metadata reused, with required owned output distinguished from scratch storage?
+- Are shared publication/current-record helpers used, with wrappers deferred to explicit API boundaries and custom virtual reads preserved?
 - Are escaped strings the only ordinary values that require decoding allocations?
 - Do sync and async entry points use the same framing and grammar state?
 - Is current-record memory valid until the reader advances?
