@@ -1,0 +1,17 @@
+Parser,Async,Stage,Records,CpuMeanMs,AllocatedBytes
+CommonLog,False,raw,50000,9.660,140480
+CommonLog,False,numeric,50000,12.434,141777
+CommonLog,False,string,50000,13.717,4502305
+CommonLog,False,projection,50000,14.594,4502305
+CommonLog,True,raw,50000,17.757,140481
+CommonLog,True,numeric,50000,18.133,141777
+CommonLog,True,string,50000,19.617,4502305
+CommonLog,True,projection,50000,19.037,4502305
+W3c,False,raw,50000,7.483,108192
+W3c,False,numeric,50000,10.814,109488
+W3c,False,string,50000,11.197,2910016
+W3c,False,projection,50000,12.312,7270017
+W3c,True,raw,50000,13.625,108193
+W3c,True,numeric,50000,18.121,109489
+W3c,True,string,50000,20.632,2910017
+W3c,True,projection,50000,19.437,7270017

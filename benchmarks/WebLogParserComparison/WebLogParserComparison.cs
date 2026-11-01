@@ -18,7 +18,21 @@ namespace PocketCsvReader.Benchmark;
 public class WebLogParserComparison
 {
     public const int RecordCount = 50_000;
-    public enum LogParser { CsvChars, CsvUtf8, FixedWidth, Ndjson, Json, Logfmt, Ltsv, CommonLog, CombinedLog, W3c, JsonProjected, NdjsonProjected }
+    public enum LogParser
+    {
+        CsvChars,
+        CsvUtf8,
+        FixedWidth,
+        Ndjson,
+        Json,
+        Logfmt,
+        Ltsv,
+        CommonLog,
+        CombinedLog,
+        W3c,
+        JsonProjected,
+        NdjsonProjected
+    }
 
     [ParamsAllValues]
     public LogParser Parser { get; set; }
@@ -87,7 +101,7 @@ public class WebLogParserComparison
         for (int i = 0; i < RecordCount; i++)
         {
             var row = Expected(i);
-            string host = $"192.0.2.{i % 254 + 1}";
+            string host = $"192.0.2.{(i % 254) + 1}";
             string user = $"user{i % 100}";
             string[] fields = [host, "-", user, "01/Nov/2026:12:34:56 +0000", row.Request,
                 row.Status.ToString(CultureInfo.InvariantCulture), row.Bytes.ToString(CultureInfo.InvariantCulture)];
@@ -165,6 +179,63 @@ public class WebLogParserComparison
             checksum += row.Request.Length + row.Status + row.Bytes;
         }
         return checksum;
+    }
+
+    // MemoryStream completes async I/O inline, keeping thread allocation accounting valid.
+    // Separate raw parsing, numeric conversion, selected text, and request reconstruction.
+    public static void RunWebLogBreakdown()
+    {
+        Console.WriteLine("Parser,Async,Stage,Records,CpuMeanMs,AllocatedBytes");
+        using var process = Process.GetCurrentProcess();
+        foreach (var parser in new[] { LogParser.CommonLog, LogParser.W3c })
+        {
+            var benchmark = new WebLogParserComparison { Parser = parser };
+            benchmark.Setup();
+            foreach (bool asynchronous in new[] { false, true })
+            {
+                foreach (var stage in new[] { "raw", "numeric", "string", "projection" })
+                {
+                    long ReadAll()
+                    {
+                        using var reader = benchmark._open(new MemoryStream(benchmark._data, writable: false));
+                        long checksum = 0;
+                        int count = 0;
+                        while (asynchronous ? ((BaseDataReader<WebLogs.WebLogProfile>)reader).ReadAsync().GetAwaiter().GetResult() : reader.Read())
+                        {
+                            count++;
+                            if (stage == "raw") continue;
+                            if (stage == "projection")
+                            {
+                                var row = benchmark.Project(reader);
+                                checksum += row.Request.Length + row.Status + row.Bytes;
+                                continue;
+                            }
+                            checksum += reader.GetInt32(benchmark._statusOrdinal) + reader.GetInt64(benchmark._bytesOrdinal);
+                            if (stage == "string") checksum += reader.GetString(benchmark._requestOrdinal).Length;
+                        }
+                        if (count != RecordCount) throw new InvalidOperationException("Row count changed.");
+                        return checksum;
+                    }
+
+                    var warmup = Stopwatch.StartNew();
+                    while (warmup.Elapsed.TotalSeconds < 1) ReadAll();
+                    var cpu = new double[3];
+                    var allocated = new double[3];
+                    for (int sample = 0; sample < cpu.Length; sample++)
+                    {
+                        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                        var cpuBefore = process.TotalProcessorTime;
+                        long before = GC.GetAllocatedBytesForCurrentThread();
+                        var timer = Stopwatch.StartNew();
+                        int iterations = 0;
+                        do { ReadAll(); iterations++; } while (timer.Elapsed.TotalSeconds < 1);
+                        allocated[sample] = (double)(GC.GetAllocatedBytesForCurrentThread() - before) / iterations;
+                        cpu[sample] = (process.TotalProcessorTime - cpuBefore).TotalMilliseconds / iterations;
+                    }
+                    Console.WriteLine(FormattableString.Invariant($"{parser},{asynchronous},{stage},{RecordCount},{cpu.Average():F3},{allocated.Average():F0}"));
+                }
+            }
+        }
     }
 
     public static void RunMatrix()

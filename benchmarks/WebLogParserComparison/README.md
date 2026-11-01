@@ -1,5 +1,8 @@
 # CSV storage reuse and full parser comparison
 
+For the latest rebased W3C/Common/Combined investigation, see
+[the web-log allocation follow-up](WEBLOG-ALLOCATIONS.md).
+
 For the controlled CPU investigation and subsequent source-dispatch update, see
 [the controlled CSV UTF-8 follow-up](CONTROLLED-CSV.md). It did not reproduce the
 previously suggested regression. The twelve-parser table below is the historical

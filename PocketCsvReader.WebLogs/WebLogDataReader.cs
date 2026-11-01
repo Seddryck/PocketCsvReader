@@ -56,16 +56,16 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
 
     protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
     {
-        var result = await Source.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var result = await ReadSourceAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
         Fields = Source.Fields;
-        if (result.Record.FieldSpans.Length == 0)
+        if (result.State != RecordState.Record)
         {
             Record = RecordMemory.Empty;
             return false;
         }
 
-        Record = result.Record;
+        SetRecord(result.Record);
         RowCount++;
         return true;
     }

@@ -24,7 +24,9 @@ public static class ControlledCsvBenchmark
                 throw new InvalidOperationException("The worker could not pin the requested logical CPU.");
         }
         else
+        {
             throw new PlatformNotSupportedException("This controlled worker pins a Windows process.");
+        }
 
         var benchmark = new WebLogParserComparison { Parser = parser };
         benchmark.Setup(); // Checks every value on every one of the 50,000 rows.

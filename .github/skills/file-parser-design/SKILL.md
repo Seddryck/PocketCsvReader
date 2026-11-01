@@ -186,6 +186,15 @@ advancement to verify that an optimization has not weakened its ownership contra
 Run the raw allocation budget for both sync and async transport where applicable.
 `CsvStorageReuseTests` is the compiled example of this dual borrowed/owned contract.
 
+A wrapper-free synchronous path does not prove that async reads are allocation-free.
+Check each transport at the reader handoff, including formats sharing one source.
+Web logs use the shared current-record transport for Common, Combined, and W3C;
+their public async source API still materializes its required compatibility wrapper.
+Keep projection transformations separate in allocation reports: reconstructing a
+request from a W3C URI can create both a URI string and a final request string even
+when raw parsing reuses all field metadata. Do not attribute those output costs to
+lazy parsing or change returned values merely to improve a parser comparison.
+
 Run the source guard and its self-tests before the PR:
 
 ```shell

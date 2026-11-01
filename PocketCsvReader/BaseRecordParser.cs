@@ -34,8 +34,8 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
 
     ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
         => ReadResultAsync(borrowFields: true, cancellationToken);
-    private FieldSpan[] _fieldBuffer = new FieldSpan[20];
     private readonly PositionTracker? _position;
+    private FieldSpan[] _fieldBuffer = new FieldSpan[20];
     private int _trackedInBuffer;
     PositionTracker? IPositionSource.Tracker => _position;
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;

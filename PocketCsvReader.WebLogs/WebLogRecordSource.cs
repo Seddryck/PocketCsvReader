@@ -1,7 +1,18 @@
 namespace PocketCsvReader.WebLogs;
 
-internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositionSource
+internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositionSource, ICurrentRecordSource
 {
+    bool ICurrentRecordSource.SupportsCurrentRecord => true;
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent()
+    {
+        var eof = IsEndOfFile(out var record, out var state);
+        return new(eof, record.Current, state);
+    }
+
+    ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
+        => ReadCurrentAsync(cancellationToken);
+
     internal static readonly string[] CommonFields =
     [
         "RemoteHost",
@@ -73,10 +84,13 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+        => (await ReadCurrentAsync(cancellationToken).ConfigureAwait(false)).Materialize();
+
+    private async ValueTask<CurrentRecordResult> ReadCurrentAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (_completed)
-            return new(true, RecordMemory.Empty, RecordState.Eof);
+            return new(true, default, RecordState.Eof);
 
         while (true)
         {
@@ -86,13 +100,13 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
             if (line is not { } captured)
             {
                 _completed = true;
-                return new(true, RecordMemory.Empty, RecordState.Eof);
+                return new(true, default, RecordState.Eof);
             }
 
             if (!ParseLine(captured.Memory.Span))
                 continue;
 
-            return new(false, new RecordMemory(captured.Memory, _fields), RecordState.Record);
+            return new(false, new CurrentRecord(captured.Memory, _fields), RecordState.Record);
         }
     }
 

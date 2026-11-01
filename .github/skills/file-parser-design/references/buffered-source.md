@@ -41,6 +41,14 @@ without accessing a value. Required selected strings belong in a separate budget
 Prefer sharing lifecycle/storage code across formats over copying one more local
 optimization; keep grammar and format-specific ownership constraints in their packages.
 
+`WebLogRecordSource` also implements the shared transport: its async data reader
+receives a value view, while public async source calls materialize the wrapper.
+`PocketCsvReader.WebLogs.Testing/CurrentRecordViewTests.cs` checks Common, Combined,
+and W3C in both transports with a budget that rejects an 80-byte wrapper per row.
+The W3C benchmark breakdown separately measures raw reads, numeric access, URI
+strings, and request reconstruction; a higher projection total alone is not
+evidence of fresh parser metadata or eager decoding.
+
 ## Source guard
 
 `dotnet run --project .github/tools/ParserAllocationGuard -c Release -- .` parses production C# syntax using Roslyn from the installed SDK, without another NuGet dependency. It discovers source files in root-level `PocketCsvReader*` project directories, including newly added packages and helpers, while excluding test, benchmark, profiler, and build-output directories. It checks all source in that scope, rather than guessing hot paths from filenames.

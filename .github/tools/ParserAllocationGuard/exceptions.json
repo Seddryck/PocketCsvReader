@@ -49,13 +49,6 @@
     "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected NDJSON memory, valid until the next read; no character copy."
   },
   {
-    "Path": "PocketCsvReader.WebLogs/WebLogRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(captured.Memory,_fields)",
-    "Count": 1,
-    "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable schema field array until the next read or disposal; no character or field-array copy. The RecordReadResult contract requires a RecordMemory wrapper."
-  },
-  {
     "Path": "PocketCsvReader/PositionedLineReader.cs",
     "Rule": "PA001",
     "Code": "_reader.ReadLine()",

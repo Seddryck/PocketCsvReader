@@ -232,7 +232,8 @@ public class CsvStorageReuseTests
 
     private sealed class CustomParser(StreamReader reader, CsvProfile profile) : RecordParser(reader, profile)
     {
-        public int SyncReads, AsyncReads;
+        public int SyncReads;
+        public int AsyncReads;
         public override bool IsEndOfFile(out RecordSpan record, out RecordState state)
         { SyncReads++; return base.IsEndOfFile(out record, out state); }
         public override async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)

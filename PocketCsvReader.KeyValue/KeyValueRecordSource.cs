@@ -8,9 +8,9 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     private readonly BufferedRecordReader _reader;
     private readonly PositionTracker? _position;
     private readonly List<FieldSpan> _scratchFields = [];
+    private readonly FieldMetadataBuffer _metadata = new();
     // Borrowed character and metadata storage is valid until the next read.
     private FieldSpan[] _fields = [];
-    private readonly FieldMetadataBuffer _metadata = new();
     PositionTracker? IPositionSource.Tracker => _position;
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;
 
