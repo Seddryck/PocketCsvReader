@@ -136,6 +136,35 @@ public class CsvStorageReuseTests
     }
 
     [Test]
+    public async Task SourceCapability_IsResolvedOnceForMixedReads()
+    {
+        using var reader = new CountingReader(new MemoryStream(Encoding.UTF8.GetBytes("one,1\ntwo,2\nthree,3\n")));
+        reader.Initialize();
+        Assert.That(reader.Parser!.CapabilityChecks, Is.EqualTo(1));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("three"));
+        Assert.That(await reader.ReadAsync(), Is.False);
+        Assert.That(reader.Parser.CapabilityChecks, Is.EqualTo(1));
+    }
+
+    private sealed class CountingReader(Stream stream) : CsvDataReader(stream,
+        new CsvProfile(new(Header: false, LineTerminator: "\n"))
+        { StreamInitialization = StreamInitializationOptions.ForwardOnly })
+    {
+        public CountingParser? Parser;
+        protected override BaseRecordParser<CsvProfile> CreateRecordParser(StreamReader reader, CsvProfile profile)
+            => Parser = new CountingParser(reader, profile);
+    }
+
+    private sealed class CountingParser(StreamReader reader, CsvProfile profile) : RecordParser(reader, profile)
+    {
+        public int CapabilityChecks;
+        protected override bool SupportsBorrowedRecords { get { CapabilityChecks++; return true; } }
+    }
+
+    [Test]
     public async Task CustomParserOverrides_AreNotBypassed()
     {
         using var reader = new CustomReader(new MemoryStream(Encoding.UTF8.GetBytes("one,1\ntwo,2\n")));

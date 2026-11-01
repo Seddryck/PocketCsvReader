@@ -3,7 +3,10 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using PocketCsvReader.Benchmark;
 
-if (args is ["--matrix"])
+if (args is ["--controlled-worker", var controlledParser, var label, var core, var warmup, var batches, var seconds])
+    ControlledCsvBenchmark.RunWorker(Enum.Parse<WebLogParserComparison.LogParser>(controlledParser), label,
+        int.Parse(core), int.Parse(warmup), int.Parse(batches), int.Parse(seconds));
+else if (args is ["--matrix"])
     WebLogParserComparison.RunMatrix();
 else if (args is ["--validate"])
 {

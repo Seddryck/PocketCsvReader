@@ -1,5 +1,10 @@
 # CSV storage reuse and full parser comparison
 
+For the controlled CPU investigation and subsequent source-dispatch update, see
+[the controlled CSV UTF-8 follow-up](CONTROLLED-CSV.md). It did not reproduce the
+previously suggested regression. The twelve-parser table below is the historical
+measurement at PR revision `93a566a`, before that follow-up.
+
 ## Change and ownership review
 
 The baseline is `origin/main` at `b359baf`, including lazy JSON string decoding.
@@ -110,7 +115,7 @@ dotnet benchmarks/WebLogParserComparison/bin/Release/net10.0/WebLogParserCompari
 The optional `ParserSourceRoot` MSBuild property can select a different checkout;
 it is unset here so the benchmark and its generated builds use this implementation.
 
-## Results per 50,000 records
+## Historical twelve-parser results per 50,000 records (`93a566a`)
 
 The CPU column is process CPU from the matrix; elapsed time is reported separately.
 Allocated bytes include the three requested output values. Raw values and standard

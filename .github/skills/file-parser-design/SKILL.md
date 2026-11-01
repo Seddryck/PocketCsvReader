@@ -109,6 +109,9 @@ Keep those allocations at the explicit public/materialization boundary. Preserve
 virtual overrides of unknown subclasses: borrowed reads must be an explicit safe
 opt-in, not a bypass of their public read behavior. Third-party public sources
 continue through the compatible fallback; no internal interface is required of them.
+Resolve a lifetime-stable source capability once during reader initialization;
+avoid repeating interface/type/eligibility probes on every row or adding an async
+forwarding state machine where the borrowed source's `ValueTask` can be returned directly.
 
 ### Share grammar between sync and async paths
 

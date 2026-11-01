@@ -48,6 +48,7 @@ internal readonly record struct CurrentRecordResult(bool IsEndOfFile, CurrentRec
 
 internal interface ICurrentRecordSource
 {
+    // Lifetime-stable capability, sampled once at reader initialization.
     bool SupportsCurrentRecord { get; }
     CurrentRecordResult ReadCurrent();
     ValueTask<CurrentRecordResult> ReadCurrentAsync(CancellationToken cancellationToken);

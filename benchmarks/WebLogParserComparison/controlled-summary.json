@@ -1,0 +1,134 @@
+{
+  "original": {
+    "BeforeCpuMs": 17.15507155766986,
+    "AfterCpuMs": 16.47273470556045,
+    "GeometricCpuRatio": 0.9602336175874085,
+    "PairedLogRatio95CI": [
+      0.884004591725592,
+      1.043035985305401
+    ],
+    "BeforeWallMs": 17.302893715268354,
+    "AfterWallMs": 16.60387488911062,
+    "BeforeAllocatedBytes": 29165608.0,
+    "AfterAllocatedBytes": 4365889.913014567,
+    "Pairs": [
+      {
+        "Pair": 1,
+        "BeforeCpuMs": 17.13145145966153,
+        "AfterCpuMs": 16.478779269972453,
+        "Ratio": 0.9619021078730026
+      },
+      {
+        "Pair": 2,
+        "BeforeCpuMs": 16.83848431614025,
+        "AfterCpuMs": 16.77418201662231,
+        "Ratio": 0.9961812299545093
+      },
+      {
+        "Pair": 3,
+        "BeforeCpuMs": 17.80260309865573,
+        "AfterCpuMs": 15.87420634920635,
+        "Ratio": 0.8916789449968138
+      },
+      {
+        "Pair": 4,
+        "BeforeCpuMs": 16.84774735622193,
+        "AfterCpuMs": 16.763771186440678,
+        "Ratio": 0.995015584694755
+      }
+    ],
+    "ControlsMatched": true,
+    "ParserMvids": {
+      "before": "96506ae0-06a1-46ee-9378-8a2c4b6d498e",
+      "after": "d8a32421-6d2a-410a-bd03-03a7f05e4043"
+    }
+  },
+  "final": {
+    "BeforeCpuMs": 16.707492526969467,
+    "AfterCpuMs": 16.302766817496067,
+    "GeometricCpuRatio": 0.9756165494702234,
+    "PairedLogRatio95CI": [
+      0.9361750011122981,
+      1.016719791138718
+    ],
+    "BeforeWallMs": 16.764522833923653,
+    "AfterWallMs": 16.442217809481086,
+    "BeforeAllocatedBytes": 29165608.0,
+    "AfterAllocatedBytes": 4365897.9425715525,
+    "Pairs": [
+      {
+        "Pair": 1,
+        "BeforeCpuMs": 16.7170282369146,
+        "AfterCpuMs": 16.58971625928001,
+        "Ratio": 0.992384293677661
+      },
+      {
+        "Pair": 2,
+        "BeforeCpuMs": 16.535167011019283,
+        "AfterCpuMs": 16.295450311610892,
+        "Ratio": 0.9855026139591672
+      },
+      {
+        "Pair": 3,
+        "BeforeCpuMs": 16.746761204481793,
+        "AfterCpuMs": 16.52768016416023,
+        "Ratio": 0.9869180053595717
+      },
+      {
+        "Pair": 4,
+        "BeforeCpuMs": 16.831013655462186,
+        "AfterCpuMs": 15.798220534933133,
+        "Ratio": 0.938637497320675
+      }
+    ],
+    "ControlsMatched": true,
+    "ParserMvids": {
+      "before": "96506ae0-06a1-46ee-9378-8a2c4b6d498e",
+      "after": "b40b4444-0f88-4199-ae6f-f7e4d35c862f"
+    }
+  },
+  "overhead": {
+    "BeforeCpuMs": 16.407228084381433,
+    "AfterCpuMs": 15.876809564731788,
+    "GeometricCpuRatio": 0.9678265816527081,
+    "PairedLogRatio95CI": [
+      0.9062543010219989,
+      1.0335821756622243
+    ],
+    "BeforeWallMs": 16.47033900020345,
+    "AfterWallMs": 16.045938414229365,
+    "BeforeAllocatedBytes": 4365889.892535605,
+    "AfterAllocatedBytes": 4365897.820531392,
+    "Pairs": [
+      {
+        "Pair": 1,
+        "BeforeCpuMs": 16.02701612903226,
+        "AfterCpuMs": 15.848214285714286,
+        "Ratio": 0.9888437222575649
+      },
+      {
+        "Pair": 2,
+        "BeforeCpuMs": 16.799311150079866,
+        "AfterCpuMs": 15.625,
+        "Ratio": 0.9300976605773337
+      },
+      {
+        "Pair": 3,
+        "BeforeCpuMs": 16.776960784313726,
+        "AfterCpuMs": 15.773028371453568,
+        "Ratio": 0.9401600548653113
+      },
+      {
+        "Pair": 4,
+        "BeforeCpuMs": 16.025624274099883,
+        "AfterCpuMs": 16.260995601759298,
+        "Ratio": 1.014687186198407
+      }
+    ],
+    "ControlsMatched": true,
+    "ParserMvids": {
+      "before": "d8a32421-6d2a-410a-bd03-03a7f05e4043",
+      "after": "b40b4444-0f88-4199-ae6f-f7e4d35c862f"
+    }
+  }
+}
