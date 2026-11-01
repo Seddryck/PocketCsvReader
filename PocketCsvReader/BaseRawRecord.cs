@@ -168,11 +168,20 @@ public abstract class BaseRawRecord<P> where P : IProfile
 /// <returns>The raw string representation of the field value.</returns>
 public abstract string GetRawString(int i);
 
-    protected bool IsNull(int i)
+    protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
     public string GetString(int i)
         => _record?.IsUtf8 == true && TryGetDirectString(i, out var value)
-            ? value : StringMapper.Map(GetValueOrThrow(i))!;
+            ? value : GetStringValue(i);
+
+    protected virtual string GetStringValue(int i)
+        => StringMapper.Map(GetValueOrThrow(i))!;
+
+    /// <summary>Returns a field's logical text, allowing formats to decode and cache it on demand.</summary>
+    protected virtual ReadOnlyMemory<char> GetFieldMemory(ref FieldSpan field)
+        => field.DecodedValue is { } decoded
+            ? decoded.AsMemory()
+            : CurrentRecordMemory.Slice(field.Value.Start, field.Value.Length);
 
     private protected virtual bool TryGetDirectString(int i, out string value)
     {
