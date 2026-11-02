@@ -11,6 +11,7 @@ public class NdjsonProfile : IProfile
     internal static ParserOptimizationOptions DefaultParserOptimizations { get; }
         = new(BufferSize: 64 * 1024, ReadAhead: false, RowCountAtStart: false);
 
+    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     public NdjsonDialectDescriptor Dialect { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }

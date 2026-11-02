@@ -4,6 +4,7 @@ namespace PocketCsvReader.Json.Configuration;
 
 public class JsonProfile : IProfile
 {
+    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     internal static ParserOptimizationOptions DefaultParserOptimizations { get; }
         = new(BufferSize: 64 * 1024, ReadAhead: false, RowCountAtStart: false);
 

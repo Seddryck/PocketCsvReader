@@ -7,6 +7,7 @@ public enum SecurityLogFormat { Cef,
 
 public sealed class SecurityLogProfile : IProfile
 {
+    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     public SecurityLogFormat Format { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }

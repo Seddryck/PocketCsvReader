@@ -7,6 +7,7 @@ namespace PocketCsvReader;
 
 public class CsvProfile : IProfile
 {
+    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     public DialectDescriptor Dialect { get; private set; }
     public SchemaDescriptor? Schema { get; private set; }
     public ResourceDescriptor? Resource { get; private set; }

@@ -53,3 +53,8 @@ For labeled formats, each dictionary or array reflects that current record's fie
 Returned row arrays, strings, dictionaries, and dynamic objects are independently owned. Borrowed parser views expire on the next read; see [buffering](../buffering-and-benchmarks/). All materializers can throw during enumeration when conversion fails. Use `foreach` or dispose enumerators explicitly on early exit.
 
 For typed objects use [object mapping](../mapper-object-builder/); for asynchronous consumption use [async reading](../async-reading/); for columnar analytics use [Arrow batches](../apache-arrow/).
+
+[Reader filters](../reader-filtering/) apply before output rows are materialized,
+including objects, arrays, dictionaries, dynamic records, and tables. Default CSV
+constructor projection can reuse values already parsed by filters; a custom span
+mapper controls its own parsing.

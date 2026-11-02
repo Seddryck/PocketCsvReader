@@ -15,6 +15,7 @@ A reader profile combines independent settings. Use a format-specific builder so
 | Dialect/format | Record boundaries, quoting, labels | [Format guides](../why-pocketcsvreader/#supported-inputs) |
 | Schema | Field names, types, cultures and formats | [Schemas](../fluent-api-schema/) |
 | Resource | Encoding, compression, replacement sequences | [Input initialization](../fluent-api-resource/), [compression](../compressed-files/), [nulls](../sequences/) |
+| Filters | Conditions applied before projection | [Reader filtering](../reader-filtering/) |
 | Runtime parsers | Conversion shared by runtime type | [Custom parsers](../fluent-api-runtime-parsers/) |
 | Parser options | Buffering and supported format options | [Tuning](../parser-optimizations/) |
 

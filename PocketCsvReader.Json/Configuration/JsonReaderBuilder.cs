@@ -70,5 +70,5 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
             _orderedProjection,
             _recordPath,
             _allowComments,
-            _allowTrailingCommas));
+            _allowTrailingCommas) { Filters = BuildFilters() });
 }

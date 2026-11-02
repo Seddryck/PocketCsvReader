@@ -38,6 +38,6 @@ while (reader.Read())
 // 1: Ada
 ```
 
-See [output models](https://seddryck.github.io/PocketCsvReader/docs/output-models/), [object mapping](https://seddryck.github.io/PocketCsvReader/docs/mapper-object-builder/), [async reading](https://seddryck.github.io/PocketCsvReader/docs/async-reading/), [inference](https://seddryck.github.io/PocketCsvReader/docs/schema-inference/), and [performance guidance](https://seddryck.github.io/PocketCsvReader/docs/parser-optimizations/) for complete behavior and limitations.
+See [output models](https://seddryck.github.io/PocketCsvReader/docs/output-models/), [reader filtering](https://seddryck.github.io/PocketCsvReader/docs/reader-filtering/), [object mapping](https://seddryck.github.io/PocketCsvReader/docs/mapper-object-builder/), [async reading](https://seddryck.github.io/PocketCsvReader/docs/async-reading/), [inference](https://seddryck.github.io/PocketCsvReader/docs/schema-inference/), and [performance guidance](https://seddryck.github.io/PocketCsvReader/docs/parser-optimizations/) for complete behavior and limitations.
 
 Shared ownership, null, conversion, and performance contracts have their authoritative home in the documentation rather than duplicated README sections.

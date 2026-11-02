@@ -19,7 +19,7 @@ public abstract class SecurityLogReaderBuilder<TBuilder> : ReaderBuilder<TBuilde
         => options with { RowCountAtStart = false };
 
     protected SecurityLogProfile BuildProfile(SecurityLogFormat format)
-        => new(format, _attributes, BuildSchema(), BuildResource(), BuildParsers(), BuildParserOptimizations());
+        => new(format, _attributes, BuildSchema(), BuildResource(), BuildParsers(), BuildParserOptimizations()) { Filters = BuildFilters() };
 }
 
 public sealed class CefReaderBuilder : SecurityLogReaderBuilder<CefReaderBuilder>

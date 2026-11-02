@@ -80,3 +80,8 @@ c,d
 `BadDataContext` supplies record/line information, field index, offset, parser state, offending input and the exception. Enable `WithPositionTracking()` before reading for precise record starts and explicit offset units; see [source positions](../source-positions/). Legacy diagnostics without tracking can be approximate/record-relative.
 
 Dialect `Build()` rejects invalid combinations described in [CSV configuration errors](../csv-dialect-descriptor/#configuration-errors). Fix configuration rather than trying to recover it as a data row. After an unrecovered parser error or input-I/O cancellation, stop using the reader and restart with a fresh reader and replayable input. Getter conversion errors do not themselves consume another record; handle them deliberately at the application level.
+
+[Reader filtering](../reader-filtering/) selects rows; it does not suppress
+conversion failures, configuration errors, or predicate exceptions. To reject
+malformed cell text deliberately, use a span predicate with `TryParse`. Rejected
+rows retain their source numbering for diagnostics.

@@ -121,12 +121,95 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         {
             Initialize();
             _hasCurrentRecord = false;
-            return _hasCurrentRecord = !IsEof && ReadCore();
+            do
+            {
+                _hasCurrentRecord = false;
+                ResetRowValues();
+                _hasCurrentRecord = !IsEof && ReadCore();
+                if (!_hasCurrentRecord) return false;
+            } while (!AcceptCurrentRow());
+            return true;
         }
         finally
         {
             ExitRead();
         }
+    }
+
+    private RowView? _filterView;
+
+    private bool AcceptCurrentRow()
+    {
+        if (Profile.Filters.Count == 0) return true;
+        var view = _filterView ??= new RowView(this);
+        view.Active = true;
+        try
+        {
+            for (var index = 0; index < Profile.Filters.Count; index++)
+            {
+                var filter = Profile.Filters[index];
+                if (filter.RowPredicate is { } row)
+                {
+                    if (!row(view)) return false;
+                    continue;
+                }
+                var ordinal = filter.Column is { } column ? view.GetOrdinal(column) : filter.Ordinal;
+                view.Validate(ordinal);
+                if (filter.SpanPredicate is { } span)
+                {
+                    var value = GetValueOrThrow(ordinal);
+                    if (!value.HasValue || !span(value.Value)) return false;
+                }
+                else if (!filter.ValuePredicate!(view, ordinal))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        catch
+        {
+            _hasCurrentRecord = false;
+            throw;
+        }
+        finally { view.Active = false; }
+    }
+
+    private sealed class RowView(BaseDataReader<TProfile> reader) : IRowView
+    {
+        internal bool Active;
+        private readonly Dictionary<string, int> _ordinals = new(StringComparer.Ordinal);
+        private string[]? _fields;
+        private void Check()
+        {
+            if (!Active) throw new InvalidOperationException("The row view is valid only during its filter call.");
+        }
+        internal void Validate(int i)
+        {
+            Check();
+            if ((uint)i >= (uint)reader.FieldCount) throw new ArgumentOutOfRangeException(nameof(i));
+        }
+        public int FieldCount { get { Check(); return reader.FieldCount; } }
+        public string GetName(int i) { Validate(i); return reader.GetName(i); }
+        public int GetOrdinal(string name)
+        {
+            Check();
+            if (!ReferenceEquals(_fields, reader.Fields))
+            {
+                _fields = reader.Fields;
+                _ordinals.Clear();
+            }
+            if (!_ordinals.TryGetValue(name, out var i)) _ordinals.Add(name, i = reader.GetOrdinal(name));
+            return i;
+        }
+        public bool IsDBNull(int i) { Validate(i); return reader.IsDBNull(i); }
+        public bool IsDBNull(string name) => IsDBNull(GetOrdinal(name));
+        public object GetValue(int i) { Validate(i); return reader.GetValue(i); }
+        public object GetValue(string name) => GetValue(GetOrdinal(name));
+        public T GetFieldValue<T>(int i) { Validate(i); return reader.GetFieldValue<T>(i); }
+        public T GetFieldValue<T>(string name) => GetFieldValue<T>(GetOrdinal(name));
+        public T GetFieldValue<T>(int i, ParseSpan<T> parser) { Validate(i); return reader.GetFieldValue(i, parser); }
+        public T GetFieldValue<T>(string name, ParseSpan<T> parser) => GetFieldValue(GetOrdinal(name), parser);
     }
 
     protected abstract bool ReadCore();
@@ -170,7 +253,15 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             cancellationToken.ThrowIfCancellationRequested();
             await InitializeAsync(cancellationToken).ConfigureAwait(false);
             _hasCurrentRecord = false;
-            return _hasCurrentRecord = !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
+            do
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _hasCurrentRecord = false;
+                ResetRowValues();
+                _hasCurrentRecord = !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
+                if (!_hasCurrentRecord) return false;
+            } while (!AcceptCurrentRow());
+            return true;
         }
         finally
         {
