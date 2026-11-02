@@ -23,9 +23,7 @@ def frontmatter(text):
     return fields, body
 
 
-def source_check(root):
-    errors = []
-    pages = root / 'docs/_docs'
+def check_navigation(root, pages, errors):
     nav = (root / 'docs/_data/navigation_docs.yml').read_text(encoding='utf-8')
     slugs = re.findall(r'^  - ([\w-]+)\s*$', nav, re.M)
     if len(slugs) != len(set(slugs)):
@@ -41,41 +39,45 @@ def source_check(root):
     inspect_group = nav.split('- title: Inspect and prepare input', 1)[-1].split('- title:', 1)[0]
     if '  - schema-inference' not in inspect_group:
         errors.append('Inference must remain discoverable under input inspection')
-    routes = {'/docs/', '/contact/', '/changelog-timeline/'}
     for slug in slugs:
         if not (pages / f'{slug}.md').is_file():
             errors.append(f'Navigation target missing: {slug}')
-    marked = {}
-    for page in sorted(pages.glob('*.md')):
-        text = page.read_text(encoding='utf-8')
-        fields, body = frontmatter(text)
-        if not fields.get('title'):
-            errors.append(f'{page.name}: missing title')
-        if page.stem not in slugs and 'compatibility' not in fields.get('tags', ''):
-            errors.append(f'{page.name}: missing from navigation')
-        routes.add(fields.get('permalink', f'/docs/{page.stem}/'))
-        if len(re.findall(r'^```', body, re.M)) % 2:
-            errors.append(f'{page.name}: unbalanced code fences')
-        if re.search(r'\]\(/docs/', body):
-            errors.append(f'{page.name}: root-relative documentation link bypasses baseurl')
-        for match in re.finditer(r'<!-- example: ([\w-]+) -->\s*```csharp\n(.*?)```', body, re.S):
-            if match[1] in marked:
-                errors.append(f'Duplicate example marker: {match[1]}')
-            expected = re.search(r'<!-- output: ' + re.escape(match[1]) + r' -->\s*```text\n(.*?)```', body, re.S)
-            if expected is None:
-                errors.append(f'{page.name}: {match[1]} needs an expected-output block')
-            marked[match[1]] = (page.name, match[2], expected[1].strip() if expected else '')
-    for page in sorted(pages.glob('*.md')):
-        fields, body = frontmatter(page.read_text(encoding='utf-8'))
-        source = fields.get('permalink', f'/docs/{page.stem}/')
-        for match in re.finditer(r'\]\(([^\s)]+)(?:\s+"[^"]*")?\)', body):
-            target = match[1].strip('<>')
-            parts = urlsplit(target)
-            if parts.scheme or parts.netloc:
-                continue
-            path = urlsplit(urljoin(source, target)).path
-            if path not in routes:
-                errors.append(f'{page.name}: unresolved local documentation link {target}')
+    return slugs
+
+
+def check_page(page, fields, body, slugs, errors):
+    if not fields.get('title'):
+        errors.append(f'{page.name}: missing title')
+    if page.stem not in slugs and 'compatibility' not in fields.get('tags', ''):
+        errors.append(f'{page.name}: missing from navigation')
+    if len(re.findall(r'^```', body, re.M)) % 2:
+        errors.append(f'{page.name}: unbalanced code fences')
+    if re.search(r'\]\(/docs/', body):
+        errors.append(f'{page.name}: root-relative documentation link bypasses baseurl')
+
+
+def collect_examples(page, body, marked, errors):
+    for match in re.finditer(r'<!-- example: ([\w-]+) -->\s*```csharp\n(.*?)```', body, re.S):
+        if match[1] in marked:
+            errors.append(f'Duplicate example marker: {match[1]}')
+        expected = re.search(r'<!-- output: ' + re.escape(match[1]) + r' -->\s*```text\n(.*?)```', body, re.S)
+        if expected is None:
+            errors.append(f'{page.name}: {match[1]} needs an expected-output block')
+        marked[match[1]] = (page.name, match[2], expected[1].strip() if expected else '')
+
+
+def check_source_links(page, fields, body, routes, errors):
+    source = fields.get('permalink', f'/docs/{page.stem}/')
+    for match in re.finditer(r'\]\(([^\s)]+)(?:\s+"[^"]*")?\)', body):
+        target = match[1].strip('<>')
+        parts = urlsplit(target)
+        if parts.scheme or parts.netloc:
+            continue
+        if urlsplit(urljoin(source, target)).path not in routes:
+            errors.append(f'{page.name}: unresolved local documentation link {target}')
+
+
+def check_entrypoints(root, slugs, errors):
     for name in ['navigation_header.yml', 'navigation_mobile.yml', 'navigation_footer.yml']:
         text = (root / 'docs/_data' / name).read_text(encoding='utf-8')
         if not re.search(r'url: /docs/why-pocketcsvreader/\s*$', text, re.M):
@@ -84,6 +86,24 @@ def source_check(root):
     for target in re.findall(r'^  doc: (.+)$', boxes, re.M):
         if target not in slugs:
             errors.append(f'Homepage card points outside documentation navigation: {target}')
+
+
+def source_check(root):
+    errors = []
+    pages = root / 'docs/_docs'
+    slugs = check_navigation(root, pages, errors)
+    routes = {'/docs/', '/contact/', '/changelog-timeline/'}
+    marked = {}
+    sources = []
+    for page in sorted(pages.glob('*.md')):
+        fields, body = frontmatter(page.read_text(encoding='utf-8'))
+        sources.append((page, fields, body))
+        check_page(page, fields, body, slugs, errors)
+        routes.add(fields.get('permalink', f'/docs/{page.stem}/'))
+        collect_examples(page, body, marked, errors)
+    for page, fields, body in sources:
+        check_source_links(page, fields, body, routes, errors)
+    check_entrypoints(root, slugs, errors)
     print(f'Source checks: {len(slugs)} navigation entries, {len(list(pages.glob("*.md")))} pages, {len(marked)} runnable examples')
     if errors:
         raise ValueError('\n'.join(errors))
@@ -104,41 +124,50 @@ class Links(HTMLParser):
             self.links.append(attrs['href'])
 
 
-def site_check(site, baseurl):
-    if not site.is_dir():
-        raise ValueError(f'Rendered site does not exist: {site}')
+def read_rendered_documents(site):
     documents = {}
-    errors = []
     for page in sorted(site.rglob('*.html')):
         parser = Links()
         parser.feed(page.read_text(encoding='utf-8'))
         documents[page.resolve()] = parser
     if not documents:
         raise ValueError(f'No rendered HTML documents found in {site}')
+    return documents
+
+
+def check_rendered_link(href, route, relative, site, baseurl, documents, errors):
+    parsed = urlsplit(href)
+    if parsed.scheme or parsed.netloc:
+        return
+    if not href:
+        errors.append(f'{relative}: empty link (possible unresolved template target)')
+        return
+    target = urlsplit(urljoin(baseurl.rstrip('/') + route, href))
+    path = unquote(target.path)
+    if baseurl and not (path == baseurl or path.startswith(baseurl + '/')):
+        errors.append(f'{relative}: link bypasses baseurl: {href}')
+        return
+    path = path[len(baseurl):].lstrip('/')
+    candidate = site / path
+    if target.path.endswith('/') or candidate.is_dir():
+        candidate = candidate / 'index.html'
+    if not candidate.exists():
+        errors.append(f'{relative}: missing target {href}')
+    elif target.fragment and candidate.resolve() in documents:
+        if unquote(target.fragment) not in documents[candidate.resolve()].ids:
+            errors.append(f'{relative}: missing anchor {href}')
+
+
+def site_check(site, baseurl):
+    if not site.is_dir():
+        raise ValueError(f'Rendered site does not exist: {site}')
+    documents = read_rendered_documents(site)
+    errors = []
     for page, parser in documents.items():
         relative = page.relative_to(site.resolve()).as_posix()
         route = '/' + (relative[:-10] if relative.endswith('index.html') else relative)
         for href in parser.links:
-            parsed = urlsplit(href)
-            if parsed.scheme or parsed.netloc:
-                continue
-            if not href:
-                errors.append(f'{relative}: empty link (possible unresolved template target)')
-                continue
-            target = urlsplit(urljoin(baseurl.rstrip('/') + route, href))
-            path = unquote(target.path)
-            if baseurl and not (path == baseurl or path.startswith(baseurl + '/')):
-                errors.append(f'{relative}: link bypasses baseurl: {href}')
-                continue
-            path = path[len(baseurl):].lstrip('/')
-            candidate = site / path
-            if target.path.endswith('/') or candidate.is_dir():
-                candidate = candidate / 'index.html'
-            if not candidate.exists():
-                errors.append(f'{relative}: missing target {href}')
-            elif target.fragment and candidate.resolve() in documents:
-                if unquote(target.fragment) not in documents[candidate.resolve()].ids:
-                    errors.append(f'{relative}: missing anchor {href}')
+            check_rendered_link(href, route, relative, site, baseurl, documents, errors)
     if errors:
         raise ValueError('\n'.join(sorted(set(errors))))
     print(f'Rendered checks: {len(documents)} HTML pages; internal routes and anchors resolve under {baseurl or "/"}')
