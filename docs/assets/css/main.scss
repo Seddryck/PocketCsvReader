@@ -1,40 +1,8 @@
 ---
-# Only the main Sass file needs front matter (the dashes are enough)
 ---
 
-// Keep Liquid asset URLs in this entry point: Jekyll renders it before Sass.
-// The fonts are served by the site, including under the GitHub Pages base path.
-@font-face {
-  font-family: "Geist Sans";
-  src: url("{{ '/assets/fonts/geist/Geist[wght].woff2' | relative_url }}") format("woff2");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Sans";
-  src: url("{{ '/assets/fonts/geist/Geist-Italic[wght].woff2' | relative_url }}") format("woff2");
-  font-style: italic;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Mono";
-  src: url("{{ '/assets/fonts/geist/GeistMono[wght].woff2' | relative_url }}") format("woff2");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Mono";
-  src: url("{{ '/assets/fonts/geist/GeistMono-Italic[wght].woff2' | relative_url }}") format("woff2");
-  font-style: italic;
-  font-weight: 100 900;
-  font-display: swap;
-}
+// Self-hosted font faces.
+@import "theme/fonts";
 
 // Custom variables and variable overwrites.
 @import "theme/variables";
@@ -50,5 +18,4 @@
 @import "theme/uikit";
 
 // Other vendor styles
-// @import "syntax-highlighting/cld";
 @import "syntax-highlighting/bw";

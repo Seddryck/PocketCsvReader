@@ -18,10 +18,11 @@ families. The browser requests only the faces needed by the page and caches them
 according to the hosting server's HTTP cache headers. No font CDN or local font
 installation is required.
 
-Font faces are declared in `docs/assets/css/main.scss`, where Jekyll processes
-Liquid URLs before compiling Sass. Keep the `relative_url` filter so deployment
-under `/PocketCsvReader/` and a root-path local preview both work. The shared theme
-variables select Sans for text/UI and Mono for inline code and preformatted blocks.
+Font faces are declared in `docs/_sass/theme/_fonts.scss` and imported by the
+main Sass entry point. Their URLs resolve relative to `assets/css/main.css`, so
+deployment under `/PocketCsvReader/` and a root-path local preview both work
+without Liquid in the font declarations. The shared theme variables select Sans
+for text/UI and Mono for inline code and preformatted blocks.
 
 To verify changes, build with `bundle exec jekyll build` from `docs`, then serve the
 output under the configured base path. In a browser with its cache disabled, check
