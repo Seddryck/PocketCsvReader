@@ -48,18 +48,7 @@ Examples:
 
 ## Configuring Compression
 
-PocketCsvReader can automatically decompress delimited-files compressed with a classical compression format.
-
-```csharp
-var builder = new CsvReaderBuilder().WithResource
-(
-    new ResourceDescriptorBuilder()
-                .WithCompression(CompressionFormat.Gzip)
-);
-var reader = builder.Build();
-```
-
-More info on [compression](../compressed-files).
+Compression is a resource setting, configured with `WithCompression` or disabled with `WithoutCompression` (the default). See [Read compressed files](../compressed-files/) for the configuration example, supported formats and aliases, encoding considerations, and ZIP archive requirements.
 
 ### Registering Sequences
 

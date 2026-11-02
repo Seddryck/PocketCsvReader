@@ -10,6 +10,11 @@ dotnet add package PocketCsvReader.FixedWidth
 ```
 
 ```csharp
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.IO;
+using System.Text;
 using PocketCsvReader.FixedWidth;
 using PocketCsvReader.FixedWidth.Configuration;
 
@@ -26,14 +31,29 @@ var fixedWidth = new FixedWidthReaderBuilder()
         .WithTemporalField<DateOnly>(field => field.WithFormat("yyyy-MM-dd")))
     .Build();
 
-using var reader = fixedWidth.ToDataReader("people.txt");
+// Each record has 31 characters: a 5-character ID, one ignored space,
+// a 15-character name, and a 10-character birth date.
+var content = "00042 " + "Ada Lovelace".PadRight(15) + "1815-12-10\n"
+            + "00043 " + "Grace Hopper".PadRight(15) + "1906-12-09\n";
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+using var reader = fixedWidth.ToDataReader(stream);
 while (reader.Read())
 {
     var id = reader.GetInt32(0);
     var name = reader.GetString(1);
     var birthDate = reader.GetFieldValue<DateOnly>(2);
+    Console.WriteLine(FormattableString.Invariant($"{id}: {name}, born {birthDate:yyyy-MM-dd}"));
 }
 ```
+
+Output:
+
+```text
+42: Ada Lovelace, born 1815-12-10
+43: Grace Hopper, born 1906-12-09
+```
+
+To read the same records from disk, replace `fixedWidth.ToDataReader(stream)` with `fixedWidth.ToDataReader("people.txt")`. The ID's zero padding and the name's space padding are removed before typed access.
 
 Fields may be adjacent or separated by ignored gaps. Overlapping fields, negative offsets, and non-positive widths are rejected when the reader is built. Records must exactly match the end of the last declared field unless `AllowTrailingCharacters()` is enabled.
 
@@ -66,6 +86,8 @@ The same reader supports the standard output models:
 DataTable table = fixedWidth.ToDataTable("people.txt");
 IEnumerable<string?[]> rows = fixedWidth.ToArrayString("people.txt");
 IEnumerable<Person> people = fixedWidth.To<Person>("people.txt");
+
+public record Person(int Id, string Name, DateOnly BirthDate);
 ```
 
 The default object mapper uses a public constructor with one parameter per field. Pass a mapping function when only selected fields are needed; only the fields accessed by that function are parsed:

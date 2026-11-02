@@ -23,6 +23,8 @@
   - schema-inference
   - mapper-object-builder
   - compressed-files
+  - fixed-width
+  - key-value-formats
   - json-and-ndjson
   - web-log-formats
   - security-log-formats

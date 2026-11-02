@@ -113,20 +113,17 @@ The `To<T>` method maps CSV records to objects of a specified type.
 #### Example: Mapping to a `Person` Class
 
 ```csharp
-public class Person
-{
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public int Age { get; set; }
-}
-
 IEnumerable<Person> people = csvReader.To<Person>("example.csv");
 
 foreach (var person in people)
 {
     Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
 }
+
+public record Person(string FirstName, string LastName, int Age);
 ```
+
+The default mapper passes columns to a public constructor in column order. Here, each data row must contain first name, last name, and age, in that order. See [Span mapper and object builder](../mapper-object-builder/) for a complete order-import example and custom parsers.
 
 #### From a Stream to Strongly-Typed Objects
 
