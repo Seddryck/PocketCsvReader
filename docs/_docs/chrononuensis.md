@@ -85,4 +85,4 @@ The adapter passes `ReadOnlySpan<char>` directly to Chrononuensis, including fie
 dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*ChrononuensisParsing*'
 ```
 
-Detailed machine-specific measurements belong with the [benchmark methodology](../buffering-and-benchmarks/#benchmarks). The integration avoids intermediate input strings; the upstream parser can still allocate. No fixed throughput or zero-allocation guarantee is implied.
+Detailed machine-specific measurements belong with the [benchmark methodology](../buffering-and-benchmarks/#chrononuensis-measurement-example). The integration avoids intermediate input strings; the upstream parser can still allocate. No fixed throughput or zero-allocation guarantee is implied.
