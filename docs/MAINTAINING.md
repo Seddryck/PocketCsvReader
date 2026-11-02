@@ -11,6 +11,7 @@ Use format guides for grammar and deviations, shared guides for ownership/conver
 From the repository root, with Python 3.11+ and the .NET 10 SDK:
 
 ```sh
+python -m unittest discover -s .github/tools -p 'test_check_docs.py'
 python .github/tools/check_docs.py
 python .github/tools/check_docs.py --examples
 ```
@@ -32,7 +33,7 @@ Then, from the repository root:
 python .github/tools/check_docs.py --site artifacts/docs-site
 ```
 
-The rendered checker resolves local links and fragments under `/PocketCsvReader`, including desktop/mobile navigation. Use `--baseurl ''` when checking an intentionally root-mounted build. Ruby dependencies, build output, example executables, and logs must remain outside tracked site sources.
+The rendered checker resolves local links and fragments under `/PocketCsvReader`, including desktop/mobile navigation. Rendered tables must contain actual header cells; table scrolling is handled by CSS without rewriting generated markup. The /docs/ compatibility landing page links to the overview without forcing a timed redirect. Use `--baseurl ''` when checking an intentionally root-mounted build. Ruby dependencies, build output, example executables, and logs must remain outside tracked site sources.
 
 The Documentation workflow runs these checks once on Ubuntu/.NET 10/Ruby 3.3 and retains a rendered preview artifact; it does not publish. Library TFMs and release workflows remain independent. Review desktop and mobile navigation, first-example tables/code, long reference pages, old URLs/fragments, and selected format pages visually before merging. Run `git diff --check` and report exact focused tests/builds and any checks not run.
 

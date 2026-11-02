@@ -19,9 +19,11 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      - name: Test documentation validation
+        run: python3 -m unittest discover -s .github/tools -p 'test_check_docs.py'
       - name: Check navigation and compile runnable examples
         run: python3 .github/tools/check_docs.py --examples
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1
         with:
           ruby-version: '3.3'
           bundler: '2.3.18'

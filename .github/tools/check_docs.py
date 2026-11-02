@@ -17,15 +17,15 @@ def frontmatter(text):
     _, header, body = text.split('---', 2)
     fields = {}
     for line in header.splitlines():
-        match = re.match(r'^(\w+):\s*(.*?)\s*$', line)
-        if match:
-            fields[match[1]] = match[2].strip('"\'')
+        key, separator, value = line.partition(':')
+        if separator and re.fullmatch(r'\w+', key):
+            fields[key] = value.strip().strip('"\'')
     return fields, body
 
 
 def check_navigation(root, pages, errors):
     nav = (root / 'docs/_data/navigation_docs.yml').read_text(encoding='utf-8')
-    slugs = re.findall(r'^  - ([\w-]+)\s*$', nav, re.M)
+    slugs = re.findall(r'^ {2}- ([\w-]+)\s*$', nav, re.M)
     if len(slugs) != len(set(slugs)):
         errors.append('Duplicate documentation navigation entries')
     groups = re.findall(r'^- title: (.+)$', nav, re.M)
@@ -83,7 +83,7 @@ def check_entrypoints(root, slugs, errors):
         if not re.search(r'url: /docs/why-pocketcsvreader/\s*$', text, re.M):
             errors.append(f'{name}: Docs must point to the overview')
     boxes = (root / 'docs/_data/navigation_boxes.yml').read_text(encoding='utf-8')
-    for target in re.findall(r'^  doc: (.+)$', boxes, re.M):
+    for target in re.findall(r'^ {2}doc: (.+)$', boxes, re.M):
         if target not in slugs:
             errors.append(f'Homepage card points outside documentation navigation: {target}')
 
@@ -115,13 +115,23 @@ class Links(HTMLParser):
         super().__init__()
         self.ids = set()
         self.links = []
+        self.table_headers = []
+        self._open_tables = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == 'table':
+            self._open_tables.append(0)
+        if tag == 'th' and self._open_tables:
+            self._open_tables[-1] += 1
         if attrs.get('id'):
             self.ids.add(attrs['id'])
         if tag == 'a' and 'href' in attrs:
             self.links.append(attrs['href'])
+
+    def handle_endtag(self, tag):
+        if tag == 'table' and self._open_tables:
+            self.table_headers.append(self._open_tables.pop())
 
 
 def read_rendered_documents(site):
@@ -129,6 +139,8 @@ def read_rendered_documents(site):
     for page in sorted(site.rglob('*.html')):
         parser = Links()
         parser.feed(page.read_text(encoding='utf-8'))
+        if 0 in parser.table_headers:
+            raise ValueError(f'{page}: rendered table has no header cells')
         documents[page.resolve()] = parser
     if not documents:
         raise ValueError(f'No rendered HTML documents found in {site}')

@@ -34,7 +34,7 @@ layout: default
                     </div>
 
                     <div class="article-content link-primary">
-                        {{ content | replace: '<table>', '<div class="doc-table-wrap" role="region" aria-label="Scrollable reference table" tabindex="0"><table>' | replace: '</table>', '</table></div>' }}
+                        {{ content }}
                         {% if site.share.doc %}
                             {% include share.html %}
                         {% endif %}

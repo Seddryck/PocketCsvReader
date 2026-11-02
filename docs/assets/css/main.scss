@@ -35,13 +35,15 @@
 }
 
 // Keep wide API comparison tables inside the article on narrow screens.
-.doc-table-wrap {
+.article-content table {
+  display: block;
   max-width: 100%;
   overflow-x: auto;
 }
 
 @media (max-width: 639px) {
-  .doc-table-wrap table {
-    min-width: 40rem;
+  .article-content th,
+  .article-content td {
+    min-width: 8rem;
   }
 }
