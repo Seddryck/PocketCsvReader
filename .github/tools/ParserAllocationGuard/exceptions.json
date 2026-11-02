@@ -35,20 +35,6 @@
     "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected JSON memory, valid until the next read; no character copy."
   },
   {
-    "Path": "PocketCsvReader.Ndjson/NdjsonRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(parsed.Value.Memory,parsed.Value.Fields)",
-    "Count": 1,
-    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected NDJSON memory, valid until the next read; no character copy."
-  },
-  {
-    "Path": "PocketCsvReader.Ndjson/NdjsonRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(selected.Memory,selected.Fields)",
-    "Count": 1,
-    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected NDJSON memory, valid until the next read; no character copy."
-  },
-  {
     "Path": "PocketCsvReader/PositionedLineReader.cs",
     "Rule": "PA001",
     "Code": "_reader.ReadLine()",

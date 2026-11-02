@@ -148,6 +148,8 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         return ReadPublicSourceAsync(cancellationToken);
     }
 
+    private protected ICurrentRecordSource? CurrentRecordSource => _currentRecordSource;
+
     private async ValueTask<CurrentRecordResult> ReadPublicSourceAsync(CancellationToken cancellationToken)
     {
         var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);

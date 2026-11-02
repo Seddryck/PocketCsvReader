@@ -82,21 +82,41 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         return true;
     }
 
-    protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    protected override ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+        => CurrentRecordSource is { } current
+            ? ReadBorrowedCoreAsync(current, cancellationToken)
+            : ReadPublicCoreAsync(cancellationToken);
+
+    private async ValueTask<bool> ReadBorrowedCoreAsync(ICurrentRecordSource source, CancellationToken cancellationToken)
     {
         Fields = [];
+        var result = await source.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        IsEof = result.IsEndOfFile;
+        SetRecord(result.Record);
+        return CompleteRead(result.State);
+    }
 
+    // Separate state machines keep the public-source path's awaiter small and
+    // avoid a forwarding allocation whenever an external source suspends.
+    private async ValueTask<bool> ReadPublicCoreAsync(CancellationToken cancellationToken)
+    {
+        Fields = [];
         var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
-        if (result.State == RecordState.Eof)
+        Record = result.Record;
+        return CompleteRead(result.State);
+    }
+
+    private bool CompleteRead(RecordState state)
+    {
+        if (state == RecordState.Eof)
         {
             Record = RecordMemory.Empty;
             return false;
         }
 
-        Record = result.Record;
         if (!HasStableLabelShape || RowCount == 0)
-            UpdateRowShape(result.Record.Span, result.Record.FieldSpans);
+            UpdateRowShape(CurrentRecordMemory, CurrentFieldSpans!);
         Fields = _rowShape.Labels;
 
         RowCount++;

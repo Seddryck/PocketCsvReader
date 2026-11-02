@@ -47,6 +47,9 @@ internal sealed class ProjectedJsonValueFramer : IJsonValueFramer
 
     public int Delimiter { get; private set; }
     public bool RequiresValueMaterialization { get; private set; }
+    internal bool IsInString => _token == TokenKind.String;
+    internal bool IsStringEscapePending => IsInString
+        && _stringEscapeState is StringEscapeState.AfterSlash or StringEscapeState.LowSurrogateU;
 
     public ProjectedJsonValueFramer(
         IReadOnlyList<string> projectedProperties,
