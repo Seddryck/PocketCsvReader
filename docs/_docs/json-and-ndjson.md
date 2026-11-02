@@ -41,7 +41,7 @@ var json = new JsonReaderBuilder()
     .Build();
 ```
 
-Use `WithOrderedProjection` only when the selected properties are guaranteed to occur in projection order. It avoids general property lookup, but a record whose selected properties are reordered is rejected.
+Projection avoids building field metadata and nested field trees for properties you will not use. The complete JSON value is still read and validated. Use `WithOrderedProjection` only when the selected properties are guaranteed to occur in projection order: it additionally replaces general name lookup with comparison against the next expected selected name. A record whose selected properties are reordered is rejected. See [Why projection improves performance](../parser-optimizations/#why-projection-improves-performance) for a worked example and the limits of these savings.
 
 ## JSON with comments (JSONC)
 
@@ -122,6 +122,8 @@ var ndjson = new NdjsonReaderBuilder()
 ```
 
 Unselected properties may occur before, after, or between selected properties, but the selected properties themselves must occur in configuration order. A reordered selected property is rejected.
+
+Both projection modes avoid representing unused fields; ordered projection also avoids the general name lookup used to find selected fields. Neither skips reading or validating the rest of the record. See [Why projection improves performance](../parser-optimizations/#why-projection-improves-performance) for a comparison with unprojected reading and guidance on when the difference matters.
 
 When every object is guaranteed to have the same properties in the same order, opt in to stable-shape parsing:
 
