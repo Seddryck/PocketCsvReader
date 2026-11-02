@@ -2,7 +2,7 @@
 title: Parser optimizations
 tags: [configuration]
 ---
-The `ParserOptimizationOptions` record provides a set of parameters to fine-tune the performance and behavior of the CSV parser. These options allow developers to balance flexibility, accuracy, and speed depending on the specific requirements of their use case.
+The `ParserOptimizationOptions` record provides settings shared by several readers. The defaults and descriptions below refer to CSV unless stated otherwise. Other formats use their own framing and syntax rules; accepting the same options record does not mean every CSV setting changes their behavior. See [JSON, NDJSON, and key-value readers](#json-ndjson-and-key-value-readers) for their defaults and format-specific optimizations.
 
 ## Options and Their Descriptions
 
@@ -82,14 +82,41 @@ The `ParserOptimizationOptions` record provides a set of parameters to fine-tune
 
 The JSON, NDJSON, and LTSV/logfmt readers share the labeled-reader layer, but their framing and field-parsing strategies differ. The following optimizations are applied automatically unless the table identifies an opt-in API.
 
+### Options for NDJSON, LTSV, and logfmt
+
+NDJSON and key-value builders default to a 64 KB `BufferSize`, with `ReadAhead` and `RowCountAtStart` set to `false`. These readers consume input through reusable chunk buffers without the CSV double-buffer read-ahead or row-count pre-scan. NDJSON does not use those two flags to select its record source. LTSV/logfmt builders and profiles explicitly force both flags to `false`, even when requested as `true`.
+
+`BufferSize` controls the input chunk size, rather than limiting record length. Records that cross chunk boundaries are consolidated in pooled storage. A record already contained in a buffer is read directly from that memory. Configure `PoolString` when you need string pooling, and use `.WithPositionTracking()` to opt into source-position tracking (disabled by default).
+
+When supplying a new options record, set the intended values explicitly: `new ParserOptimizationOptions(BufferSize: 128 * 1024)` still has the record constructor's CSV default `ReadAhead = true`. For example:
+
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Ndjson.Configuration;
+using PocketCsvReader.KeyValue.Configuration;
+
+var options = new ParserOptimizationOptions(
+    BufferSize: 128 * 1024,
+    ReadAhead: false,
+    RowCountAtStart: false);
+
+var ndjson = new NdjsonReaderBuilder().WithParserOptimizations(options).Build();
+var ltsv = new LtsvReaderBuilder().WithParserOptimizations(options).Build();
+var logfmt = new LogfmtReaderBuilder().WithParserOptimizations(options).Build();
+```
+
+CSV-specific settings such as `NoTextQualifier`, `LookupTableChar`, and `ExtendIncompleteRecords` do not configure these formats' grammar or record shape. JSON string escapes and logfmt quoted-value escapes are decoded by their format parsers; setting `UnescapeChars = false` does not disable that decoding. LTSV does not use CSV quoting or escape rules. These labeled readers do not apply the CSV sequence-substitution sanitizer, so `HandleSpecialValues` does not enable sequence replacements or disable recognition of JSON's native `null` token.
+
+### Automatic storage and projection optimizations
+
 | Optimization | JSON | NDJSON | LTSV/logfmt |
 | --- | --- | --- | --- |
 | Cache repeated label sequences and ordinal dictionaries | Yes | Yes | Yes |
 | Keep synchronous current-record memory without a per-row wrapper | Yes | Yes | Yes |
-| Read records through reusable chunk buffers | Yes | Yes | No; records currently use line-based strings |
+| Read records through reusable chunk buffers | Yes | Yes | Yes |
 | Project selected JSON properties | `WithProjection` | `WithProjection` | Not applicable |
 | Reuse the projected `FieldSpan` buffer between records | Yes | Yes | Not applicable |
-| Find projected fields while locating the record boundary | Yes | No; projection runs after NDJSON framing | Not applicable |
+| Find projected fields while locating the record boundary | Yes | Yes, for eligible configurations described below | Not applicable |
 | Stop property lookup after every projected field is found | Yes | Yes | Not applicable |
 | Require projected properties in a known order | `WithOrderedProjection` | `WithOrderedProjection` | Not applicable |
 | Trust and reuse one stable object shape | Not applicable | `WithStableObjectShape` | Not applicable |
@@ -106,11 +133,18 @@ When rows repeat the same labels in the same order, their label strings and name
 
 ### NDJSON projection
 
-`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. NDJSON first finds the complete record according to its line terminator and comment settings, then uses the shared projected JSON scanner to validate the record, skip unselected values, and populate a reusable projected-field buffer. It uses property-name fingerprints and stops projection lookup after all selected fields have been found.
+`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. For eligible configurations, the reader locates the record boundary and selected fields in one pass through the input. It validates the complete JSON value, skips unselected values, and populates a reusable projected-field buffer. Property-name fingerprints support lookup; lookup stops once all selected fields have been found, while validation continues.
+
+This combined path is selected automatically for ordinary or ordered projection when all of the following hold:
+
+- The line terminator is LF (`"\n"`) or CRLF (`"\r\n"`).
+- Comments are disabled.
+- The configured whitespace characters are exactly space, tab, carriage return, and line feed.
+- Neither `WithRecordPath` nor `WithStableObjectShape` is enabled.
 
 `NdjsonReaderBuilder.WithOrderedProjection` avoids the fingerprint lookup by comparing each property with the next expected selected name. Unselected properties may occur between selected properties; reordered selected properties are rejected.
 
-Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing optimization.
+Other configurations retain the compatible path: frame the complete record first, then parse or project its JSON values. Custom terminators, comments, record-path selection, and stable-shape parsing therefore must not be described as using combined framing and projection. Both paths preserve format validation, synchronous/asynchronous reads, and records spanning buffer boundaries.
 
 ### NDJSON stable object shape
 
@@ -118,4 +152,8 @@ Because NDJSON framing and property projection are separate passes, it does not 
 
 ### LTSV and logfmt
 
-The key-value readers benefit from shared row-shape caching and direct synchronous record storage. They do not use JSON projection or JSON framing. Their current record sources read one complete line as a string before parsing its labeled fields.
+LTSV and logfmt use reusable chunk buffers for line framing and parse fields directly from the captured character memory. They reuse scratch field storage and published field metadata as records advance, rather than creating a complete line string for every row. Records crossing chunk boundaries are consolidated in pooled storage; decoded logfmt escapes and materialized output strings can still require allocations.
+
+Both formats also benefit from shared row-shape caching. Their labels, field order, and field count may change on each row; they do not use JSON projection or the trusted stable-object-shape contract. Synchronous and asynchronous reads share the framing and parsing implementation. Borrowed record memory and metadata are valid only until the next read or reader disposal; materialized outputs retain their own values.
+
+See [Key-value formats](../key-value-formats/) for logfmt and LTSV examples, and [JSON and NDJSON](../json-and-ndjson/) for JSON-specific configuration.
