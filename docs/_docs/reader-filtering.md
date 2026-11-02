@@ -1,21 +1,37 @@
 ---
-title: Reader filtering
+title: Filter rows before projection
+tags: [usage]
 ---
 
-# Reader filtering
+Configure conditions before building a reader. This example keeps active Belgian customers aged 18 or older whose requested quantity exceeds availability.
 
-Configure conditions before building a reader:
-
+<!-- example: reader-filtering -->
 ```csharp
+using System.Text;
+using PocketCsvReader.Configuration;
+
 var csv = new CsvReaderBuilder()
-    .WithDialect(d => d.WithHeader())
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
     .WithFilter("Status", "Active")
     .WithFilter("Country", value => value.SequenceEqual("BE".AsSpan()))
     .WithFilter<int>("Age", age => age >= 18)
     .WithRowFilter(row =>
         row.GetFieldValue<int>("Quantity") > row.GetFieldValue<int>("Available"))
     .Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+    "Name,Status,Country,Age,Quantity,Available\n" +
+    "Ada,Active,BE,22,5,3\nBob,Inactive,BE,34,8,2\nGrace,Active,BE,17,4,1\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine($"{reader.GetString(reader.GetOrdinal("Name"))}: {reader.GetFieldValue<int>("Age")}");
 ```
+
+<!-- output: reader-filtering -->
+```text
+Ada: 22
+```
+
+## Configure cell and row conditions
 
 Each cell overload accepts a name or a zero-based ordinal:
 
@@ -65,12 +81,13 @@ and predicate exceptions propagate. They do not silently reject a row. Use an
 explicit TryParse predicate when malformed text should be rejected.
 Conditions after a false condition are not evaluated.
 
-Typed filtering uses the same schema, formats, cultures, registered-parser
-precedence, and conversions as typed getters. Named lookups are cached for a
+Typed filtering uses the same [schema formats and cultures](../fluent-api-schema/),
+[registered-parser precedence](../fluent-api-runtime-parsers/), and conversions as
+[typed getters](../datareader-api/). Named lookups are cached for a
 stable schema and rebound when record labels change or a new batch file opens.
 Filters can only refer to fields exposed by a configured format projection.
 
-## Parsed-value reuse and source numbering
+## Reuse parsed values
 
 With filtering enabled, a lazy per-current-row cache shares successful typed
 conversions across cell filters, row filters, subsequent getters, and default
@@ -85,28 +102,14 @@ The dictionary and boxed value-type results have allocation costs. Default
 constructor projection uses getters when filtering is enabled; a custom
 `SpanMapper<T>` controls its own raw parsing and cannot share getter conversions.
 String projections still request strings even when a filter requested a number.
+See [output models](../output-models/) for projection choices and the
+[filtering performance check](../buffering-and-benchmarks/#reader-filtering) for
+measured cache and allocation costs.
 
-Source-position diagnostics and `RowCount` retain their source meaning.
+## Source positions and generated row numbers
+
+[Source-position diagnostics](../source-positions/) and `RowCount` retain their source meaning.
 CSV `WithRowNumber()` counts source data records before filtering, so rejected
-rows leave gaps. Numbering continues across batch files. With a generated
+rows leave gaps. Numbering continues across [batch files](../batch-reading/). With a generated
 column, ordinal zero is the generated number and source columns shift by one.
 The row predicate can read/filter that number.
-
-Run the focused performance check with:
-
-```powershell
-dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --reader-filtering-matrix
-```
-
-It compares no filtering, span filtering, a string row predicate, manual typed
-filtering/projection, and configured typed filtering/projection. It reports
-allocation per source row, elapsed time, and parser calls, and asserts that
-configured typed filtering plus projection parses each field only once.
-
-A short local .NET 10 Release check on 50,000 rows measured 0.22 bytes/row
-without filtering, 0.24 with span filtering, 32.24 with a string row predicate,
-and 24.26 with configured typed filtering/projection. The typed case made
-50,000 parser calls versus 100,000 for manual filtering followed by projection.
-The configured case took 56.52 ms versus 37.84 ms manually in this run: dictionary
-lookup and boxing can outweigh reuse for cheap integer parsing. These are
-single-process smoke measurements, not statistically controlled benchmarks.

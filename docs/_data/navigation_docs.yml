@@ -22,6 +22,7 @@
   docs:
   - output-models
   - datareader-api
+  - reader-filtering
   - mapper-object-builder
   - async-reading
   - batch-reading

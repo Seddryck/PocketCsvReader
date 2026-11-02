@@ -25,6 +25,32 @@ LTSV/logfmt frame lines over reusable chunk buffers and reuse scratch and publis
 
 Borrowed parser character/byte memory and field metadata expire on the next read or disposal. Custom span parsers and mappers must finish synchronously and copy/parse retained values. Ordinary returned strings and row objects remain usable. Array/dictionary/table materialization has its own ownership costs. See [stream lifetimes](../stream-lifetimes/) and [Arrow ownership](../apache-arrow/).
 
+## Reader filtering
+
+[Configured row filtering](../reader-filtering/) runs before projection. Span conditions
+avoid typed conversion and do not allocate the parsed-value cache. Typed filtering
+can reuse conversion results during projection, but dictionary lookups and boxed
+value types have costs; reuse is not a universal throughput improvement.
+
+Run the focused performance check with:
+
+```powershell
+dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --reader-filtering-matrix
+```
+
+It compares no filtering, span filtering, a string row predicate, manual typed
+filtering/projection, and configured typed filtering/projection. It reports
+allocation per source row, elapsed time, and parser calls, and asserts that
+configured typed filtering plus projection parses each field only once.
+
+A short local .NET 10 Release check on 50,000 rows measured 0.22 bytes/row
+without filtering, 0.24 with span filtering, 32.24 with a string row predicate,
+and 24.26 with configured typed filtering/projection. The typed case made
+50,000 parser calls versus 100,000 for manual filtering followed by projection.
+The configured case took 56.52 ms versus 37.84 ms manually in this run: dictionary
+lookup and boxing can outweigh reuse for cheap integer parsing. These are
+single-process smoke measurements, not statistically controlled benchmarks.
+
 ## Benchmarks
 
 Measure Release builds with representative data, the actual fields read, and warmup. Separate raw parsing from returned-output allocations, and distinguish throughput from allocated bytes. Async allocation budgets are configuration-sensitive; Debug results do not establish Release behavior.

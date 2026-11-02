@@ -54,3 +54,10 @@ The complete `IsValid` contract and malformed-input handling are in [validation 
 
 ## Source positions
 Enable tracking before reading; see [Source positions](../source-positions/) for units and lifecycle. [Generated row numbers](../batch-reading/#generated-row-numbers) are a separate output column.
+
+## Filter before reading
+
+Configure [reader filters](../reader-filtering/) on the builder to make `Read()` and
+`ReadAsync()` skip rejected rows before returning a current record. Conditions can
+inspect sanitized spans, parsed values, or several fields through a read-only row
+view. Compatible parsed values are reused by subsequent getters.
