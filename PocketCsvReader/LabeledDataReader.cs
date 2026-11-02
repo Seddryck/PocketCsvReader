@@ -82,21 +82,41 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         return true;
     }
 
-    protected override async ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+    protected override ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
+        => CurrentRecordSource is { } current
+            ? ReadBorrowedCoreAsync(current, cancellationToken)
+            : ReadPublicCoreAsync(cancellationToken);
+
+    private async ValueTask<bool> ReadBorrowedCoreAsync(ICurrentRecordSource source, CancellationToken cancellationToken)
     {
         Fields = [];
-
-        var result = await ReadSourceAsync(cancellationToken).ConfigureAwait(false);
+        var result = await source.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
-        if (result.State == RecordState.Eof)
+        SetRecord(result.Record);
+        return CompleteRead(result.State);
+    }
+
+    // Separate state machines keep the public-source path's awaiter small and
+    // avoid a forwarding allocation whenever an external source suspends.
+    private async ValueTask<bool> ReadPublicCoreAsync(CancellationToken cancellationToken)
+    {
+        Fields = [];
+        var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
+        IsEof = result.IsEndOfFile;
+        Record = result.Record;
+        return CompleteRead(result.State);
+    }
+
+    private bool CompleteRead(RecordState state)
+    {
+        if (state == RecordState.Eof)
         {
             Record = RecordMemory.Empty;
             return false;
         }
 
-        SetRecord(result.Record);
         if (!HasStableLabelShape || RowCount == 0)
-            UpdateRowShape(result.Record.Characters, result.Record.Fields!);
+            UpdateRowShape(CurrentRecordMemory, CurrentFieldSpans!);
         Fields = _rowShape.Labels;
 
         RowCount++;

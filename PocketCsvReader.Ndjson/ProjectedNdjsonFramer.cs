@@ -3,19 +3,21 @@ using PocketCsvReader.Json;
 namespace PocketCsvReader.Ndjson;
 
 // NDJSON owns line boundaries; the shared JSON grammar owns validation and offsets.
-// Raw line breaks inside strings are invalid JSON, so locating LF in chunks cannot
-// split a valid string. CRLF may straddle chunks; the previous character is retained.
-internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer, bool crlf) : IRecordFramer
+// Failed validation switches to lexical framing, then the captured record is parsed
+// by the compatible path. Errors are reported only after the capture has ended.
+internal sealed class ProjectedNdjsonFramer(
+    ProjectedJsonValueFramer valueFramer,
+    NdjsonRecordSource.NdjsonFramer fallback,
+    bool crlf) : IRecordFramer
 {
     private int _total;
     private char _previous;
     private bool _started;
     private bool _complete;
-    private char[] _whitespace = new char[16];
-    private int _whitespaceLength;
     public int ValueStart { get; private set; }
     public int ValueLength { get; private set; }
     public bool HasValue => _started;
+    public bool RequiresFallback { get; private set; }
 
     public void Reset()
     {
@@ -23,7 +25,7 @@ internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer
         _previous = '\0';
         _started = false;
         _complete = false;
-        _whitespaceLength = 0;
+        RequiresFallback = false;
         ValueStart = 0;
         ValueLength = 0;
         valueFramer.Prepare('{', 0);
@@ -31,6 +33,28 @@ internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer
     }
 
     public FrameScanResult Scan(ReadOnlySpan<char> input)
+    {
+        if (RequiresFallback) return fallback.Scan(input);
+
+        // Snapshot only lexical state at this chunk's start. On error, replay
+        // this chunk (not the record) through the existing NDJSON boundary rules.
+        int total = _total;
+        bool inString = valueFramer.IsInString;
+        bool escaping = valueFramer.IsStringEscapePending;
+        int matched = crlf && !inString && _previous == '\r' ? 1 : 0;
+        try
+        {
+            return ScanProjected(input);
+        }
+        catch (InvalidDataException)
+        {
+            RequiresFallback = true;
+            fallback.Resume(total, inString, escaping, matched);
+            return fallback.Scan(input);
+        }
+    }
+
+    private FrameScanResult ScanProjected(ReadOnlySpan<char> input)
     {
         int consumed = 0;
         while (consumed < input.Length)
@@ -45,7 +69,9 @@ internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer
             consumed += length;
             if (boundary)
             {
-                ValidateComplete();
+                // Incomplete objects must also finish their capture before the
+                // compatible parser supplies its trimmed-input diagnostic.
+                RequiresFallback = _started && !_complete;
                 _total++;
                 return new(consumed + 1, true, _total - (crlf ? 2 : 1));
             }
@@ -76,29 +102,10 @@ internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer
         }
         if (!_complete)
         {
-            // ParseCandidate trims its input before validation. Defer a chunk's
-            // trailing whitespace until another token arrives, preserving EOF
-            // diagnostics (including truncated numbers/strings) across refills.
-            int end = input.Length;
-            while (end > index && IsWhitespace(input[end - 1])) end--;
-            if (end > index && _whitespaceLength > 0)
-            {
-                var whitespaceResult = valueFramer.Scan(_whitespace.AsSpan(0, _whitespaceLength));
-                ValueLength += whitespaceResult.Consumed;
-                _whitespaceLength = 0;
-            }
-            var result = valueFramer.Scan(input[index..end]);
+            var result = valueFramer.Scan(input[index..]);
             ValueLength += result.Consumed;
             index += result.Consumed;
             _complete = result.Complete;
-            if (!_complete)
-            {
-                int length = input.Length - end;
-                if (_whitespaceLength + length > _whitespace.Length)
-                    Array.Resize(ref _whitespace, Math.Max(_whitespace.Length * 2, _whitespaceLength + length));
-                input[end..].CopyTo(_whitespace.AsSpan(_whitespaceLength));
-                _whitespaceLength += length;
-            }
         }
         if (_complete)
         {
@@ -110,14 +117,10 @@ internal sealed class ProjectedNdjsonFramer(ProjectedJsonValueFramer valueFramer
         }
     }
 
-    private void ValidateComplete()
-    {
-        if (_started && !_complete) valueFramer.CompleteAtEof();
-    }
-
     public FrameScanResult CompleteAtEof()
     {
-        ValidateComplete();
+        if (RequiresFallback) return fallback.CompleteAtEof();
+        RequiresFallback = _started && !_complete;
         return _total == 0 ? default : new(0, true, _total);
     }
 

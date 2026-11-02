@@ -46,7 +46,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
             && profile.Dialect.LineTerminator is "\n" or "\r\n"
             && profile.Dialect.Whitespaces.Order().SequenceEqual(new[] { '\t', '\n', '\r', ' ' }))
         {
-            _fusedFramer = new(_projectedValueFramer, profile.Dialect.LineTerminator == "\r\n");
+            _fusedFramer = new(_projectedValueFramer, _framer, profile.Dialect.LineTerminator == "\r\n");
         }
     }
 
@@ -140,6 +140,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
     {
         if (_fusedFramer is null)
             return ParseRecord(record, _framer.CommentIndex);
+        if (_fusedFramer.RequiresFallback)
+            return ParseRecord(record, -1);
         if (!_fusedFramer.HasValue)
             return null;
         var projectedRecord = record.Slice(_fusedFramer.ValueStart, _fusedFramer.ValueLength);
@@ -337,7 +339,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
 
     private readonly record struct ParsedRecord(ReadOnlyMemory<char> Memory, FieldSpan[] Fields);
 
-    private sealed class NdjsonFramer : IRecordFramer
+    internal sealed class NdjsonFramer : IRecordFramer
     {
         private readonly string _terminator;
         private readonly char? _commentChar;
@@ -368,6 +370,17 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
             _escaping = false;
             _inComment = false;
             CommentIndex = -1;
+        }
+
+        // Resume at a chunk boundary after projection validation failed. The
+        // capture must reach its original line boundary before reporting errors.
+        internal void Resume(int total, bool inString, bool escaping, int matched)
+        {
+            Reset();
+            _total = total;
+            _inString = inString;
+            _escaping = escaping;
+            _matched = matched;
         }
 
         public FrameScanResult Scan(ReadOnlySpan<char> input)

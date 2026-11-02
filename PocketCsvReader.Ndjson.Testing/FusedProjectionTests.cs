@@ -202,6 +202,73 @@ public class FusedProjectionTests
             if (asynchronous) await reader.ReadAsync(); else reader.Read();
         });
     }
+    [Test]
+    public async Task MalformedRowsDoNotPoisonFollowingReads(
+        [Values(1, 2, 7, 65536)] int bufferSize,
+        [Values("\n", "\r\n")] string terminator,
+        [Values(false, true)] bool asynchronous,
+        [Values(
+            "{\"id\":01,\"text\":\"bad\"}",
+            "{\"id\":2,\"text\":\"prefix\\q suffix\"}",
+            "{\"id\":2,\"text\":\"\\uD800\\q\"}",
+            "{\"text\":\"missing id\"}",
+            "{\"id\":2,\"text\":\"bad\"} {}",
+            "{\"id\":2,\"text\":\"bad\"",
+            "{\"id\":2,\"text\":\"bad\nvalue\"}")] string invalid)
+    {
+        const string first = "{\"id\":1,\"text\":\"first\"}";
+        const string last = "{\"id\":3,\"text\":\"last\"}";
+        string content = first + terminator + invalid + terminator + last;
+        using var reader = Open(content, bufferSize, terminator, asyncOnly: asynchronous);
+        using var compatible = Open(content, bufferSize, terminator, fallback: true, asyncOnly: asynchronous);
+        async Task<bool> Next(NdjsonDataReader input) => asynchronous ? await input.ReadAsync() : input.Read();
+        Assert.That(await Next(reader), Is.True);
+        Assert.That(await Next(compatible), Is.True);
+        var expected = await Assert.ThrowsAsync<InvalidDataException>(async () => await Next(compatible));
+        var actual = await Assert.ThrowsAsync<InvalidDataException>(async () => await Next(reader));
+        Assert.That(actual!.Message, Is.EqualTo(expected!.Message));
+        Assert.That(await Next(reader), Is.True);
+        Assert.That(reader.GetInt32(1), Is.EqualTo(3));
+        Assert.That(reader.GetString(0), Is.EqualTo("last"));
+        Assert.That(reader.CurrentPosition!.Value.Offset, Is.EqualTo(first.Length + invalid.Length + (2 * terminator.Length)));
+        Assert.That(await Next(reader), Is.False);
+    }
+
+    [Test]
+    public async Task LargeUnusedWhitespaceDoesNotAllocateValueStorage([Values(false, true)] bool asynchronous)
+    {
+        string content = "{\"id\":7,\"unused\":\"" + new string(' ', 1024 * 1024) + "\",\"text\":\"ok\"}\n";
+        byte[] data = Encoding.UTF8.GetBytes(content);
+        async Task ReadAll()
+        {
+            using var reader = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n"))
+                .WithProjection(p => p.Property("id").Property("text"))
+                .WithResource(r => r.WithEncoding("utf-8"))
+                .WithParserOptimizations(new(BufferSize: 65536, ReadAhead: false)).Build()
+                .ToDataReader(new MemoryStream(data));
+            Assert.That(asynchronous ? await reader.ReadAsync() : reader.Read(), Is.True);
+            Assert.That(reader.GetInt32(0), Is.EqualTo(7));
+            Assert.That(reader.GetString(1), Is.EqualTo("ok"));
+        }
+        for (int i = 0; i < 3; i++) await ReadAll();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 4; i++) await ReadAll();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        // Includes fresh reader setup, assertions and cross-buffer bookkeeping.
+        // A scratch copy of even one 1 MiB unused string exceeds this allowance.
+        Assert.That(allocated, Is.LessThan(4 * 64 * 1024));
+    }
+    [Test]
+    public async Task MalformedFinalRowCanBeAdvancedPast([Values(1, 65536)] int bufferSize,
+        [Values(false, true)] bool asynchronous)
+    {
+        using var reader = Open("{\"id\":01,\"text\":\"bad\"}", bufferSize, asyncOnly: asynchronous);
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            if (asynchronous) await reader.ReadAsync(); else reader.Read();
+        });
+        Assert.That(asynchronous ? await reader.ReadAsync() : reader.Read(), Is.False);
+    }
     private sealed class AsyncOnlyStream(Stream inner) : Stream
     {
         public override bool CanRead => true;

@@ -8,6 +8,12 @@ using PocketCsvReader;
 using PocketCsvReader.Json.Configuration;
 using PocketCsvReader.Ndjson.Configuration;
 
+if (args is ["--regression", var mode, var revision])
+{
+    await PocketCsvReader.Benchmark.ProjectionRegressionBenchmark.Run(mode, revision);
+    return;
+}
+
 // Same source is compiled against the baseline and candidate package roots.
 // A worker measures one workload; the script alternates worker order in pairs.
 if (args.Length != 5) throw new ArgumentException("label format projected raw size");

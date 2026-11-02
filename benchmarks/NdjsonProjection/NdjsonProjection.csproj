@@ -5,8 +5,13 @@
     <IsPackable>false</IsPackable>
     <ParserSourceRoot Condition="'$(ParserSourceRoot)' == ''">$(MSBuildThisFileDirectory)..\..</ParserSourceRoot>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(AssemblyRoot)' == ''">
     <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
     <ProjectReference Include="$(ParserSourceRoot)\PocketCsvReader.Ndjson\PocketCsvReader.Ndjson.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AssemblyRoot)' != ''">
+    <Reference Include="PocketCsvReader"><HintPath>$(AssemblyRoot)/PocketCsvReader.dll</HintPath></Reference>
+    <Reference Include="PocketCsvReader.Json"><HintPath>$(AssemblyRoot)/PocketCsvReader.Json.dll</HintPath></Reference>
+    <Reference Include="PocketCsvReader.Ndjson"><HintPath>$(AssemblyRoot)/PocketCsvReader.Ndjson.dll</HintPath></Reference>
   </ItemGroup>
 </Project>
