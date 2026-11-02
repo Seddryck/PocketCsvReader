@@ -1,89 +1,59 @@
 ---
-title: Sequences' replacement
+title: Null, empty, and missing values
 tags: [configuration]
 ---
-In the context of CSV parsing or text processing, sequences are specific strings or patterns that are replaced by predefined values during the parsing process. These sequences are used to standardize or interpret certain textual representations in the data, making it easier to process and analyze.
 
-For example, a sequence could be a placeholder for a null value, a replacement for a long or repetitive string, or a shorthand for a more complex value.
+<span id="common-use-cases-for-sequences"></span>
+<span id="compression-of-repeated-values"></span>
+<span id="null-sequence"></span>
+<span id="placeholder-replacement"></span>
 
-## Common Use Cases for Sequences
+An absent column, an empty string, a configured null marker, and native JSON null are different inputs. Check the format and output API rather than assuming every getter normalizes them identically.
 
-### Null Sequence
+## Cases to distinguish
 
-- Description: A string that represents null values in the CSV file.
-- Example: A CSV file might use the word "NULL" to indicate missing data. During parsing, the sequence "NULL" is replaced with null in the resulting data structure.
+| Input situation | How to handle it |
+| --- | --- |
+| Label absent from a labeled record | `TryGetOrdinal` before accessing it |
+| Label present with native JSON null | `IsDBNull` returns true; boxed JSON values use `DBNull.Value` |
+| Explicit empty text | Usually an empty string unless applicable configured sequences replace it |
+| Configured CSV null marker | Sanitized to null where special-value handling applies; non-nullable typed access can throw |
+| Short CSV record | Depends on getter/output and incomplete-record options; not universally padded by every output |
+| Missing selected CEF/LEEF attribute | Returns database null according to the fixed selection schema |
 
-```plaintext
-Name,Age
-Alice,25
-Bob,NULL
-```
+Nullable/reference `GetFieldValue<T>` reads follow their null policy and can return default without invoking a custom parser. Non-nullable reads can throw. Parsed dictionaries/arrays/dynamic rows normalize database nulls to C# null. Consult [DataReader access](../datareader-api/) and [output models](../output-models/) for the chosen path.
 
-After parsing with a null sequence defined as `NULL`, the data would look like:
+## Implementing sequences in a parser
 
-```json
-[
-    { "Name": "Alice", "Age": 25 },
-    { "Name": "Bob", "Age": null }
-]
-```
-
-### Placeholder Replacement
-
-- Description: Replace a short placeholder string with a more meaningful or longer value.
-- Example: The CSV might use "N/A" for "Not Applicable," which could be replaced with a more descriptive value like "Not Available" during parsing.
-
-```plaintext
-Product,Status
-Widget,N/A
-Gadget,In Stock
-```
-
-After parsing with a replacement for  `N/A`, the data would look like:
-
-```json
-[
-    { "Product": "Widget", "Status": "Not Available" },
-    { "Product": "Gadget", "Status": "In Stock" }
-]
-```
-
-### Compression of Repeated Values
-
-- Description: Use a shorthand sequence to represent a long, repeated value to save space in the file.
-- Example: Instead of repeating the full string "Available in Store" multiple times, the file might use "AIS", which gets expanded during parsing.
-
-```plaintext
-Product,Availability
-Widget,AIS
-Gadget,AIS
-```
-
-With a sequence defined for `AIS`, the data would look like:
-
-```json
-[
-    { "Product": "Widget", "Availability": "Available in Store" },
-    { "Product": "Gadget", "Availability": "Available in Store" }
-]
-```
-
-## Implementing Sequences in a Parser
-
-Define the sequences in the parser configuration, such as:
-
+<!-- example: null-sequence -->
 ```csharp
-var profile = new CsvProfile()
+using System.Text;
+using PocketCsvReader.Configuration;
 
-var options = new ParserOptimizationOptions
-{
-    HandleSpecialValues = true,
-};
-
-profile.ParserOptimizations = options;
-
-profile.Sequences.Add("AIS", "Available in Store");
-profile.Sequences.Add("-", 0);
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+    .WithResource(r => r.WithSequence("AIS", "Available in Store").WithSequence("N/A", null))
+    .Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Status\nAIS\nN/A\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine(reader.IsDBNull(0) ? "null" : reader.GetString(0));
 ```
 
-This configuration will apply these sequences during parsing to replace or interpret the specified strings.
+<!-- output: null-sequence -->
+```text
+Available in Store
+null
+```
+
+Use `WithSequence(pattern, stringValueOrNull)` on a resource or field builder. Replacement values are text or null, not boxed numeric values; conversion to a numeric type happens afterwards. Field and resource collections participate in sanitizer selection. Do not mutate a nonexistent `profile.Sequences` collection.
+
+## Replacement behavior and applicability
+
+Sequence lookup matches an eligible complete field, not every textual occurrence. For nonempty fields, quoted or escaped input is excluded from the ordinary sequence lookup; an empty eligible value is checked separately. Thus quoted `"NULL"` and unquoted `NULL` need not mean the same thing. `HandleSpecialValues = false` disables this sanitizer path where implemented.
+
+CSV, fixed-width after padding removal, and web/security readers applying the shared sanitizer support their configured sequences. JSON/NDJSON and LTSV/logfmt labeled readers do not use the CSV sequence sanitizer. JSON's literal `null` remains native syntax regardless of `HandleSpecialValues`; the string `"null"` remains text. Logfmt bare keys and `key=` are empty strings, not automatically null.
+
+## Optional labels
+
+Resolve ordinals on each current row when labels/order can change. `IsDBNull("name")` checks a present label; it is not a substitute for `TryGetOrdinal` when the label might be absent. See the [complete optional-field example](../validation-and-errors/#optional-fields-and-name-based-null-checks).

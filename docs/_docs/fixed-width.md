@@ -9,6 +9,7 @@ Install the `PocketCsvReader.FixedWidth` package to process text records whose f
 dotnet add package PocketCsvReader.FixedWidth
 ```
 
+<!-- example: fixed-width -->
 ```csharp
 using System;
 using System.Collections.Generic;
@@ -48,6 +49,7 @@ while (reader.Read())
 
 Output:
 
+<!-- output: fixed-width -->
 ```text
 42: Ada Lovelace, born 1815-12-10
 43: Grace Hopper, born 1906-12-09

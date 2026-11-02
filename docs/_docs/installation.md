@@ -1,73 +1,52 @@
 ---
-title: Installation of the Library
+title: Installation and package selection
 tags: [installation]
 ---
-This guide explains how to install the library using three common methods:
 
-- NuGet CLI (`nuget.exe`)
-- Visual Studio Package Manager Console
-- .NET CLI
+The projects target **.NET 8, .NET 9, and .NET 10**. Use a matching .NET SDK and select the package for the input or integration you need. Extension packages reference the core library.
 
-## 1. Installing with NuGet CLI (`nuget.exe`)
+## Install with the .NET CLI
 
-### Prerequisites with NuGet CLI
+Run from the directory containing your application project:
 
-- Download and install `nuget.exe` from the [NuGet official website](https://www.nuget.org/downloads).
-- Ensure `nuget.exe` is accessible via your system's PATH.
-
-### Steps with NuGet CLI
-
-1. Open a command prompt or terminal.
-2. Run the following command:
-
-   ```bash
-   nuget install PocketCsvReader -Version <VersionNumber>
-   ```
-
-   Replace `<VersionNumber>` with the desired version. If no version is specified, the latest version will be installed.
-
-### JSON extension packages
-
-Use `PocketCsvReader.Json` for a single standard JSON document, including a pretty-printed top-level array. Use `PocketCsvReader.Ndjson` for a stream of independently framed JSON values:
-
-```bash
-dotnet add package PocketCsvReader.Json --version <VersionNumber>
-dotnet add package PocketCsvReader.Ndjson --version <VersionNumber>
+```sh
+dotnet add package PocketCsvReader
 ```
 
-## 2. Installing with Visual Studio Package Manager Console
+For JSON input, for example:
 
-### Prerequisites with Visual Studio Package Manager Console
+```sh
+dotnet add package PocketCsvReader.Json
+```
 
-- Visual Studio must be installed.
-- Your project should be loaded in Visual Studio.
+Omitting `--version` selects the latest available package. To pin a release, append `--version` followed by that release's actual version number.
 
-### Steps with Visual Studio Package Manager Console
+## Choose packages
 
-1. Open the **Package Manager Console** from **Tools > NuGet Package Manager > Package Manager Console**.
-2. Run the following command:
+| Package | Purpose | Guide |
+| --- | --- | --- |
+| `PocketCsvReader` | CSV/TSV and shared reading APIs | [First CSV](../basic-usage/) |
+| `PocketCsvReader.Json` | JSON and JSONC | [JSON](../json-and-ndjson/) |
+| `PocketCsvReader.Ndjson` | Newline-delimited JSON | [NDJSON](../ndjson/) |
+| `PocketCsvReader.FixedWidth` | Fixed character positions | [Fixed-width](../fixed-width/) |
+| `PocketCsvReader.KeyValue` | LTSV and logfmt | [Key-value](../key-value-formats/) |
+| `PocketCsvReader.WebLogs` | Common, Combined, W3C | [Web logs](../web-log-formats/) |
+| `PocketCsvReader.SecurityLogs` | CEF and LEEF | [Security logs](../security-log-formats/) |
+| `PocketCsvReader.Arrow` | Apache Arrow output batches | [Arrow](../apache-arrow/) |
+| `PocketCsvReader.Chrononuensis` | Temporal period parsers | [Chrononuensis](../chrononuensis/) |
 
-   ```powershell
-   Install-Package PocketCsvReader -Version <VersionNumber>
-   ```
+## Visual Studio Package Manager Console
 
-   Replace `<VersionNumber>` with the desired version. If no version is specified, the latest version will be installed.
+```powershell
+Install-Package PocketCsvReader
+```
 
-## 3. Installing with .NET CLI
+## NuGet CLI
 
-### Prerequisites with .NET CLI
+```sh
+nuget install PocketCsvReader
+```
 
-- .NET SDK must be installed. You can download it from the [official .NET website](https://dotnet.microsoft.com/).
-- Ensure the `dotnet` command is accessible from your terminal.
+`nuget install` downloads packages into a directory; it does not add a modern project's package reference. Prefer `dotnet add package` or Visual Studio for that task.
 
-### Steps with .NET CLI
-
-1. Open a terminal or command prompt.
-2. Navigate to the directory of your project.
-3. Run the following command:
-
-   ```bash
-   dotnet add package <PackageName> --version <VersionNumber>
-   ```
-
-   Replace `<VersionNumber>` with the desired version. If no version is specified, the latest version will be installed.
+Continue with [Read your first CSV](../basic-usage/) or the guide for your format.

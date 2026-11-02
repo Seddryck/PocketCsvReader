@@ -1,55 +1,24 @@
-# How to contribute
+# Contributing
 
-Third-party patches are essential for keeping PocketCsvReader great. We want to keep it as easy as possible to contribute changes. There are a few guidelines that we need contributors to follow so that we can have a chance of keeping on top of things.
+Discuss substantial changes in an issue before implementation. Use a descriptive natural-language issue title, not a Conventional Commit prefix. Every issue has exactly one change-type label: `bug`, `new-feature`, or `enhancement`; documentation work may also use `docs`.
 
-We love pull requests from everyone. By participating in this project, you agree to abide by the thoughtbot [code of conduct](https://thoughtbot.com/open-source-code-of-conduct)
+## Branches and worktrees
 
-## Getting Started
+Read [AGENTS.md](AGENTS.md) and applicable workflows under `.github/skills/`. Fetch origin, create a task branch from the latest `origin/main`, and work in a dedicated worktree. Use `fix/` for defective behavior, `feat/` for features/enhancements, `docs/` for documentation, and the other repository prefixes for refactoring, tests, performance, and maintenance. Describe the change in plain text; do not append an issue number or use a tooling prefix.
 
-* Make sure you have a [GitHub account](https://github.com/signup/free) (It's free!).
-* Read the documentation.
-* Search in the issues if your problem hasn't already be submitted.
-* Submit an issue (assuming one does not already exist)
-    * Clearly describe the issue including steps to reproduce when it is a bug.
-    * Specify the version on which this bug has been found.
-* Fork the repository on GitHub.
+For repositories under `D:\users\seddr\Projects`, create worktrees manually under `<repository-root>/.worktrees/<task-name>` and exclude `.worktrees/` locally through `.git/info/exclude`, not the shared `.gitignore`.
 
-## Making Changes
+## Validation and pull requests
 
-* Create a topic branch from where you want to base your work.
-    * This is usually the master branch.
-    * Only target release branches if you are certain your fix must be on that branch.
-    * To quickly create a topic branch based on develop; `git checkout -b
-      feature/my_contribution main`. Please avoid working directly on the
-      `main` or another branch.
-    * The name of your branch should contain the issue number at the end between brackets and preceded by a cross (#).
-* Make commits of logical units.
-* Check for unnecessary whitespace with `git diff --check` before committing.
-* Make sure your commit messages is explicit.
-* Make sure you have added the necessary tests for your changes.
-* If possible, run _all_ the tests to assure nothing else was accidentally broken.
-* Check the status of your build on appVeyor. If something is broken, try to fix it.
+Run focused tests first. Build the solution and run relevant tests; avoid full suites unless the change requires them. Report exactly what ran and what did not. Use Conventional Commit messages, commit all intended changes, push the branch, and open a pull request targeting `main` with a Conventional Commit-style title. Describe resulting behavior, validation and limitations. Link an existing issue using `close #number`. Do not add change-type labels to the PR unless requested. Leave a clean worktree.
 
-## Submitting Changes
+GitHub Actions runs CI. Check the applicable workflow results before merging. New parsers and substantial record-source changes must follow the [file-parser-design skill](.github/skills/file-parser-design/SKILL.md), including memory ownership and allocation checks.
 
-* Push your changes to a topic branch in your fork of the repository.
-* Submit a pull request to the repository PocketCsvReader (Seddryck/PocketCsvReader).
-* Update your issue to mark that you have submitted code and are ready for it to be reviewed (Status: ready-for-merge).
-* Include a link to the pull request in the ticket.
-* At this point, you're waiting on us. We like to, at least, comment on pull requests within a few business days. We may suggest some changes or improvements or alternatives.
+## Documentation changes
 
-## Some things that will increase the chance that
+The [documentation maintenance guide](docs/MAINTAINING.md) describes the navigation, compatibility routes, runnable example markers, link checks, Jekyll build, and visual review. Keep shared behavior in one authoritative guide and link format-specific differences from format pages.
 
-### Your issue will be quickly answered
-
-* Write a good description of your problem in the issue ticket
-* If you've a problem using PocketCsvReader, post your test (not a screen capture) and explain what you're trying to achieve. Don't forget to post the error (full stack) that you're receiving!
-* If you'd like to suggest a feature, explain why you think it will be valuable and suggest a syntax.
-
-### Your pull request is accepted
-
-* Write a good description of your issue in the ticket
-* Write tests.
+Ask before machine-wide configuration changes. Never commit secrets or print credentials. For GitHub issue/PR management use `gh`, reusing the existing Windows keyring authentication; do not start a new login just because sandbox access fails.
 
 ## Local Git hooks
 

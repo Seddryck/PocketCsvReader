@@ -1,31 +1,48 @@
-- title: Getting Started
+- title: Getting started
   docs:
   - why-pocketcsvreader
-  
-- title: CSV Profiles
-  docs:
-  - csv-dialect-descriptor
-  - pre-configured-dialect-descriptor
-  - parser-optimizations
-  - sequences
-
-- title: Usage
-  docs:
   - installation
   - basic-usage
-  - datareader-api
-  - apache-arrow
-  - fluent-api-profile-configuration
-  - fluent-api-runtime-parsers
-  - chrononuensis
-  - fluent-api-resource
-  - fluent-api-schema
-  - schema-inference
-  - mapper-object-builder
-  - compressed-files
+- title: Format guides
+  docs:
+  - csv-dialect-descriptor
+  - json-and-ndjson
+  - ndjson
   - fixed-width
   - key-value-formats
-  - json-and-ndjson
   - web-log-formats
   - security-log-formats
-
+- title: Inspect and prepare input
+  docs:
+  - schema-inference
+  - json-record-paths
+  - fluent-api-resource
+  - compressed-files
+- title: Reading data
+  docs:
+  - output-models
+  - datareader-api
+  - mapper-object-builder
+  - async-reading
+  - batch-reading
+  - stream-lifetimes
+- title: Configuration
+  docs:
+  - fluent-api-profile-configuration
+  - fluent-api-schema
+  - fluent-api-runtime-parsers
+  - sequences
+- title: Validation and diagnostics
+  docs:
+  - validation-and-errors
+  - source-positions
+- title: Performance
+  docs:
+  - parser-optimizations
+  - json-projection
+  - utf8-input
+  - buffering-and-benchmarks
+- title: Integrations
+  docs:
+  - apache-arrow
+  - chrononuensis

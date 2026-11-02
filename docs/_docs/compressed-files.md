@@ -1,5 +1,5 @@
 ---
-title: Read compressed files
+title: Read compressed input
 tags: [configuration]
 ---
 
@@ -9,29 +9,34 @@ Use resource configuration to read GZip, Deflate, Brotli, or ZIP input through t
 
 You can specify compression using the `ResourceDescriptorBuilder` class within a `CsvProfile`. The `WithCompression` method accepts a compression name either as a string or as a `CompressionFormat` enumeration value. Alternatively, call `WithoutCompression` to indicate that the file is not compressed — this is also the default.
 
+<!-- example: gzip-input -->
 ```csharp
+using System.IO.Compression;
+using System.Text;
 using PocketCsvReader;
 using PocketCsvReader.Configuration;
 
+using var compressed = new MemoryStream();
+using (var gzip = new GZipStream(compressed, CompressionMode.Compress, leaveOpen: true))
+    gzip.Write(Encoding.UTF8.GetBytes("1001,Ada\n1002,Grace\n"));
+compressed.Position = 0;
 var profile = new CsvProfile(
-    new DialectDescriptorBuilder()
-        .WithDelimiter(',')
-        .WithLineTerminator("\n")
-        .WithoutHeader()
-        .Build(),
+    new DialectDescriptorBuilder().WithoutHeader().WithLineTerminator("\n").Build(),
     null,
-    new ResourceDescriptorBuilder()
-        .WithEncoding("utf-8")
-        .WithCompression("gz")
-        .Build());
-
+    new ResourceDescriptorBuilder().WithEncoding("utf-8").WithCompression("gz").Build());
 var csvReader = new CsvReader(profile);
-using var reader = csvReader.ToDataReader("orders.csv.gz");
-while (reader.Read())
-{
-    Console.WriteLine(reader.GetString(0));
-}
+using var reader = csvReader.ToDataReader(compressed);
+while (reader.Read()) Console.WriteLine(reader.GetString(0));
 ```
+
+<!-- output: gzip-input -->
+```text
+1001
+1002
+```
+
+
+This example creates GZip input in memory. For a file, use `csvReader.ToDataReader("orders.csv.gz")` instead.
 
 Set `WithEncoding` to the encoding of the decompressed text. Compression must be configured explicitly; the reader does not infer it from the filename extension. The example has no header; replace `.WithoutHeader()` with `.WithHeader()` when the first row contains column names.
 

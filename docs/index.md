@@ -7,7 +7,7 @@ hero:
     search: false
 ---
 
-{% include boxes.html columns="3" title="Browse Topics" subtitle="Chose an option that you need help with or search above" %}
+{% include boxes.html columns="3" title="Browse Topics" subtitle="Start with a task, then follow the linked format and configuration guides" %}
 
 {% include changelog.html %}
 

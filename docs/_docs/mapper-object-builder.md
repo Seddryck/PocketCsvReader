@@ -1,5 +1,5 @@
 ---
-title: Span mapper and object builder
+title: Map rows to objects
 tags: [configuration]
 ---
 
@@ -17,6 +17,7 @@ OrderId,Customer,OrderedOn,Total,Status
 
 The following complete console example reads those orders from an in-memory UTF-8 stream. It overrides the date parser to require ISO dates and registers a parser for the application's payment-status enum.
 
+<!-- example: order-import -->
 ```csharp
 using System;
 using System.Globalization;
@@ -58,6 +59,7 @@ public enum PaymentStatus { Pending, Paid }
 
 Output:
 
+<!-- output: order-import -->
 ```text
 1001: Ada Lovelace, 2026-10-30, 149.95, Paid
 1002: Grace Hopper, 2026-10-31, 89.50, Pending

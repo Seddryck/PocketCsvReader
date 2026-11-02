@@ -1,5 +1,35 @@
 # Changelog page source
 
+- title: Buffered and projected parsing
+  date: Nov 2, 2026
+  list:
+  - 'Combined NDJSON framing and projection; reusable CSV and log storage. <a href="https://github.com/Seddryck/PocketCsvReader/pull/396">#396</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/393">#393</a>'
+- title: More formats and lower allocation
+  date: Nov 1, 2026
+  list:
+  - 'CEF/LEEF security logs, Combined web logs, JSONC, and lazy JSON string decoding. <a href="https://github.com/Seddryck/PocketCsvReader/pull/386">#386</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/382">#382</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/381">#381</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/392">#392</a>'
+- title: Validation and parsed row outputs
+  date: Oct 31, 2026
+  list:
+  - 'Cell validation, schema-declared arrays, dynamic rows, and typed CommonLog output. <a href="https://github.com/Seddryck/PocketCsvReader/pull/377">#377</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/359">#359</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/360">#360</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/368">#368</a>'
+- title: Brotli input
+  date: Oct 26, 2026
+  list:
+  - 'Brotli resource decompression. <a href="https://github.com/Seddryck/PocketCsvReader/pull/355">#355</a>'
+- title: Inspection, metadata, and custom parsing
+  date: Oct 22, 2026
+  list:
+  - 'Row numbers, source positions, UTF-8 CSV input, parsed dictionaries/arrays, JSON record paths, Chrononuensis, and span custom parsers. <a href="https://github.com/Seddryck/PocketCsvReader/pull/352">#352</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/350">#350</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/345">#345</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/344">#344</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/343">#343</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/342">#342</a>, <a href="https://github.com/Seddryck/PocketCsvReader/pull/340">#340</a>'
+- title: Schema and dialect discovery
+  date: Oct 11, 2026
+  list:
+  - 'Opt-in inference with bounded sampling and diagnostics. <a href="https://github.com/Seddryck/PocketCsvReader/pull/334">#334</a>'
+- title: Analytics and JSON projection
+  date: Oct 8, 2026
+  list:
+  - 'Apache Arrow batches, ordinary/ordered JSON and NDJSON projection, and trusted stable-object shapes. <a href="https://github.com/Seddryck/PocketCsvReader/pull/330">#330</a>'
+
+
 - title: Asynchronous data access
   label:
   date: Oct 6, 2026

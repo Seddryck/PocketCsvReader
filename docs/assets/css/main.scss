@@ -21,3 +21,27 @@
 // Other vendor styles
 // @import "syntax-highlighting/cld";
 @import "syntax-highlighting/bw";
+// Keep every documentation group reachable on short desktop viewports.
+.sidebar-docs {
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 1rem;
+}
+
+// The inherited theme uses the accent color on an accent mobile header.
+.uk-navbar-container .uk-navbar-toggle {
+  color: $global-primary-background;
+}
+
+// Keep wide API comparison tables inside the article on narrow screens.
+.doc-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 639px) {
+  .doc-table-wrap table {
+    min-width: 40rem;
+  }
+}

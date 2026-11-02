@@ -1,5 +1,5 @@
 ---
-title: Key-value formats
+title: LTSV and logfmt
 subtitle: Read logfmt and Labeled Tab-separated Values (LTSV)
 tags: [quick-start, formats]
 ---
@@ -14,6 +14,7 @@ dotnet add package PocketCsvReader.KeyValue
 
 This complete example reads two application log entries. The second entry deliberately changes the field order, so the reader resolves labels on each row.
 
+<!-- example: logfmt -->
 ```csharp
 using System;
 using System.IO;
@@ -37,6 +38,7 @@ while (reader.Read())
 
 Output:
 
+<!-- output: logfmt -->
 ```text
 info: order 1001, Order accepted
 warn: order 1002, Payment pending
@@ -50,6 +52,7 @@ Logfmt values can be unquoted or double-quoted. Quoted values support escapes su
 
 LTSV separates fields with a tab and splits each field at its first colon. A value can contain further colons, as in a URL or timestamp. This example includes the same labels in different orders:
 
+<!-- example: ltsv -->
 ```csharp
 using System;
 using System.IO;
@@ -72,6 +75,7 @@ while (reader.Read())
 
 Output:
 
+<!-- output: ltsv -->
 ```text
 200: /orders/1001
 404: /orders/1002
@@ -83,7 +87,7 @@ Labels come from each record, rather than a header row. Call `Read()` before loo
 
 Use `TryGetOrdinal("label", out var ordinal)` to check for optional fields before accessing them. Duplicate labels are preserved, and `GetOrdinal` returns the first matching occurrence. Access subsequent occurrences by index. A missing label passed to `GetOrdinal` throws `ArgumentOutOfRangeException`.
 
-Both formats accept LF or CRLF line endings and a final record without a newline. An empty line is exposed as a record with zero fields. Invalid syntax throws `InvalidDataException`.
+Both formats accept LF, CRLF, or CR line endings and a final record without a newline. An empty line is exposed as a record with zero fields. Invalid syntax throws `InvalidDataException`.
 
 ## Configuration and output models
 
@@ -92,3 +96,5 @@ Both builders support the shared `WithSchema`, `WithResource`, `WithParsers`, an
 The readers expose `ToDataReader`, `ToDbDataReader`, `ToDataTable`, and `ToArrayString`, with filename and stream overloads. `ToDataReader` is useful for variable record shapes; tabular output requires a consistent set of columns. They also provide the shared parsed-row materializers such as `ToDictionaries` and `ToObjectArrays`.
 
 Input is processed in one forward-only pass, including non-seekable streams. Read-ahead and row-count pre-scans are disabled for these formats. Keep the reader open while accessing its current row, and dispose it when finished. Materialized strings and output objects remain valid after the next read.
+
+For null versus empty values see [value handling](../sequences/); for reused buffers and metadata see [key-value buffering](../buffering-and-benchmarks/#key-value-records).

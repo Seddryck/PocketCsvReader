@@ -54,7 +54,7 @@ GEM
       rexml
     kramdown-parser-gfm (1.1.0)
       kramdown (~> 2.0)
-    liquid (4.0.3)
+    liquid (4.0.4)
     listen (3.7.1)
       rb-fsevent (~> 0.10, >= 0.10.3)
       rb-inotify (~> 0.9, >= 0.9.10)
@@ -100,11 +100,12 @@ DEPENDENCIES
   jekyll-gist
   jekyll-paginate (~> 1.1)
   jekyll-seo-tag
+  liquid (~> 4.0, >= 4.0.4)
   tzinfo-data
   webrick
 
 RUBY VERSION
-   ruby 3.1.3p185
+   ruby 3.3.13p207
 
 BUNDLED WITH
    2.3.18

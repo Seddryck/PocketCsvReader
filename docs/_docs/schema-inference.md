@@ -1,9 +1,41 @@
 ---
-title: Schema and Dialect Inference
+title: Infer a schema and dialect
 tags: [configuration]
 ---
 
+## Complete inspection example
+
+This sample uses explicit header/dialect settings and infers value types. `Infer` restores the seekable input position so the reader can consume the same records.
+
+<!-- example: infer-schema -->
+```csharp
+using System.Text;
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id,Name\n1,Ada\n2,Grace\n"));
+var result = new CsvInference(new CsvInferenceOptions
+{
+    Header = CsvHeaderMode.Present,
+    MaximumRecords = 100,
+    Dialect = new DialectDescriptorBuilder().WithHeader().WithLineTerminator("\n").Build()
+}).Infer(stream);
+var csv = new CsvReaderBuilder().WithDialect(result.Dialect).WithSchema(result.Schema).Build();
+using var reader = csv.ToDataReader(stream);
+while (reader.Read()) Console.WriteLine($"{reader.GetInt32(0)}: {reader.GetString(1)}");
+```
+
+<!-- output: infer-schema -->
+```text
+1: Ada
+2: Grace
+```
+
 PocketCsvReader can inspect a bounded sample and return an explicit schema and dialect. Inference is opt-in: it never changes an existing reader or silently replaces an explicitly configured schema.
+
+## Inspect, review, and configure
+
+Inference reads input and proposes settings; it does not merely declare configuration. Sample the input, review diagnostics, accept or adjust the inferred types/dialect, then configure a reader explicitly. This is why this guide sits under **Inspect and prepare input**. See [schemas](../fluent-api-schema/) and [CSV dialects](../csv-dialect-descriptor/) for explicit settings.
 
 ## Infer a Schema
 

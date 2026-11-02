@@ -1,381 +1,43 @@
 # PocketCsvReader
 
-![Logo](https://raw.githubusercontent.com/Seddryck/PocketCsvReader/main/assets/PocketCsvReader-icon-256.png)
+PocketCsvReader reads CSV and other structured text through forward-only data readers and streaming row outputs. Optional packages support JSON/JSONC, NDJSON, fixed-width, LTSV, logfmt, web logs, and security logs. The projects target .NET 8, 9, and 10.
 
-PocketCsvReader is a highly efficient and lightweight library tailored for parsing delimited flat files. Optional extension packages add support for formats such as JSON, NDJSON, fixed-width, LTSV, logfmt, Common Log Format, W3C Extended Log Format, CEF, and LEEF. With a focus on simplicity and performance, it offers seamless file reading and supports versatile outputs, including DataTables, string arrays, strongly-typed object mapping and an IDataReader interface.
+[Documentation](https://seddryck.github.io/PocketCsvReader/docs/why-pocketcsvreader/) · [Installation](https://seddryck.github.io/PocketCsvReader/docs/installation/) · [Contributing](contributing.md)
 
-[About][] | [Install][] | [Quick-start][]
+## Packages
 
-[About]: #about (About)
-[Install]: #install (Install)
-[Quick-start]: #quick-start (Quick-start)
+| Package | Purpose |
+| --- | --- |
+| `PocketCsvReader` | CSV/TSV and shared APIs |
+| `PocketCsvReader.Json` | JSON and JSONC |
+| `PocketCsvReader.Ndjson` | NDJSON |
+| `PocketCsvReader.FixedWidth` | Fixed character positions |
+| `PocketCsvReader.KeyValue` | LTSV and logfmt |
+| `PocketCsvReader.WebLogs` | Common, Combined, W3C |
+| `PocketCsvReader.SecurityLogs` | CEF and LEEF |
+| `PocketCsvReader.Arrow` | Apache Arrow output |
+| `PocketCsvReader.Chrononuensis` | Temporal period parsers |
 
-## About
+## First example
 
-**Social media:** [![website](https://img.shields.io/badge/website-seddryck.github.io/PocketCsvReader-fe762d.svg)](https://seddryck.github.io/PocketCsvReader)
-[![twitter badge](https://img.shields.io/badge/twitter%20PocketCsvReader-@Seddryck-blue.svg?style=flat&logo=twitter)](https://twitter.com/Seddryck)
-
-**Releases:** [![GitHub releases](https://img.shields.io/github/v/release/seddryck/PocketCsvReader?label=GitHub%20releases)](https://github.com/seddryck/PocketCsvReader/releases/latest) 
-[![nuget](https://img.shields.io/nuget/v/PocketCsvReader.svg)](https://www.nuget.org/packages/PocketCsvReader/) [![GitHub Release Date](https://img.shields.io/github/release-date/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/releases/latest) [![licence badge](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://github.com/Seddryck/PocketCsvReader/blob/master/LICENSE) 
-
-**Dev. activity:** [![GitHub last commit](https://img.shields.io/github/last-commit/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/commits)
-![Still maintained](https://img.shields.io/maintenance/yes/2027.svg)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Seddryck/PocketCsvReader)
-
-**Continuous integration builds:** [![CI and release](https://github.com/Seddryck/PocketCsvReader/actions/workflows/ci-release.yml/badge.svg)](https://github.com/Seddryck/PocketCsvReader/actions/workflows/ci-release.yml)
-[![CodeFactor](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader/badge)](https://www.codefactor.io/repository/github/seddryck/PocketCsvReader)
-[![codecov](https://codecov.io/github/Seddryck/PocketCsvReader/branch/main/graph/badge.svg?token=PCRL1Y6JVR)](https://codecov.io/github/Seddryck/PocketCsvReader)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FSeddryck%2FPocketCsvReader?ref=badge_shield)
-
-**Status:** [![stars badge](https://img.shields.io/github/stars/Seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/stargazers)
-[![Bugs badge](https://img.shields.io/github/issues/Seddryck/PocketCsvReader/bug.svg?color=red&label=Bugs)](https://github.com/Seddryck/PocketCsvReader/issues?utf8=%E2%9C%93&q=is:issue+is:open+label:bug+)
-[![Top language](https://img.shields.io/github/languages/top/seddryck/PocketCsvReader.svg)](https://github.com/Seddryck/PocketCsvReader/search?l=C%23)
-
-## Install
-
-The optional `PocketCsvReader.SecurityLogs` package reads CEF and LEEF security events. See the [security log guide](docs/_docs/security-log-formats.md) for supported versions, syslog envelopes, and attribute selection.
-
-The optional `PocketCsvReader.Chrononuensis` package adds span parsers for ten temporal period types with `.WithParsers(options => options.UseChrononuensis())`. See the [supported types, formats, and precedence rules](docs/_docs/chrononuensis.md). The core package has no Chrononuensis dependency.
-
-Replace `<VersionNumber>` with the desired version in each of the following solutions. If no version is specified, the latest version will be installed.
-
-### NuGet CLI
-
-1. Open a command prompt or terminal.
-2. Run the following command:
-
-   ```bash
-   nuget install PocketCsvReader -Version <VersionNumber>
-   ```
-   
-## Visual Studio Package Manager Console
-
-1. Open the **Package Manager Console** from **Tools > NuGet Package Manager > Package Manager Console**.
-2. Run the following command:
-
-   ```powershell
-   Install-Package PocketCsvReader -Version <VersionNumber>
-   ```
-## Dotnet-CLI
-
-1. Open a terminal or command prompt.
-2. Navigate to the directory of your project.
-3. Run the following command:
-
-   ```bash
-   dotnet add package PocketCsvReader --version <VersionNumber>
-   ```
-
-   For standard JSON documents, install the JSON extension package:
-
-   ```bash
-   dotnet add package PocketCsvReader.Json --version <VersionNumber>
-   ```
-
-   For newline-delimited JSON streams, install the NDJSON extension package:
-
-   ```bash
-   dotnet add package PocketCsvReader.Ndjson --version <VersionNumber>
-   ```
-
-   For fixed-width files, install the extension package as well:
-
-   ```bash
-   dotnet add package PocketCsvReader.FixedWidth --version <VersionNumber>
-   ```
-
-   For LTSV and logfmt records, install the key-value extension package:
-
-   ```bash
-   dotnet add package PocketCsvReader.KeyValue --version <VersionNumber>
-   ```
-
-   For Common Log Format and W3C Extended Log Format files, install the web-log extension package:
-
-   ```bash
-   dotnet add package PocketCsvReader.WebLogs --version <VersionNumber>
-   ```
-## Quick-start
-
-The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
-
-### Features
-
-- Read CSV files or streams into a `DataTable`.
-- Access CSV data in a forward-only, read-only manner using `IDataReader`.
-- Map CSV records to strongly-typed objects.
-- Map CSV records to array of strings.
-- Customizable CSV parsing profiles for delimiters, quote handling, and more.
-- Supports encoding detection through the `IEncodingDetector` interface.
-- Stream standard JSON objects and top-level arrays without materializing the complete document.
-- Read NDJSON as a sequence of independently framed JSON values.
-- Read fixed-width files in one forward-only pass with field conversion deferred until a `Get*` accessor requests that field.
-- Read labeled LTSV and logfmt records through one shared reader and format-specific builders.
-- Read Common Log Format and W3C Extended Log Format files with format-aware streaming readers.
-
-Fixed-width support is distributed separately as `PocketCsvReader.FixedWidth`.
-
-Standard JSON and NDJSON use separate extension packages. `PocketCsvReader.Json` accepts one JSON document and yields each element of a top-level array as a row. `PocketCsvReader.Ndjson` expects a sequence of JSON values separated by line terminators and supports NDJSON-specific comments and custom terminators.
-
-```csharp
-using PocketCsvReader.Json;
-using PocketCsvReader.Ndjson;
-
-using var json = new JsonReader().ToDataReader("people.json");
-while (json.Read())
-{
-    var id = json.GetInt32(json.GetOrdinal("id"));
-    var name = json.GetString(json.GetOrdinal("name"));
-}
-
-using var ndjson = new NdjsonReader().ToDataReader("events.ndjson");
-while (ndjson.Read())
-{
-    var eventName = ndjson.GetString(ndjson.GetOrdinal("event"));
-}
+```sh
+dotnet add package PocketCsvReader
 ```
 
-LTSV and logfmt support is distributed separately as `PocketCsvReader.KeyValue`:
-
 ```csharp
-using PocketCsvReader.KeyValue.Configuration;
+using System.Text;
+using PocketCsvReader.Configuration;
 
-var ltsvReader = new LtsvReaderBuilder().Build();
-var logfmtReader = new LogfmtReaderBuilder().Build();
-
-using var dataReader = logfmtReader.ToDataReader("application.log");
-while (dataReader.Read())
-{
-    var level = dataReader.GetString(dataReader.GetOrdinal("level"));
-    var message = dataReader.GetString(dataReader.GetOrdinal("message"));
-}
-```
-
-Common and W3C Extended web-log support is distributed separately as `PocketCsvReader.WebLogs`:
-
-```csharp
-using PocketCsvReader.WebLogs;
-
-using var common = new CommonLogReader().ToDataReader("access.log");
-while (common.Read())
-{
-    var request = common.GetString(common.GetOrdinal("Request"));
-    var status = common.GetInt32(common.GetOrdinal("StatusCode"));
-}
-
-using var w3c = new W3cExtendedLogReader().ToDataReader("u_ex.log");
-while (w3c.Read())
-{
-    var method = w3c.GetString(w3c.GetOrdinal("cs-method"));
-    var path = w3c.GetString(w3c.GetOrdinal("cs-uri-stem"));
-}
-```
-
-### Initialization
-
-You can create an instance of `CsvReader` with various configurations:
-
-```csharp
-// Default configuration: comma-delimited, double quotes for escaping, 4 KB buffer size.
-var csvReader = new CsvReader();
-
-// Custom CSV profile (e.g., semicolon-delimited, double quotes for escaping).
-var csvReaderWithProfile = new CsvReader(CsvProfile.SemiColumnDoubleQuote);
-
-// Custom buffer size for large files.
-var csvReaderWithBuffer = new CsvReader(bufferSize: 64 * 1024);
-
-// Both custom profile and buffer size.
-var csvReaderCustom = new CsvReader(CsvProfile.SemiColumnDoubleQuote, bufferSize: 16 * 1024);
-```
-
-### Reading CSV Data
-
-#### Reading Into a `DataTable`
-
-The `ToDataTable` method reads CSV data and returns a `DataTable` containing all rows and fields.
-
-```csharp
-DataTable dataTable = csvReader.ToDataTable("example.csv");
-```
-
-or to read from a stream,
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-DataTable dataTable = csvReader.ToDataTable(stream);
-```
-
-### Accessing Data with `IDataReader`
-
-The `ToDataReader` method provides a forward-only, read-only `CsvDataReader` implementing `IDataReader` for processing large files efficiently. `IDataReader` itself is synchronous; PocketCsvReader readers also implement `IAsyncDataReader` when asynchronous stream I/O is needed.
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-using var reader = csvReader.ToDataReader(stream);
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+    .Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id,Name\n1,Ada\n"));
+using var reader = csv.ToDataReader(stream);
 while (reader.Read())
-{
-    Console.WriteLine(reader[0]); // Access the first column of the current row.
-    Console.WriteLine(reader.GetDateTime(1)); // Access the second column of the current row as an object boxing a DateTime.
-    Console.WriteLine(reader.GetFieldValue<DateOnly>(2)); // Access the third column of the current row as DateOnly.
-}
+    Console.WriteLine($"{reader.GetInt32(0)}: {reader.GetString(1)}");
+// 1: Ada
 ```
 
-For consumers built around the standard `DbDataReader` abstraction, use `ToDbDataReader`. It is supported by every PocketCsvReader format and by CSV batch readers. Asynchronous advancement uses the underlying stream's asynchronous operations and accepts a cancellation token. Field getters remain synchronous because the current record is already buffered after `ReadAsync` completes.
+See [output models](https://seddryck.github.io/PocketCsvReader/docs/output-models/), [object mapping](https://seddryck.github.io/PocketCsvReader/docs/mapper-object-builder/), [async reading](https://seddryck.github.io/PocketCsvReader/docs/async-reading/), [inference](https://seddryck.github.io/PocketCsvReader/docs/schema-inference/), and [performance guidance](https://seddryck.github.io/PocketCsvReader/docs/parser-optimizations/) for complete behavior and limitations.
 
-```csharp
-await using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-await using DbDataReader reader = csvReader.ToDbDataReader(stream);
-while (await reader.ReadAsync(cancellationToken))
-{
-    Console.WriteLine(reader.GetInt32(0));
-    Console.WriteLine(reader.GetString(1));
-}
-```
-
-### Reading as Arrays
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-foreach (var record in csvReader.ToArrayString(stream))
-{
-    Console.WriteLine(string.Join(", ", record));
-}
-```
-
-### Mapping Records to Strongly-Typed Objects
-
-The `To<T>` method maps CSV records to objects of a specified type.
-
-```csharp
-public class Person
-{
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public int Age { get; set; }
-}
-
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-IEnumerable<Person> people = csvReader.To<Person>(stream);
-
-foreach (var person in people)
-{
-    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
-}
-```
-
-Use `ToAsync<T>` to stream the same strongly typed records with asynchronous input reads. It is lazy and forward-only, so records are mapped one at a time rather than buffering the complete input.
-
-```csharp
-await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellationToken: cancellationToken))
-{
-    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
-}
-```
-
-`ToAsync<T>` uses the same asynchronous reader and parser infrastructure as `ReadAsync`, including profiles, headers, bad-data handling, buffer-boundary handling, and cancellation. A file passed by name is opened on enumeration and closed with the enumerator. A caller-provided stream remains owned by the caller and is left open.
-
-### Optional UTF-8 byte parsing
-
-Character parsing remains the default. To scan UTF-8 bytes directly, configure the same reader API:
-
-```csharp
-var csvReader = new CsvReaderBuilder()
-    .WithStreamInitialization(StreamInitializationOptions.Utf8)
-    .Build();
-
-// Or probe the input and select a compatible parser automatically:
-var profile = new CsvProfile(new DialectDescriptor())
-{
-    StreamInitialization = new(ProbeEncoding: true, InputMode: CsvInputMode.Auto)
-};
-```
-
-| Input mode | Resolved UTF-8 encoding | Other encoding |
-| --- | --- | --- |
-| `DecodedChars` (default) | Character parser | Character parser |
-| `Auto` | Byte parser for supported profiles | Character parser |
-| `Utf8Bytes` | Byte parser for supported profiles | `NotSupportedException` |
-
-An explicit resource encoding takes precedence over BOM detection. Otherwise, probing recognizes UTF-8, UTF-16, and UTF-32 BOMs, including on non-seekable streams; input without a BOM defaults to UTF-8. The resolved encoding's matching BOM is consumed. `StreamInitializationOptions.Utf8` disables encoding probing for a known UTF-8 source, while still consuming a UTF-8 BOM. When probing is disabled, other BOMs do not change the encoding. Invalid UTF-8 uses the same replacement fallback as the default UTF-8 `StreamReader`; skipped fields need no decoding or validation.
-
-The byte parser supports ASCII delimiters, quotes, escapes, comments, and record terminators, with arbitrary UTF-8 field text. It handles quoted multiline records, escaped quotes, short reads, and fields larger than the configured buffer. Array dialects, non-ASCII syntax characters, and bad-data policies use the character parser in `Auto` and throw `NotSupportedException` in `Utf8Bytes`. Selection happens after decompression. Both synchronous and asynchronous readers honor these policies.
-
-Records remain in pooled byte buffers, with ordinary text scanned in bulk between CSV syntax bytes. Eligible ASCII string getters decode directly into the returned string. Other field access uses a reusable pooled character cache when sanitization, custom parsing, or multibyte text requires it, avoiding intermediate per-field strings. Compatible integer and Boolean getters can parse bytes directly when no custom parsers or sequence substitutions apply. Character-based object mappers materialize a complete character record with matching character offsets. Parser-owned record memory is valid only until the next read or disposal; returned strings and mapped objects remain valid.
-
-Byte parsing is opt-in because throughput and allocations depend on the workload, especially how many strings are materialized. The `Utf8Input` benchmarks compare ASCII and Unicode input, narrow and wide records, multiline fields, numeric getters, and skipped columns. See the [measured comparison](PocketCsvReader.Benchmark/Utf8Input.md). Run them with:
-
-```shell
-dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*Utf8Input*'
-```
-
-
-### Dictionary rows
-
-`ToDictionaries` streams independently owned `IReadOnlyDictionary<string, object?>`
-rows from a filename or a stream. Values use the schema and runtime parsers;
-fields without an explicit type remain strings. Null fields and `DBNull.Value`
-become C# `null`.
-
-```csharp
-var reader = new CsvReaderBuilder()
-    .WithDialect(d => d.WithHeader())
-    .WithSchema(s => s.Named().WithField<int>("Id").WithField<string>("Name"))
-    .Build();
-foreach (var row in reader.ToDictionaries("people.csv"))
-    Console.WriteLine($"{row["Id"]}: {row["Name"]}");
-// Alternatively: reader.ToDictionaries(stream)
-```
-
-Keys match `IDataReader.GetName` for each record, including schema-provided names
-in formats that expose them. CSV without headers uses `field_0`, `field_1`, etc.;
-unnamed CSV headers use the reader's generated names. Names are case-sensitive
-(ordinal comparison). Duplicate names throw `InvalidDataException` to avoid losing
-values. Each row reflects that record's field count and names, including changing
-shapes in labeled formats. Record-width rules, special-value handling, and parser
-errors follow the underlying data reader. Enumeration opens the reader lazily and
-disposes it, including its input stream, when completed, stopped, or failed. Retained
-rows stay valid after enumeration advances.
-
-### Parsed value arrays
-
-`ToObjectArrays(filename)` and `ToObjectArrays(stream)` return a lazy
-`IEnumerable<object?[]>`. Each record gets an independently owned array in the
-underlying reader's field order. This API is inherited by CSV, JSON, NDJSON,
-fixed-width, key-value, and web-log readers through the shared reader base.
-
-```csharp
-var reader = new CsvReaderBuilder()
-    .WithDialect(d => d.WithHeader())
-    .WithSchema(s => s.Named().WithField<int>("Id").WithField<string>("Name"))
-    .Build();
-foreach (object?[] row in reader.ToObjectArrays("people.csv"))
-    Console.WriteLine($"{(int)row[0]!}: {row[1]}");
-```
-
-| Output API | Row contents | Access |
-|---|---|---|
-| `ToArrayString` | Strings and nulls | Field ordinal |
-| `ToObjectArrays` | Schema/runtime-parser values and nulls | Field ordinal |
-| `ToDictionaries` | Schema/runtime-parser values and nulls | Reader field name |
-| `To<T>` | Mapped typed objects | Object members (CSV) |
-
-Untyped fields remain strings. Both parsed row APIs normalize null fields and
-`DBNull.Value` to C# `null`, and retain empty strings unless configured special-value
-handling maps them differently. Parsers and special values follow the data reader's
-configuration, including field-specific and runtime parsers. With a named schema,
-define every field, just as for `IDataReader`.
-
-Arrays use the current `IDataReader.FieldCount`: for CSV, an incomplete record
-therefore produces a shorter array (and a dictionary with fewer keys); absent
-trailing columns are not padded. Explicit empty cells remain present. Extra CSV
-fields throw `InvalidDataException`. Malformed records follow `BadDataPolicy`
-(default: throw; configured skipping remains effective). Invalid typed values
-propagate the parser's exception. Other formats retain their own data-reader
-width, field ordering, and missing-value rules. Duplicate names are allowed in
-arrays because access is positional.
-
-Opening and reading begin when enumeration advances. Enumerating a stream is
-forward-only; disposing the enumerator closes its reader and input stream, even
-on early exit or errors. Returned arrays and dictionaries remain valid afterwards.
-Normal reader buffering can read ahead, but neither API buffers the whole input.
+Shared ownership, null, conversion, and performance contracts have their authoritative home in the documentation rather than duplicated README sections.

@@ -4,6 +4,27 @@ subtitle: Read Common, Combined, and W3C Extended Log Format files
 tags: [usage]
 ---
 
+## Complete Common Log example
+
+Install `PocketCsvReader.WebLogs`. This input is one Common Log Format request; the response status is converted only when requested.
+
+<!-- example: common-log -->
+```csharp
+using System.Text;
+using PocketCsvReader.WebLogs;
+
+var input = "127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /orders HTTP/1.0\" 200 2326\n";
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(input));
+using var reader = new CommonLogReader().ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine($"{reader.GetInt32(reader.GetOrdinal("StatusCode"))}: {reader.GetString(reader.GetOrdinal("Request"))}");
+```
+
+<!-- output: common-log -->
+```text
+200: GET /orders HTTP/1.0
+```
+
 Install the `PocketCsvReader.WebLogs` extension to parse Common Log Format (CLF), Combined Log Format, and W3C Extended Log Format files.
 
 ## Common Log Format
@@ -42,7 +63,7 @@ foreach (var entry in new CommonLogReader().ToCommonLog("access.log"))
 
 Timestamps are parsed using the CLF pattern `dd/MMM/yyyy:HH:mm:ss zzz` and invariant culture, preserving the original UTC offset (for example, `-0700`). Numbers also use invariant culture. Invalid typed values throw `FormatException`; numbers outside their target type's range throw `OverflowException` during enumeration.
 
-Both filename and `Stream` overloads return `IEnumerable<CommonLog>`. Records are parsed as enumeration advances; the reader disposes its input when enumeration completes, fails, or the enumerator is disposed early. As with `To<T>()`, the filename overload opens the file when called, so enumerate the result and dispose the enumerator (for example, with `foreach`). The existing `To<T>()` remains available for custom models and mappers.
+Both filename and `Stream` overloads return `IEnumerable<CommonLog>`. Records are parsed as enumeration advances; the reader disposes its input when enumeration completes, fails, or the enumerator is disposed early. The extension-reader filename overload opens the file when called, so enumerate the result and dispose the enumerator (for example, with `foreach`). The existing `To<T>()` remains available for custom models and mappers.
 
 ## Combined Log Format
 
@@ -102,3 +123,7 @@ All three readers support `ToDataReader`, `ToDataTable`, `ToArrayString`, and `T
 CLF and W3C readers frame records over shared pooled character buffers and reuse field metadata for their fixed result schema. A record contained in one buffer is read as a view over that memory; a record spanning buffers is consolidated once into pooled storage. The current record's character memory and metadata are valid until the next read or reader disposal. Strings and typed objects returned to callers own their materialized values and remain valid after the reader advances.
 
 Synchronous and asynchronous reads use the same framing and field-parsing logic. W3C directive names and values remain retained strings, and string/object output still allocates the values required by the public API.
+
+## Boundaries and output ownership
+
+Use the [stream ownership table](../stream-lifetimes/) for disposal and lazy creation, [output models](../output-models/) for returned shapes, and [validation](../validation-and-errors/) for the distinction between syntax errors and conversion failures. Final complete records may lack a newline. Malformed format syntax is rejected; a CSV bad-data policy does not enable log-format recovery.

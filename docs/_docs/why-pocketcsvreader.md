@@ -1,8 +1,38 @@
 ---
-title: Why did we create PocketCsvReader?
-subtitle: Your Go-To Solution for Fast and Flexible CSV Parsing!
+title: Overview and supported formats
 tags: [quick-start]
 ---
-Why maintain PocketCsvReader in the .NET ecosystem with 50+ CSV libraries? Because it brings something rare: the perfect balance of flexibility and lightweight design. While other libraries offer configuration options, PocketCsvReader takes it further by providing advanced dialect customization, all within a lean and efficient package.
 
-Fully aligned with the CSV Dialect Specification, it handles non-standard formats with ease while staying remarkably fast and resource-friendly. If you need a library that combines adaptability with performance, PocketCsvReader is the standout choice.
+PocketCsvReader reads structured text through a forward-only data reader. Start with the core CSV package and add the extension for your input format. Schema and custom parser settings control value conversion; output APIs let you consume fields, objects, arrays, dictionaries, or tables.
+
+## Start here
+
+1. [Install the package for your format](../installation/).
+2. [Read your first CSV](../basic-usage/), or choose a format below.
+3. [Choose an output model](../output-models/) and review [stream ownership](../stream-lifetimes/).
+
+## Supported inputs
+
+| Input | Guide | Package |
+| --- | --- | --- |
+| CSV, TSV, other delimiters | [CSV and TSV](../csv-dialect-descriptor/) | `PocketCsvReader` |
+| JSON objects/arrays and opt-in JSONC | [JSON and JSONC](../json-and-ndjson/) | `PocketCsvReader.Json` |
+| Independently framed JSON values | [NDJSON](../ndjson/) | `PocketCsvReader.Ndjson` |
+| Character-position records | [Fixed-width](../fixed-width/) | `PocketCsvReader.FixedWidth` |
+| Labeled tab-separated and key=value records | [LTSV and logfmt](../key-value-formats/) | `PocketCsvReader.KeyValue` |
+| Common, Combined, and W3C logs | [Web logs](../web-log-formats/) | `PocketCsvReader.WebLogs` |
+| CEF and LEEF events | [Security logs](../security-log-formats/) | `PocketCsvReader.SecurityLogs` |
+
+## Prepare and interpret input
+
+If the CSV structure is unknown, [infer a schema and dialect](../schema-inference/), inspect diagnostics, then accept or adjust the result. Inference reads a sample; it is a discovery step before explicit configuration.
+
+[Profiles and builders](../fluent-api-profile-configuration/) combine syntax, schema, resource, parser, and optimization settings. [Null and missing values](../sequences/) and [error handling](../validation-and-errors/) differ by format and output API.
+
+## Boundaries and limitations
+
+The readers process files and streams; they are not writers or network log receivers. Streaming avoids loading the complete input in ordinary row-reading paths, but memory also depends on the largest record, selected output model, and format. `ToDataTable` materializes all rows. JSON record-path selection captures a complete document before selecting rows; ordinary top-level array reading streams its elements.
+
+Use [projection and stable shapes](../json-projection/) or [UTF-8 CSV input](../utf8-input/) only when their contracts fit the data. Benchmark representative input rather than assuming one configuration is always fastest.
+
+Optional integrations expose [Apache Arrow batches](../apache-arrow/) and [Chrononuensis temporal types](../chrononuensis/). Package support and framework requirements are listed in [installation](../installation/).
