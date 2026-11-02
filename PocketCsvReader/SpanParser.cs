@@ -172,6 +172,7 @@ internal class SpanParser
 
     public void CacheTypeParser<T>(int index)
     {
+        if (!TypeParsers.ContainsKey(typeof(T))) CreateNullableEntry(typeof(T));
         if (!TypeParsers.TryGetValue(typeof(T), out var parser))
             throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
         FieldParsers[index] = parser;
@@ -190,8 +191,25 @@ internal class SpanParser
         return false;
     }
 
+    private ParserEntry? CreateNullableEntry(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is not { } underlying || !TypeParsers.ContainsKey(underlying)) return null;
+        var method = typeof(SpanParser).GetMethod(nameof(LiftNullable), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var entry = (ParserEntry)method.MakeGenericMethod(underlying).Invoke(this, null)!;
+        TypeParsers[type] = entry;
+        return entry;
+    }
+
+    private ParserEntry LiftNullable<T>()
+        where T : struct
+    {
+        var parse = (ParseSpan<T>)TypeParsers[typeof(T)].Typed;
+        return CreateEntry<T?>(span => parse(span));
+    }
+
     public bool TryGetParser<T>([NotNullWhen(true)] out ParseSpan<T>? parse)
     {
+        if (!TypeParsers.ContainsKey(typeof(T))) CreateNullableEntry(typeof(T));
         if (TypeParsers.TryGetValue(typeof(T), out var entry))
         {
             var dlg = entry.Typed;

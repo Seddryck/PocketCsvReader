@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -63,6 +63,7 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
         {
             ParserOptimizations = BuildParserOptimizations(),
             StreamInitialization = _streamInitialization,
+            Filters = BuildFilters(),
             RowNumber = _rowNumber
         };
         return new CsvReader(profile);

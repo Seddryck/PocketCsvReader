@@ -12,6 +12,11 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        if (args is ["--reader-filtering-matrix"])
+        {
+            ReaderFiltering.RunMatrix();
+            return;
+        }
         if (args is ["--lazy-json-matrix"])
         {
             LazyJsonDecodingComparison.RunMatrix();

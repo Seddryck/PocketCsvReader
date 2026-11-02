@@ -53,7 +53,7 @@ public sealed class FixedWidthReaderBuilder : ReaderBuilder<FixedWidthReaderBuil
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
-            BuildParserOptimizations());
+            BuildParserOptimizations()) { Filters = BuildFilters() };
         return new FixedWidthReader(profile);
     }
 }

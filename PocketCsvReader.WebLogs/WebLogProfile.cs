@@ -4,6 +4,7 @@ namespace PocketCsvReader.WebLogs;
 
 public sealed class WebLogProfile : IProfile
 {
+    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     public WebLogFormat Format { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }

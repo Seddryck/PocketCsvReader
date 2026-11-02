@@ -20,5 +20,5 @@ public abstract class KeyValueReaderBuilder<TBuilder> : ReaderBuilder<TBuilder>
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
-            BuildParserOptimizations()));
+            BuildParserOptimizations()) { Filters = BuildFilters() });
 }

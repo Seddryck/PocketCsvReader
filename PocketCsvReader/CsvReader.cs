@@ -277,7 +277,10 @@ namespace PocketCsvReader
             var mapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                yield return reader.MapCurrent(mapper);
+            {
+                yield return Profile.Filters.Count != 0 && spanMapper is null
+                    ? FilteredObjectMapper<T>.Map(reader) : reader.MapCurrent(mapper);
+            }
         }
 
         /// <summary>
@@ -306,7 +309,10 @@ namespace PocketCsvReader
             var mapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                yield return reader.MapCurrent(mapper);
+            {
+                yield return Profile.Filters.Count != 0 && spanMapper is null
+                    ? FilteredObjectMapper<T>.Map(reader) : reader.MapCurrent(mapper);
+            }
         }
     }
 }

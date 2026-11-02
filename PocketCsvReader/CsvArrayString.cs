@@ -51,6 +51,17 @@ public class CsvArrayString : IDisposable
     /// <returns>An enumerable of string arrays, where each array represents a row of CSV fields. Returns <c>null</c> if no fields are present in a row.</returns>
     public IEnumerable<string?[]> Read()
     {
+        if (Profile.Filters.Count != 0)
+        {
+            using var reader = new CsvDataReader(Stream, Profile);
+            foreach (var values in DataReaderMaterializer.ToStringArrays(reader))
+            {
+                Fields = reader.Fields;
+                RowCount++;
+                yield return values;
+            }
+            yield break;
+        }
         var stringMapper = new SpanMapper<string?[]?>((span, fieldSpans) =>
         {
             if (!(fieldSpans?.Any() ?? false))

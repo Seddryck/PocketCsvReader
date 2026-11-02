@@ -15,6 +15,40 @@ namespace PocketCsvReader;
 public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader
     where TProfile : IProfile
 {
+    // Allocate lazily: span-only filtering and unfiltered readers never create a value cache.
+    // Values of struct types are boxed once per cached conversion.
+    private Dictionary<(int Ordinal, Type Type, Delegate Parser), object?>? _rowValues;
+    protected void ResetRowValues() => _rowValues?.Clear();
+
+    private T ParseCached<T>(int i, ParseSpan<T> parse, ReadOnlySpan<char> span)
+    {
+        if (Profile.Filters.Count == 0) return parse(span);
+        var key = (i, typeof(T), (Delegate)parse);
+        if (_rowValues?.TryGetValue(key, out var cached) is true) return (T)cached!;
+        var value = parse(span);
+        (_rowValues ??= []).Add(key, value);
+        return value;
+    }
+
+    private object ParseBoxedCached(int i, ParseSpan<object> parse, ReadOnlySpan<char> span)
+    {
+        if (Profile.Filters.Count == 0) return parse(span);
+        // Boxed and typed getters share the original typed delegate as their identity.
+        var entry = Parser.TryGetEntry(i, out var fieldEntry) ? fieldEntry : null;
+        if (entry is null && TryGetFieldDescriptor(i, out var field))
+        {
+            Parser.TryGetEntry(field.RuntimeType, out entry);
+            if (entry is null && Nullable.GetUnderlyingType(field.RuntimeType) is { } underlying)
+                Parser.TryGetEntry(underlying, out entry);
+        }
+        if (entry is null) return ParseCached(i, parse, span);
+        var key = (i, entry.Typed.GetType().GenericTypeArguments[0], entry.Typed);
+        if (_rowValues?.TryGetValue(key, out var cached) is true) return cached!;
+        var value = parse(span);
+        (_rowValues ??= []).Add(key, value);
+        return value;
+    }
+
     private SpanParser Parser { get; } = new();
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
@@ -84,7 +118,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         try
         {
             if (Parser.TryGetParser<T>(i, out var parse))
-                return parse(GetValueOrThrow(i));
+                return ParseCached(i, parse, GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is TemporalFormatDescriptor))
             {
@@ -92,7 +126,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
                     RegisterFieldParser(i, field);
                 else
                     RegisterFormattedParser(i, typeof(T), field);
-                return Parser.Parse<T>(i, GetValueOrThrow(i));
+                return ParseCached(i, ResolveTypedParser<T>(i), GetValueOrThrow(i));
             }
 
             return ParseAndOptionallyCache<T>(i);
@@ -108,7 +142,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         try
         {
             if (Parser.TryGetParser<Guid>(i, out var parse))
-                return parse(GetValueOrThrow(i));
+                return ParseCached(i, parse, GetValueOrThrow(i));
 
             return ParseAndOptionallyCache<Guid>(i);
         }
@@ -138,11 +172,11 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetNumeric<T>(int i)
     {
-        if (TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (Profile.Filters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
         try
         {
             if (Parser.TryGetParser<T>(i, out var parse))
-                return parse(GetValueOrThrow(i));
+                return ParseCached(i, parse, GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is NumericFormatDescriptor))
             {
@@ -150,7 +184,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
                     RegisterFieldParser(i, field);
                 else
                     RegisterFormattedParser(i, typeof(T), field);
-                return Parser.Parse<T>(i, GetValueOrThrow(i));
+                return ParseCached(i, ResolveTypedParser<T>(i), GetValueOrThrow(i));
             }
 
             return ParseAndOptionallyCache<T>(i);
@@ -286,7 +320,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
         try
         {
-            return parse.Invoke(value.Value);
+            return ParseBoxedCached(i, parse, value.Value);
         }
         catch (TargetInvocationException ex)
         {
@@ -395,17 +429,17 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public T GetFieldValue<T>(int i)
     {
-        if (TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (Profile.Filters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
         if (IsNullFieldValue<T>(i))
             return default!;
         try
         {
             if (Parser.TryGetParser<T>(i, out var parse))
-                return parse(GetValueOrThrow(i));
+                return ParseCached(i, parse, GetValueOrThrow(i));
             if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
             {
                 RegisterFieldParser(i, field);
-                return Parser.Parse<T>(i, GetValueOrThrow(i));
+                return ParseCached(i, ResolveTypedParser<T>(i), GetValueOrThrow(i));
             }
             return ParseAndOptionallyCache<T>(i);
         }
@@ -417,13 +451,24 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
     }
 
+    private ParseSpan<T> ResolveTypedParser<T>(int i)
+    {
+        if (Parser.TryGetParser<T>(i, out var fieldParse)) return fieldParse;
+        if (Parser.TryGetParser<T>(out var typeParse)) return typeParse;
+        throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+    }
+
     private T ParseAndOptionallyCache<T>(int i)
     {
         if (!CacheInferredFieldParsers)
-            return Parser.Parse<T>(GetValueOrThrow(i));
+        {
+            if (!Parser.TryGetParser<T>(out var parse))
+                throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+            return ParseCached(i, parse, GetValueOrThrow(i));
+        }
 
         Parser.CacheTypeParser<T>(i);
-        return Parser.Parse<T>(i, GetValueOrThrow(i));
+        return ParseCached(i, ResolveTypedParser<T>(i), GetValueOrThrow(i));
     }
 
     public T GetFieldValue<T>(int i, IFormatProvider format)
@@ -455,7 +500,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         ArgumentNullException.ThrowIfNull(parse);
         if (IsNullFieldValue<T>(i))
             return default!;
-        return parse(GetValueOrThrow(i).Value);
+        return ParseCached(i, parse, GetValueOrThrow(i).Value);
     }
 
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]

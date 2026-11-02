@@ -15,9 +15,10 @@ public class CsvObjectReader<T> : IDisposable
     protected Stream Stream { get; }
     protected StreamReader? StreamReader { get; private set; }
     private bool LeaveOpen { get; }
+    private readonly bool _defaultMapper;
     private bool _disposed;
     private CsvDataReader? _dataReader;
-    private bool UseDataReader => Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
+    private bool UseDataReader => Profile.Filters.Count != 0 || Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
         || Profile.RowNumber is not null
         || !string.IsNullOrEmpty(Profile.Resource?.Encoding);
     protected Memory<char> buffer;
@@ -35,6 +36,7 @@ public class CsvObjectReader<T> : IDisposable
         Stream = stream;
         buffer = new Memory<char>(new char[BufferSize]);
         Profile = profile;
+        _defaultMapper = spanMapper is null;
         SpanMapper = spanMapper ?? new SpanMapper<T>(new SpanObjectBuilder<T>().Instantiate);
         LeaveOpen = leaveOpen;
     }
@@ -68,7 +70,8 @@ public class CsvObjectReader<T> : IDisposable
             while (_dataReader!.Read())
             {
                 RowCount++;
-                yield return _dataReader.MapCurrent(SpanMapper);
+                yield return Profile.Filters.Count != 0 && _defaultMapper
+                    ? FilteredObjectMapper<T>.Map(_dataReader) : _dataReader.MapCurrent(SpanMapper);
             }
             yield break;
         }

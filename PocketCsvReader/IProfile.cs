@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,6 +11,7 @@ public interface IProfile
     SchemaDescriptor? Schema { get; }
     ResourceDescriptor? Resource { get; }
     RuntimeParsersDescriptor? Parsers { get; }
+    IReadOnlyList<ReaderFilter> Filters => Array.Empty<ReaderFilter>();
     bool TrackPosition => false;
     StreamInitializationOptions StreamInitialization => StreamInitializationOptions.Default;
 }

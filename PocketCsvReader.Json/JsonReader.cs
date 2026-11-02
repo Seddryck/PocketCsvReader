@@ -40,6 +40,6 @@ public class JsonReader : FlatFileReader<JsonProfile, JsonDataReader>
             profile.OrderedProjection,
             profile.RecordPath,
             profile.AllowComments,
-            profile.AllowTrailingCommas);
+            profile.AllowTrailingCommas) { Filters = profile.Filters };
     }
 }
