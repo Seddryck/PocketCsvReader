@@ -1,9 +1,8 @@
 ---
-# Only the main Sass file needs front matter (the dashes are enough)
 ---
 
-// System fonts
-@import "system-font-css/_system-font";
+// Self-hosted font faces.
+@import "theme/fonts";
 
 // Custom variables and variable overwrites.
 @import "theme/variables";
@@ -19,7 +18,6 @@
 @import "theme/uikit";
 
 // Other vendor styles
-// @import "syntax-highlighting/cld";
 @import "syntax-highlighting/bw";
 // Keep every documentation group reachable on short desktop viewports.
 .sidebar-docs {
