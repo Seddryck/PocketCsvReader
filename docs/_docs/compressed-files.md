@@ -1,28 +1,44 @@
 ---
-title: Read compressed files
+title: Read compressed input
 tags: [configuration]
 ---
 
-The `PocketCsvReader.Compression` namespace provides `DecompressorFactory` and multiple classes implementing the `IDecompressor` interface. These classes support decompressing files using `GZip`, `Deflate`, and `Brotli` formats. The class handling `Zip` supports `deflate` compression, but also accounts for the fact that a ZIP archive may contain multiple files.
+Use resource configuration to read GZip, Deflate, Brotli, or ZIP input through the usual `CsvReader` methods. This page covers compression configuration and archive behavior. See [Fluent API for Resource Configuration](../fluent-api-resource/) for encoding and value substitution settings.
 
 ## Specifying the Compression to the Reader
 
 You can specify compression using the `ResourceDescriptorBuilder` class within a `CsvProfile`. The `WithCompression` method accepts a compression name either as a string or as a `CompressionFormat` enumeration value. Alternatively, call `WithoutCompression` to indicate that the file is not compressed — this is also the default.
 
+<!-- example: gzip-input -->
 ```csharp
+using System.IO.Compression;
+using System.Text;
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+using var compressed = new MemoryStream();
+using (var gzip = new GZipStream(compressed, CompressionMode.Compress, leaveOpen: true))
+    gzip.Write(Encoding.UTF8.GetBytes("1001,Ada\n1002,Grace\n"));
+compressed.Position = 0;
 var profile = new CsvProfile(
-    new DialectDescriptorBuilder()
-        .WithDelimiter(',')
-        .WithLineTerminator("\n")
-        .Build(),
+    new DialectDescriptorBuilder().WithoutHeader().WithLineTerminator("\n").Build(),
     null,
-    new ResourceDescriptorBuilder()
-        .WithEncoding("utf-8")
-        .WithCompression("gz")
-        .Build());
+    new ResourceDescriptorBuilder().WithEncoding("utf-8").WithCompression("gz").Build());
+var csvReader = new CsvReader(profile);
+using var reader = csvReader.ToDataReader(compressed);
+while (reader.Read()) Console.WriteLine(reader.GetString(0));
 ```
 
-When using compression, it's strongly recommended to specify the encoding of the underlying file. This significantly improves memory efficiency. See below for more context.
+<!-- output: gzip-input -->
+```text
+1001
+1002
+```
+
+
+This example creates GZip input in memory. For a file, use `csvReader.ToDataReader("orders.csv.gz")` instead.
+
+Set `WithEncoding` to the encoding of the decompressed text. Compression must be configured explicitly; the reader does not infer it from the filename extension. The example has no header; replace `.WithoutHeader()` with `.WithHeader()` when the first row contains column names.
 
 For a Brotli-compressed CSV, configure the resource with either string identifier or the typed format:
 
@@ -53,7 +69,7 @@ Identifiers are case-insensitive and may start with a dot, for example `.BR`.
 
 ### Class DecompressorFactory
 
-The `DecompressorFactory` offers two instantiation options: `Streaming` and `Buffered`. For better memory performance, prefer `Streaming`, but note that it's forward-only, meaning you cannot detect encoding. If encoding cannot be predefined, use the `Buffered` version instead.
+The `PocketCsvReader.Compression` namespace also exposes `DecompressorFactory` for direct decompression. `Streaming` returns a forward-only decompression stream. `Buffered` decompresses into a seekable in-memory stream, allowing callers to rewind or probe the decompressed data. `CsvReader` chooses the decompression strategy during stream initialization; the fluent resource API configures the format, rather than selecting a factory mode.
 
 For Brotli, streaming decompresses from the input's current position without seeking. Buffered decompression rewinds seekable input and returns a seekable in-memory stream positioned at the beginning; non-seekable input is read from its current position. Dispose the returned stream when finished. Both modes leave the compressed input open for the caller to dispose.
 

@@ -4,6 +4,28 @@ subtitle: Read CEF and LEEF security events
 tags: [usage]
 ---
 
+## Complete CEF example
+
+Install `PocketCsvReader.SecurityLogs`. Select the `msg` extension from a single CEF event. The seven header fields precede selected attributes.
+
+<!-- example: cef-event -->
+```csharp
+using System.Text;
+using PocketCsvReader.SecurityLogs.Configuration;
+
+var cef = new CefReaderBuilder().WithAttributes("msg").Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+    "CEF:0|Example|App|1.0|100|Order accepted|5|msg=ready\n"));
+using var reader = cef.ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine($"{reader.GetInt32(reader.GetOrdinal("Severity"))}: {reader.GetString(reader.GetOrdinal("msg"))}");
+```
+
+<!-- output: cef-event -->
+```text
+5: ready
+```
+
 Install the optional package (targets .NET 8, 9, and 10):
 
 ```bash

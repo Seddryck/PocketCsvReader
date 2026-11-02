@@ -1,80 +1,47 @@
 ---
-title: Fluent API for Resource Configuration
-tags: [configuration]
+title: Encoding and stream initialization
+tags: [input]
 ---
 
-## Overview
+<span id="accessing-the-resource-descriptor"></span>
+<span id="configuring-compression"></span>
+<span id="configuring-file-encoding"></span>
+<span id="overview"></span>
+<span id="supported-encodings"></span>
 
-The Fluent API for resource configuration in PocketCsvReader provides an intuitive and flexible way to define resource-level settings, such as file encoding and value substitution sequences.
+Configure input encoding before creating the reader. The resource descriptor also carries compression and sequences, whose authoritative guides are [Compression](../compressed-files/) and [Null and missing values](../sequences/).
 
-## Accessing the Resource Descriptor
-
-You can configure resource settings using the `CsvReaderBuilder`, class and the `WithResource` method, which allows you to instantiate a `ResourceDescriptorBuilder`:
-
-```csharp
-var builder = new CsvReaderBuilder().WithResource
-(
-    new ResourceDescriptorBuilder()
-                .WithEncoding("utf-8")
-);
-var reader = builder.Build();
-```
-
-This method allows you to define **resource-level behaviors**, including encoding settings and sequences.
-
-## Configuring File Encoding
-
-PocketCsvReader can automatically detect file encoding based on the Byte Order Mark (BOM). The BOM is a sequence of bytes at the beginning of a file that indicates the encoding format.
-
-However, some CSV files do not include a BOM, and certain encodings lack a defined BOM. In such cases, you can manually specify the encoding using the `WithEncoding` method.
+## Configure an encoding
 
 ```csharp
-var builder = new CsvReaderBuilder().WithResource
-(
-    new ResourceDescriptorBuilder()
-                .WithEncoding("ISO-8859-2")
-);
-var reader = builder.Build();
+var csv = new CsvReaderBuilder()
+    .WithResource(r => r.WithEncoding("utf-8"))
+    .Build();
 ```
 
-### Supported Encodings
+`WithEncoding` accepts an encoding name recognized by .NET, such as `utf-8`. Some legacy code pages require the application's encoding provider registration. It describes decompressed text when compression is configured. It is not a compression or filename-extension detector.
 
-The `WithEncoding` method expects a MIME-type encoding name. Case sensitivity is not enforced when validating MIME types.
+## Probing and BOMs
 
-Examples:
-
-- `WithEncoding("ISO-8859-2")`
-- `WithEncoding("utf-8")`
-
-## Configuring Compression
-
-PocketCsvReader can automatically decompress delimited-files compressed with a classical compression format.
+CSV's `StreamInitializationOptions` controls encoding probing and parser selection. Explicit resource encoding has precedence over probing. Without an explicit encoding, probing recognizes supported BOMs; input without one falls back to UTF-8. Known UTF-8 input can use `StreamInitializationOptions.Utf8`, which disables probing and requests native byte parsing subject to its eligibility rules. `ForwardOnly` disables probing while retaining the default character input mode.
 
 ```csharp
-var builder = new CsvReaderBuilder().WithResource
-(
-    new ResourceDescriptorBuilder()
-                .WithCompression(CompressionFormat.Gzip)
-);
-var reader = builder.Build();
+var csv = new CsvReaderBuilder()
+    .WithStreamInitialization(new StreamInitializationOptions(
+        ProbeEncoding: true, InputMode: CsvInputMode.Auto))
+    .Build();
 ```
 
-More info on [compression](../compressed-files).
+The matching initial encoding preamble is consumed once; later U+FEFF characters remain data. With probing disabled, another encoding's BOM does not select that encoding. A non-seekable stream cannot be rewound by the caller; probe handling and ordinary forward-only parsing must not be confused with [inference replay](../schema-inference/#streams).
 
-### Registering Sequences
+See [native UTF-8 input](../utf8-input/) for the selection matrix, unsupported dialects, replacement fallback, and decompression behavior. Other format profiles can enforce their own initialization policy; do not assume CSV's native byte parser exists for every format.
 
-A sequence substitution allows you to replace specific values in the CSV data before parsing. The concept of sequences is explained in detail [here](/docs/sequences).
+## Compression
 
-You can define sequences using the WithSequence method of the ResourceDescriptorBuilder class. This method allows you to specify:
+Compression is explicitly configured by `WithCompression` and disabled by `WithoutCompression`. See [Read compressed files](../compressed-files/) for examples, aliases, factory modes, and ZIP constraints. Ordinary reader configuration does not infer compression from filename extensions; inference has its own documented filename handling.
 
-1. The pattern to match in the CSV data.
-2. The replacement value to substitute in place of the matched pattern.
+## Registering sequences
 
-```csharp
-var builder = new CsvReaderBuilder()
-    .WithResource(
-        (r) => r.WithSequence("0", "-1")
-    );
-```
+`WithResource(r => r.WithSequence("N/A", null))` registers a resource-level replacement for readers that apply the sanitizer. Replacements match whole eligible field values, not arbitrary substrings in the file. Quoted/escaped fields and native JSON nulls have distinct rules. See [value handling](../sequences/).
 
- In this example, all occurrences of "0" in the CSV data will be replaced with "-1" before parsing.
+For disposal, lazy enumeration, cancellation, and already-open streams see [Stream ownership](../stream-lifetimes/).

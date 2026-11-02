@@ -92,6 +92,7 @@ plugins:
   - jekyll-gist
   - jekyll-avatar
 exclude:
+  - MAINTAINING.md
   - Gemfile
   - Gemfile.lock
   - node_modules

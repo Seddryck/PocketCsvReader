@@ -1,30 +1,14 @@
 ---
 layout: page
 width: small
-title: Got Any Questions
+title: Questions, bugs, and contributions
 permalink: /contact/
 ---
 
-### Some questions to ask?
+Ask usage questions in [GitHub Q&A](https://github.com/Seddryck/PocketCsvReader/discussions/categories/q-a). Discuss feature ideas in [Ideas](https://github.com/Seddryck/PocketCsvReader/discussions/categories/ideas).
 
-We encourage you to ask your questions in the [Q&A category](https://github.com/Seddryck/pocketcsvreader/discussions/categories/q-a) of the discussions feature on the the GitHub repository. Please don't use Twitter or LinkedIn for this.
+For a bug, [open an issue](https://github.com/Seddryck/PocketCsvReader/issues) with the package/version, .NET runtime, input format, a minimal sanitized input sample, reader/profile configuration, expected and actual results, and the exception/stack trace. Mention encoding, line endings, headers, and whether the input is compressed or non-seekable when relevant. Do not include credentials or sensitive production records.
 
-### Ideas for new features?
+For a feature or documentation issue, use a descriptive natural-language title and explain the intended behavior. Repository maintainers use one change-type label: bug, new-feature, or enhancement; docs can be an additional topic label.
 
-New ideas are welcome! Feel free to share them in the [Ideas category](https://github.com/Seddryck/pocketcsvreader/discussions/categories/ideas) of the discussions feature on the the GitHub repository.
-
-You already have a good idea how to describe your new idea? Go ahead and write down your user-story in the [Issues](https://github.com/Seddryck/pocketcsvreader/issues) tab. No specific format is needed.
-
-### Facing a bug?
-
-Please report the discovered bug in the [Issues](https://github.com/Seddryck/pocketcsvreader/issues) section. No specific format of report is needed but we need to know the connection url that you're using (feel free to change a few chars but we need something very close) and also the version of the provider (and of the database). If you're receiving an error message, please include it!
-
-### Willing to contribute?
-
-The best is always to first open an [idea](https://github.com/Seddryck/pocketcsvreader/discussions/categories/ideas) or an [issue](https://github.com/Seddryck/pocketcsvreader/issues). Always better to discuss the purpose before going too far on the development. 
-
-Then, when implemented, you can  submit [Pull Requests](https://github.com/Seddryck/pocketcsvreader/pulls). Don't forget to include the corresponding tests and documentation, we won't accept any pull request that is not coming with tests and/or documentation. Your pull requests will be manually reviewed and accepted.
-
-### Other kind of contact needed?
-
-The best is to shout me (in English or French) on [@Seddryck](https://twitter.com/Seddryck) on twitter. Naturally, answering questions or providing support is not possible through this medium, use the means provided above for this kind of questions.
+See [contributing guidance](https://github.com/Seddryck/PocketCsvReader/blob/main/contributing.md) before implementing a change. Include focused validation and documentation with the pull request.

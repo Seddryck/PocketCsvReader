@@ -1,75 +1,16 @@
 ---
-title: Pre-configured dialect descriptors
-tags: [configuration]
+title: CSV preset profiles
+tags: [compatibility]
 ---
-The CsvProfile class provides several pre-configured dialect descriptors that define common CSV dialects. These profiles are designed to simplify the setup of common CSV configurations.
+
+The authoritative preset table and examples have moved to [CSV and TSV: presets](../csv-dialect-descriptor/#presets). Existing URLs and the following anchors remain available.
 
 ## Available Profiles
-
 ### CommaDoubleQuote
-
-A profile that uses a comma as the delimiter and enables double quoting. This profile assumes no header in the CSV.
-
-* Delimiter: `,`
-* Line Terminator: Platform-specific (e.g., \n or \r\n)
-* Quote Character: `"`
-* Escape Character: `\`
-* Double Quote: Enabled
-* Header: Disabled
-
-**Usage:**
-
-```csharp
-var profile = CsvProfile.CommaDoubleQuote;
-```
-
+See [CommaDoubleQuote](../csv-dialect-descriptor/#commadoublequote).
 ### SemiColumnDoubleQuote
-
-A profile that uses a semicolon as the delimiter and enables double quoting. This profile assumes no header in the CSV.
-
-* Delimiter: `;`
-* Line Terminator: Platform-specific (e.g., \n or \r\n)
-* Quote Character: `"`
-* Escape Character: `\`
-* Double Quote: Enabled
-* Header: Disabled
-
-**Usage:**
-
-```csharp
-var profile = CsvProfile.SemiColumnDoubleQuote;
-```
-
+See [SemiColumnDoubleQuote](../csv-dialect-descriptor/#semicolumndoublequote).
 ### TabDoubleQuote
-
-A profile that uses a tab character as the delimiter and enables double quoting. This profile assumes no header in the CSV.
-
-* Delimiter: `\t` (`tab`)
-* Line Terminator: Platform-specific (e.g., \n or \r\n)
-* Quote Character: `"`
-* Escape Character: `\`
-* Double Quote: Enabled
-* Header: Disabled
-
-**Usage:**
-
-```csharp
-var profile = CsvProfile.TabDoubleQuote;
-```
-
+See [TabDoubleQuote](../csv-dialect-descriptor/#tabdoublequote).
 ### PipeSingleQuote
-
-A profile that uses a pipe character (`|`) as the delimiter and uses single quoting. This profile assumes no header in the CSV.
-
-* Delimiter: `|`
-* Line Terminator: Platform-specific (e.g., \n or \r\n)
-* Quote Character: `"`
-* Escape Character: `\`
-* Double Quote: Enabled
-* Header: Disabled
-
-**Usage:**
-
-```csharp
-var profile = CsvProfile.PipeSingleQuote;
-```
+See [PipeSingleQuote](../csv-dialect-descriptor/#pipesinglequote).

@@ -1,217 +1,79 @@
 ---
-title: Basic usage of the library
+title: Read your first CSV
 tags: [quick-start]
 ---
-The `CsvReader` class is a flexible and efficient tool for reading and parsing CSV files or streams into various formats, such as `DataTable`, `IDataReader`, or strongly-typed objects. This documentation explains the basics of how to use the class, including common use cases and examples.
 
-## Features
+<span id="1-accessing-data-with-idatareader"></span>
+<span id="2-reading-into-a-datatable"></span>
+<span id="3-reading-as-arrays"></span>
+<span id="4-mapping-records-to-strongly-typed-objects"></span>
+<span id="5-reading-as-dynamic-objects"></span>
+<span id="asynchronous-strongly-typed-streaming"></span>
+<span id="best-practices-and-additional-notes"></span>
+<span id="error-handling"></span>
+<span id="example-mapping-to-a-person-class"></span>
+<span id="features"></span>
+<span id="from-a-file-to-a-datatable"></span>
+<span id="from-a-file-to-a-idatareader"></span>
+<span id="from-a-file-to-an-array"></span>
+<span id="from-a-stream-to-a-datatable"></span>
+<span id="from-a-stream-to-a-idatareader"></span>
+<span id="from-a-stream-to-an-array"></span>
+<span id="from-a-stream-to-strongly-typed-objects"></span>
+<span id="getting-started"></span>
+<span id="initialization"></span>
+<span id="reading-csv-data"></span>
 
-- Access CSV data in a forward-only, read-only manner using `IDataReader`.
-- Read CSV files or streams into a `DataTable`.
-- Map CSV records to strongly-typed objects.
-- Map CSV records to array of strings.
-- Customizable CSV parsing profiles for delimiters, quote handling, and more.
-- Supports encoding detection through the `IEncodingDetector` interface.
+Install [PocketCsvReader](../installation/). This complete console example reads a small customer export without requiring a file on disk.
 
-## Getting Started
+## Input
 
-### Initialization
-
-You can create an instance of `CsvReader` with various configurations:
-
-```csharp
-// Default configuration: comma-delimited, double quotes for escaping, 4 KB buffer size.
-var csvReader = new CsvReader();
-
-// Custom CSV profile (e.g., semicolon-delimited, double quotes for escaping).
-var csvReaderWithProfile = new CsvReader(CsvProfile.SemiColumnDoubleQuote);
-
-// Custom buffer size for large files.
-var csvReaderWithBuffer = new CsvReader(bufferSize: 64 * 1024);
-
-// Both custom profile and buffer size.
-var csvReaderCustom = new CsvReader(CsvProfile.SemiColumnDoubleQuote, bufferSize: 16 * 1024);
+```csv
+Id,Name
+1,Ada
+2,Grace
 ```
 
----
+## Read rows
 
-## Reading CSV Data
-
-### 1. Accessing Data with `IDataReader`
-
-The `ToDataReader` method provides a forward-only, read-only `IDataReader` for processing large files efficiently.
-
-#### From a File to a IDataReader
-
+<!-- example: first-csv -->
 ```csharp
-using var reader = csvReader.ToDataReader("example.csv");
-while (reader.Read())
-{
-    Console.WriteLine(reader[0]); // Access the first column of the current row.
-}
-```
+using System.Text;
+using PocketCsvReader.Configuration;
 
-#### From a Stream to a IDataReader
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-using var reader = csvReader.ToDataReader(stream);
-while (reader.Read())
-{
-    Console.WriteLine(reader[0]); // Access the first column of the current row.
-}
-```
-
-### 2. Reading Into a `DataTable`
-
-The `ToDataTable` method reads CSV data and returns a `DataTable` containing all rows and fields.
-
-#### From a File to a DataTable
-
-```csharp
-DataTable dataTable = csvReader.ToDataTable("example.csv");
-```
-
-#### From a Stream to a DataTable
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-DataTable dataTable = csvReader.ToDataTable(stream);
-```
-
----
-
-### 3. Reading as Arrays
-
-The `ToArrayString` method returns an enumerable of string arrays, where each array represents a record (row) of fields.
-
-#### From a File to an array
-
-```csharp
-foreach (var record in csvReader.ToArrayString("example.csv"))
-{
-    Console.WriteLine(string.Join(", ", record));
-}
-```
-
-#### From a Stream to an array
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-foreach (var record in csvReader.ToArrayString(stream))
-{
-    Console.WriteLine(string.Join(", ", record));
-}
-```
-
----
-
-### 4. Mapping Records to Strongly-Typed Objects
-
-The `To<T>` method maps CSV records to objects of a specified type.
-
-#### Example: Mapping to a `Person` Class
-
-```csharp
-public class Person
-{
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
-    public int Age { get; set; }
-}
-
-IEnumerable<Person> people = csvReader.To<Person>("example.csv");
-
-foreach (var person in people)
-{
-    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
-}
-```
-
-#### From a Stream to Strongly-Typed Objects
-
-```csharp
-using var stream = new FileStream("example.csv", FileMode.Open, FileAccess.Read);
-IEnumerable<Person> people = csvReader.To<Person>(stream);
-
-foreach (var person in people)
-{
-    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
-}
-```
-
-#### Asynchronous Strongly-Typed Streaming
-
-Use `ToAsync<T>` when records should be mapped one at a time while the underlying input is read asynchronously:
-
-```csharp
-await foreach (var person in csvReader.ToAsync<Person>("example.csv", cancellationToken: cancellationToken))
-{
-    Console.WriteLine($"{person.FirstName} {person.LastName}, Age: {person.Age}");
-}
-```
-
-The sequence is lazy, forward-only, and uses the same parser, mapping, profile, and bad-data behavior as the synchronous API. Cancellation is forwarded to the underlying asynchronous I/O. File inputs are closed when enumeration ends; caller-provided streams are left open.
-
-### 5. Reading as Dynamic Objects
-
-Use `ToDynamic(filename)` or `ToDynamic(stream)` to read each record as an independent
-`System.Dynamic.ExpandoObject`, without defining a model type. For a file with
-`Name,City` headers:
-
-```csharp
-var dynamicReader = new CsvReaderBuilder()
-    .WithDialect(d => d.WithHeader())
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
     .Build();
 
-foreach (dynamic record in dynamicReader.ToDynamic("people.csv"))
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id,Name\n1,Ada\n2,Grace\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
 {
-    Console.WriteLine($"{record.Name}: {record.City}");
-    var fields = (IDictionary<string, object?>)record;
-    Console.WriteLine(fields["City"]);
+    var id = reader.GetInt32(reader.GetOrdinal("Id"));
+    var name = reader.GetString(reader.GetOrdinal("Name"));
+    Console.WriteLine($"{id}: {name}");
 }
 ```
 
-Dictionary access also supports names containing spaces or punctuation. Names come
-from the underlying `IDataReader`, including generated names for headerless or
-unnamed fields. Values retain configured schema and parser types; untyped fields
-remain strings and database nulls become C# `null`. Duplicate names, compared
-ordinally, throw `System.Data.DuplicateNameException` before yielding the affected
-record, consistent with `ToDataTable()`; names are never silently overwritten or renamed.
-
-The shared reader abstraction obtains records through `ToDataReader()` and supports
-other formats such as fixed-width files. Enumeration is lazy and disposes the reader
-and its input stream on completion, failure, or early exit. Returned objects remain
-usable after enumeration ends. Empty input returns an empty sequence.
-
-## Error Handling
-
-The following exceptions may be thrown:
-
-- `FileNotFoundException`: If the specified file does not exist.
-- `ArgumentNullException`: If a required argument (e.g., stream) is null.
-- `IOException`: For general file or stream-related errors.
-
-Ensure proper exception handling to avoid runtime issues:
-
-```csharp
-try
-{
-    var data = csvReader.ToDataTable("example.csv");
-}
-catch (FileNotFoundException ex)
-{
-    Console.WriteLine($"File not found: {ex.Message}");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"An error occurred: {ex.Message}");
-}
+<!-- output: first-csv -->
+```text
+1: Ada
+2: Grace
 ```
 
-## Best Practices and Additional Notes
+`WithHeader()` uses the first row for column names. For headerless data use `WithoutHeader()` and access columns by position. The line terminator is explicit here because the input uses LF. See [CSV and TSV](../csv-dialect-descriptor/) for quoting, comments, presets, and dialect defaults.
 
-1. **Use Streams for Large Files:** Use stream-based methods to avoid loading large files entirely into memory.
-2. **Dispose Resources:** Always dispose of `IDataReader` and `Stream` objects after use.
-3. The class uses an `IEncodingDetector` to automatically detect the file encoding. You can replace this with a custom implementation if needed.
-4. Buffer size configuration can improve performance for specific use cases.
+To read a file, replace `csv.ToDataReader(stream)` with `csv.ToDataReader("customers.csv")`. The data reader owns its supplied stream and closes it on disposal. A filename overload streams input too; choosing a filename does not itself load the whole file.
+
+## Map to objects
+
+The default CSV object mapper requires a public constructor whose parameter count and order match the data columns, such as `public record Customer(int Id, string Name)`. A property-only class is insufficient. Use `csv.To<Customer>("customers.csv")` and enumerate it while its input is available.
+
+Column names do not bind constructor parameters. [Map rows to objects](../mapper-object-builder/) contains a complete order import, custom parsers, and a selected-column mapper.
+
+## Next steps
+
+- [Choose an output model](../output-models/) for arrays, dictionaries, dynamic rows, tables, or typed objects.
+- [Configure schemas and cultures](../fluent-api-schema/) when values need explicit types or formats.
+- [Read asynchronously](../async-reading/) and understand [stream lifetimes](../stream-lifetimes/).
+- [Handle optional fields and malformed input](../validation-and-errors/).

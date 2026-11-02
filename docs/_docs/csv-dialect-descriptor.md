@@ -1,120 +1,106 @@
 ---
-title: CSV dialect descriptor
-tags: [configuration]
----
-The `CsvDialectDescriptor` class provides extensive configuration options for tuning the behavior of CSV parsing operations. Below is an explanation of each property and its potential impact on CSV processing.
-
-The description of PocketCsvReader is aligned with the [CSV Dialect Specification](https://specs.frictionlessdata.io/csv-dialect/#specification) provided by Frictionless Data.
-
+title: CSV and TSV
+tags: [formats]
 ---
 
-## `Delimiter`
+<span id="casesensitiveheader"></span>
+<span id="commentchar"></span>
+<span id="commentrows"></span>
+<span id="csvddfversion"></span>
+<span id="delimiter"></span>
+<span id="doublequote"></span>
+<span id="escapechar"></span>
+<span id="header"></span>
+<span id="headerjoin"></span>
+<span id="headerrows"></span>
+<span id="lineterminator"></span>
+<span id="nullsequence"></span>
+<span id="quotechar"></span>
+<span id="skipinitialspace"></span>
 
-- **Description:** The character used to separate fields in a CSV file.
-- **Default Value:** `','` (comma)
-- **Tuning:**
-  - Change this value to match the delimiter used in your CSV files.
-  - Examples:
-    - `';'` for semicolon-separated values (common in Europe).
-    - `'\t'` for tab-separated values (TSV files).
+The core `PocketCsvReader` package reads delimiter-separated records. Configure a `DialectDescriptor` through `CsvReaderBuilder.WithDialect` before reading.
 
-## `LineTerminator`
+## Example: semicolon export
 
-- **Description:** The string used to terminate lines in a CSV file.
-- **Default Value:** `\r\n` (carriage return and newline).
-- **Tuning:**
-  - Adjust for files that use different line endings.
-  - Examples:
-    - `\n` for Unix-style line endings.
-    - `\r` for older Mac-style line endings.
+<!-- example: semicolon-csv -->
+```csharp
+using System.Text;
+using PocketCsvReader.Configuration;
 
-## `QuoteChar`
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithDelimiter(';').WithLineTerminator("\n").WithHeader())
+    .Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id;Name\n1;\"Ada; Lovelace\"\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine($"{reader.GetInt32(0)}: {reader.GetString(1)}");
+```
 
-- **Description:** The character used to quote fields containing special characters (e.g., delimiters or line terminators).
-- **Default Value:** `"` (double quotes).
-- **Tuning:**
-  - Change this value if the CSV uses a different quoting character.
-  - Example: `'` for single-quoted CSV fields.
+<!-- output: semicolon-csv -->
+```text
+1: Ada; Lovelace
+```
 
-## `DoubleQuote`
+Use `WithDelimiter('\t')` for TSV. Quoted fields may contain delimiters or record terminators; doubled quote escaping is enabled by default. For backslash escaping configure `WithEscapeChar('\\')` explicitly. A final record can end at EOF without a terminator. Use a configured terminator matching the input; do not assume every newline convention is interchangeable.
 
-- **Description:** Specifies whether double quotes inside quoted fields should be escaped by doubling them.
-- **Default Value:** `false`.
-- **Tuning:**
-  - Set to `true` if your CSV files use double-quote escaping (e.g., `field with ""quotes""`).
-  - Set to `false` if another escaping method is used (e.g., backslash).
+## Dialect reference
 
-## `EscapeChar`
+These are `new DialectDescriptor()` defaults, not necessarily the defaults of a preset profile.
 
-- **Description:** The character used to escape special characters within fields.
-- **Default Value:** `null` (null, indicating no escape character).
-- **Tuning:**
-  - Set to a specific character if your CSV uses an escape mechanism (e.g., `\` for backslashes).
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `Delimiter` | comma | Field separator |
+| `LineTerminator` | `"\r\n"` | Record separator; quoted records may span physical lines |
+| `QuoteChar` | `"` | Quote character; `WithoutQuoteChar()` disables it |
+| `DoubleQuote` | `true` | Doubled quotes inside quoted text represent one quote |
+| `EscapeChar` | `null` | Optional alternate escape character |
+| `NullSequence` | `null` | Configured representation of null; see [value handling](../sequences/) |
+| `MissingCell` | `null` | Missing-cell representation |
+| `SkipInitialSpace` | `false` | Ignore configured initial field spaces |
+| `Header` | `true` | First configured header row supplies names |
+| `HeaderRows` | `[1]` | One-based header row indexes |
+| `HeaderJoin` | one space | Join corresponding cells from multiple header rows |
+| `HeaderRepeat` | `true` | Each file in a batch has its own headers |
+| `CommentChar` | `null` | Optional comment marker |
+| `CommentRows` | `null` | Optional one-based rows treated as comments |
+| `ArrayDelimiter`, `ArrayPrefix`, `ArraySuffix` | `null` | Optional array syntax inside a field |
 
-## `NullSequence`
+`DialectDescriptor` has no `CaseSensitiveHeader` or `CsvDdfVersion` setting. Reader name lookup uses ordinal, case-sensitive comparison. The dialect vocabulary is related to the [Frictionless CSV dialect specification](https://specs.frictionlessdata.io/csv-dialect/); the table above describes the actual public API.
 
-- **Description:** A string used to represent null values in the CSV.
-- **Default Value:** `null` (no explicit null representation).
-- **Tuning:**
-  - Define a specific string to represent nulls, such as `(null)`, `N/A`, or `-`.
+### Headers and comments
 
-## `SkipInitialSpace`
+Use `WithHeaderRows(new[] { 1, 2 }).WithHeaderJoin(".")` for multiple header rows. `WithoutHeader()` clears header rows. Headerless CSV uses generated names such as `field_0`. Repeated headers and generated row numbers are covered in [batch reading](../batch-reading/).
 
-- **Description:** Specifies whether to skip whitespace following the delimiter.
-- **Default Value:** `false`.
-- **Tuning:**
-  - Set to `true` if your CSV has spaces after delimiters (e.g., `   value1, "value2"`).
+Configure comments through `WithCommentChar('#')` or `WithCommentRows(new[] { 1, 3 })`. The parser distinguishes comments from quoted data; comment markers inside quoted fields remain data. Comments do not produce returned data rows. Test comment placement against representative input instead of stripping text before parsing.
 
-## `Header`
+### Arrays
 
-- **Description:** Specifies whether the first row(s) of the CSV contains column headers.
-- **Default Value:** `true`.
-- **Tuning:**
-  - Set to `false` if your CSV does not include headers.
-  - Useful for datasets where all rows are data.
+`WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']'))` configures array syntax. Declare array types in the [schema](../fluent-api-schema/#arrays), or use explicit array getters. An array declaration does not transform arbitrary scalar text into an array.
 
-## `HeaderRows`
+## Presets
 
-- **Description:** Specifies the row indexes that contain the headers.
-- **Default Value:** `[1]`.
-- **Tuning:**
-  - Set to `[1,2]` if your CSV defines headers across the first two rows.
-  - Set to `[2,3]` if your CSV defines headers across the second and third two rows. The first row is ignored.
-  - Useful for datasets where multiple rows combine to define the headers.
+[Earlier preset-page links](../pre-configured-dialect-descriptor/) remain supported; this section owns the current preset reference.
 
-## `HeaderJoin`
+`CsvProfile` provides the following presets. They use `Environment.NewLine`, backslash escaping, doubled-quote support, and **no header**.
 
-- **Description:** Specifies the separator used to combine fields when headers span multiple rows.
-- **Default Value:** ` ` (concatenates headers without a space as separator).
-- **Tuning:**
-  - Set to . to produce fields like `fruit.id` and `fruit.name`.
-  - Useful for datasets with multi-line headers that need to be merged into a single row of header fields.
+| Profile | Delimiter | Quote |
+| --- | --- | --- |
+| `CommaDoubleQuote` | `,` | `"` |
+| `SemiColumnDoubleQuote` | `;` | `"` |
+| `TabDoubleQuote` | tab | `"` |
+| `PipeSingleQuote` | `\|` | `'` |
 
-## `CommentChar`
+### CommaDoubleQuote
+Use `new CsvReader(CsvProfile.CommaDoubleQuote)` for the comma preset.
+### SemiColumnDoubleQuote
+Use `new CsvReader(CsvProfile.SemiColumnDoubleQuote)` for the semicolon preset; the public name retains this spelling.
+### TabDoubleQuote
+Use `new CsvReader(CsvProfile.TabDoubleQuote)` for TSV.
+### PipeSingleQuote
+Use `new CsvReader(CsvProfile.PipeSingleQuote)` for pipe-separated, single-quoted input.
 
-- **Description:** The character used to denote comments in the CSV file. Must be the first character of the row.
-- **Default Value:** `null` (null, indicating no comments).
-- **Tuning:**
-  - Specify a comment character (e.g., `'#'` or `';'`) to skip lines starting with that character.
+## Configuration errors
 
-## `CommentRows`
+`Build()` rejects an empty terminator, non-positive header row numbers, enabled headers without header rows, disabled headers with header rows, colliding delimiter/quote/comment characters, and reserved syntax characters occurring inside the line terminator. These are configuration errors, not recoverable bad records.
 
-- **Description:** Specifies row indexes that are treated as comments, regardless of whether `commentChar` is set.
-- **Default Value:** `[]` (no specific rows are treated as comments).
-- **Tuning:**
-  - Specify indexes like `[1,3,4]` to treat the first, third, and fourth rows as comments.
-  - Useful for skipping predefined rows that do not contain data.
-
-## `CaseSensitiveHeader`
-
-- **Description:** Indicates whether header names should be treated as case-sensitive.
-- **Default Value:** `false`.
-- **Tuning:**
-  - Set to `true` if your application differentiates between header names like `"Name"` and `"name"`.
-
-## `CsvDdfVersion`
-
-- **Description:** The version of the CSV dialect descriptor format.
-- **Default Value:** `"1.0"`.
-- **Tuning:**
-  - Adjust to a specific version if required by compatibility standards.
+For data errors see [validation and recovery](../validation-and-errors/). For conversion, nulls, and incomplete rows see [schemas](../fluent-api-schema/) and [null and missing values](../sequences/). Custom terminator mismatch fixes preserve parsing state; they do not make mismatched terminators a supported substitute for a correctly configured dialect.

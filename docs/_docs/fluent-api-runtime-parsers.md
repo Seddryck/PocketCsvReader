@@ -1,112 +1,70 @@
 ---
-title: Fluent API for Runtime Type Parsers
+title: Custom parsers
 tags: [configuration]
 ---
 
-## Overview
+<span id="defining-a-set-of-parsers"></span>
+<span id="handling-multiple-parsers"></span>
+<span id="overview"></span>
+<span id="registering-a-custom-parser"></span>
 
-The optional [Chrononuensis integration](/docs/chrononuensis) registers span parsers for temporal periods with `options.UseChrononuensis()`. Explicit custom parsers override its defaults in either registration order.
+Register a field parser when conversion differs by column, or a runtime parser when the same type should be parsed consistently across fields. Both are data-reader conversion settings; `SpanObjectBuilder.SetParser` configures the separate constructor-mapping path.
 
-The Fluent API for runtime type parsers in PocketCsvReader provides an intuitive and flexible way to define parsers for various runtime types. This is particularly useful when working with custom or non-standard types serialized in a CSV file that need to be correctly deserialized.
+## Complete custom type example
 
-By defining a set of parsers, you ensure that these types are always deserialized properly across different CSV files. However, if the deserialization logic varies depending on the field, you should register the parser at the field level instead. See: [Providing a Custom Parser](/docs/fluent-api-schema#providing-a-custom-parser).
-
-## Defining a set of parsers
-
-You can configure runtime type parsers in two ways:
-
-1. Using a CSV Profile
-
-The `CsvProfile` class allows you to define a set of parsers as part of the CSV processing configuration:
-
+<!-- example: custom-parser -->
 ```csharp
-var profile = new CsvProfile(
-    new DialectDescriptorBuilder().Build()
-    , new SchemaDescriptorBuilder()
-            .Indexed()
-            .WithField<YearMonth>()
-            .Build()
-    , null
-    , new RuntimeParsersDescriptorBuilder()
-            .WithParser(...)
-            .Build()
-);
-```
+using System.Globalization;
+using System.Text;
+using PocketCsvReader.Configuration;
 
-1. Using a CSV Reader Builder
-
-You can also configure parsers using the `CsvReaderBuilder` class:
-
-```csharp
-var builder = new CsvReaderBuilder().WithParsers
-(
-    new RuntimeParsersDescriptorBuilder()
-                .WithParser(...)
-);
-var reader = builder.Build();
-```
-
-### Registering a Custom Parser
-
-To define custom parsers, instantiate a `RuntimeParsersDescriptorBuilder` and use its method `WithParser` method.
-
-**Example:** Custom Parser for `Point`
-
-```csharp
-Point parse(string input)
-{
-    var parts = input.Split(';');
-    return new Point(parts[0], parts[1]);
-}
-
-var schema = new RuntimeParsersDescriptorBuilder()
-    .WithParser<Point>(parse)
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithoutHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Indexed().WithField<Coordinate>())
+    .WithParsers(p => p.WithParser((ReadOnlySpan<char> text) =>
+    {
+        var separator = text.IndexOf(';');
+        if (separator < 0) throw new FormatException("Expected x;y");
+        return new Coordinate(
+            int.Parse(text[..separator], CultureInfo.InvariantCulture),
+            int.Parse(text[(separator + 1)..], CultureInfo.InvariantCulture));
+    }))
     .Build();
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("3;4\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+{
+    var point = reader.GetFieldValue<Coordinate>(0);
+    Console.WriteLine($"({point.X}, {point.Y})");
+}
+public record Coordinate(int X, int Y);
 ```
 
-In this example:
-
-- The custom parser splits the input string using ; as a delimiter.
-- It parses the extracted values into integers.
-- It creates a Point instance from the parsed values.
-
-### Handling Multiple Parsers
-
-- You can define multiple parsers for different types.
-- If two parsers are registered for the same type, the most recently registered parser overrides the previous one.
-
-### Parsing spans without intermediate strings
-
-Use the public `PocketCsvReader.ParseSpan<T>` delegate to consume a `ReadOnlySpan<char>` directly:
-
-```csharp
-ParseSpan<int> parse = (ReadOnlySpan<char> value) =>
-    int.Parse(value, CultureInfo.InvariantCulture);
-
-var parsers = new RuntimeParsersDescriptorBuilder().WithParser(parse).Build();
-
-// Direct descriptor registration is also supported.
-var descriptor = new RuntimeParsersDescriptor();
-descriptor.AddParser(parse);
-```
-
-Field parsers and field formats retain precedence over runtime parsers. A schema builder may supply a default numeric or temporal format; use field-level registration to override that format.
-
-The parser runs synchronously and must not retain the span. It receives the same sanitized and decoded input as existing string parsers. Typed reads avoid intermediate strings; boxed reads still allocate when boxing value types, and returned objects may allocate themselves. Null values retain the existing reader behavior and skip custom parsers for nullable/reference typed reads. Arrays use the registered parser for each non-null element.
-
-Use an explicitly typed span lambda or a `ParseSpan<T>` variable to select the span overload. For a method group, assign or cast it to `ParseSpan<T>` first:
-
-```csharp
-ParseSpan<int> parse = int.Parse;
-var parsers = new RuntimeParsersDescriptorBuilder().WithParser(parse).Build();
-```
-
-Existing string delegates continue to work. With C# 13 or newer, overload priorities keep untyped lambdas and overloaded method groups on the legacy string overload. With an older compiler, explicitly type the lambda parameter as `string` when overload resolution is ambiguous.
-
-To compare custom numeric and date parsers at field and runtime scope, run:
-
+<!-- output: custom-parser -->
 ```text
-dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*CustomParsing*' --job short
+(3, 4)
 ```
 
-These benchmarks measure steady-state typed access with registration and initial parser caching outside the measured operation. `MemoryDiagnoser` reports total managed allocations alongside throughput, including intermediate strings and any boxing performed by the legacy adapter. They do not measure CSV tokenization or boxed access. The custom benchmark runner preserves the current power plan.
+## Parser scope and precedence
+
+| Scope | API | Effect |
+| --- | --- | --- |
+| Explicit getter | `GetFieldValue<T>(ordinal, parser)` | Parser for that requested read |
+| Field | `WithField<T>(f => f.WithParser(...))` | Parser for one schema field |
+| Field format | Specialized schema field builder | Formatted conversion, ahead of runtime type defaults |
+| Runtime type | `WithParsers(p => p.WithParser(...))` | Shared type parser when no field override wins |
+| Integration defaults | `UseChrononuensis()` | Fallback registrations; explicit runtime parsers win in either registration order |
+
+The latest explicit registration for the same field/type replaces its previous parser. Schema builders can supply default numeric/temporal formats; use a field parser to override that field's format deliberately. Preserve underlying parse exceptions rather than silently substituting zero or an empty value.
+
+## Parsing spans without intermediate strings
+
+`ParseSpan<T>` consumes `ReadOnlySpan<char>` synchronously. Select the overload using an explicitly typed span lambda or a `ParseSpan<T>` variable. For an overloaded method group, assign it to that delegate first. With C# 13+, overload priorities retain legacy string behavior for untyped lambdas; on older compilers, type the parameter explicitly when ambiguous.
+
+String delegates remain supported but require a string input. Typed span reads avoid that intermediate string, although returned objects and boxed value reads can allocate. Do not retain the supplied span. See [buffer ownership](../buffering-and-benchmarks/#record-lifetimes).
+
+Nullable/reference typed reads skip custom parsers for null fields according to the getter's null policy. Array getters use registered element parsers unless a whole-array parser wins. Native JSON decoding and CSV sanitization are format-specific; see [value handling](../sequences/).
+
+For direct use of the public `SpanParser`, `TryParse` returns false for supported conversion failures; configuration errors and unexpected failures are not a general-purpose exception suppression contract. The cell-level API is [IsValid](../validation-and-errors/#validate-a-cell).
+
+The [Chrononuensis integration](../chrononuensis/) supplies temporal period parsers. Reproducible parser benchmarks are linked from [benchmark guidance](../buffering-and-benchmarks/#benchmarks).

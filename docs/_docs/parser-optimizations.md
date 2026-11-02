@@ -1,121 +1,92 @@
 ---
-title: Parser optimizations
+title: Tune reader options
 tags: [configuration]
 ---
-The `ParserOptimizationOptions` record provides a set of parameters to fine-tune the performance and behavior of the CSV parser. These options allow developers to balance flexibility, accuracy, and speed depending on the specific requirements of their use case.
+The `ParserOptimizationOptions` record provides settings shared by several readers. The defaults and descriptions below refer to CSV unless stated otherwise. Other formats use their own framing and syntax rules; accepting the same options record does not mean every CSV setting changes their behavior. See [JSON, NDJSON, and key-value readers](#json-ndjson-and-key-value-readers) for their defaults and format-specific optimizations.
 
 ## Options and Their Descriptions
 
+These are the shared record constructor defaults. Format builders may replace them; a setting stored in an options record is not evidence that every parser uses it.
+
 ### `NoTextQualifier`
-
-- **Default Value:** `false`
-- **Description:** Disables the use of text qualifiers (e.g., quotes around fields).
-- **Impact:** 
-  - When `true`, the parser will not handle fields enclosed in quotes. This can improve performance if the CSV does not use text qualifiers.
-  - If the CSV contains quoted fields, enabling this might lead to incorrect parsing.
-
+Default `false`. Legacy CSV optimization flag; actual quote syntax is configured by the dialect's `QuoteChar`. Do not use this flag to disable JSON/logfmt grammar.
 ### `UnescapeChars`
-
-- **Default Value:** `true`
-- **Description:** Enables or disables unescaping of special characters (e.g., newline, delimiter, or escape sequences) within quoted fields.
-- **Impact:** 
-  - When `true`, escaped characters like `\n` are processed as their literal equivalents (e.g., `
-`).
-  - Set to `false` if unescaping is unnecessary, improving performance.
-
+Default `true`. Controls applicable CSV escape sanitization. Native JSON and logfmt escape decoding follows those parsers and is not disabled by this flag.
 ### `HandleSpecialValues`
-
-- **Default Value:** `true`
-- **Description:** Controls whether the parser recognizes and processes special values (e.g., null sequences or special keywords like "NULL").
-- **Impact:**
-  - When `true`, the parser converts defined special values (e.g., "NULL") into `null` or other intended values.
-  - Disabling this can slightly improve performance when such conversions are unnecessary.
-
+Default `true`. Controls sequence sanitization where implemented; see [value handling](../sequences/). It does not turn off native JSON null recognition.
 ### `RowCountAtStart`
-
-- **Default Value:** `false`
-- **Description:** Determines whether the total row count is calculated at the start of parsing.
-- **Impact:**
-  - When `true`, the parser reads through the entire file once to determine the total number of rows before starting actual parsing.
-  - Useful for progress tracking but can increase the initial processing time for large files.
-
+Default `false`. CSV can pre-count records before reading; this may require seeking and an extra pass. It is inappropriate for forward-only streaming formats.
 ### `ExtendIncompleteRecords`
-
-- **Default Value:** `true`
-- **Description:** Specifies whether incomplete rows (fewer columns than expected) should be extended with empty fields.
-- **Impact:**
-  - When `true`, incomplete rows are padded to match the expected number of columns.
-  - Set to `false` to raise an error or skip such rows.
-
+Default `true`. CSV getter handling for absent trailing fields; it is not a universal materializer padding rule and setting false is not a configurable skip-record policy. See [missing values](../sequences/) and [recovery](../validation-and-errors/).
 ### `ReadAhead`
-
-- **Default Value:** `true`
-- **Description:** Enables prefetching of data to improve parsing performance.
-- **Impact:**
-  - When `true`, the parser reads ahead in the input stream to reduce I/O overhead.
-  - Disabling this can save memory but might slow down parsing for large files.
-
+Default `true`. CSV selects its double-buffer read-ahead path. Other formats can ignore or normalize the flag. Buffer size and read-ahead are separate choices.
 ### `BufferSize`
-
-- **Default Value:** `4096` (4 KB)
-- **Description:** The size of the buffer used for reading data from the input stream.
-- **Impact:**
-  - Larger buffer sizes can improve performance for large files but increase memory usage.
-  - Smaller buffer sizes reduce memory usage but might slow down parsing.
-
+Default `4096` characters in the shared record. The NDJSON/key-value builders use 64 KB defaults. Positive sizes are required by those profiles. A larger chunk can reduce refills; it does not cap record length.
 ### `PoolString`
-
-- **Default Value:** `null`
-- **Description:** Specifies a string pooling mechanism to optimize memory usage for repeated values.
-- **Impact:**
-  - Use this option to minimize memory consumption when dealing with CSV files containing many repeated strings.
-
+Default `null`. Optional string-pooling delegate used by the value mapper. Pooling can reduce repeated strings but retained pools have a memory cost.
 ### `LookupTableChar`
+Default `true`. Legacy CSV flag; do not infer that switching it changes every current scanner. Delimiter/quote settings belong to the dialect, and JSON/key-value scanners use their own implementation.
 
-- **Default Value:** `true`
-- **Description:** Determines whether a lookup table is used for character checks (e.g., delimiter or quote detection).
-- **Impact:**
-  - When `true`, a lookup table is used, which speeds up character checks during parsing.
-  - Disabling this might slightly reduce parsing speed but save some memory.
+### `TrackPosition`
+Default `false`. Prefer `.WithPositionTracking()` before reading. See [source positions](../source-positions/) for units and overhead.
+
+## Which options apply?
+
+| Reader | Input buffer | ReadAhead / RowCountAtStart | Syntax and field handling |
+| --- | --- | --- | --- |
+| CSV | Shared 4 KB default; configurable | CSV-specific paths | Dialect plus applicable sanitizer/incomplete-field settings |
+| JSON | Format's buffered source | Not CSV double-buffer/count selection | Native JSON grammar and decoding |
+| NDJSON | Builder defaults to 64 KB | Not used to select its record source | Native JSON plus NDJSON framing |
+| LTSV/logfmt | Builder defaults to 64 KB | Forced false | Native key-value grammar/decoding |
+| Fixed-width | Configurable character buffer | No universal CSV semantics; row count disabled by builder | Field offsets, widths, padding |
+| Web/security logs | Format-specific chunk source | Do not assume CSV semantics | Format grammar and applicable value sanitization |
+
+Use native [UTF-8 input](../utf8-input/) independently from these options. For measuring changes see [benchmarks](../buffering-and-benchmarks/#benchmarks).
 
 ## JSON, NDJSON, and key-value readers
 
 The JSON, NDJSON, and LTSV/logfmt readers share the labeled-reader layer, but their framing and field-parsing strategies differ. The following optimizations are applied automatically unless the table identifies an opt-in API.
 
-| Optimization | JSON | NDJSON | LTSV/logfmt |
-| --- | --- | --- | --- |
-| Cache repeated label sequences and ordinal dictionaries | Yes | Yes | Yes |
-| Keep synchronous current-record memory without a per-row wrapper | Yes | Yes | Yes |
-| Read records through reusable chunk buffers | Yes | Yes | No; records currently use line-based strings |
-| Project selected JSON properties | `WithProjection` | `WithProjection` | Not applicable |
-| Reuse the projected `FieldSpan` buffer between records | Yes | Yes | Not applicable |
-| Find projected fields while locating the record boundary | Yes | No; projection runs after NDJSON framing | Not applicable |
-| Stop property lookup after every projected field is found | Yes | Yes | Not applicable |
-| Require projected properties in a known order | `WithOrderedProjection` | `WithOrderedProjection` | Not applicable |
-| Trust and reuse one stable object shape | Not applicable | `WithStableObjectShape` | Not applicable |
+### Options for NDJSON, LTSV, and logfmt
+
+NDJSON and key-value builders default to a 64 KB `BufferSize`, with `ReadAhead` and `RowCountAtStart` set to `false`. These readers consume input through reusable chunk buffers without the CSV double-buffer read-ahead or row-count pre-scan. NDJSON does not use those two flags to select its record source. LTSV/logfmt builders and profiles explicitly force both flags to `false`, even when requested as `true`.
+
+`BufferSize` controls the input chunk size, rather than limiting record length. Records that cross chunk boundaries are consolidated in pooled storage. A record already contained in a buffer is read directly from that memory. Configure `PoolString` when you need string pooling, and use `.WithPositionTracking()` to opt into source-position tracking (disabled by default).
+
+When supplying a new options record, set the intended values explicitly: `new ParserOptimizationOptions(BufferSize: 128 * 1024)` still has the record constructor's CSV default `ReadAhead = true`. For example:
+
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Ndjson.Configuration;
+using PocketCsvReader.KeyValue.Configuration;
+
+var options = new ParserOptimizationOptions(
+    BufferSize: 128 * 1024,
+    ReadAhead: false,
+    RowCountAtStart: false);
+
+var ndjson = new NdjsonReaderBuilder().WithParserOptimizations(options).Build();
+var ltsv = new LtsvReaderBuilder().WithParserOptimizations(options).Build();
+var logfmt = new LogfmtReaderBuilder().WithParserOptimizations(options).Build();
+```
+
+CSV-specific settings such as `NoTextQualifier`, `LookupTableChar`, and `ExtendIncompleteRecords` do not configure these formats' grammar or record shape. JSON string escapes and logfmt quoted-value escapes are decoded by their format parsers; setting `UnescapeChars = false` does not disable that decoding. LTSV does not use CSV quoting or escape rules. These labeled readers do not apply the CSV sequence-substitution sanitizer, so `HandleSpecialValues` does not enable sequence replacements or disable recognition of JSON's native `null` token.
+
+## Automatic storage and projection optimizations
+
+See [buffering and benchmark guidance](../buffering-and-benchmarks/) for memory reuse and [projection and stable shapes](../json-projection/) for JSON/NDJSON fast-path contracts.
+
+## Why projection improves performance
+
+The worked comparison moved to [Why projection improves performance](../json-projection/#why-projection-improves-performance).
 
 ### Repeated labeled row shapes
-
-When rows repeat the same labels in the same order, their label strings and name-to-ordinal dictionary are reused. A different field count or label order is treated as another row shape. Up to 64 shapes are cached per data reader so highly heterogeneous input remains bounded.
-
+See [row-shape caching](../buffering-and-benchmarks/#labeled-row-shapes).
 ### JSON projection
-
-`JsonReaderBuilder.WithProjection` validates the complete JSON value while materializing only selected properties. The JSON reader combines projection with object framing, reuses field metadata, compares property names without creating a string for ordinary unescaped names, and stops projection lookup once all selected fields have been found.
-
-`JsonReaderBuilder.WithOrderedProjection` is a faster opt-in contract. Selected properties must occur in the configured order, although unselected properties may occur between them. Reordered selected properties are rejected.
-
+See [JSON projection](../json-projection/#json-projection).
 ### NDJSON projection
-
-`NdjsonReaderBuilder.WithProjection` exposes selected properties in configuration order and accepts those properties in any input order. NDJSON first finds the complete record according to its line terminator and comment settings, then uses the shared projected JSON scanner to validate the record, skip unselected values, and populate a reusable projected-field buffer. It uses property-name fingerprints and stops projection lookup after all selected fields have been found.
-
-`NdjsonReaderBuilder.WithOrderedProjection` avoids the fingerprint lookup by comparing each property with the next expected selected name. Unselected properties may occur between selected properties; reordered selected properties are rejected.
-
-Because NDJSON framing and property projection are separate passes, it does not receive the JSON reader's projection-during-framing optimization.
-
+See [NDJSON projection](../json-projection/#ndjson-projection).
 ### NDJSON stable object shape
-
-`NdjsonReaderBuilder.WithStableObjectShape` is an opt-in trusted-input contract for streams whose objects always have the same recursive JSON structure and property order. The first object establishes object property counts, array lengths, labels, and ordinals at every level. Later objects validate property-name syntax but skip decoding, comparison, and lookup, then write values directly by ordinal into reusable field-array trees. Property-count, array-length, and scalar/container drift throws before a record is exposed. Same-count renames and reorders are deliberately not detected, so callers must use this option only for trusted stable-shape input. Scalar leaf types remain dynamic unless a schema or typed accessor establishes and caches a conversion for an ordinal.
-
+See [stable object shape](../json-projection/#ndjson-stable-object-shape).
 ### LTSV and logfmt
-
-The key-value readers benefit from shared row-shape caching and direct synchronous record storage. They do not use JSON projection or JSON framing. Their current record sources read one complete line as a string before parsing its labeled fields.
+See [key-value buffering](../buffering-and-benchmarks/#key-value-records).

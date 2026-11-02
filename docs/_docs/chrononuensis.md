@@ -85,19 +85,4 @@ The adapter passes `ReadOnlySpan<char>` directly to Chrononuensis, including fie
 dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*ChrononuensisParsing*'
 ```
 
-A focused run on Windows 11 x64, Intel Core Ultra 9 275HX, .NET SDK 10.0.401 / runtime 10.0.12, BenchmarkDotNet 0.15.8 produced the following results. The measured value was `2026-10`; the primitive control was `12345`. This is a local comparison, not a cross-machine performance guarantee.
-
-| Path | Mean | Allocated per read |
-|---|---:|---:|
-| Existing schema format / reflection | 1,694.0 ns | 6,040 B |
-| Explicit string parser | 1,566.6 ns | 5,904 B |
-| Integration span parser | 1,633.4 ns | 5,840 B |
-| Direct upstream span parser | 1,567.1 ns | 5,840 B |
-| Integer, integration disabled | 136.3 ns | 192 B |
-| Integer, integration enabled | 146.5 ns | 192 B |
-
-The integration removed 200 B per temporal read relative to the existing formatted path and 64 B relative to the string parser. Its allocation count matched direct upstream span parsing. Primitive allocation counts were unchanged; the enabled control took about 10 ns longer in this run, so these measurements do not establish identical throughput. The disabled path gains no registrations or per-read integration processing. An initial shorter run showed substantial tiering noise; the comparison above used five warmup iterations, ten measured 250 ms iterations, one launch, and tiering disabled only in benchmark child processes:
-
-```shell
-dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*ChrononuensisParsing*' --warmupCount 5 --iterationCount 10 --launchCount 1 --iterationTime 250 --envVars DOTNET_TieredCompilation:0
-```
+Detailed machine-specific measurements belong with the [benchmark methodology](../buffering-and-benchmarks/#chrononuensis-measurement-example). The integration avoids intermediate input strings; the upstream parser can still allocate. No fixed throughput or zero-allocation guarantee is implied.
