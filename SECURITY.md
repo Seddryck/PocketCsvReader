@@ -1,24 +1,46 @@
 # Security Policy
 
+This policy applies to PocketCsvReader and its extension packages.
+
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are provided for the latest stable release of each package. Upgrade
+an affected package to its latest stable release before checking whether a
+vulnerability is still present.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.2.x  (and up) | :white_check_mark: |
-| 0.1.x   | :x:                |
+| Release | Security updates |
+| ------- | ---------------- |
+| Latest stable release of each package | Supported |
+| Earlier releases and prereleases | Not supported |
+
+Security fixes are released in a new stable version. Fixes are not backported to
+earlier releases. If an issue prevents upgrading, include that information in your
+private report.
 
 ## Reporting a Vulnerability
 
-If you've found a security issue in Expressif, you can submit your report with [GitHub's private vulnerabilty reporting feature](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability#privately-reporting-a-security-vulnerability) on the corresponding repository.
+Report suspected vulnerabilities through
+[GitHub's private vulnerability reporting form](https://github.com/Seddryck/PocketCsvReader/security/advisories/new).
+You must sign in to GitHub to submit a report. Reports are shared privately with
+the repository maintainers.
 
-Please include as much information as possible in your report to better help us understand and resolve the issue: 
+Do not disclose vulnerability details in public issues, discussions, or pull
+requests before coordinating disclosure with the maintainers. Use public issues
+for ordinary bugs that have no security impact.
 
-- Where the security issue exists
-- The type of issue (ex. SQL injection, cross-site scripting, missing authorization, etc.)
-- Full paths or links to the source files where the security issue exists, if possible
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof of concept or exploit code, if available
+Include the following information when available:
+
+- The affected PocketCsvReader package and version, .NET version, and operating system.
+- A description of the vulnerability and its potential security impact.
+- Steps to reproduce, including a minimal input file or proof of concept.
+- Relevant configuration, source file paths, and error messages.
+- Any suggested mitigation or fix.
+
+Remove credentials, personal data, and other sensitive information from examples
+and attachments. You do not need a complete diagnosis to report a suspected issue.
+
+## Response and Disclosure
+
+Maintainers review reports on a best-effort basis. There is no guaranteed response
+or resolution time. Use the private report to provide additional information and
+coordinate a fix and any public disclosure with the maintainers.
