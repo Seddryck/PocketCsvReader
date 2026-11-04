@@ -85,5 +85,5 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
             _projectedProperties,
             _orderedProjection,
             _stableObjectShape,
-            _recordPath) { Filters = BuildFilters() });
+            _recordPath) { Filters = BuildFilters(), Skip = Skip, Take = Take });
 }

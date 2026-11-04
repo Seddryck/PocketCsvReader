@@ -20,6 +20,7 @@ public class CsvObjectReader<T> : IDisposable
     private CsvDataReader? _dataReader;
     private bool UseDataReader => Profile.Filters.Count != 0 || Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
         || Profile.RowNumber is not null
+        || Profile.Skip != 0 || Profile.Take.HasValue
         || !string.IsNullOrEmpty(Profile.Resource?.Encoding);
     protected Memory<char> buffer;
     public int RowCount { get; private set; } = 0;
@@ -66,8 +67,8 @@ public class CsvObjectReader<T> : IDisposable
     {
         if (UseDataReader)
         {
-            Initialize();
-            while (_dataReader!.Read())
+            _dataReader ??= new CsvDataReader(Stream, Profile, LeaveOpen);
+            while (_dataReader.Read())
             {
                 RowCount++;
                 yield return Profile.Filters.Count != 0 && _defaultMapper
@@ -80,12 +81,11 @@ public class CsvObjectReader<T> : IDisposable
         if (IsEof)
             yield break;
 
+        if (RowCount == 0 && Profile.Dialect.Header)
+            _ = RecordParser!.ReadHeaders();
+
         while (!IsEof)
         {
-            if (RowCount == 0 && Profile.Dialect.Header)
-            {
-                _ = RecordParser!.ReadHeaders();
-            }
             IsEof = RecordParser!.IsEndOfFile(out var value, out var state);
             if (state == RecordState.Comment)
                 continue;

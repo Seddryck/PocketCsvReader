@@ -6,6 +6,25 @@ public abstract class ReaderBuilder<TBuilder>
     private readonly ProfileBuilderComponents _components = new();
     private readonly List<ReaderFilter> _filters = [];
 
+    protected int Skip { get; private set; }
+    protected int? Take { get; private set; }
+
+    /// <summary>Skips the specified number of accepted data records before returning results.</summary>
+    public TBuilder WithSkip(int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        Skip = count;
+        return (TBuilder)this;
+    }
+
+    /// <summary>Returns at most the specified number of data records after skipping.</summary>
+    public TBuilder WithTake(int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        Take = count;
+        return (TBuilder)this;
+    }
+
     /// <summary>Keeps rows whose sanitized cell equals the expected text. Null never matches.</summary>
     public TBuilder WithFilter(string column, string expected, StringComparison comparison = StringComparison.Ordinal)
     {

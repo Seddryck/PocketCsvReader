@@ -13,5 +13,5 @@ public sealed class W3cExtendedLogReaderBuilder : ReaderBuilder<W3cExtendedLogRe
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
-            BuildParserOptimizations()) { Filters = BuildFilters() });
+            BuildParserOptimizations()) { Filters = BuildFilters(), Skip = Skip, Take = Take });
 }

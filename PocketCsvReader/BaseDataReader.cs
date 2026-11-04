@@ -33,12 +33,14 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
     private int _readInProgress;
+    internal RecordWindow? Window { get; set; }
 
     protected BaseDataReader(Stream stream, TProfile profile, StringMapper stringMapper, bool leaveOpen = false)
         : base(profile, stringMapper)
     {
         RawStream = stream;
         LeaveOpen = leaveOpen;
+        Window = RecordWindow.Create(profile);
     }
 
     public void Initialize()
@@ -119,15 +121,16 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         EnterRead();
         try
         {
-            Initialize();
             _hasCurrentRecord = false;
+            if (Window?.IsComplete == true) return false;
+            Initialize();
             do
             {
                 _hasCurrentRecord = false;
                 ResetRowValues();
                 _hasCurrentRecord = !IsEof && ReadCore();
                 if (!_hasCurrentRecord) return false;
-            } while (!AcceptCurrentRow());
+            } while (!AcceptCurrentRow() || Window?.Accept() == false);
             return true;
         }
         finally
@@ -251,8 +254,9 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await InitializeAsync(cancellationToken).ConfigureAwait(false);
             _hasCurrentRecord = false;
+            if (Window?.IsComplete == true) return false;
+            await InitializeAsync(cancellationToken).ConfigureAwait(false);
             do
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -260,7 +264,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
                 ResetRowValues();
                 _hasCurrentRecord = !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
                 if (!_hasCurrentRecord) return false;
-            } while (!AcceptCurrentRow());
+            } while (!AcceptCurrentRow() || Window?.Accept() == false);
             return true;
         }
         finally

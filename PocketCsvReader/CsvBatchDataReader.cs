@@ -9,6 +9,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private IEnumerator<Func<Stream>> Streams { get; }
     private Stream? _currentStream;
     private CsvProfile Profile { get; }
+    private readonly RecordWindow? _window;
 
     private CsvDataReader? Current { get; set; }
     private bool _isClosed = false;
@@ -25,7 +26,9 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     public CsvBatchDataReader(IEnumerable<Func<Stream>> streams, CsvProfile profile)
     {
         (Streams, Profile) = (streams.GetEnumerator(), profile);
-        MoveNext();
+        _window = RecordWindow.Create(profile);
+        if (_window?.IsComplete != true)
+            MoveNext();
     }
 
     private void MoveNext()
@@ -40,7 +43,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (Streams.MoveNext())
         {
             _currentStream = Streams.Current.Invoke();
-            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber };
+            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber, Window = _window };
         }
         else
         {
@@ -62,6 +65,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
 
             while (!Current.Read())
             {
+                if (_window?.IsComplete == true)
+                    return false;
                 MoveNext();
                 if (Current is null)
                     return false;
@@ -85,6 +90,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
 
             while (!await Current.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                if (_window?.IsComplete == true)
+                    return false;
                 await MoveNextAsync().ConfigureAwait(false);
                 if (Current is null)
                     return false;
@@ -111,7 +118,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (Streams.MoveNext())
         {
             _currentStream = Streams.Current.Invoke();
-            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber };
+            Current = new CsvDataReader(_currentStream, Profile) { CurrentRowNumber = rowNumber, Window = _window };
         }
         else
         {
@@ -177,8 +184,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (!_isClosed)
         {
             _isClosed = true;
-            _currentStream?.Dispose();
             Current?.Dispose();
+            _currentStream?.Dispose();
             if (_allStreamsOpen)
             {
                 while (Streams.MoveNext())

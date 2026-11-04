@@ -12,6 +12,8 @@ public interface IProfile
     ResourceDescriptor? Resource { get; }
     RuntimeParsersDescriptor? Parsers { get; }
     IReadOnlyList<ReaderFilter> Filters => Array.Empty<ReaderFilter>();
+    int Skip => 0;
+    int? Take => null;
     bool TrackPosition => false;
     StreamInitializationOptions StreamInitialization => StreamInitializationOptions.Default;
 }
