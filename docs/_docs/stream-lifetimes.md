@@ -17,6 +17,7 @@ Opening, buffering, enumeration, and disposal are different events. Keep supplie
 | `ToCommonLog` / `ToCombinedLog` | Typed extension-reader enumeration | Closed by its enumerator |
 | `ToDataTable` | Entire table read during the call | Closed during the call |
 | CSV batch data reader | First input opened during construction | Inputs closed as batch advances/disposes |
+| CSV batch with asynchronous factories | First input opened on the first asynchronous read | Returned streams closed on advancement, failure, cancellation during a read, or disposal |
 | Arrow batches | Reader owned by batch enumeration | Follow underlying data-reader ownership; supplied input closes |
 
 Explicit reader constructors that expose `leaveOpen` allow a different ownership choice. Check the actual overload; a general claim that all stream overloads leave input open is incorrect. An enumerator that is abandoned without disposal cannot reliably release its reader.
