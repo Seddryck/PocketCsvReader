@@ -142,31 +142,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 if (Current is not null && await Current.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return true;
 
-                var fields = Current?.SourceHeaders;
-                var rowNumber = Current?.CurrentRowNumber ?? 0;
-                await DisposeAsyncInput().ConfigureAwait(false);
-
-                ObjectDisposedException.ThrowIf(_isClosed, this);
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!factories.MoveNext())
-                {
-                    DisposeAsyncFactories();
+                if (!await MoveNextFromAsyncFactories(factories, cancellationToken).ConfigureAwait(false))
                     return false;
-                }
-
-                var open = factories.Current
-                    ?? throw new InvalidOperationException("An asynchronous stream factory is null.");
-                cancellationToken.ThrowIfCancellationRequested();
-                _currentStream = await open(cancellationToken).ConfigureAwait(false)
-                    ?? throw new InvalidOperationException("An asynchronous stream factory returned null.");
-                cancellationToken.ThrowIfCancellationRequested();
-                ObjectDisposedException.ThrowIf(_isClosed, this);
-                if (!_currentStream.CanRead)
-                    throw new InvalidOperationException("An asynchronous stream factory returned an unreadable stream.");
-
-                Current = new CsvDataReader(_currentStream, Profile, leaveOpen: true) { CurrentRowNumber = rowNumber };
-                if (fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
-                    Current.SetHeaders(fields);
             }
             return false;
         }
@@ -183,6 +160,38 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
             }
             throw;
         }
+    }
+
+    private async ValueTask<bool> MoveNextFromAsyncFactories(
+        IEnumerator<Func<CancellationToken, ValueTask<Stream>>> factories,
+        CancellationToken cancellationToken)
+    {
+        var fields = Current?.SourceHeaders;
+        var rowNumber = Current?.CurrentRowNumber ?? 0;
+        await DisposeAsyncInput().ConfigureAwait(false);
+
+        ObjectDisposedException.ThrowIf(_isClosed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!factories.MoveNext())
+        {
+            DisposeAsyncFactories();
+            return false;
+        }
+
+        var open = factories.Current
+            ?? throw new InvalidOperationException("An asynchronous stream factory is null.");
+        cancellationToken.ThrowIfCancellationRequested();
+        _currentStream = await open(cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("An asynchronous stream factory returned null.");
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_isClosed, this);
+        if (!_currentStream.CanRead)
+            throw new InvalidOperationException("An asynchronous stream factory returned an unreadable stream.");
+
+        Current = new CsvDataReader(_currentStream, Profile, leaveOpen: true) { CurrentRowNumber = rowNumber };
+        if (fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
+            Current.SetHeaders(fields);
+        return true;
     }
 
     private async ValueTask DisposeAsyncInput()
