@@ -23,7 +23,7 @@ public class AsyncStreamFactoryBatchTest
         var emptyStream = new TrackingStream("");
         var nextStream = new TrackingStream("Grace\n");
         var calls = 0;
-        await using var reader = CreateReader().ToDataReaderFromAsyncStreamFactories(
+        await using var reader = CreateReader().ToDataReader(
         [
             token =>
             {
@@ -190,7 +190,7 @@ public class AsyncStreamFactoryBatchTest
     public async Task Dispose_OnlyDisposesAcquiredStreams(bool asyncDisposal)
     {
         var acquired = new TrackingStream("Name\nAda");
-        var reader = CreateReader().ToDataReaderFromAsyncStreamFactories(
+        var reader = CreateReader().ToDataReader(
             [_ => new(acquired), _ => throw new AssertionException("Unused factory was called.")]);
         Assert.That(await reader.ReadAsync(), Is.True);
 
@@ -209,7 +209,7 @@ public class AsyncStreamFactoryBatchTest
     [Test]
     public async Task Dispose_BeforeFirstReadDoesNotInvokeFactories()
     {
-        var reader = CreateReader().ToDataReaderFromAsyncStreamFactories(
+        var reader = CreateReader().ToDataReader(
             [_ => throw new AssertionException("Unused factory was called.")]);
         await reader.DisposeAsync();
         Assert.That(await reader.ReadAsync(), Is.False);
@@ -223,7 +223,7 @@ public class AsyncStreamFactoryBatchTest
         Func<CancellationToken, ValueTask<Stream>>[] openers = hasRows
             ? [_ => { calls++; return new(new TrackingStream("Name\nAda")); }]
             : [];
-        await using var reader = CreateReader().ToDbDataReaderFromAsyncStreamFactories(openers);
+        await using var reader = CreateReader().ToDbDataReader(openers);
         Assert.Throws<NotSupportedException>(() => _ = reader.HasRows);
         Assert.Throws<NotSupportedException>(() => reader.Read());
         Assert.That(calls, Is.Zero);

@@ -188,7 +188,7 @@ namespace PocketCsvReader
         /// Use <see cref="CsvBatchDataReader.ReadAsync"/> to advance the batch. The batch owns each
         /// returned stream and passes the current read's cancellation token to its factory.
         /// </remarks>
-        public CsvBatchDataReader ToDataReaderFromAsyncStreamFactories(
+        public CsvBatchDataReader ToDataReader(
             IEnumerable<Func<CancellationToken, ValueTask<Stream>>> openers)
             => CsvBatchDataReader.FromAsyncStreamFactories(openers, Profile);
 
@@ -197,9 +197,9 @@ namespace PocketCsvReader
         /// Synchronous reads are unsupported. <see cref="System.Data.Common.DbDataReader.HasRows"/>
         /// is available after the first completed asynchronous read establishes whether rows exist.
         /// </remarks>
-        public System.Data.Common.DbDataReader ToDbDataReaderFromAsyncStreamFactories(
+        public System.Data.Common.DbDataReader ToDbDataReader(
             IEnumerable<Func<CancellationToken, ValueTask<Stream>>> openers)
-            => new DbDataReaderAdapter(ToDataReaderFromAsyncStreamFactories(openers));
+            => new DbDataReaderAdapter(ToDataReader(openers));
 
         /// <summary>
         /// Reads a CSV file and maps its records into objects of type <typeparamref name="T"/>.

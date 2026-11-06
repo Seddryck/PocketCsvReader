@@ -36,7 +36,7 @@ For files, call `csv.ToDataReader(new[] { "part1.csv", "part2.csv" })`. `ToDbDat
 
 ## Asynchronous stream factories
 
-Use `ToDataReaderFromAsyncStreamFactories`, `ToDbDataReaderFromAsyncStreamFactories`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. Later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.
+Pass an `IEnumerable<Func<CancellationToken, ValueTask<Stream>>>` to `ToDataReader`, `ToDbDataReader`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. Later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.
 
 ```csharp
 using System.Net.Http;
@@ -50,7 +50,7 @@ static async Task PrintRemoteCsvAsync(HttpClient http, IEnumerable<Uri> uris, Ca
     var openers = uris.Select(uri =>
         (Func<CancellationToken, ValueTask<Stream>>)(async ct => await http.GetStreamAsync(uri, ct)));
 
-    await using var reader = csv.ToDataReaderFromAsyncStreamFactories(openers);
+    await using var reader = csv.ToDataReader(openers);
     while (await reader.ReadAsync(token))
         Console.WriteLine(reader.GetString(0));
 }
