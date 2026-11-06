@@ -32,7 +32,37 @@ while (reader.Read())
 2: Grace
 ```
 
-For files, call `csv.ToDataReader(new[] { "part1.csv", "part2.csv" })`. `ToDbDataReader` has corresponding batch overloads; use `ReadAsync(token)` for async advancement. Factories are invoked synchronously when moving to an input; they are not asynchronous stream factories.
+For files, call `csv.ToDataReader(new[] { "part1.csv", "part2.csv" })`. `ToDbDataReader` has corresponding batch overloads. These overloads call synchronous factories even when rows are read with `ReadAsync(token)`.
+
+## Asynchronous stream factories
+
+Pass an `IEnumerable<Func<CancellationToken, ValueTask<Stream>>>` to `ToDataReader`, `ToDbDataReader`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. Later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.
+
+```csharp
+using System.Net.Http;
+using PocketCsvReader.Configuration;
+
+static async Task PrintRemoteCsvAsync(HttpClient http, IEnumerable<Uri> uris, CancellationToken token)
+{
+    var csv = new CsvReaderBuilder()
+        .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+        .Build();
+    var openers = uris.Select(uri =>
+        (Func<CancellationToken, ValueTask<Stream>>)(async ct => await http.GetStreamAsync(uri, ct)));
+
+    await using var reader = csv.ToDataReader(openers);
+    while (await reader.ReadAsync(token))
+        Console.WriteLine(reader.GetString(0));
+}
+```
+
+The caller owns the `HttpClient` and keeps it alive until the batch is disposed. `GetStreamAsync` provides the response body stream directly and the batch takes ownership of that stream. [Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.getstreamasync?view=net-10.0)
+
+Factories receive the active read token and should pass it to their I/O. Return a readable stream positioned at the start of the CSV. A factory owns any resources it allocates until it returns the stream. If a factory uses `SendAsync` directly, it must dispose the response on failure and arrange for disposing the returned stream to release the response on success.
+
+A read that starts with a cancelled token leaves the batch available for another read. Cancellation or failure during acquisition or record reading closes the batch and disposes its active stream. Dispose the reader after the active read finishes. Use `await using` to allow asynchronous stream cleanup. Unused factories are never invoked during disposal.
+
+Synchronous `Read()` throws `NotSupportedException`. The database adapter's `HasRows` also throws until the first completed `ReadAsync` determines whether the batch contains rows. After that it returns the cached value.
 
 ## Headers and schema
 
@@ -40,7 +70,7 @@ By default, each file has its own header (`HeaderRepeat = true`). Use `WithHeade
 
 ## Ownership
 
-Batch construction opens its first input. Advancing closes the previous stream; disposing closes the current stream and releases the batch enumerator. The batch owns provided streams and streams returned by factories. Prefer factories for many files and dispose a batch even if no records are read. Do not reuse a consumed stream sequence without resetting/reopening it.
+Filename, stream, and synchronous-factory batches open their first input during construction. Advancing closes the previous stream. Disposing closes the current stream and releases the batch enumerator. The batch owns provided streams and streams returned by factories. Prefer factories for many files and dispose a batch even if no records are read. Do not reuse a consumed stream sequence without resetting/reopening it.
 
 ## Generated row numbers
 
