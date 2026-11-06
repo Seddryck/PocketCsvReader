@@ -37,7 +37,9 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     {
         Profile = profile;
         _usesAsyncFactories = true;
-        _asyncStreams = openers.GetEnumerator();
+        _window = RecordWindow.Create(profile);
+        if (_window?.IsComplete != true)
+            _asyncStreams = openers.GetEnumerator();
     }
 
     /// <summary>Creates a batch whose stream factories are awaited on demand by <see cref="ReadAsync"/>.</summary>
@@ -142,6 +144,12 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 if (Current is not null && await Current.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return true;
 
+                if (_window?.IsComplete == true)
+                {
+                    await DisposeAsyncBatch().ConfigureAwait(false);
+                    return false;
+                }
+
                 if (!await MoveNextFromAsyncFactories(factories, cancellationToken).ConfigureAwait(false))
                     return false;
             }
@@ -188,7 +196,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (!_currentStream.CanRead)
             throw new InvalidOperationException("An asynchronous stream factory returned an unreadable stream.");
 
-        Current = new CsvDataReader(_currentStream, Profile, leaveOpen: true) { CurrentRowNumber = rowNumber };
+        Current = new CsvDataReader(_currentStream, Profile, leaveOpen: true) { CurrentRowNumber = rowNumber, Window = _window };
         if (fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
             Current.SetHeaders(fields);
         return true;

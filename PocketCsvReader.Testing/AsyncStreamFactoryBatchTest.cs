@@ -246,6 +246,39 @@ public class AsyncStreamFactoryBatchTest
         Assert.That(factories["Name"], Is.EqualTo("Grace"));
     }
 
+    [Test]
+    public async Task ReadAsync_SkipAndTakeSpanInputsWithoutOpeningUnusedFactories()
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithHeaderRepeat(false).WithLineTerminator("\n"))
+            .WithRowNumber()
+            .WithSkip(1)
+            .WithTake(2)
+            .Build();
+        var first = new TrackingStream("Name\nAda\nGrace");
+        var second = new TrackingStream("Linus\nMargaret");
+        await using var reader = csv.ToDataReader(
+            [_ => new(first), _ => new(second), _ => throw new AssertionException("Unused factory was called.")]);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader["Name"], Is.EqualTo("Grace"));
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader["Name"], Is.EqualTo("Linus"));
+        Assert.That(await reader.ReadAsync(), Is.False);
+        Assert.That(first.AsyncDisposals, Is.EqualTo(1));
+        Assert.That(second.AsyncDisposals, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ReadAsync_TakeZeroDoesNotOpenAStream()
+    {
+        var csv = new CsvReaderBuilder().WithTake(0).Build();
+        await using var reader = csv.ToDataReader(
+            [_ => throw new AssertionException("Unused factory was called.")]);
+
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
     private sealed class TrackingStream(string content) : MemoryStream(Encoding.UTF8.GetBytes(content))
     {
         public int SyncDisposals { get; private set; }
