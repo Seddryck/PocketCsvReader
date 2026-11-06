@@ -84,6 +84,9 @@ namespace PocketCsvReader
                 StreamInitialization = profile.StreamInitialization,
                 ParserOptimizations = profile.ParserOptimizations with { BufferSize = bufferSize },
                 BadDataPolicy = profile.BadDataPolicy,
+                Filters = profile.Filters,
+                Skip = profile.Skip,
+                Take = profile.Take,
                 RowNumber = profile.RowNumber
             };
         }
@@ -116,15 +119,8 @@ namespace PocketCsvReader
             if (filenames == null || filenames.Length == 0)
                 throw new ArgumentException("File names collection cannot be null or empty.", nameof(filenames));
 
-            IEnumerable<Stream> fileToStream(string[] filenames)
-            {
-                foreach (var filename in filenames)
-                {
-                    yield return OpenRead(filename);
-                }
-            }
-
-            return new CsvBatchDataReader(fileToStream(filenames), Profile);
+            var openers = filenames.Select<string, Func<Stream>>(filename => () => OpenRead(filename));
+            return new CsvBatchDataReader(openers, Profile);
         }
 
         /// <summary>

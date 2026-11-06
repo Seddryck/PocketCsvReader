@@ -13,5 +13,5 @@ public sealed class CommonLogReaderBuilder : ReaderBuilder<CommonLogReaderBuilde
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
-            BuildParserOptimizations()) { Filters = BuildFilters() });
+            BuildParserOptimizations()) { Filters = BuildFilters(), Skip = Skip, Take = Take });
 }

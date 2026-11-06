@@ -54,6 +54,6 @@ public class NdjsonReader : FlatFileReader<NdjsonProfile, NdjsonDataReader>
             profile.ProjectedProperties,
             profile.OrderedProjection,
             profile.StableObjectShape,
-            profile.RecordPath) { Filters = profile.Filters };
+            profile.RecordPath) { Filters = profile.Filters, Skip = profile.Skip, Take = profile.Take };
     }
 }

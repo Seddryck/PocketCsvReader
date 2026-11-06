@@ -8,6 +8,8 @@ public sealed class KeyValueProfile : IProfile
         = new(BufferSize: 64 * 1024, ReadAhead: false, RowCountAtStart: false);
 
     public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
+    public int Skip { get; init; }
+    public int? Take { get; init; }
     public KeyValueFormat Format { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }

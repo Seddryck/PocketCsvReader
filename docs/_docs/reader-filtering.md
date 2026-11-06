@@ -113,3 +113,25 @@ CSV `WithRowNumber()` counts source data records before filtering, so rejected
 rows leave gaps. Numbering continues across [batch files](../batch-reading/). With a generated
 column, ordinal zero is the generated number and source columns shift by one.
 The row predicate can read/filter that number.
+
+## Skip and take records
+
+Use `WithSkip(count)` to skip accepted data records and `WithTake(count)` to cap the results.
+For example, this reader skips 10 records and returns up to the next 10.
+
+```csharp
+var csv = new CsvReaderBuilder()
+    .WithSkip(10).WithTake(10)
+    .Build();
+```
+
+Skipping always precedes taking, regardless of the order of builder calls. Headers,
+comments, records discarded by the bad-data policy, and rows rejected by filters
+do not use up either count. The default is zero skipped records and unlimited
+results. Both methods accept zero, and `WithTake(0)` returns an empty result.
+Negative counts throw `ArgumentOutOfRangeException`.
+
+The options apply to `To<T>()`, `ToArrayString()`, `ToDataTable()`, and
+`ToDataReader()` where supported. In CSV batches, the counts span all files or
+streams. The reader stops parsing after the requested number of records and
+does not open subsequent batch inputs. Buffered input may still read ahead.

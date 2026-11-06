@@ -64,6 +64,8 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
             ParserOptimizations = BuildParserOptimizations(),
             StreamInitialization = _streamInitialization,
             Filters = BuildFilters(),
+            Skip = Skip,
+            Take = Take,
             RowNumber = _rowNumber
         };
         return new CsvReader(profile);

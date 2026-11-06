@@ -7,6 +7,8 @@ namespace PocketCsvReader.FixedWidth;
 public sealed class FixedWidthProfile : IProfile
 {
     public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
+    public int Skip { get; init; }
+    public int? Take { get; init; }
     public FixedWidthDescriptor Descriptor { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }
