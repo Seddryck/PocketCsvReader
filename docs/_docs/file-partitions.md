@@ -67,3 +67,49 @@ For `CsvFileQuery<NamedPartitions>`, the named overload accepts one or more `Par
 The query applies conditions with short-circuiting AND, in array order and then in the order filters were registered. An unknown key on a complete descriptor raises `KeyNotFoundException` when reached, including for `NotEqual`. Delegate exceptions propagate. `EnumerateFiles()` lists the same selection used by reader execution. Files that fail the filters remain unopened, and an entirely rejected input yields an empty reader.
 
 CSV row filters still run on rows in the selected files. When headers are enabled, a filtered query requires `HeaderRepeat = true` so each accepted file supplies its own header.
+
+## Extract partitions from filenames
+
+Given paths such as `orders-BE-2026.csv`, capture both `country` and `year` and filter on `year` alone. Both 2026 files pass, regardless of country.
+
+<!-- example: filename-partitions -->
+```csharp
+using System.Text;
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+var csvByPath = new Dictionary<string, string>
+{
+    ["orders-BE-2025.csv"] = "OrderId,Country,Year\n41,BE,2025\n",
+    ["orders-BE-2026.csv"] = "OrderId,Country,Year\n42,BE,2026\n",
+    ["orders-FR-2026.csv"] = "OrderId,Country,Year\n43,FR,2026\n"
+};
+var paths = csvByPath.Keys.Order(StringComparer.Ordinal);
+var selected = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+    .FromFiles(paths, path => new MemoryStream(Encoding.UTF8.GetBytes(csvByPath[path])))
+    .WithPartitions(p => p.FromFileName("orders-{country}-{year}.csv"))
+    .Build()
+    .WithPartitionFilter(PartitionCondition.Equal("year", "2026"));
+
+foreach (var file in selected.EnumerateFiles())
+    Console.WriteLine(file.Path);
+
+using var reader = selected.ToDataReader();
+while (reader.Read())
+    Console.WriteLine($"{reader["OrderId"]},{reader["Country"]},{reader["Year"]}");
+```
+
+<!-- output: filename-partitions -->
+```text
+orders-BE-2026.csv
+orders-FR-2026.csv
+42,BE,2026
+43,FR,2026
+```
+
+The filename supplies the value used for selection. The reader then returns the `Country` and `Year` columns from each accepted CSV file.
+
+The pattern matches the entire basename using ordinal, case-sensitive comparison. A placeholder is `{key}`. {% raw %}Write `{{` and `}}` for literal braces.{% endraw %} Each capture contains at least one character. The first occurrence of the next literal separates adjacent captures, and the final literal is matched at the end of the name. For example, `orders-BE-2026-extra.csv` gives `country = BE` and `year = 2026-extra` with the pattern above.
+
+A pattern must have at least one placeholder. Adjacent placeholders without a literal separator, repeated keys, empty keys, whitespace in keys, unmatched braces, and path separators are rejected when configuring the query. A filename that fails to match raises `FormatException` during discovery.

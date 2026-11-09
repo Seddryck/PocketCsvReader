@@ -26,6 +26,10 @@ public sealed class FilePartitionBuilder
             }
         }
     }
+
+    /// <summary>Extracts named string partitions from each complete filename.</summary>
+    public CsvFileQueryBuilder<NamedPartitions> FromFileName(string pattern)
+        => FromPath(new FileNamePartitionPattern(pattern).Extract);
 }
 
 /// <summary>Selects how a CSV path sequence supplies partition metadata.</summary>
