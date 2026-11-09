@@ -6,6 +6,7 @@
     <Description>PocketCsvReader.Json is a lightweight streaming JSON document reader that exposes top-level objects and array elements through IDataReader and the PocketCsvReader materialization APIs.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PocketCsvReader.Arrow.ColumnarJson" />
     <InternalsVisibleTo Include="PocketCsvReader.Ndjson" />
     <InternalsVisibleTo Include="PocketCsvReader.Json.Testing" />
   </ItemGroup>

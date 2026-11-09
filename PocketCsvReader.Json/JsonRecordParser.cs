@@ -8,11 +8,14 @@ internal ref struct JsonRecordParser
     private static readonly SearchValues<char> StringSpecialCharacters = SearchValues.Create(
         "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F" +
         "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\");
+    private static readonly char[] StandardWhitespace = [' ', '\t', '\r', '\n'];
     private readonly ReadOnlySpan<char> _json;
     private readonly char[] _whitespaces;
     private readonly bool _allowComments;
     private readonly bool _allowTrailingCommas;
     private readonly JsonFieldBuffer? _fieldBuffer;
+    private readonly bool _collectFields;
+    private readonly int _maximumDepth;
     private int _position;
 
     private JsonRecordParser(
@@ -20,13 +23,16 @@ internal ref struct JsonRecordParser
         char[] whitespaces,
         bool allowComments = false,
         bool allowTrailingCommas = false,
-        JsonFieldBuffer? fieldBuffer = null)
+        JsonFieldBuffer? fieldBuffer = null,
+        bool collectFields = true)
     {
         _json = json;
         _allowComments = allowComments;
         _allowTrailingCommas = allowTrailingCommas;
         _whitespaces = whitespaces;
         _fieldBuffer = fieldBuffer;
+        _collectFields = collectFields;
+        _maximumDepth = collectFields ? int.MaxValue : 128;
     }
 
     public static FieldSpan[] Parse(
@@ -243,12 +249,12 @@ internal ref struct JsonRecordParser
             if (scratch is null)
             {
                 fields = Current == '{'
-                    ? ParseObject(materializeLabels: true)
+                    ? ParseObject()
                     : [ParseValue(allowObject: false, allowCompositeArrayItems: true)];
             }
             else if (Current == '{')
             {
-                ParseObjectFields(materializeLabels: true, scratch);
+                ParseObjectFields(scratch);
             }
             else
             {
@@ -267,52 +273,130 @@ internal ref struct JsonRecordParser
         }
     }
 
-    private FieldSpan[] ParseObject(bool materializeLabels)
+    // Walks values with the same grammar as Parse, without collecting FieldSpan trees.
+    internal static Elements Enumerate(ReadOnlySpan<char> json, bool properties = false)
+        => new(json, properties);
+
+    internal static void ValidateValue(ReadOnlySpan<char> json)
     {
-        var fields = ParseObjectFields(materializeLabels, null);
+        var parser = new JsonRecordParser(json, StandardWhitespace, collectFields: false);
+        parser.SkipWhitespace();
+        parser.ParseValue(allowObject: true, allowCompositeArrayItems: true);
+        parser.ExpectEndOfValue();
+    }
+
+    private void ExpectEndOfValue()
+    {
+        SkipWhitespace();
+        if (!IsEnd)
+            throw new InvalidDataException($"Unexpected JSON content at position {_position}.");
+    }
+
+    private bool MoveNextContainerItem(char close, ref bool started)
+    {
+        SkipWhitespace();
+        if (started && Current != close)
+        {
+            Expect(',');
+            SkipWhitespace();
+            if (!_allowTrailingCommas)
+                return true;
+        }
+
+        if (Current == close)
+        {
+            _position++;
+            return false;
+        }
+
+        started = true;
+        return true;
+    }
+
+    private ParsedString ReadPropertyLabel(bool materialize)
+    {
+        var label = materialize ? ParseString() : SkipString();
+        SkipWhitespace();
+        Expect(':');
+        SkipWhitespace();
+        return label;
+    }
+
+    internal ref struct Elements
+    {
+        private readonly bool _properties;
+        private readonly char _close;
+        private JsonRecordParser _parser;
+        private bool _started;
+        private bool _ended;
+
+        public Elements(ReadOnlySpan<char> json, bool properties)
+        {
+            _parser = new JsonRecordParser(json, StandardWhitespace, collectFields: false);
+            _properties = properties;
+            _close = properties ? '}' : ']';
+            _parser.SkipWhitespace();
+            _parser.Expect(properties ? '{' : '[');
+        }
+
+        public ReadOnlySpan<char> Name { get; private set; }
+        public ReadOnlySpan<char> Value { get; private set; }
+        public int ValueStart { get; private set; }
+
+        public bool MoveNext()
+        {
+            if (_ended)
+                return false;
+            if (!_parser.MoveNextContainerItem(_close, ref _started))
+            {
+                _parser.ExpectEndOfValue();
+                _ended = true;
+                return false;
+            }
+
+            if (_properties)
+            {
+                var label = _parser.ReadPropertyLabel(materialize: false).Span;
+                Name = _parser._json.Slice(label.Start - 1, label.Length + 2);
+            }
+
+            ValueStart = _parser._position;
+            _parser.ParseValue(allowObject: true, allowCompositeArrayItems: true);
+            Value = _parser._json[ValueStart.._parser._position];
+            return true;
+        }
+    }
+
+    private FieldSpan[] ParseObject(int depth = 0)
+    {
+        var fields = ParseObjectFields(null, depth);
         return fields is null ? [] : [.. fields];
     }
 
-    private List<FieldSpan>? ParseObjectFields(bool materializeLabels, List<FieldSpan>? fields)
+    private List<FieldSpan>? ParseObjectFields(List<FieldSpan>? fields, int depth = 0)
     {
         Expect('{');
-        SkipWhitespace();
-        if (Current == '}')
-        {
-            _position++;
+        var started = false;
+        if (!MoveNextContainerItem('}', ref started))
             return fields;
-        }
 
-        fields ??= new List<FieldSpan>();
-        while (true)
+        if (_collectFields)
+            fields ??= new List<FieldSpan>();
+        do
         {
-            var label = materializeLabels ? ParseString() : SkipString();
-            SkipWhitespace();
-            Expect(':');
-            SkipWhitespace();
-
-            var value = ParseValue(allowObject: true, allowCompositeArrayItems: true);
-            fields.Add(value with { Label = label.Span, DecodedLabel = label.Decoded });
-
-            SkipWhitespace();
-            if (Current == '}')
-            {
-                _position++;
-                return fields;
-            }
-
-            Expect(',');
-            SkipWhitespace();
-            if (_allowTrailingCommas && Current == '}')
-            {
-                _position++;
-                return fields;
-            }
+            var label = ReadPropertyLabel(_collectFields);
+            var value = ParseValue(allowObject: true, allowCompositeArrayItems: true, depth);
+            fields?.Add(value with { Label = label.Span, DecodedLabel = label.Decoded });
         }
+        while (MoveNextContainerItem('}', ref started));
+        return fields;
     }
 
-    private FieldSpan ParseValue(bool allowObject, bool allowCompositeArrayItems)
+    private FieldSpan ParseValue(bool allowObject, bool allowCompositeArrayItems, int depth = 0)
     {
+        if (depth >= _maximumDepth)
+            throw new InvalidDataException($"JSON nesting exceeds {_maximumDepth} levels at position {_position}.");
+
         if (Current == '"')
         {
             // Validate every escape now; decoded storage is created by value access.
@@ -326,12 +410,12 @@ internal ref struct JsonRecordParser
                 throw new InvalidDataException("Objects are not supported in this array.");
 
             var start = _position;
-            var children = ParseObject(materializeLabels: true);
+            var children = ParseObject(depth + 1);
             return new FieldSpan(CompletedSpan(start, _position - start), default, children);
         }
 
         if (Current == '[')
-            return ParseArray(allowCompositeArrayItems);
+            return ParseArray(allowCompositeArrayItems, depth + 1);
 
         return Current switch
         {
@@ -416,40 +500,22 @@ internal ref struct JsonRecordParser
             _position++;
     }
 
-    private FieldSpan ParseArray(bool allowCompositeItems)
+    private FieldSpan ParseArray(bool allowCompositeItems, int depth)
     {
         var start = _position;
         Expect('[');
-        SkipWhitespace();
-        var children = new List<FieldSpan>();
-
-        if (Current == ']')
+        var started = false;
+        var children = _collectFields ? new List<FieldSpan>() : null;
+        while (MoveNextContainerItem(']', ref started))
         {
-            _position++;
-            return new FieldSpan(CompletedSpan(start, _position - start), default, []);
-        }
-
-        while (true)
-        {
-            if (!allowCompositeItems && (Current == '[' || Current == '{'))
+            if (!allowCompositeItems && Current is '[' or '{')
                 throw new InvalidDataException("Nested arrays and object array elements are not supported.");
 
-            children.Add(ParseValue(allowObject: allowCompositeItems, allowCompositeArrayItems: allowCompositeItems));
-            SkipWhitespace();
-            if (Current == ']')
-            {
-                _position++;
-                return new FieldSpan(CompletedSpan(start, _position - start), default, [.. children]);
-            }
-
-            Expect(',');
-            SkipWhitespace();
-            if (_allowTrailingCommas && Current == ']')
-            {
-                _position++;
-                return new FieldSpan(CompletedSpan(start, _position - start), default, [.. children]);
-            }
+            var item = ParseValue(allowObject: allowCompositeItems, allowCompositeArrayItems: allowCompositeItems, depth);
+            children?.Add(item);
         }
+
+        return new FieldSpan(CompletedSpan(start, _position - start), default, children is null ? [] : [.. children]);
     }
 
     private ParsedString ParseString()
