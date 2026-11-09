@@ -9,7 +9,9 @@ public sealed class KeyValueDataReader : LabeledDataReader<KeyValueProfile>
         : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString))
     { }
 
-    protected override bool HasStableLabelShape => Profile.Projection is not null;
+    protected override bool HasStableLabelShape => Profile.StableFieldLayout || Profile.Projection is not null;
+
+    protected override bool CacheInferredFieldParsers => Profile.StableFieldLayout;
 
     protected override IRecordSource<KeyValueProfile> CreateRecordSource(StreamReader reader, KeyValueProfile profile)
         => new KeyValueRecordSource(reader, profile);

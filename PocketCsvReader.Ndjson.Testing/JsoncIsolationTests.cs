@@ -15,7 +15,7 @@ public class JsoncIsolationTests
         var builder = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n"));
         if (mode == 1) builder.WithProjection(p => p.Property("id"));
         if (mode == 2) builder.WithOrderedProjection(p => p.Property("id"));
-        if (mode == 3) builder.WithStableObjectShape();
+        if (mode == 3) builder.WithStableFieldLayout();
         if (mode == 4) builder.WithRecordPath("$");
         using var reader = builder.Build().ToDataReader(new MemoryStream(
             Encoding.UTF8.GetBytes("{\"id\":1}\n" + invalid + "\n")));

@@ -3,7 +3,7 @@ using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson;
 
-internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositionSource, ICurrentRecordSource
+internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
     private readonly NdjsonFramer _framer;
@@ -17,11 +17,8 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
     private readonly FieldSpan[]? _projectedFields;
     private readonly JsonFieldBuffer _fieldBuffer = new();
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
+    private readonly StableJsonRecordLayout? _stableLayout;
     private IEnumerator<ReadOnlyMemory<char>>? _matches;
-    private StableJsonShape? _stableShape;
-    private FieldSpan[]? _stableFields;
-    private FieldSpan[]? _stableScratchFields;
-    private int[]? _stableProjectedOrdinals;
 
     public NdjsonProfile Profile { get; }
 
@@ -31,24 +28,24 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
         if (profile.TrackPosition) _position = new();
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
-        _projectedFields = profile.ProjectedProperties is null
-            ? null
-            : new FieldSpan[profile.ProjectedProperties.Count];
-        _projectedValueFramer = profile.ProjectedProperties is null
-            ? null
-            : new ProjectedJsonValueFramer(
-                profile.ProjectedProperties,
-                _projectedFields!,
-                profile.OrderedProjection);
-        // Preserve the established parser for other dialects, paths and stable shapes.
-        if (_projectedValueFramer is not null && !profile.StableObjectShape
-            && profile.ParsedRecordPath is null && profile.Dialect.CommentChar is null
-            && profile.Dialect.LineTerminator is "\n" or "\r\n"
-            && profile.Dialect.Whitespaces.Order().SequenceEqual(new[] { '\t', '\n', '\r', ' ' }))
+        if (profile.StableFieldLayout)
         {
-            _fusedFramer = new(_projectedValueFramer, _framer, profile.Dialect.LineTerminator == "\r\n");
+            _stableLayout = new(profile.Dialect.Whitespaces, profile.ProjectedProperties, profile.OrderedProjection);
+            return;
         }
+        if (profile.ProjectedProperties is not { } properties)
+            return;
+
+        _projectedFields = new FieldSpan[properties.Count];
+        _projectedValueFramer = new ProjectedJsonValueFramer(properties, _projectedFields, profile.OrderedProjection);
+        if (CanFuseProjection(profile))
+            _fusedFramer = new(_projectedValueFramer, _framer, profile.Dialect.LineTerminator == "\r\n");
     }
+
+    private static bool CanFuseProjection(NdjsonProfile profile)
+        => profile.ParsedRecordPath is null && profile.Dialect.CommentChar is null
+            && profile.Dialect.LineTerminator is "\n" or "\r\n"
+            && profile.Dialect.Whitespaces.Order().SequenceEqual(new[] { '\t', '\n', '\r', ' ' });
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
@@ -86,21 +83,7 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
         }
     }
 
-    bool ICurrentRecordSource.SupportsCurrentRecord => true;
-
-    CurrentRecordResult ICurrentRecordSource.ReadCurrent()
-    {
-        var eof = IsEndOfFile(out var record, out var state);
-        return new(eof, record.Current, state);
-    }
-
-    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
-        => (await ReadCurrentAsync(cancellationToken).ConfigureAwait(false)).Materialize();
-
-    ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
-        => ReadCurrentAsync(cancellationToken);
-
-    private async ValueTask<CurrentRecordResult> ReadCurrentAsync(CancellationToken cancellationToken)
+    async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         while (true)
@@ -194,8 +177,11 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
 
     private ParsedRecord ParseCandidate(ReadOnlyMemory<char> record)
     {
-        if (Profile.StableObjectShape)
-            return ParseStableCandidate(record);
+        if (_stableLayout is not null)
+        {
+            var stableRecord = Trim(record);
+            return new ParsedRecord(stableRecord, _stableLayout.Parse(stableRecord.Span));
+        }
 
         if (_projectedValueFramer is null)
         {
@@ -220,74 +206,6 @@ internal sealed class NdjsonRecordSource : IRecordSource<NdjsonProfile>, IPositi
     {
         if (_projectedValueFramer!.RequiresValueMaterialization)
             JsonRecordParser.MaterializeProjectedValues(record.Span, Profile.Dialect.Whitespaces, _projectedFields!);
-    }
-
-    private ParsedRecord ParseStableCandidate(ReadOnlyMemory<char> record)
-    {
-        var stableRecord = Trim(record);
-        FieldSpan[] fields;
-        if (_stableFields is null)
-        {
-            if (stableRecord.IsEmpty || stableRecord.Span[0] != '{')
-                throw new InvalidDataException("A stable-shape NDJSON record must be a JSON object.");
-            fields = JsonRecordParser.Parse(stableRecord.Span, Profile.Dialect.Whitespaces);
-            _stableShape = JsonRecordParser.CreateStableShape(stableRecord.Span, fields);
-            _stableFields = fields;
-            if (Profile.ProjectedProperties is not null)
-                _stableProjectedOrdinals = ResolveProjectedOrdinals(stableRecord.Span, fields);
-        }
-        else
-        {
-            var stableShape = _stableShape
-                ?? throw new InvalidOperationException("The stable JSON shape was not initialized.");
-            _stableScratchFields ??= stableShape.CreateFieldBuffer();
-            fields = JsonRecordParser.ParseStableObjectValues(
-                stableRecord.Span,
-                Profile.Dialect.Whitespaces,
-                stableShape,
-                _stableScratchFields);
-            (_stableFields, _stableScratchFields) = (fields, _stableFields);
-        }
-
-        if (_stableProjectedOrdinals is null)
-            return new ParsedRecord(stableRecord, fields);
-
-        for (var projectedOrdinal = 0; projectedOrdinal < _stableProjectedOrdinals.Length; projectedOrdinal++)
-            _projectedFields![projectedOrdinal] = fields[_stableProjectedOrdinals[projectedOrdinal]];
-        return new ParsedRecord(stableRecord, _projectedFields!);
-    }
-
-    private int[] ResolveProjectedOrdinals(ReadOnlySpan<char> record, FieldSpan[] fields)
-    {
-        var ordinals = new int[Profile.ProjectedProperties!.Count];
-        var previousOrdinal = -1;
-        for (var projectedOrdinal = 0; projectedOrdinal < ordinals.Length; projectedOrdinal++)
-        {
-            var property = Profile.ProjectedProperties[projectedOrdinal];
-            var sourceOrdinal = FindProperty(record, fields, property);
-            if (sourceOrdinal < 0)
-                throw new InvalidDataException($"Projected property '{property}' was not found.");
-            if (Profile.OrderedProjection && sourceOrdinal <= previousOrdinal)
-                throw new InvalidDataException($"Projected property '{property}' was not found in the configured order.");
-            ordinals[projectedOrdinal] = sourceOrdinal;
-            previousOrdinal = sourceOrdinal;
-        }
-        return ordinals;
-    }
-
-    private static int FindProperty(ReadOnlySpan<char> record, FieldSpan[] fields, string property)
-    {
-        for (var ordinal = 0; ordinal < fields.Length; ordinal++)
-        {
-            var field = fields[ordinal];
-            if (field.DecodedLabel is not null
-                ? field.DecodedLabel.Equals(property, StringComparison.Ordinal)
-                : record.Slice(field.Label.Start, field.Label.Length).SequenceEqual(property))
-            {
-                return ordinal;
-            }
-        }
-        return -1;
     }
 
     private ReadOnlyMemory<char> Trim(ReadOnlyMemory<char> value)

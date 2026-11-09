@@ -30,9 +30,11 @@ public class JsoncReaderTests
         [Values(1, 2, 7, 65536)] int bufferSize,
         [Values(false, true)] bool async,
         [Values(0, 1, 2)] int projection,
-        [Values(false, true)] bool selected)
+        [Values(false, true)] bool selected,
+        [Values(false, true)] bool stable)
     {
         var builder = Builder(bufferSize, projection);
+        if (stable) builder.WithStableFieldLayout();
         if (selected) builder.WithRecordPath("$.customers[*]");
         var rows = "[/* first */" + Object + ", // between\r\n" + Object + ",/* final */]";
         var document = "// before root\r\n" + (selected ? "{\"customers\":" + rows + ",\"other\":[false,],}" : rows) + "/* after root */ // eof";

@@ -74,9 +74,9 @@ var ndjson = new NdjsonReaderBuilder()
 
 Unselected properties may occur before, after, or between selected properties, but the selected properties themselves must occur in configuration order. A reordered selected property is rejected.
 
-Both projection modes avoid representing unused fields; ordered projection also avoids the general name lookup used to find selected fields. Neither skips reading or validating the rest of the record. See [Why projection improves performance](../json-projection/#why-projection-improves-performance) for a comparison with unprojected reading and guidance on when the difference matters.
+With stable field layout disabled, both projection modes avoid representing unused fields while validating the full record. Ordered projection uses the configured order to find selected fields. See [Why projection improves performance](../json-projection/#why-projection-improves-performance) for a comparison with unprojected reading.
 
-For trusted stable structure, see [stable object shapes](../json-projection/#ndjson-stable-object-shape), including same-count rename/reorder risks.
+For trusted object records with a consistent layout, use `NdjsonReaderBuilder.WithStableFieldLayout()` with or without projection. See [Stable field layout](../json-projection/#stable-field-layout) for the source layout contract and the effect of same-count renames and reordering.
 
 ## Boundaries and values
 
@@ -86,4 +86,4 @@ JSON null, quoted strings, numbers, arrays and nested objects retain their sourc
 
 ## Select nested nodes as records
 
-See [Select JSON nodes as rows](../json-record-paths/) for the supported path subset and per-record buffering. See [projection and stable shapes](../json-projection/) for performance, contracts, eligibility, and fallback behavior.
+See [Select JSON nodes as rows](../json-record-paths/) for the supported path subset and per-record buffering. See [JSON projection and stable field layout](../json-projection/) for performance and parser behavior.

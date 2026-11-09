@@ -13,6 +13,10 @@ public class JsonDataReader : LabeledDataReader<JsonProfile>
     protected override IRecordSource<JsonProfile> CreateRecordSource(StreamReader reader, JsonProfile profile)
         => new JsonRecordSource(reader, profile);
 
+    protected override bool HasStableLabelShape => Profile.StableFieldLayout;
+
+    protected override bool CacheInferredFieldParsers => Profile.StableFieldLayout;
+
     protected override ReadOnlyMemory<char> GetFieldMemory(ref FieldSpan field)
         => JsonValueDecoder.GetMemory(CurrentRecordMemory, ref field, ref _decodingBuffer);
 

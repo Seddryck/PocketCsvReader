@@ -31,7 +31,10 @@ public class NdjsonProfile : IProfile
     /// while scalar leaf types may still vary.
     /// </summary>
     /// <value>True to reuse the first object structure; otherwise false.</value>
-    public bool StableObjectShape { get; }
+    public bool StableFieldLayout { get; }
+
+    /// <inheritdoc cref="StableFieldLayout"/>
+    public bool StableObjectShape => StableFieldLayout;
 
     public NdjsonProfile(
         NdjsonDialectDescriptor dialect,
@@ -53,7 +56,7 @@ public class NdjsonProfile : IProfile
         ParserOptimizations = parserOptimizations ?? DefaultParserOptimizations;
         ProjectedProperties = JsonProjection.Create(projectedProperties, orderedProjection);
         OrderedProjection = orderedProjection;
-        StableObjectShape = stableObjectShape;
+        StableFieldLayout = stableObjectShape;
         if (ParserOptimizations.BufferSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(parserOptimizations), "The parser buffer size must be positive.");
     }

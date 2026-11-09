@@ -9,10 +9,10 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | Package | Purpose |
 | --- | --- |
 | `PocketCsvReader` | CSV/TSV and shared APIs |
-| `PocketCsvReader.Json` | JSON and JSONC |
-| `PocketCsvReader.Ndjson` | NDJSON |
+| `PocketCsvReader.Json` | JSON and JSONC with projection and stable field layout for object records |
+| `PocketCsvReader.Ndjson` | NDJSON with projection and stable field layout for object records |
 | `PocketCsvReader.FixedWidth` | Fixed character positions |
-| `PocketCsvReader.KeyValue` | LTSV and logfmt |
+| `PocketCsvReader.KeyValue` | LTSV and logfmt with column projection, aliases, and stable field layout |
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C |
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF |
 | `PocketCsvReader.Arrow` | Apache Arrow output |

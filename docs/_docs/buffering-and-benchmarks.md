@@ -27,9 +27,9 @@ Borrowed parser character/byte memory and field metadata expire on the next read
 
 ## Reader filtering
 
-[Configured row filtering](../reader-filtering/) runs before projection. Span conditions
+[Configured row filtering](../reader-filtering/) runs after any format projection and before row materialization. Span conditions
 avoid typed conversion and do not allocate the parsed-value cache. Typed filtering
-can reuse conversion results during projection, but dictionary lookups and boxed
+can reuse conversion results during materialization, but dictionary lookups and boxed
 value types have costs; reuse is not a universal throughput improvement.
 
 Run the focused performance check with:

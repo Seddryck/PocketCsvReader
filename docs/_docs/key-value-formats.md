@@ -83,7 +83,7 @@ Output:
 
 ## Labels and changing record shapes
 
-Labels come from each record, rather than a header row. Call `Read()` before looking up a field. `FieldCount`, field order, and labels may change between records; resolve ordinals on the current row instead of caching them across rows.
+Labels come from each record. Call `Read()` before looking up a field. With ordinary reading, `FieldCount`, field order, and labels may change between records. Resolve ordinals on each row when the source layout varies and projection is disabled.
 
 Use `TryGetOrdinal("label", out var ordinal)` to check for optional fields before accessing them. Duplicate labels are preserved, and `GetOrdinal` returns the first matching occurrence. Access subsequent occurrences by index. A missing label passed to `GetOrdinal` throws `ArgumentOutOfRangeException`.
 
@@ -91,7 +91,7 @@ Both formats accept LF, CRLF, or CR line endings and a final record without a ne
 
 ## Project a fixed set of columns
 
-Use `WithProjection` on either builder to select source keys in output order and optionally give them aliases.
+Both `LogfmtReaderBuilder` and `LtsvReaderBuilder` support `WithProjection` to select source keys in output order and optionally give them aliases.
 
 ```csharp
 var requests = new LogfmtReaderBuilder()
@@ -102,7 +102,13 @@ var requests = new LogfmtReaderBuilder()
     .Build();
 ```
 
-The configured names and ordinals stay the same even when source fields move or are absent. A missing key is exposed as `DBNull.Value`; a present empty value remains an empty string. When a key occurs more than once, projection takes its first value. Output names must be unique. Named schemas and filters refer to the output names. Unselected fields are still checked for valid syntax.
+The configured names and ordinals stay the same even when source fields move or are absent. A missing key is exposed as `DBNull.Value`. A present empty value remains an empty string. When a key occurs more than once, projection takes its first value. Output names must be unique. Named schemas and filters refer to the output names. Unselected fields are still checked for valid syntax.
+
+## Reuse a trusted source layout
+
+Both builders support `WithStableFieldLayout()` on its own or with projection. Enable it when every record has the same keys in the same order. The first record establishes the layout. Later rows still validate syntax and parse values while reusing labels and ordinals. A different source field count throws `InvalidDataException`, even if the changed field is excluded by projection. Renames or reordering with the same count can assign values to the wrong columns.
+
+An empty first record establishes a zero-field layout. Empty values count as fields. Without projection, duplicate keys keep their ordinals and name lookup resolves the first occurrence. With projection, the reader resolves selected keys once against the first record, including missing keys, and reuses those positions. Value conversions still use the configured schema or requested target type.
 
 ## Configuration and output models
 

@@ -53,7 +53,7 @@ public class NdjsonReader : FlatFileReader<NdjsonProfile, NdjsonDataReader>
             profile.ParserOptimizations with { BufferSize = bufferSize },
             profile.ProjectedProperties,
             profile.OrderedProjection,
-            profile.StableObjectShape,
+            profile.StableFieldLayout,
             profile.RecordPath) { Filters = profile.Filters, Skip = profile.Skip, Take = profile.Take };
     }
 }

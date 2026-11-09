@@ -9,6 +9,7 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
     private string? _recordPath;
     private bool _allowComments;
     private bool _allowTrailingCommas;
+    private bool _stableFieldLayout;
 
     /// <summary>Enables line/block comments and trailing commas.</summary>
     public JsonReaderBuilder WithJsonc()
@@ -43,6 +44,14 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
     public JsonReaderBuilder WithProjection(Func<JsonProjectionBuilder, JsonProjectionBuilder> configure)
         => ConfigureProjection(configure, ordered: false);
 
+    /// <summary>Reuses the first object's recursive field layout for subsequent object records.</summary>
+    /// <remarks>Names are trusted. Renames and reordering with the same count may misassign values.</remarks>
+    public JsonReaderBuilder WithStableFieldLayout()
+    {
+        _stableFieldLayout = true;
+        return this;
+    }
+
     /// <summary>
     /// Projects properties in the order in which they must occur in each JSON object.
     /// Non-projected properties may occur between projected properties.
@@ -70,5 +79,11 @@ public class JsonReaderBuilder : ReaderBuilder<JsonReaderBuilder>
             _orderedProjection,
             _recordPath,
             _allowComments,
-            _allowTrailingCommas) { Filters = BuildFilters(), Skip = Skip, Take = Take });
+            _allowTrailingCommas)
+        {
+            StableFieldLayout = _stableFieldLayout,
+            Filters = BuildFilters(),
+            Skip = Skip,
+            Take = Take
+        });
 }

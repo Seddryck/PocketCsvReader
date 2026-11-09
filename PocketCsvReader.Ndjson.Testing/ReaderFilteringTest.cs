@@ -9,7 +9,7 @@ public class ReaderFilteringTest
     [Test]
     public void StableShape_SupportsNullableTypedFiltering()
     {
-        var csv = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n")).WithStableObjectShape()
+        var csv = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n")).WithStableFieldLayout()
             .WithFilter<int?>("id", id => id is null || id > 1).Build();
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"id\":1}\n{\"id\":null}\n{\"id\":2}"));
         using var reader = csv.ToDataReader(stream);

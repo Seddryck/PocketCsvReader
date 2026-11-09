@@ -7,9 +7,17 @@ namespace PocketCsvReader.KeyValue.Testing;
 
 public class BufferedKeyValueTests
 {
-    private static KeyValueReader Build(bool logfmt, int bufferSize) => logfmt
-        ? new LogfmtReaderBuilder().WithParserOptimizations(new(BufferSize: bufferSize)).Build()
-        : new LtsvReaderBuilder().WithParserOptimizations(new(BufferSize: bufferSize)).Build();
+    private static KeyValueReader Build(bool logfmt, int bufferSize, bool stable = false)
+        => logfmt
+            ? Configure(new LogfmtReaderBuilder(), bufferSize, stable).Build()
+            : Configure(new LtsvReaderBuilder(), bufferSize, stable).Build();
+
+    private static TBuilder Configure<TBuilder>(KeyValueReaderBuilder<TBuilder> builder, int bufferSize, bool stable)
+        where TBuilder : KeyValueReaderBuilder<TBuilder>
+    {
+        if (stable) builder.WithStableFieldLayout();
+        return builder.WithParserOptimizations(new(BufferSize: bufferSize));
+    }
 
     [Test]
     public async Task BoundariesPreserveValuesAndSchema(
@@ -165,14 +173,17 @@ public class BufferedKeyValueTests
     }
 
     [Test]
-    public async Task ReturnsFirstRecordBeforeConsumingDocument([Values(false, true)] bool logfmt, [Values(false, true)] bool async)
+    public async Task ReturnsFirstRecordBeforeConsumingDocument(
+        [Values] bool logfmt, [Values] bool async, [Values] bool stable)
     {
         string line = logfmt ? "a=hello\n" : "a:hello\n";
         using var stream = new ChunkedStream(string.Concat(Enumerable.Repeat(line, 10_000)), async);
-        using var reader = Build(logfmt, 31).ToDataReader(stream);
+        using var reader = Build(logfmt, 31, stable).ToDataReader(stream);
         Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
         Assert.That(reader.GetString(0), Is.EqualTo("hello"));
         Assert.That(stream.BytesRead, Is.LessThan(Encoding.UTF8.GetByteCount(line) * 10_000));
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
+        Assert.That(reader.GetString(reader.GetOrdinal("a")), Is.EqualTo("hello"));
     }
 
     [TestCase("", 0)]

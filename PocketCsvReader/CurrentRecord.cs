@@ -53,3 +53,19 @@ internal interface ICurrentRecordSource
     CurrentRecordResult ReadCurrent();
     ValueTask<CurrentRecordResult> ReadCurrentAsync(CancellationToken cancellationToken);
 }
+
+// Sources with borrowed sync and async paths materialize the compatibility
+// wrapper only when called through the public record-source interface.
+internal interface IBorrowedRecordSource<out TProfile> : IRecordSource<TProfile>, ICurrentRecordSource
+{
+    bool ICurrentRecordSource.SupportsCurrentRecord => true;
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent()
+    {
+        var eof = IsEndOfFile(out var record, out var state);
+        return new(eof, record.Current, state);
+    }
+
+    async ValueTask<RecordReadResult> IRecordSource<TProfile>.ReadAsync(CancellationToken cancellationToken)
+        => (await ReadCurrentAsync(cancellationToken).ConfigureAwait(false)).Materialize();
+}

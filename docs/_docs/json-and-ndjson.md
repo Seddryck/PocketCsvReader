@@ -63,6 +63,8 @@ var json = new JsonReaderBuilder()
 
 Projection avoids building field metadata and nested field trees for properties you will not use. The complete JSON value is still read and validated. Use `WithOrderedProjection` only when the selected properties are guaranteed to occur in projection order: it additionally replaces general name lookup with comparison against the next expected selected name. A record whose selected properties are reordered is rejected. See [Why projection improves performance](../json-projection/#why-projection-improves-performance) for a worked example and the limits of these savings.
 
+Use `JsonReaderBuilder.WithStableFieldLayout()` for trusted object records with the same recursive structure and property order. This works with standalone objects, objects streamed from arrays, and objects selected by a record path. You can combine it with either projection mode. See [Stable field layout](../json-projection/#stable-field-layout).
+
 ## JSON with comments (JSONC)
 
 Opt in to JSONC using the existing `PocketCsvReader.Json` package:
@@ -91,13 +93,13 @@ This returns the same two rows as strict JSON without comments or trailing comma
 
 Profiles expose independent, read-only `AllowComments` and `AllowTrailingCommas` settings. For example, `new JsonProfile(allowComments: true)` accepts comments while continuing to reject trailing commas, and `new JsonProfile(allowTrailingCommas: true)` permits trailing commas while continuing to reject comments. Set both to `true` for JSONC. The builder offers `WithComments(bool allowComments = true)` and `WithTrailingCommas(bool allowTrailingCommas = true)`; `WithJsonc()` is shorthand for enabling both. Both settings default to `false`, and either can be disabled again after `WithJsonc()`. The existing profile constructor remains available. The file extension never changes the dialect automatically.
 
-JSONC works with root objects, streamed top-level arrays, nested values, normal and ordered projection, record paths, and both synchronous and asynchronous reads. Framing retains comment state across buffer boundaries and preserves offsets into the original input; it does not strip comments or normalize the document. Raw composite values therefore retain their original comments and commas. As with strict JSON, record-path selection captures the complete document before enumerating matches; without a record path, top-level array elements stream independently.
+JSONC works with root objects, streamed top-level arrays, nested values, normal and ordered projection, record paths, and stable field layout for object records. It supports synchronous and asynchronous reads. Framing retains comment state across buffer boundaries and preserves offsets into the original input. Raw composite values retain their original comments and commas. As with strict JSON, record-path selection captures the complete document before enumerating matches. Without a record path, top-level array elements stream independently.
 
 NDJSON retains its existing line framing and optional comment configuration. Its JSON values remain strict; `WithJsonc()` applies only to the JSON reader.
 
 ## Newline-delimited JSON
 
-The independent NDJSON guide now covers [NDJSON framing and configuration](../ndjson/), including projection and stable-shape links.
+See [NDJSON framing and configuration](../ndjson/) for NDJSON projection and stable field layout.
 
 ## Select nested nodes as records
 

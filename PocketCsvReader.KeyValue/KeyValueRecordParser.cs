@@ -5,18 +5,18 @@ namespace PocketCsvReader.KeyValue;
 
 internal static class KeyValueRecordParser
 {
-    public static void Parse(ReadOnlySpan<char> record, KeyValueFormat format, List<FieldSpan> fields)
+    public static void Parse(ReadOnlySpan<char> record, KeyValueFormat format, List<FieldSpan> fields, bool captureLabels = true)
     {
         fields.Clear();
         switch (format)
         {
-            case KeyValueFormat.Ltsv: ParseLtsv(record, fields); break;
-            case KeyValueFormat.Logfmt: ParseLogfmt(record, fields); break;
+            case KeyValueFormat.Ltsv: ParseLtsv(record, fields, captureLabels); break;
+            case KeyValueFormat.Logfmt: ParseLogfmt(record, fields, captureLabels); break;
             default: throw new ArgumentOutOfRangeException(nameof(format), format, null);
         }
     }
 
-    private static void ParseLtsv(ReadOnlySpan<char> record, List<FieldSpan> fields)
+    private static void ParseLtsv(ReadOnlySpan<char> record, List<FieldSpan> fields, bool captureLabels)
     {
         if (record.Length == 0)
             return;
@@ -42,7 +42,7 @@ internal static class KeyValueRecordParser
 
             fields.Add(new FieldSpan(
                 new SpanInfo(separator + 1, fieldEnd - separator - 1),
-                new SpanInfo(fieldStart, separator - fieldStart)));
+                captureLabels ? new SpanInfo(fieldStart, separator - fieldStart) : default));
 
             if (fieldEnd == record.Length)
                 break;
@@ -50,7 +50,7 @@ internal static class KeyValueRecordParser
         }
     }
 
-    private static void ParseLogfmt(ReadOnlySpan<char> record, List<FieldSpan> fields)
+    private static void ParseLogfmt(ReadOnlySpan<char> record, List<FieldSpan> fields, bool captureLabels)
     {
         var position = 0;
         while (true)
@@ -59,11 +59,11 @@ internal static class KeyValueRecordParser
             if (position == record.Length)
                 return;
 
-            fields.Add(ParseLogfmtField(record, ref position));
+            fields.Add(ParseLogfmtField(record, ref position, captureLabels));
         }
     }
 
-    private static FieldSpan ParseLogfmtField(ReadOnlySpan<char> record, ref int position)
+    private static FieldSpan ParseLogfmtField(ReadOnlySpan<char> record, ref int position, bool captureLabels)
     {
         var labelStart = position;
         while (position < record.Length && IsIdentifierChar(record[position]))
@@ -71,7 +71,7 @@ internal static class KeyValueRecordParser
         if (labelStart == position)
             throw SyntaxError("A logfmt key was expected", position);
 
-        var label = new SpanInfo(labelStart, position - labelStart);
+        var label = captureLabels ? new SpanInfo(labelStart, position - labelStart) : default;
         if (position == record.Length || IsWhitespace(record[position]))
             return new FieldSpan(new SpanInfo(position, 0), label);
 

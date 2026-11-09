@@ -9,6 +9,24 @@ namespace PocketCsvReader.Ndjson.Testing;
 public class StableObjectShapeTests
 {
     [Test]
+    public void OldBuilderMethodForwardsWithNonErrorMigrationWarning()
+    {
+        var diagnostic = typeof(NdjsonReaderBuilder).GetMethod("WithStableObjectShape")!
+            .GetCustomAttribute<ObsoleteAttribute>()!;
+        Assert.That(diagnostic.IsError, Is.False);
+        Assert.That(diagnostic.Message, Does.Contain("WithStableFieldLayout()"));
+
+#pragma warning disable CS0618 // Exercise the retained compatibility method.
+        var format = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n"))
+            .WithStableObjectShape().Build();
+#pragma warning restore CS0618
+        using var reader = format.ToDataReader(Stream("{\"id\":1}\n{\"renamed\":2}"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(reader.GetOrdinal("id")), Is.EqualTo(2));
+    }
+
+    [Test]
     public void Read_StableShape_ReusesFirstLabelsAndMapsLaterValuesByOrdinal()
     {
         using var reader = CreateReader(
@@ -88,7 +106,7 @@ public class StableObjectShapeTests
         var ndjson = new NdjsonReaderBuilder()
             .WithDialect(dialect => dialect.WithLineTerminator("\n"))
             .WithDialect(dialect => dialect.WithCommentChar('#'))
-            .WithStableObjectShape()
+            .WithStableFieldLayout()
             .Build();
         const string content =
             "{\"na\\u006de\":\"Ada\",\"payload\":{\"items\":[1,{\"deep\":true}]}} # first\n" +
@@ -145,7 +163,7 @@ public class StableObjectShapeTests
         var ndjson = new NdjsonReaderBuilder()
             .WithDialect(dialect => dialect.WithLineTerminator("\n"))
             .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 2, ReadAhead: false))
-            .WithStableObjectShape()
+            .WithStableFieldLayout()
             .Build();
         using var reader = ndjson.ToDataReader(Stream(
             "{\"identifier\":123,\"description\":\"first value\"}\n" +
@@ -166,7 +184,7 @@ public class StableObjectShapeTests
         var ndjson = new NdjsonReaderBuilder()
             .WithDialect(dialect => dialect.WithLineTerminator("\n"))
             .WithProjection(projection => projection.Property("name").Property("count"))
-            .WithStableObjectShape()
+            .WithStableFieldLayout()
             .Build();
         using var reader = ndjson.ToDataReader(Stream(
             "{\"ignored\":true,\"count\":1,\"name\":\"Ada\"}\n" +
@@ -202,7 +220,7 @@ public class StableObjectShapeTests
         var ndjson = new NdjsonReaderBuilder()
             .WithDialect(dialect => dialect.WithLineTerminator("\n"))
             .WithSchema(schema => schema.Named().WithIntegerField<int>("id"))
-            .WithStableObjectShape()
+            .WithStableFieldLayout()
             .Build();
         using var reader = ndjson.ToDataReader(Stream("{\"id\":1}\n{\"id\":2}"));
 
@@ -217,7 +235,7 @@ public class StableObjectShapeTests
     private static NdjsonDataReader CreateReader(string content)
         => new NdjsonReaderBuilder()
             .WithDialect(dialect => dialect.WithLineTerminator("\n"))
-            .WithStableObjectShape()
+            .WithStableFieldLayout()
             .Build()
             .ToDataReader(Stream(content));
 
