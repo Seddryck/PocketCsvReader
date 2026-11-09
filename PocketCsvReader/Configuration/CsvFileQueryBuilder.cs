@@ -51,10 +51,16 @@ public sealed class CsvFilePathBuilder
 public sealed class CsvFileQueryBuilder<TPartition>
 {
     private readonly CsvReaderBuilder _reader;
-    private readonly IEnumerable<PartitionedFile<TPartition>> _files;
+    private readonly Func<IReadOnlyList<PartitionCondition>, IEnumerable<PartitionedFile<TPartition>>> _discover;
 
     internal CsvFileQueryBuilder(CsvReaderBuilder reader, IEnumerable<PartitionedFile<TPartition>> files)
-        => (_reader, _files) = (reader, files);
+        : this(reader, _ => files)
+    {
+    }
 
-    public CsvFileQuery<TPartition> Build() => new(_reader.Build().Profile, _files);
+    internal CsvFileQueryBuilder(CsvReaderBuilder reader,
+        Func<IReadOnlyList<PartitionCondition>, IEnumerable<PartitionedFile<TPartition>>> discover)
+        => (_reader, _discover) = (reader, discover);
+
+    public CsvFileQuery<TPartition> Build() => new(_reader.Build().Profile, _discover);
 }
