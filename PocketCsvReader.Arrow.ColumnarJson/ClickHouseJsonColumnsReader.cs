@@ -3,14 +3,14 @@ using Apache.Arrow.Ipc;
 
 namespace PocketCsvReader.Arrow.ColumnarJson;
 
-/// <summary>Reads a ClickHouse JSONColumns document as a single Arrow record batch.</summary>
+/// <summary>Reads ClickHouse JSONColumns and JSONColumnsWithMetadata documents as single Arrow record batches.</summary>
 /// <remarks>
 /// File streams are owned by the returned Arrow stream. A supplied stream is left open
 /// by default. The caller owns each returned batch.
 /// </remarks>
 public sealed class ClickHouseJsonColumnsReader : IArrowStreamSource, ILazyArrowRecordSource
 {
-    private readonly Schema _schema;
+    private readonly Schema? _schema;
     private readonly bool _leaveOpen;
 
     /// <summary>Configures a reader with the schema of the exported columns.</summary>
@@ -20,6 +20,12 @@ public sealed class ClickHouseJsonColumnsReader : IArrowStreamSource, ILazyArrow
         _schema = schema;
         _leaveOpen = leaveOpen;
     }
+
+    private ClickHouseJsonColumnsReader(bool leaveOpen) => _leaveOpen = leaveOpen;
+
+    /// <summary>Configures JSONColumnsWithMetadata mode, deriving the Arrow schema from the export's meta array.</summary>
+    /// <remarks>The meta array must precede the data object.</remarks>
+    public static ClickHouseJsonColumnsReader WithMetadata(bool leaveOpen = true) => new(leaveOpen);
 
     /// <inheritdoc />
     public IArrowArrayStream ToArrowStream(string filename)
@@ -62,16 +68,29 @@ public sealed class ClickHouseJsonColumnsReader : IArrowStreamSource, ILazyArrow
         => new ColumnsStream(stream, leaveOpen, asynchronous, _schema).OpenAsync(cancellationToken);
 
     private sealed class ColumnsStream(
-        Stream stream, bool leaveOpen, bool asynchronous, Schema schema, SharedJsonFile? file = null)
+        Stream stream, bool leaveOpen, bool asynchronous, Schema? schema, SharedJsonFile? file = null)
         : JsonBatchStream(stream, leaveOpen, asynchronous, schema, file)
     {
+        private readonly bool _withMetadata = schema is null;
+        private ClickHouseMetadataInput? _metadata;
         private bool _read;
+
+        protected override async ValueTask InitializeAsync(CancellationToken cancellationToken)
+        {
+            if (!_withMetadata)
+                return;
+
+            _metadata = new ClickHouseMetadataInput(Input, Scratch);
+            Schema = await _metadata.ReadSchemaAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         protected override async ValueTask<IArrowRecord?> ReadBatchAsync(bool lazy, CancellationToken cancellationToken)
         {
             if (_read)
                 return null;
-            var batch = await ReadDataAsync(lazy, cancellationToken).ConfigureAwait(false);
+            var batch = _metadata is null
+                ? await ReadDataAsync(lazy, cancellationToken).ConfigureAwait(false)
+                : await _metadata.ReadBatchAsync(token => ReadDataAsync(lazy, token), cancellationToken).ConfigureAwait(false);
             try
             {
                 if (await Input.PeekSignificantAsync(cancellationToken).ConfigureAwait(false) != -1)
