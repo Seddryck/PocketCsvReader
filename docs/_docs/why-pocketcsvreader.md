@@ -23,6 +23,8 @@ PocketCsvReader reads structured text through a forward-only data reader. Start 
 | Common, Combined, and W3C logs | [Web logs](../web-log-formats/) | `PocketCsvReader.WebLogs` |
 | CEF and LEEF events | [Security logs](../security-log-formats/) | `PocketCsvReader.SecurityLogs` |
 
+JSON and NDJSON support property projection and stable field layout for object records. Logfmt and LTSV support column projection with aliases and stable field layout. See [JSON and NDJSON projection](../json-projection/) and [logfmt and LTSV projection](../key-value-formats/#project-a-fixed-set-of-columns).
+
 ## Prepare and interpret input
 
 If the CSV structure is unknown, [infer a schema and dialect](../schema-inference/), inspect diagnostics, then accept or adjust the result. Inference reads a sample; it is a discovery step before explicit configuration.
@@ -33,6 +35,6 @@ If the CSV structure is unknown, [infer a schema and dialect](../schema-inferenc
 
 The readers process files and streams; they are not writers or network log receivers. Streaming avoids loading the complete input in ordinary row-reading paths, but memory also depends on the largest record, selected output model, and format. `ToDataTable` materializes all rows. JSON record-path selection captures a complete document before selecting rows; ordinary top-level array reading streams its elements.
 
-Use [projection and stable shapes](../json-projection/) or [UTF-8 CSV input](../utf8-input/) only when their contracts fit the data. Benchmark representative input rather than assuming one configuration is always fastest.
+See [parser optimizations](../parser-optimizations/) for the input contracts and performance considerations for stable field layout and UTF-8 CSV input.
 
 Optional integrations expose [Apache Arrow batches](../apache-arrow/) and [Chrononuensis temporal types](../chrononuensis/). Package support and framework requirements are listed in [installation](../installation/).

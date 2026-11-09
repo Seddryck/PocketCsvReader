@@ -3,13 +3,14 @@ using System.Runtime.InteropServices;
 
 namespace PocketCsvReader.KeyValue;
 
-internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPositionSource
+internal sealed class KeyValueRecordSource : IBorrowedRecordSource<KeyValueProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
     private readonly PositionTracker? _position;
     private readonly List<FieldSpan> _scratchFields = [];
     private readonly FieldMetadataBuffer _metadata = new();
     private readonly LabeledColumnProjection? _projection;
+    private int? _stableFieldCount;
     // Borrowed character and metadata storage is valid until the next read.
     private FieldSpan[] _fields = [];
     PositionTracker? IPositionSource.Tracker => _position;
@@ -43,16 +44,16 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
         return false;
     }
 
-    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         BeginRead();
         var line = await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false);
         if (line is not { } captured)
-            return new(true, RecordMemory.Empty, RecordState.Eof);
+            return new(true, default, RecordState.Eof);
 
         Parse(captured.Memory.Span);
-        return new(false, new RecordMemory(captured.Memory, _fields), RecordState.Record);
+        return new(false, new CurrentRecord(captured.Memory, _fields), RecordState.Record);
     }
 
     private void BeginRead()
@@ -64,15 +65,23 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     private void Parse(ReadOnlySpan<char> line)
     {
         _position?.CompleteRecord();
-        KeyValueRecordParser.Parse(line, Profile.Format, _scratchFields);
+        var captureLabels = !_stableFieldCount.HasValue;
+        KeyValueRecordParser.Parse(line, Profile.Format, _scratchFields, captureLabels);
         var fields = CollectionsMarshal.AsSpan(_scratchFields);
+        if (Profile.StableFieldLayout)
+        {
+            _stableFieldCount ??= fields.Length;
+            if (fields.Length != _stableFieldCount.Value)
+                throw new InvalidDataException($"Stable field count changed from {_stableFieldCount.Value} to {fields.Length}.");
+        }
         if (_projection is null)
         {
             _fields = _metadata.PublishBorrowed(fields);
         }
         else
         {
-            _projection.Resolve(line, fields);
+            if (captureLabels)
+                _projection.Resolve(line, fields);
             _fields = _projection.Apply(fields);
         }
         // Do not retain decoded strings in both temporary and returned storage.

@@ -21,7 +21,7 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
         _recordPath = path;
         return this;
     }
-    private bool _stableObjectShape;
+    private bool _stableFieldLayout;
 
     public NdjsonReaderBuilder()
         : base(NdjsonProfile.DefaultParserOptimizations)
@@ -59,11 +59,15 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
     /// with the same count can therefore map values to the wrong ordinal. Structural drift is rejected.
     /// Scalar leaf types may still vary.
     /// </summary>
-    public NdjsonReaderBuilder WithStableObjectShape()
+    public NdjsonReaderBuilder WithStableFieldLayout()
     {
-        _stableObjectShape = true;
+        _stableFieldLayout = true;
         return this;
     }
+
+    /// <inheritdoc cref="WithStableFieldLayout"/>
+    [Obsolete("Use WithStableFieldLayout() instead.")]
+    public NdjsonReaderBuilder WithStableObjectShape() => WithStableFieldLayout();
 
     private NdjsonReaderBuilder ConfigureProjection(
         Func<JsonProjectionBuilder, JsonProjectionBuilder> configure,
@@ -84,6 +88,6 @@ public class NdjsonReaderBuilder : ReaderBuilder<NdjsonReaderBuilder>
             BuildParserOptimizations(),
             _projectedProperties,
             _orderedProjection,
-            _stableObjectShape,
+            _stableFieldLayout,
             _recordPath) { Filters = BuildFilters(), Skip = Skip, Take = Take });
 }

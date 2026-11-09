@@ -21,20 +21,6 @@
     "Reason": "Decodes an escaped path property name once while configuring a JSON record selector, not a complete input record."
   },
   {
-    "Path": "PocketCsvReader.Json/JsonRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(capture.Memory,fields)",
-    "Count": 1,
-    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected JSON memory, valid until the next read; no character copy."
-  },
-  {
-    "Path": "PocketCsvReader.Json/JsonRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(json,GetFields(json,0))",
-    "Count": 1,
-    "Reason": "Reviewed memory-backed internal constructor: borrowed captured/selected JSON memory, valid until the next read; no character copy."
-  },
-  {
     "Path": "PocketCsvReader/PositionedLineReader.cs",
     "Rule": "PA001",
     "Code": "_reader.ReadLine()",
@@ -75,13 +61,6 @@
     "Code": "newRecordMemory(_buffer.AsMemory(0,offset+record.Span.Length),fields)",
     "Count": 1,
     "Reason": "Reviewed memory-backed internal constructor over the reusable buffer containing the generated row number and original record."
-  },
-  {
-    "Path": "PocketCsvReader.KeyValue/KeyValueRecordSource.cs",
-    "Rule": "PA002",
-    "Code": "newRecordMemory(captured.Memory,_fields)",
-    "Count": 1,
-    "Reason": "Reviewed async result wrapper: the internal ReadOnlyMemory constructor borrows pooled captured characters and the reusable current-record metadata array until the next read or disposal, without copying either. RecordReadResult requires this wrapper."
   },
   {
     "Path": "PocketCsvReader/CurrentRecord.cs",

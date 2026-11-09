@@ -7,6 +7,7 @@ public abstract class KeyValueReaderBuilder<TBuilder> : ReaderBuilder<TBuilder>
 {
     private readonly KeyValueFormat _format;
     private ProjectedColumn[]? _projection;
+    private bool _stableFieldLayout;
 
     protected KeyValueReaderBuilder(KeyValueFormat format)
         : base(KeyValueProfile.DefaultParserOptimizations)
@@ -20,6 +21,14 @@ public abstract class KeyValueReaderBuilder<TBuilder> : ReaderBuilder<TBuilder>
         return (TBuilder)this;
     }
 
+    /// <summary>Reuses the first record's keys and order for subsequent records.</summary>
+    /// <remarks>Field counts are checked. Renames and reordering with the same count may misassign values.</remarks>
+    public TBuilder WithStableFieldLayout()
+    {
+        _stableFieldLayout = true;
+        return (TBuilder)this;
+    }
+
     protected sealed override ParserOptimizationOptions NormalizeParserOptimizations(ParserOptimizationOptions options)
         => options with { ReadAhead = false, RowCountAtStart = false };
 
@@ -29,5 +38,12 @@ public abstract class KeyValueReaderBuilder<TBuilder> : ReaderBuilder<TBuilder>
             BuildSchema(),
             BuildResource(),
             BuildParsers(),
-            BuildParserOptimizations()) { Projection = _projection, Filters = BuildFilters(), Skip = Skip, Take = Take });
+            BuildParserOptimizations())
+        {
+            Projection = _projection,
+            StableFieldLayout = _stableFieldLayout,
+            Filters = BuildFilters(),
+            Skip = Skip,
+            Take = Take
+        });
 }

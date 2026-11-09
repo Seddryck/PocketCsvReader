@@ -283,7 +283,7 @@ public class NdjsonRecordPathIntegrationTests
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"child\":[{\"name\":\"Ada\",\"id\":1},{\"name\":\"Grace\",\"id\":2}]}"));
         using var reader = new NdjsonReaderBuilder().WithRecordPath("$.child[*]")
-            .WithStableObjectShape().WithOrderedProjection(p => p.Property("id")).Build().ToDataReader(stream);
+            .WithStableFieldLayout().WithOrderedProjection(p => p.Property("id")).Build().ToDataReader(stream);
         Assert.That(asynchronous ? await reader.ReadAsync() : reader.Read(), Is.True);
         Assert.That(reader.FieldCount, Is.EqualTo(1));
         Assert.That(reader.GetInt32(0), Is.EqualTo(1));

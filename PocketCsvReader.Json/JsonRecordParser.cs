@@ -51,11 +51,13 @@ internal ref struct JsonRecordParser
         ReadOnlySpan<char> json,
         char[] whitespaces,
         StableJsonShape shape,
-        FieldSpan[] fields)
+        FieldSpan[] fields,
+        bool allowComments = false,
+        bool allowTrailingCommas = false)
     {
         ArgumentNullException.ThrowIfNull(shape);
         ArgumentNullException.ThrowIfNull(fields);
-        var parser = new JsonRecordParser(json, whitespaces);
+        var parser = new JsonRecordParser(json, whitespaces, allowComments, allowTrailingCommas);
         parser.SkipWhitespace();
         if (parser.Current != '{')
             throw new InvalidDataException("A stable-shape JSON value must be an object.");
@@ -100,16 +102,18 @@ internal ref struct JsonRecordParser
             ordinal++;
 
             SkipWhitespace();
-            if (Current == '}')
+            if (Current != '}')
             {
-                _position++;
-                if (ordinal != expectedPropertyCount)
-                    throw PropertyCountChanged(expectedPropertyCount, ordinal);
-                return;
+                Expect(',');
+                SkipWhitespace();
+                if (!_allowTrailingCommas || Current != '}')
+                    continue;
             }
 
-            Expect(',');
-            SkipWhitespace();
+            _position++;
+            if (ordinal != expectedPropertyCount)
+                throw PropertyCountChanged(expectedPropertyCount, ordinal);
+            return;
         }
     }
 
@@ -162,16 +166,18 @@ internal ref struct JsonRecordParser
             fields[ordinal] = ParseStableValue(shape.Children[ordinal], fields[ordinal].Children);
             ordinal++;
             SkipWhitespace();
-            if (Current == ']')
+            if (Current != ']')
             {
-                _position++;
-                if (ordinal != expectedItemCount)
-                    throw ArrayItemCountChanged(expectedItemCount, ordinal);
-                return new FieldSpan(CompletedSpan(start, _position - start), default, fields);
+                Expect(',');
+                SkipWhitespace();
+                if (!_allowTrailingCommas || Current != ']')
+                    continue;
             }
 
-            Expect(',');
-            SkipWhitespace();
+            _position++;
+            if (ordinal != expectedItemCount)
+                throw ArrayItemCountChanged(expectedItemCount, ordinal);
+            return new FieldSpan(CompletedSpan(start, _position - start), default, fields);
         }
     }
 

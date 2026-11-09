@@ -1,32 +1,66 @@
+using System.Data;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
+using PocketCsvReader.Json.Configuration;
 using PocketCsvReader.KeyValue;
 using PocketCsvReader.KeyValue.Configuration;
+using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Benchmark;
 
 public static class LabeledLayoutBenchmarks
 {
     private const int RecordCount = 4_096;
+    private const string Id = "id";
+    private const string Duration = "duration";
 
     public static void RunMatrix()
     {
         Console.WriteLine("Format,Input,Mode,CpuMsPer1000Rows,WallMsPer1000Rows,BytesPerRow");
-        foreach (var logfmt in new[] { true, false })
+        MeasureKeyValue("Logfmt", true, () => new LogfmtReaderBuilder(), builder => builder.Build());
+        MeasureKeyValue("LTSV", false, () => new LtsvReaderBuilder(), builder => builder.Build());
+        MeasureJson();
+    }
+
+    private static void MeasureKeyValue<TBuilder>(
+        string format, bool logfmt, Func<TBuilder> create, Func<TBuilder, KeyValueReader> build)
+        where TBuilder : KeyValueReaderBuilder<TBuilder>
+    {
+        foreach (var varying in new[] { true, false })
         {
-            var format = logfmt ? "Logfmt" : "LTSV";
-            foreach (var varying in new[] { true, false })
-            {
-                var data = BuildKeyValueInput(logfmt, varying);
-                var input = varying ? "Varying" : "Fixed";
-                var ordinary = logfmt ? new LogfmtReaderBuilder().Build() : new LtsvReaderBuilder().Build();
-                var projected = logfmt
-                    ? new LogfmtReaderBuilder().WithProjection(p => p.Column("id").Column("duration")).Build()
-                    : new LtsvReaderBuilder().WithProjection(p => p.Column("id").Column("duration")).Build();
-                Measure(format, input, "Ordinary", () => Read(ordinary, data));
-                Measure(format, input, "Projection", () => Read(projected, data));
-            }
+            var data = BuildKeyValueInput(logfmt, varying);
+            var input = varying ? "Varying" : "Fixed";
+            var ordinary = build(create());
+            var projected = build(WithProjection(create()));
+            Measure(format, input, "Ordinary", () => Read(ordinary, data));
+            Measure(format, input, "Projection", () => Read(projected, data));
+            if (varying)
+                continue;
+
+            var stable = build(create().WithStableFieldLayout());
+            var combined = build(WithProjection(create()).WithStableFieldLayout());
+            Measure(format, input, "Stable", () => Read(stable, data));
+            Measure(format, input, "ProjectionAndStable", () => Read(combined, data));
         }
+
+        static TBuilder WithProjection(TBuilder builder)
+            => builder.WithProjection(p => p.Column(Id).Column(Duration));
+    }
+
+    private static void MeasureJson()
+    {
+        const string json = """{"\u0069d":42,"duration":18,"trace":{"tags":[1,2,3],"active":true},"region":"west","status":"ok","request":"GET","message":"test"}""";
+        var array = Encoding.UTF8.GetBytes("[" + string.Join(',', Enumerable.Repeat(json, RecordCount)) + "]");
+        var lines = Encoding.UTF8.GetBytes(string.Join('\n', Enumerable.Repeat(json, RecordCount)));
+        var ordinaryJson = new JsonReaderBuilder().Build();
+        var stableJson = new JsonReaderBuilder().WithStableFieldLayout().Build();
+        var ordinaryNdjson = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n")).Build();
+        var stableNdjson = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n")).WithStableFieldLayout().Build();
+        Measure("JSON", "ObjectArray", "Ordinary", () => Read(ordinaryJson, array));
+        Measure("JSON", "ObjectArray", "Stable", () => Read(stableJson, array));
+        Measure("NDJSON", "Fixed", "Ordinary", () => Read(ordinaryNdjson, lines));
+        Measure("NDJSON", "Fixed", "Stable", () => Read(stableNdjson, lines));
     }
 
     private static byte[] BuildKeyValueInput(bool logfmt, bool varying)
@@ -46,19 +80,21 @@ public static class LabeledLayoutBenchmarks
         return Encoding.UTF8.GetBytes(data.ToString());
     }
 
-    private static long Read(KeyValueReader format, byte[] data)
+    private static long Read<TProfile, TReader>(FlatFileReader<TProfile, TReader> format, byte[] data)
+        where TProfile : IProfile
+        where TReader : IDataReader
     {
         using var reader = format.ToDataReader(new MemoryStream(data, writable: false));
         return Sum(reader);
     }
 
-    private static long Sum(System.Data.IDataReader reader)
+    private static long Sum(IDataReader reader)
     {
         long checksum = 0;
         var rows = 0;
         while (reader.Read())
         {
-            checksum += reader.GetInt32(reader.GetOrdinal("id")) + reader.GetInt32(reader.GetOrdinal("duration"));
+            checksum += reader.GetInt32(reader.GetOrdinal(Id)) + reader.GetInt32(reader.GetOrdinal(Duration));
             rows++;
         }
         if (rows != RecordCount)
@@ -81,9 +117,6 @@ public static class LabeledLayoutBenchmarks
         var allocation = new double[cpu.Length];
         for (var i = 0; i < cpu.Length; i++)
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
             var beforeCpu = process.TotalProcessorTime;
             var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
             var start = Stopwatch.GetTimestamp();
@@ -105,7 +138,7 @@ public static class LabeledLayoutBenchmarks
         Array.Sort(wall);
         Array.Sort(allocation);
         var median = cpu.Length / 2;
-        Console.WriteLine(FormattableString.Invariant(
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"{format},{input},{mode},{cpu[median]:F3},{wall[median]:F3},{allocation[median]:F2}"));
     }
 }

@@ -86,7 +86,10 @@ See [row-shape caching](../buffering-and-benchmarks/#labeled-row-shapes).
 See [JSON projection](../json-projection/#json-projection).
 ### NDJSON projection
 See [NDJSON projection](../json-projection/#ndjson-projection).
-### NDJSON stable object shape
-See [stable object shape](../json-projection/#ndjson-stable-object-shape).
+### Logfmt and LTSV column projection
+Both builders support selecting, renaming, and ordering output columns. See [Project a fixed set of columns](../key-value-formats/#project-a-fixed-set-of-columns).
+
+### Stable field layout
+`WithStableFieldLayout()` is available for JSON, NDJSON, logfmt, and LTSV. See the [JSON and NDJSON layout contract](../json-projection/#stable-field-layout) and the [logfmt and LTSV layout contract](../key-value-formats/#reuse-a-trusted-source-layout).
 ### LTSV and logfmt
 See [key-value buffering](../buffering-and-benchmarks/#key-value-records).

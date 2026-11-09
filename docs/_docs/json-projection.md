@@ -1,5 +1,5 @@
 ---
-title: Project JSON fields and trust stable shapes
+title: Project JSON fields and reuse stable field layouts
 tags: [performance]
 ---
 
@@ -43,7 +43,7 @@ var events = new NdjsonReaderBuilder()
     .Build();
 ```
 
-Both examples expose columns in the order `event`, `timestamp`. If the input instead puts `timestamp` before `event`, ordinary projection succeeds; ordered projection rejects the record because its order contract is broken. Use ordered projection only when the producer guarantees that selected properties retain their relative order. It does not require every property or nested structure to remain identical; that is a separate stable-object-shape contract.
+Both examples expose columns in the order `event`, `timestamp`. If the input instead puts `timestamp` before `event`, ordinary projection succeeds and ordered projection rejects the record. Ordered projection requires the selected properties to retain their relative order. Stable field layout adds a separate contract for the entire source object.
 
 Both projection modes read the rest of the record and reject invalid unselected JSON. After finding the last selected field, the scanner stops name lookup but continues syntax validation to the record boundary. Malformed data in a later `tags` value still fails. On the combined framing/projection paths described below, one scan also locates that boundary, avoiding a separate framing pass.
 
@@ -51,7 +51,7 @@ The benefit is usually most noticeable when selecting a small subset of a wide o
 
 ## JSON projection
 
-`JsonReaderBuilder.WithProjection` validates the complete JSON value while materializing only selected properties. The JSON reader combines projection with object framing, reuses field metadata, compares property names without creating a string for ordinary unescaped names, and stops projection lookup once all selected fields have been found.
+With stable field layout disabled, `JsonReaderBuilder.WithProjection` combines projection with object framing. It validates the complete JSON value while materializing only selected properties, reuses field metadata, and stops projection lookup once all selected fields have been found.
 
 `JsonReaderBuilder.WithOrderedProjection` is a faster opt-in contract. Selected properties must occur in the configured order, although unselected properties may occur between them. Reordered selected properties are rejected.
 
@@ -64,12 +64,18 @@ This combined path is selected automatically for ordinary or ordered projection 
 - The line terminator is LF (`"\n"`) or CRLF (`"\r\n"`).
 - Comments are disabled.
 - The configured whitespace characters are exactly space, tab, carriage return, and line feed.
-- Neither `WithRecordPath` nor `WithStableObjectShape` is enabled.
+- Neither `WithRecordPath` nor `WithStableFieldLayout` is enabled.
 
 `NdjsonReaderBuilder.WithOrderedProjection` avoids the fingerprint lookup by comparing each property with the next expected selected name. Unselected properties may occur between selected properties; reordered selected properties are rejected.
 
-Other configurations retain the compatible path: frame the complete record first, then parse or project its JSON values. Custom terminators, comments, record-path selection, and stable-shape parsing therefore must not be described as using combined framing and projection. Both paths preserve format validation, synchronous/asynchronous reads, and records spanning buffer boundaries.
+With custom terminators, comments, record-path selection, or stable field layout, the reader frames the complete record before projecting the JSON values. Both paths support format validation, synchronous and asynchronous reads, and records spanning buffer boundaries.
 
-## NDJSON stable object shape
+<a id="ndjson-stable-object-shape"></a>
 
-`NdjsonReaderBuilder.WithStableObjectShape` is an opt-in trusted-input contract for streams whose objects always have the same recursive JSON structure and property order. The first object establishes object property counts, array lengths, labels, and ordinals at every level. Later objects validate property-name syntax but skip decoding, comparison, and lookup, then write values directly by ordinal into reusable field-array trees. Property-count, array-length, and scalar/container drift throws before a record is exposed. Same-count renames and reorders are deliberately not detected, so callers must use this option only for trusted stable-shape input. Scalar leaf types remain dynamic unless a schema or typed accessor establishes and caches a conversion for an ordinal.
+## Stable field layout
+
+`WithStableFieldLayout()` is available on both `JsonReaderBuilder` and `NdjsonReaderBuilder`. Use it with trusted object sequences, including objects in a JSON array, whose recursive structure and property order are consistent. A standalone JSON object also works. NDJSON's previous name, `WithStableObjectShape()`, remains a forwarding alias and now emits an obsolete warning. Replace it with `WithStableFieldLayout()` to migrate.
+
+The first object establishes property counts, array lengths, labels, and ordinals at every level. An empty first object establishes a zero-field layout. Duplicate keys keep their ordinals, and name lookup and stable projection select the first match. Later objects validate property-name syntax and write values by ordinal into reusable field buffers. Changes in property count, array length, or scalar versus container shape throw before projection can hide the change. Same-count renames and reorders can assign values to the wrong columns. Scalar types may vary and conversion strategies still come from the schema or requested target type.
+
+Both readers support stable field layout with ordinary and ordered projection. The first object resolves the selected properties. Later records reuse their source ordinals. Logfmt and LTSV also support projection and stable field layout through their own builders. See [LTSV and logfmt](../key-value-formats/).

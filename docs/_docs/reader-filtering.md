@@ -85,7 +85,7 @@ Typed filtering uses the same [schema formats and cultures](../fluent-api-schema
 [registered-parser precedence](../fluent-api-runtime-parsers/), and conversions as
 [typed getters](../datareader-api/). Named lookups are cached for a
 stable schema and rebound when record labels change or a new batch file opens.
-Filters can only refer to fields exposed by a configured format projection.
+With a configured format projection, filters run on the exposed columns and use their output names and ordinals. This includes aliases in logfmt and LTSV. Accepted rows then flow to the chosen output model.
 
 ## Reuse parsed values
 

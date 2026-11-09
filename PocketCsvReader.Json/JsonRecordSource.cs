@@ -2,7 +2,7 @@ using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Json;
 
-internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSource
+internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPositionSource
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
@@ -13,6 +13,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
     public RecordPosition? CurrentPosition => _position?.CurrentPosition;
     private readonly IJsonValueFramer _valueFramer;
     private readonly ProjectedJsonValueFramer? _projectedValueFramer;
+    private readonly StableJsonRecordLayout? _stableLayout;
     // The current record owns this buffer until the reader advances to the next record.
     private readonly FieldSpan[]? _projectedFields;
     private readonly JsonFieldBuffer _fieldBuffer = new();
@@ -28,14 +29,19 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         Profile = profile;
         if (profile.TrackPosition) _position = new();
         _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
-        _projectedFields = profile.ProjectedProperties is null
+        if (profile.StableFieldLayout)
+        {
+            _stableLayout = new(JsonWhitespaces, profile.ProjectedProperties, profile.OrderedProjection,
+                profile.AllowComments, profile.AllowTrailingCommas);
+        }
+        _projectedFields = profile.ProjectedProperties is null || _stableLayout is not null
             ? null
             : new FieldSpan[profile.ProjectedProperties.Count];
-        _projectedValueFramer = profile.ProjectedProperties is null
+        _projectedValueFramer = _projectedFields is null
             ? null
             : new ProjectedJsonValueFramer(
-                profile.ProjectedProperties,
-                _projectedFields!,
+                profile.ProjectedProperties!,
+                _projectedFields,
                 profile.OrderedProjection,
                 profile.AllowComments,
                 profile.AllowTrailingCommas);
@@ -75,21 +81,21 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         return isEndOfFile;
     }
 
-    public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
+    async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (Profile.ParsedRecordPath is not null)
             return await ReadSelectedAsync(cancellationToken).ConfigureAwait(false);
         _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
-            return new(true, RecordMemory.Empty, RecordState.Eof);
+            return new(true, default, RecordState.Eof);
 
         var first = _state == DocumentState.BeforeRoot
             ? await PeekFirstRootCharacterAsync(cancellationToken).ConfigureAwait(false)
             : await PeekFirstArrayElementCharacterAsync(cancellationToken).ConfigureAwait(false);
 
         if (first < 0)
-            return new(true, RecordMemory.Empty, RecordState.Eof);
+            return new(true, default, RecordState.Eof);
 
         _position?.BeginRecord();
         var recordStart = _cursor.Position;
@@ -101,7 +107,7 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
             : await CompleteArrayElementAsync(delimiter, cancellationToken).ConfigureAwait(false);
 
         _position?.CompleteRecord();
-        return new(isEndOfFile, new RecordMemory(capture.Memory, fields), RecordState.Record);
+        return new(isEndOfFile, new CurrentRecord(capture.Memory, fields), RecordState.Record);
     }
 
     private bool ReadSelected(out RecordSpan record, out RecordState recordState)
@@ -130,14 +136,14 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         }
         if (TrySelectRow(out var row))
         {
-            record = RecordSpan.FromMemory(row.Span, row.FieldSpans);
+            record = RecordSpan.FromMemory(row.Characters, row.Fields!);
             recordState = RecordState.Record;
             return false;
         }
         return EndOfFile(out record, out recordState);
     }
 
-    private async ValueTask<RecordReadResult> ReadSelectedAsync(CancellationToken cancellationToken)
+    private async ValueTask<CurrentRecordResult> ReadSelectedAsync(CancellationToken cancellationToken)
     {
         if (_matches is null && _state != DocumentState.Complete)
         {
@@ -164,10 +170,10 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
         }
         return TrySelectRow(out var row)
             ? new(false, row, RecordState.Record)
-            : new(true, RecordMemory.Empty, RecordState.Eof);
+            : new(true, default, RecordState.Eof);
     }
 
-    private bool TrySelectRow(out RecordMemory row)
+    private bool TrySelectRow(out CurrentRecord row)
     {
         if (_matches?.MoveNext() == true)
         {
@@ -186,12 +192,12 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
                 if (!result.Complete)
                     _projectedValueFramer.CompleteAtEof();
             }
-            row = new RecordMemory(json, GetFields(json, 0));
+            row = new CurrentRecord(json, GetFields(json, 0));
             return true;
         }
         _matches?.Dispose();
         _matches = null;
-        row = RecordMemory.Empty;
+        row = default;
         return false;
     }
 
@@ -213,6 +219,18 @@ internal sealed class JsonRecordSource : IRecordSource<JsonProfile>, IPositionSo
 
     private FieldSpan[] GetFields(ReadOnlyMemory<char> json, long recordStart)
     {
+        if (_stableLayout is not null)
+        {
+            try
+            {
+                return _stableLayout.Parse(json.Span);
+            }
+            catch (InvalidDataException exception)
+            {
+                throw new InvalidDataException(
+                    $"Invalid JSON value starting at position {recordStart}: {exception.Message}", exception);
+            }
+        }
         if (_projectedValueFramer is null)
             return ParseFields(json, recordStart);
 

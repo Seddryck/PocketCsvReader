@@ -14,7 +14,7 @@ public class StableObjectShapeBenchmarks
         .Build();
     private readonly NdjsonReader _stableShapeReader = new NdjsonReaderBuilder()
         .WithDialect(dialect => dialect.WithLineTerminator("\n"))
-        .WithStableObjectShape()
+        .WithStableFieldLayout()
         .Build();
     private byte[] _payload = null!;
 
