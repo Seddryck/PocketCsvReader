@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Arrow.ColumnarJson</PackageId>
+    <PackageTags>JSON Arrow RecordBatch Columnar Analytics</PackageTags>
+    <Description>Reads column-oriented JSON formats as Apache Arrow record batches.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader.Arrow\PocketCsvReader.Arrow.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+  </ItemGroup>
+</Project>

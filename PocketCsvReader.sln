@@ -85,12 +85,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.SecurityLog
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.SecurityLogs.Testing", "PocketCsvReader.SecurityLogs.Testing\PocketCsvReader.SecurityLogs.Testing.csproj", "{592020AB-6A78-4AB7-86FD-56F879C062EB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.ColumnarJson", "PocketCsvReader.Arrow.ColumnarJson\PocketCsvReader.Arrow.ColumnarJson.csproj", "{0552FE52-EB88-44C0-94CB-39AF6BB20469}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.ColumnarJson.Testing", "PocketCsvReader.Arrow.ColumnarJson.Testing\PocketCsvReader.Arrow.ColumnarJson.Testing.csproj", "{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0552FE52-EB88-44C0-94CB-39AF6BB20469}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0552FE52-EB88-44C0-94CB-39AF6BB20469}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0552FE52-EB88-44C0-94CB-39AF6BB20469}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0552FE52-EB88-44C0-94CB-39AF6BB20469}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0C744C2F-95F0-40B0-8451-887125D85C60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0C744C2F-95F0-40B0-8451-887125D85C60}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0C744C2F-95F0-40B0-8451-887125D85C60}.Release|Any CPU.ActiveCfg = Release|Any CPU
