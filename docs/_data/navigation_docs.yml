@@ -26,6 +26,7 @@
   - mapper-object-builder
   - async-reading
   - batch-reading
+  - file-partitions
   - stream-lifetimes
 - title: Configuration
   docs:
