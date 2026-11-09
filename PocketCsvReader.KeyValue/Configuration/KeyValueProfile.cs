@@ -10,6 +10,7 @@ public sealed class KeyValueProfile : IProfile
     public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
     public int Skip { get; init; }
     public int? Take { get; init; }
+    internal ProjectedColumn[]? Projection { get; init; }
     public KeyValueFormat Format { get; }
     public SchemaDescriptor? Schema { get; }
     public ResourceDescriptor? Resource { get; }

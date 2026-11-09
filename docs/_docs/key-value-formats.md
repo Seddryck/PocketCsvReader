@@ -89,6 +89,21 @@ Use `TryGetOrdinal("label", out var ordinal)` to check for optional fields befor
 
 Both formats accept LF, CRLF, or CR line endings and a final record without a newline. An empty line is exposed as a record with zero fields. Invalid syntax throws `InvalidDataException`.
 
+## Project a fixed set of columns
+
+Use `WithProjection` on either builder to select source keys in output order and optionally give them aliases.
+
+```csharp
+var requests = new LogfmtReaderBuilder()
+    .WithProjection(columns => columns
+        .Column("order_id", "OrderId")
+        .Column("level")
+        .Column("message"))
+    .Build();
+```
+
+The configured names and ordinals stay the same even when source fields move or are absent. A missing key is exposed as `DBNull.Value`; a present empty value remains an empty string. When a key occurs more than once, projection takes its first value. Output names must be unique. Named schemas and filters refer to the output names. Unselected fields are still checked for valid syntax.
+
 ## Configuration and output models
 
 Both builders support the shared `WithSchema`, `WithResource`, `WithParsers`, and `WithParserOptimizations` settings. Use a named schema when field types should follow labels as their positions change. See [Schema configuration](../fluent-api-schema/) and [Resource configuration](../fluent-api-resource/) for details.

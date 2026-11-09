@@ -9,6 +9,7 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     private readonly PositionTracker? _position;
     private readonly List<FieldSpan> _scratchFields = [];
     private readonly FieldMetadataBuffer _metadata = new();
+    private readonly LabeledColumnProjection? _projection;
     // Borrowed character and metadata storage is valid until the next read.
     private FieldSpan[] _fields = [];
     PositionTracker? IPositionSource.Tracker => _position;
@@ -19,6 +20,7 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     public KeyValueRecordSource(StreamReader reader, KeyValueProfile profile)
     {
         Profile = profile;
+        if (profile.Projection is { } columns) _projection = new(columns);
         if (profile.TrackPosition) _position = new();
         _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
     }
@@ -63,7 +65,16 @@ internal sealed class KeyValueRecordSource : IRecordSource<KeyValueProfile>, IPo
     {
         _position?.CompleteRecord();
         KeyValueRecordParser.Parse(line, Profile.Format, _scratchFields);
-        _fields = _metadata.PublishBorrowed(CollectionsMarshal.AsSpan(_scratchFields));
+        var fields = CollectionsMarshal.AsSpan(_scratchFields);
+        if (_projection is null)
+        {
+            _fields = _metadata.PublishBorrowed(fields);
+        }
+        else
+        {
+            _projection.Resolve(line, fields);
+            _fields = _projection.Apply(fields);
+        }
         // Do not retain decoded strings in both temporary and returned storage.
         _scratchFields.Clear();
     }
