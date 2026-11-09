@@ -75,6 +75,27 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
         return this;
     }
 
+    /// <summary>Selects files matching a filename glob beneath a root directory.</summary>
+    public CsvDirectoryBuilder FromDirectory(string root, string searchPattern)
+        => CreateDirectoryBuilder(root, searchPattern, null);
+
+    /// <summary>Selects files beneath a root directory and supplies a deferred opener for accepted paths.</summary>
+    public CsvDirectoryBuilder FromDirectory(string root, string searchPattern, Func<string, Stream> open)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        return CreateDirectoryBuilder(root, searchPattern, open);
+    }
+
+    private CsvDirectoryBuilder CreateDirectoryBuilder(string root, string searchPattern, Func<string, Stream>? open)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
+        if (searchPattern.IndexOfAny(['/', '\\', '\0']) >= 0 || Path.IsPathRooted(searchPattern) || searchPattern == "..")
+            throw new ArgumentException("The search pattern must be a filename glob.", nameof(searchPattern));
+
+        return new(this, new HivePartitionSource(Path.GetFullPath(root), searchPattern), open);
+    }
+
     public CsvReader Build()
     {
         var profile = new CsvProfile(

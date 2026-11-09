@@ -30,10 +30,12 @@ var query = new CsvReaderBuilder()
     .Build();
 var selected = query.WithPartitionFilter(p => p.Country == "BE" && p.Year == 2026);
 
+// Prints "orders-002.csv: BE, 2026".
 foreach (var file in selected.EnumerateFiles())
     Console.WriteLine($"{file.Path}: {file.Partition.Country}, {file.Partition.Year}");
 
 using var reader = selected.ToDataReader();
+// Prints "42,BE,2026".
 while (reader.Read())
     Console.WriteLine($"{reader["OrderId"]},{reader["Country"]},{reader["Year"]}");
 
@@ -92,10 +94,12 @@ var selected = new CsvReaderBuilder()
     .Build()
     .WithPartitionFilter(PartitionCondition.Equal("year", "2026"));
 
+// Prints orders-BE-2026.csv and orders-FR-2026.csv on separate lines.
 foreach (var file in selected.EnumerateFiles())
     Console.WriteLine(file.Path);
 
 using var reader = selected.ToDataReader();
+// Prints 42,BE,2026 and 43,FR,2026 on separate lines.
 while (reader.Read())
     Console.WriteLine($"{reader["OrderId"]},{reader["Country"]},{reader["Year"]}");
 ```
@@ -113,3 +117,71 @@ The filename supplies the value used for selection. The reader then returns the 
 The pattern matches the entire basename using ordinal, case-sensitive comparison. A placeholder is `{key}`. {% raw %}Write `{{` and `}}` for literal braces.{% endraw %} Each capture contains at least one character. The first occurrence of the next literal separates adjacent captures, and the final literal is matched at the end of the name. For example, `orders-BE-2026-extra.csv` gives `country = BE` and `year = 2026-extra` with the pattern above.
 
 A pattern must have at least one placeholder. Adjacent placeholders without a literal separator, repeated keys, empty keys, whitespace in keys, unmatched braces, and path separators are rejected when configuring the query. A filename that fails to match raises `FormatException` during discovery.
+
+## Discover Hive-style directory partitions
+
+Use `FromDirectory(root, "*.csv").WithPartitions(p => p.HiveStyle())` to read files nested under directories such as `year=2026/country=BE/`. Each level contributes a named string value in any key order. Files inherit all values along their path.
+
+For example, suppose `dataFolder` contains these files.
+
+| Path below the root | CSV header | CSV data row |
+| --- | --- | --- |
+| `year=2025/country=BE/orders-001.csv` | `OrderId,Country,Year` | `41,BE,2025` |
+| `year=2026/country=BE/orders-002.csv` | `OrderId,Country,Year` | `42,BE,2026` |
+| `year=2026/country=FR/orders-003.csv` | `OrderId,Country,Year` | `43,FR,2026` |
+
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+var selected = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+    .FromDirectory(dataFolder, "*.csv")
+    .WithPartitions(p => p.HiveStyle())
+    .Build()
+    .WithPartitionFilter(PartitionCondition.Equal("year", "2026"));
+
+// Prints the relative paths to orders-002.csv and orders-003.csv.
+foreach (var file in selected.EnumerateFiles())
+    Console.WriteLine(Path.GetRelativePath(dataFolder, file.Path));
+
+using var reader = selected.ToDataReader();
+// Prints 42,BE,2026 and 43,FR,2026 in filesystem traversal order.
+while (reader.Read())
+    Console.WriteLine($"{reader["OrderId"]},{reader["Country"]},{reader["Year"]}");
+```
+
+One possible console output is shown below. The two paths and the two rows each follow filesystem traversal order. Windows uses backslashes in the paths.
+
+```text
+year=2026/country=BE/orders-002.csv
+year=2026/country=FR/orders-003.csv
+42,BE,2026
+43,FR,2026
+```
+
+The year-only filter skips `year=2025` before listing its contents. Both country branches under `year=2026` pass. Add `PartitionCondition.NotEqual("country", "FR")` to the same filter call to also prune the `country=FR` branch.
+
+A missing key during traversal is undecided for both comparisons. Once discovery reaches a candidate file, the complete-descriptor rules apply. Named conditions registered before the first delegate predicate can prune directories. Later conditions run on complete descriptors in registration order.
+
+### When partition names are validated
+
+Discovery validates each child directory's name as it encounters it, before deciding whether to list its contents. It raises `FormatException` for a key or value that is blank after decoding or a key already inherited from an ancestor, even if the repeated value is identical.
+
+With `PartitionCondition.Equal("year", "2026")`, discovery reads the name `year=2025` and prunes that branch. A malformed directory such as `year=2025/country=` stays undiscovered. A malformed directory such as `year=2026/country=` raises an error when discovery reaches it, even if it contains no CSV files. Stopping a read early also leaves later paths undiscovered.
+
+Pass a filename pattern to `HiveStyle("orders-{batch}.csv")` to add captures after directory pruning. Discovery checks the pattern against files that match the glob in directories it lists, before applying the remaining file-level conditions. A filename capture that repeats an inherited key raises `FormatException`.
+
+### Relationship to Apache Hive
+
+`HiveStyle()` uses the nested `key=value` layout familiar from Apache Hive. Hive's table partition columns determine which key appears at each level. Hive-generated paths use lowercase keys and escape special characters, so the value `A=B` is written as `tag=A%3DB`. Hive uses a configurable default partition marker for null or empty values. [Apache Hive tutorial](https://hive.apache.org/docs/latest/user/tutorial/) · [Hive partition path generation](https://github.com/apache/hive/blob/rel/release-4.1.0/standalone-metastore/metastore-common/src/main/java/org/apache/hadoop/hive/metastore/utils/FileUtils.java#L250-L430)
+
+PocketCsvReader reads the filesystem directly. It accepts keys in any order and traverses ordinary subdirectories without `=` while carrying inherited metadata through them. It splits each partition segment at the first literal `=`, then decodes Hive percent escapes in the key and value. Both `tag=A%3DB` and `tag=A=B` supply `A=B`. To select either directory, use `PartitionCondition.Equal("tag", "A=B")`.
+
+Each `%HH` escape decodes to one character, with either uppercase or lowercase hex digits. Decoding happens once, so `tag=A%253DB` supplies `A%3DB`. Incomplete or invalid escapes and `+` are kept as written. Decoded text is used for partition metadata, duplicate-key checks, and pruning. Filesystem paths retain their original names. Keys and values retain their case and whitespace, subject to the nonblank rule, and Hive's default partition marker is treated as ordinary text. [Hive path unescaping](https://github.com/apache/hive/blob/rel/release-4.1.0/standalone-metastore/metastore-common/src/main/java/org/apache/hadoop/hive/metastore/utils/FileUtils.java#L304-L325)
+
+### Filesystem traversal
+
+- Discovery resolves the root to an absolute path and derives metadata from its descendants. The root's own name is ignored.
+- Discovery lists matching files in a directory before descending depth-first into its children. It uses the filesystem's enumeration order. The filename glob applies to each directory separately and uses platform-default casing.
+- Directory entries that are symbolic links or other reparse points are skipped below the root. The supplied root itself can be a link. Matching file links are opened normally when needed. An inaccessible directory surfaces an error if discovery attempts to list its contents.
