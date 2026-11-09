@@ -16,7 +16,7 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C |
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF |
 | `PocketCsvReader.Arrow` | Apache Arrow output |
-| `PocketCsvReader.Arrow.ColumnarJson` | Apache Arrow Integration JSON fixtures |
+| `PocketCsvReader.Arrow.ColumnarJson` | Apache Arrow Integration JSON fixtures and ClickHouse JSONColumns |
 | `PocketCsvReader.Chrononuensis` | Temporal period parsers |
 
 ## First example
