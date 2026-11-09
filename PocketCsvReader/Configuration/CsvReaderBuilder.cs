@@ -10,6 +10,28 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
     private DialectDescriptorBuilder _dialectBuilder = new();
     private RowNumberOptions? _rowNumber;
 
+    /// <summary>Selects paths whose partition metadata will be configured with WithPartitions.</summary>
+    public CsvFilePathBuilder FromFiles(IEnumerable<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return new(new(this, paths, null));
+    }
+
+    /// <summary>Selects paths and a deferred stream opener for those paths.</summary>
+    public CsvFilePathBuilder FromFiles(IEnumerable<string> paths, Func<string, Stream> open)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(open);
+        return new(new(this, paths, open));
+    }
+
+    /// <summary>Selects files with existing partition metadata.</summary>
+    public CsvFileQueryBuilder<TPartition> FromFiles<TPartition>(IEnumerable<PartitionedFile<TPartition>> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return new(this, files);
+    }
+
     /// <summary>Prepends a generated integer column, numbered from one across the returned records.</summary>
     public CsvReaderBuilder WithRowNumber(string columnName = "rowNumber")
     {

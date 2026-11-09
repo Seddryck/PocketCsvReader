@@ -79,3 +79,5 @@ Filename, stream, and synchronous-factory batches open their first input during 
 Numbers start at one for each reader and continue across batch inputs. Headers, comments, and records skipped by malformed-data recovery do not consume a generated row number. [Reader filters](../reader-filtering/) run after numbering, so filtered-out data records consume a number and leave gaps. Multiline CSV records receive one number. Overflow beyond `Int32` throws.
 
 Constructor mapping requires an additional first parameter for the generated value; custom CSV span mappers receive its field first. Tables and parsed row outputs expose an integer; string arrays expose a decimal string. Source schema indexes remain indexes of the original columns. Generated row numbers differ from [source positions](../source-positions/), which identify source records and offsets and can count skipped malformed records differently.
+
+Use [partitioned CSV queries](../file-partitions/) to discover metadata and defer opening the first file until a row request.
