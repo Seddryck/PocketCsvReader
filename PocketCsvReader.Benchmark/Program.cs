@@ -32,6 +32,11 @@ public class Program
             KeyValueBuffering.RunMatrix();
             return;
         }
+        if (args is ["--labeled-layout-matrix"])
+        {
+            LabeledLayoutBenchmarks.RunMatrix();
+            return;
+        }
         if (args is ["--position-tracking-matrix"])
         {
             PositionTracking.RunMatrix();
