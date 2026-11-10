@@ -180,6 +180,8 @@ Pass a filename pattern to `HiveStyle("orders-{batch}.csv")` to add captures aft
 
 Install the optional `PocketCsvReader.ObjectStorage` NuGet package and import its namespace. Register your configured AWS `IAmazonS3` client for a bucket and your Azure `DataLakeFileSystemClient` for its endpoint and filesystem. Attach the resolver to the builder to use the two-argument URI overload.
 
+In this example, `analytics` is the S3 bucket name and `orders/` is the object key prefix within that bucket. Replace `analytics` in both `AddS3` and the `s3://` URI with your bucket name. The resolver uses that name to select the registered client.
+
 ```csharp
 using PocketCsvReader;
 using PocketCsvReader.Configuration;
