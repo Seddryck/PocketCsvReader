@@ -72,32 +72,41 @@ public sealed class FlatFileQuery<TPartition>
     public IAsyncDataReader ToDataReader()
     {
         var window = RecordWindow.Create(_reader.Profile);
-        if (_selection.RequiresAsync)
-        {
-            var next = _selection.CreateAsyncDiscovery();
-            return new FlatFileBatchDataReader(OpenNextAsync, window, requiresAsync: true);
+        return _selection.RequiresAsync ? CreateAsyncBatch(window) : CreateLocalBatch(window);
+    }
 
-            async ValueTask<IAsyncDataReader?> OpenNextAsync(CancellationToken token)
+    /// <summary>Creates a database reader that opens matching files on demand.</summary>
+    public DbDataReader ToDbDataReader() => new DbDataReaderAdapter(ToDataReader());
+
+    private FlatFileBatchDataReader CreateAsyncBatch(RecordWindow? window)
+    {
+        var next = _selection.CreateAsyncDiscovery();
+        return new(OpenNextAsync, window, requiresAsync: true);
+
+        async ValueTask<IAsyncDataReader?> OpenNextAsync(CancellationToken token)
+        {
+            if (await next(token).ConfigureAwait(false) is not { } file)
+                return null;
+
+            var stream = await _selection.OpenAsync(file, token).ConfigureAwait(false);
+            try
             {
-                if (await next(token).ConfigureAwait(false) is not { } file)
-                    return null;
-                var stream = await _selection.OpenAsync(file, token).ConfigureAwait(false);
-                try
-                {
-                    token.ThrowIfCancellationRequested();
-                    return CreateReader(stream, window);
-                }
-                catch
-                {
-                    if (stream is not null)
-                        await stream.DisposeAsync().ConfigureAwait(false);
-                    throw;
-                }
+                token.ThrowIfCancellationRequested();
+                return CreateReader(stream, window);
+            }
+            catch
+            {
+                if (stream is not null)
+                    await stream.DisposeAsync().ConfigureAwait(false);
+                throw;
             }
         }
+    }
 
+    private FlatFileBatchDataReader CreateLocalBatch(RecordWindow? window)
+    {
         IEnumerator<PartitionedFile<TPartition>>? files = null;
-        return new FlatFileBatchDataReader(OpenNext, window, requiresAsync: false, () => files?.Dispose());
+        return new(OpenNext, window, requiresAsync: false, () => files?.Dispose());
 
         ValueTask<IAsyncDataReader?> OpenNext(CancellationToken token)
         {
@@ -121,9 +130,6 @@ public sealed class FlatFileQuery<TPartition>
             }
         }
     }
-
-    /// <summary>Creates a database reader that opens matching files on demand.</summary>
-    public DbDataReader ToDbDataReader() => new DbDataReaderAdapter(ToDataReader());
 
     private IAsyncDataReader CreateReader(Stream stream, RecordWindow? window)
     {
