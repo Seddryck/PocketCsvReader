@@ -6,7 +6,7 @@ using DirectoryEntry = PocketCsvReader.AsyncHivePartitionSource.DirectoryEntry;
 
 namespace PocketCsvReader.ObjectStorage;
 
-/// <summary>Discovers Hive-partitioned CSV files using object storage clients.</summary>
+/// <summary>Discovers Hive-partitioned files using object storage clients.</summary>
 public static class ObjectStorageDirectoryExtensions
 {
     /// <summary>Selects CSV files under an S3 bucket prefix using asynchronous listing and reads.</summary>
@@ -19,13 +19,25 @@ public static class ObjectStorageDirectoryExtensions
         this CsvReaderBuilder builder, IAmazonS3 client, string bucket, string prefix, string searchPattern)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        return new(builder, CreateSource(client, bucket, prefix, searchPattern));
+    }
+
+    /// <summary>Selects files under an S3 bucket prefix for a configured reader.</summary>
+    public static FlatFileDirectoryBuilder FromDirectory<TProfile, TDataReader>(
+        this FlatFileReader<TProfile, TDataReader> reader, IAmazonS3 client, string bucket, string prefix, string searchPattern)
+        where TProfile : IProfile
+        where TDataReader : BaseDataReader<TProfile>
+        => new(FlatFileQueryExtensions.CreateQueryReader(reader), CreateSource(client, bucket, prefix, searchPattern));
+
+    internal static AsyncHivePartitionSource CreateSource(IAmazonS3 client, string bucket, string prefix, string searchPattern)
+    {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentException.ThrowIfNullOrWhiteSpace(bucket);
         ArgumentNullException.ThrowIfNull(prefix);
-        CsvReaderBuilder.ValidateDirectorySearchPattern(searchPattern);
+        HivePartitionSource.ValidateSearchPattern(searchPattern);
         var root = prefix.Length == 0 || prefix.EndsWith('/') ? prefix : prefix + "/";
-        return new(builder, new AsyncHivePartitionSource(root, searchPattern,
-            (path, token) => ListS3DirectoryAsync(client, bucket, path, token), OpenAsync));
+        return new(root, searchPattern,
+            (path, token) => ListS3DirectoryAsync(client, bucket, path, token), OpenAsync);
 
         async ValueTask<Stream> OpenAsync(string path, CancellationToken token)
         {
@@ -43,10 +55,32 @@ public static class ObjectStorageDirectoryExtensions
         this CsvReaderBuilder builder, DataLakeFileSystemClient client, string directory, string searchPattern)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        return new(builder, CreateSource(client, directory, searchPattern));
+    }
+
+    /// <summary>Selects files under an ADLS Gen2 directory for a configured reader.</summary>
+    public static FlatFileDirectoryBuilder FromDirectory<TProfile, TDataReader>(
+        this FlatFileReader<TProfile, TDataReader> reader, DataLakeFileSystemClient client, string directory, string searchPattern)
+        where TProfile : IProfile
+        where TDataReader : BaseDataReader<TProfile>
+        => new(FlatFileQueryExtensions.CreateQueryReader(reader), CreateSource(client, directory, searchPattern));
+
+    /// <summary>Selects files under an S3 or ADLS Gen2 URI for a configured reader.</summary>
+    public static FlatFileDirectoryBuilder FromDirectory<TProfile, TDataReader>(
+        this FlatFileReader<TProfile, TDataReader> reader, Uri root, string searchPattern, ObjectStorageDirectoryResolver resolver)
+        where TProfile : IProfile
+        where TDataReader : BaseDataReader<TProfile>
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        return new(FlatFileQueryExtensions.CreateQueryReader(reader), resolver.ResolveSource(root, searchPattern));
+    }
+
+    internal static AsyncHivePartitionSource CreateSource(DataLakeFileSystemClient client, string directory, string searchPattern)
+    {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(directory);
-        CsvReaderBuilder.ValidateDirectorySearchPattern(searchPattern);
-        return new(builder, new AsyncHivePartitionSource(directory.Trim('/'), searchPattern, ListAsync, OpenAsync));
+        HivePartitionSource.ValidateSearchPattern(searchPattern);
+        return new(directory.Trim('/'), searchPattern, ListAsync, OpenAsync);
 
         async ValueTask<List<DirectoryEntry>> ListAsync(string path, CancellationToken token)
         {

@@ -13,9 +13,11 @@ namespace PocketCsvReader.ObjectStorage.Testing;
 [TestFixture]
 public class ObjectStorageDirectoryTest
 {
-    [TestCase(false)]
-    [TestCase(true)]
-    public async Task S3_PaginatesImmediateChildrenAndSkipsRejectedPrefixes(bool useUri)
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public async Task S3_PaginatesImmediateChildrenAndSkipsRejectedPrefixes(bool useUri, bool flatFile)
     {
         using var cancellation = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -45,22 +47,39 @@ public class ObjectStorageDirectoryTest
                 return open.Task;
             });
 
-        var builder = CreateBuilder().WithDirectoryResolver(new ObjectStorageDirectoryResolver()
+        var resolver = new ObjectStorageDirectoryResolver()
             .AddS3("other-bucket", Mock.Of<IAmazonS3>(MockBehavior.Strict))
-            .AddS3("analytics", client.Object));
-        var source = useUri
-            ? builder.FromDirectory(new Uri("s3://analytics/orders%2520archive/"), "*.csv")
-            : builder.FromDirectory(client.Object, "analytics", prefix, "*.csv");
-        var query = source
-            .WithPartitions(p => p.HiveStyle("orders-{batch}.csv"))
-            .Build()
-            .WithPartitionFilter(PartitionCondition.Equal("tag", "A=B"));
-        await using var reader = query.ToDataReader();
+            .AddS3("analytics", client.Object);
+        var builder = CreateBuilder().WithDirectoryResolver(resolver);
+        var uri = new Uri("s3://analytics/orders%2520archive/");
+        var condition = PartitionCondition.Equal("tag", "A=B");
+        IAsyncDataReader dataReader;
+        IAsyncEnumerable<PartitionedFile<NamedPartitions>> files;
+        if (flatFile)
+        {
+            var configured = builder.Build();
+            var source = useUri ? configured.FromDirectory(uri, "*.csv", resolver)
+                : configured.FromDirectory(client.Object, "analytics", prefix, "*.csv");
+            var query = source.HiveStyle("orders-{batch}.csv")
+                .WithPartitionFilter(condition).WithFilter("Id", "42");
+            dataReader = query.ToDataReader();
+            files = query.EnumerateFilesAsync(token);
+            Assert.Throws<NotSupportedException>(() => query.EnumerateFiles());
+        }
+        else
+        {
+            var source = useUri ? builder.FromDirectory(uri, "*.csv")
+                : builder.FromDirectory(client.Object, "analytics", prefix, "*.csv");
+            var query = source.HiveStyle("orders-{batch}.csv").Build().WithPartitionFilter(condition);
+            dataReader = query.ToDataReader();
+            files = query.EnumerateFilesAsync(token);
+            Assert.Throws<NotSupportedException>(() => query.EnumerateFiles());
+        }
+        await using var reader = dataReader;
         client.VerifyNoOtherCalls();
-        Assert.Throws<NotSupportedException>(() => query.EnumerateFiles());
         Assert.Throws<NotSupportedException>(() => reader.Read());
 
-        await using var discovery = query.EnumerateFilesAsync(token).GetAsyncEnumerator();
+        await using var discovery = files.GetAsyncEnumerator();
         var discover = discovery.MoveNextAsync().AsTask();
         Assert.That(discover.IsCompleted, Is.False);
         firstPage.SetResult(new()
@@ -87,10 +106,12 @@ public class ObjectStorageDirectoryTest
         Assert.That(stream.CanRead, Is.False);
     }
 
-    [TestCase(false, "")]
-    [TestCase(true, "")]
-    [TestCase(true, "orders 2026")]
-    public async Task Adls_ListsNonRecursivelyAndLeavesLaterDirectoriesUnvisited(bool useUri, string path)
+    [TestCase(false, "", false)]
+    [TestCase(true, "", false)]
+    [TestCase(true, "orders 2026", false)]
+    [TestCase(false, "", true)]
+    [TestCase(true, "orders 2026", true)]
+    public async Task Adls_ListsNonRecursivelyAndLeavesLaterDirectoriesUnvisited(bool useUri, string path, bool flatFile)
     {
         using var cancellation = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -117,18 +138,20 @@ public class ObjectStorageDirectoryTest
         fileClient.Setup(c => c.ReadStreamingAsync(token)).ReturnsAsync(
             Response.FromValue(DataLakeModelFactory.DataLakeFileReadStreamingResult(stream, null!), response));
 
-        var builder = CreateBuilder().WithDirectoryResolver(new ObjectStorageDirectoryResolver()
+        var resolver = new ObjectStorageDirectoryResolver()
             .AddAdls(new DataLakeFileSystemClient(new Uri("https://otherlake.dfs.core.windows.net/warehouse")))
             .AddAdls(new DataLakeFileSystemClient(new Uri("https://lake.dfs.core.windows.net/other-filesystem")))
-            .AddAdls(client.Object));
-        var source = useUri
-            ? builder.FromDirectory(new Uri($"abfss://warehouse@LAKE.dfs.core.windows.net/{Uri.EscapeDataString(path)}"), "*.csv")
-            : builder.FromDirectory(client.Object, path, "*.csv");
-        var query = source
-            .WithPartitions(p => p.HiveStyle())
-            .Build()
-            .WithPartitionFilter(PartitionCondition.NotEqual("year", "2025"));
-        await using (var reader = query.ToDbDataReader())
+            .AddAdls(client.Object);
+        var builder = CreateBuilder().WithDirectoryResolver(resolver);
+        var uri = new Uri($"abfss://warehouse@LAKE.dfs.core.windows.net/{Uri.EscapeDataString(path)}");
+        var condition = PartitionCondition.NotEqual("year", "2025");
+        var configured = builder.Build();
+        var dataReader = flatFile
+            ? (useUri ? configured.FromDirectory(uri, "*.csv", resolver) : configured.FromDirectory(client.Object, path, "*.csv"))
+                .HiveStyle().WithPartitionFilter(condition).ToDbDataReader()
+            : (useUri ? builder.FromDirectory(uri, "*.csv") : builder.FromDirectory(client.Object, path, "*.csv"))
+                .HiveStyle().Build().WithPartitionFilter(condition).ToDbDataReader();
+        await using (var reader = dataReader)
         {
             Assert.That(await reader.ReadAsync(token), Is.True);
             Assert.That(reader.HasRows, Is.True);
@@ -196,9 +219,11 @@ public class ObjectStorageDirectoryTest
         Assert.Throws<NotSupportedException>(() => builder.FromDirectory(new Uri("https://example.com/orders"), "*.csv"));
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public async Task S3_CancelsListingOrOpeningAndClosesReader(bool cancelOpen)
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public async Task S3_CancelsListingOrOpeningAndClosesReader(bool cancelOpen, bool flatFile)
     {
         using var cancellation = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -215,8 +240,10 @@ public class ObjectStorageDirectoryTest
             list.Returns(WaitAsync<ListObjectsV2Response>);
         }
 
-        await using var reader = CreateBuilder().FromDirectory(client.Object, "analytics", "orders", "*.csv")
-            .WithPartitions(p => p.HiveStyle()).Build().ToDataReader();
+        var builder = CreateBuilder();
+        await using var reader = flatFile
+            ? builder.Build().FromDirectory(client.Object, "analytics", "orders", "*.csv").HiveStyle().ToDataReader()
+            : builder.FromDirectory(client.Object, "analytics", "orders", "*.csv").HiveStyle().Build().ToDataReader();
         var read = reader.ReadAsync(token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cancellation.Cancel();

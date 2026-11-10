@@ -1,9 +1,33 @@
 ---
-title: Read partitioned CSV files
+title: Read partitioned files
 tags: [usage]
 ---
 
-Use a partition query when file paths or metadata tell you which rows an entire file contains. Partition metadata describes every row in a file and stays separate from the CSV columns.
+Use a partition query when file paths or metadata tell you which rows an entire file contains. Partition metadata describes every row in a file and stays separate from the columns read from that file.
+
+## Query NDJSON and other flat-file formats
+
+Build the format reader, then call `FromDirectory(root, pattern).HiveStyle()`. This works with NDJSON, JSON, fixed-width, logfmt, LTSV, web logs, and security logs. The example prunes other country directories before opening any files, then filters the rows in the selected files.
+
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Ndjson.Configuration;
+
+var query = new NdjsonReaderBuilder()
+    .Build()
+    .FromDirectory(dataFolder, "*.ndjson")
+    .HiveStyle()
+    .WithPartitionFilter(PartitionCondition.Equal("country", "BE"))
+    .WithFilter("status", "shipped");
+
+using var rows = query.ToDataReader();
+while (rows.Read())
+    Console.WriteLine(rows["orderId"]);
+```
+
+Each file supplies its own field layout and any headers required by the configured reader. Builder and query row filters run in registration order, and skip and take apply across all selected files. Use `FromFiles(files)` if you already have `PartitionedFile<TPartition>` descriptors.
+
+For S3 and ADLS Gen2, use the `FromDirectory` overloads in `PocketCsvReader.ObjectStorage` on the built reader. Pass a storage client or a URI and an `ObjectStorageDirectoryResolver`. Use `EnumerateFilesAsync` for discovery and `ReadAsync` for rows.
 
 ## Attach typed metadata
 

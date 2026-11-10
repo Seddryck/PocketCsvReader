@@ -39,7 +39,14 @@ public sealed class ObjectStorageDirectoryResolver : ICsvDirectoryResolver
     }
 
     CsvDirectoryBuilder ICsvDirectoryResolver.Resolve(CsvReaderBuilder builder, Uri root, string searchPattern)
+        => new(builder, ResolveSource(root, searchPattern));
+
+    internal AsyncHivePartitionSource ResolveSource(Uri root, string searchPattern)
     {
+        ArgumentNullException.ThrowIfNull(root);
+        if (!root.IsAbsoluteUri)
+            throw new ArgumentException("An absolute directory URI is required.", nameof(root));
+
         if (root.Scheme is not ("s3" or "abfss"))
             throw new NotSupportedException($"Directory URI scheme '{root.Scheme}' is not supported.");
 
@@ -50,29 +57,29 @@ public sealed class ObjectStorageDirectoryResolver : ICsvDirectoryResolver
         // Remove the URI's path separator, preserving any leading slash in the object key.
         var directory = Uri.UnescapeDataString(path.StartsWith('/') ? path[1..] : path);
         return root.Scheme == "s3"
-            ? ResolveS3(builder, root, directory, searchPattern)
-            : ResolveAdls(builder, root, directory, searchPattern);
+            ? ResolveS3(root, directory, searchPattern)
+            : ResolveAdls(root, directory, searchPattern);
     }
 
-    private CsvDirectoryBuilder ResolveS3(
-        CsvReaderBuilder builder, Uri root, string directory, string searchPattern)
+    private AsyncHivePartitionSource ResolveS3(
+        Uri root, string directory, string searchPattern)
     {
         if (root.UserInfo.Length != 0)
             throw new ArgumentException("An S3 directory URI must use the bucket as its authority.", nameof(root));
         var bucket = root.IdnHost;
         if (!_s3Clients.TryGetValue(bucket, out var client))
             throw new InvalidOperationException("No S3 client is registered for this bucket.");
-        return builder.FromDirectory(client, bucket, directory, searchPattern);
+        return ObjectStorageDirectoryExtensions.CreateSource(client, bucket, directory, searchPattern);
     }
 
-    private CsvDirectoryBuilder ResolveAdls(
-        CsvReaderBuilder builder, Uri root, string directory, string searchPattern)
+    private AsyncHivePartitionSource ResolveAdls(
+        Uri root, string directory, string searchPattern)
     {
         var fileSystem = root.UserInfo;
         if (fileSystem.Length == 0 || fileSystem.Contains(':'))
             throw new ArgumentException("An ADLS directory URI must use a filesystem and endpoint as its authority.", nameof(root));
         if (!_adlsClients.TryGetValue((root.IdnHost, fileSystem), out var client))
             throw new InvalidOperationException("No ADLS client is registered for this endpoint and filesystem.");
-        return builder.FromDirectory(client, directory, searchPattern);
+        return ObjectStorageDirectoryExtensions.CreateSource(client, directory, searchPattern);
     }
 }
