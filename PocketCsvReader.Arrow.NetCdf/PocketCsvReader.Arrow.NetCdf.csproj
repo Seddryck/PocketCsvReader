@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Arrow.NetCdf</PackageId>
+    <PackageTags>NetCDF CDL Arrow RecordBatch Columnar Analytics</PackageTags>
+    <Description>Reads textual NetCDF CDL as Apache Arrow record batches.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader.Arrow\PocketCsvReader.Arrow.csproj" />
+  </ItemGroup>
+</Project>

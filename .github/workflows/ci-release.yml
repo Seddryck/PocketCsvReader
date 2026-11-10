@@ -96,6 +96,10 @@ jobs:
             artifact: arrow-columnar-json
             project: PocketCsvReader.Arrow.ColumnarJson.Testing/PocketCsvReader.Arrow.ColumnarJson.Testing.csproj
             include: '[PocketCsvReader.Arrow.ColumnarJson]*'
+          - name: PocketCsvReader.Arrow.NetCdf
+            artifact: arrow-netcdf
+            project: PocketCsvReader.Arrow.NetCdf.Testing/PocketCsvReader.Arrow.NetCdf.Testing.csproj
+            include: '[PocketCsvReader.Arrow.NetCdf]*'
           - name: PocketCsvReader.FixedWidth
             artifact: fixed-width
             project: PocketCsvReader.FixedWidth.Testing/PocketCsvReader.FixedWidth.Testing.csproj
@@ -266,6 +270,9 @@ jobs:
           - name: PocketCsvReader.Arrow.ColumnarJson
             artifact: arrow-columnar-json
             project: PocketCsvReader.Arrow.ColumnarJson/PocketCsvReader.Arrow.ColumnarJson.csproj
+          - name: PocketCsvReader.Arrow.NetCdf
+            artifact: arrow-netcdf
+            project: PocketCsvReader.Arrow.NetCdf/PocketCsvReader.Arrow.NetCdf.csproj
           - name: PocketCsvReader.FixedWidth
             artifact: fixed-width
             project: PocketCsvReader.FixedWidth/PocketCsvReader.FixedWidth.csproj
