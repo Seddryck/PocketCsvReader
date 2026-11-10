@@ -35,6 +35,17 @@ public class CsvProfile : IProfile
 
     public virtual string EmptyCell { get; private set; }
 
+    internal CsvProfile ForSingleFile()
+    {
+        if (!Dialect.Header || Dialect.HeaderRepeat)
+            return this;
+
+        // The only file in this query carries the header even in a shared-header dialect.
+        var profile = (CsvProfile)MemberwiseClone();
+        profile.Dialect = Dialect with { HeaderRepeat = true };
+        return profile;
+    }
+
     /// <summary>
     /// Initializes a new CsvProfile with the specified field separator and record separator, using double quotes as the text qualifier and no header row.
     /// </summary>

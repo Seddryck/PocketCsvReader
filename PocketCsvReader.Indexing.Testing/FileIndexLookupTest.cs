@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using NUnit.Framework;
@@ -107,6 +108,46 @@ public class FileIndexLookupTest
         Assert.That(ReadStrings(rows, "id"), Is.EqualTo(new[] { "b", "c" }));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CsvReadsJoinedHeadersBeforeSeekingInSingleAndPartitionedFiles(bool asynchronous)
+    {
+        const string header = "Order,Order\r\nKey,Name\r\n";
+        const string remaining = "200,before\r\n300,first\r\n300,second\r\n400,after";
+        var path = Write("headers.csv", header + "100,early\r\n" + remaining, bom: true);
+        var single = Builder(repeat: false).Build();
+        var index = new SparseIndex(new IndexKey<int>("Order_Key"), 1);
+        single.BuildIndexes(path, index);
+        ReplaceWithoutChangingStamp(path, header + "xxx,early\r\n" + remaining);
+
+        await using (var rows = single.WithIndexedLookup(path, index, 300))
+            Assert.That(await ReadStringsAsync(rows, "Order_Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
+
+        var partitioned = Builder(repeat: true).FromFiles(new[] { FileSource.Partitioned(path, true) }).Build();
+        await using var batch = partitioned.WithIndexedLookup(index, 300).ToDbDataReader();
+        Assert.That(await ReadStringsAsync(batch, "Order_Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
+
+        static CsvReaderBuilder Builder(bool repeat) => new CsvReaderBuilder().WithDialect(d => d.WithHeader()
+            .WithHeaderRows([1, 2]).WithHeaderJoin("_").WithHeaderRepeat(repeat).WithLineTerminator("\r\n"));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task FixedWidthReadsPaddedHeaderBeforeSeeking(bool asynchronous)
+    {
+        const string header = "KeyName \r\n";
+        const string remaining = "200base \r\n300one  \r\n300two  \r\n400after";
+        var path = Write("header.fixed", header + "100early\r\n" + remaining, bom: true);
+        var reader = new FixedWidthReaderBuilder().WithHeader().WithLineTerminator("\r\n")
+            .WithField("configured-key", 0, 3).WithField("configured-name", 3, 5).Build();
+        var index = new SparseIndex(new IndexKey<int>("Key"), 1);
+        reader.BuildIndexes(path, index);
+        ReplaceWithoutChangingStamp(path, header + "xxxearly\r\n" + remaining);
+
+        await using var rows = reader.WithIndexedLookup(path, index, 300);
+        Assert.That(await ReadStringsAsync(rows, "Name", asynchronous), Is.EqualTo(new[] { "one", "two" }));
+    }
+
     [Test]
     public void FixedWidthAndKeyValueFormatsUseTheSharedSeekPath()
     {
@@ -169,15 +210,10 @@ public class FileIndexLookupTest
 
         // Leave an invalid key before the selected checkpoint with the same file stamp.
         // A scan that reads data rows between the header and checkpoint would fail.
-        var stamp = File.GetLastWriteTimeUtc(path);
-        File.WriteAllText(path, header + "/early xxx\r\n" + remaining, new UTF8Encoding(true));
-        File.SetLastWriteTimeUtc(path, stamp);
+        ReplaceWithoutChangingStamp(path, header + "/early xxx\r\n" + remaining);
 
         await using var rows = reader.WithIndexedLookup(path, index, 300);
-        var actual = new List<string>();
-        while (asynchronous ? await rows.ReadAsync() : rows.Read())
-            actual.Add(rows.GetString(rows.GetOrdinal("cs-uri-stem")));
-        Assert.That(actual, Is.EqualTo(new[] { "/first", "/second" }));
+        Assert.That(await ReadStringsAsync(rows, "cs-uri-stem", asynchronous), Is.EqualTo(new[] { "/first", "/second" }));
     }
 
     private void AssertSeek<TProfile, TDataReader>(FlatFileReader<TProfile, TDataReader> reader,
@@ -196,6 +232,22 @@ public class FileIndexLookupTest
         var path = Path.Combine(_directory, name);
         File.WriteAllText(path, contents, new UTF8Encoding(bom));
         return path;
+    }
+
+    private static void ReplaceWithoutChangingStamp(string path, string content)
+    {
+        // Keep both source metadata values so the test can detect an accidental sequential scan.
+        var stamp = File.GetLastWriteTimeUtc(path);
+        File.WriteAllText(path, content, new UTF8Encoding(true));
+        File.SetLastWriteTimeUtc(path, stamp);
+    }
+
+    private static async Task<string[]> ReadStringsAsync(DbDataReader rows, string column, bool asynchronous)
+    {
+        var values = new List<string>();
+        while (asynchronous ? await rows.ReadAsync() : rows.Read())
+            values.Add(rows.GetString(rows.GetOrdinal(column)));
+        return [.. values];
     }
 
     private static string[] ReadStrings(IDataReader rows, string column)

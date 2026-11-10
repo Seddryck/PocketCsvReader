@@ -82,7 +82,7 @@ public static class CsvIndexLookup
     internal static CsvFileQuery<bool> ForFile(CsvReader reader, string path)
     {
         var file = FileSource.Partitioned(path, true);
-        return new(reader.Profile, _ => [file]);
+        return new(reader.Profile.ForSingleFile(), _ => [file]);
     }
 
     private static int ResolveOrdinal(CsvDataReader reader, IIndexKey key)
