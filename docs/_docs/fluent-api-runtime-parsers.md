@@ -57,6 +57,8 @@ public record Coordinate(int X, int Y);
 
 The latest explicit registration for the same field/type replaces its previous parser. Schema builders can supply default numeric/temporal formats; use a field parser to override that field's format deliberately. Preserve underlying parse exceptions rather than silently substituting zero or an empty value.
 
+Sparse indexes also use the reader's registered runtime parser for a key without an explicit format or culture. [Use the reader's runtime parser with a sparse index](../sparse-indexes/#use-the-readers-runtime-parser)
+
 ## Parsing spans without intermediate strings
 
 `ParseSpan<T>` consumes `ReadOnlySpan<char>` synchronously. Select the overload using an explicitly typed span lambda or a `ParseSpan<T>` variable. For an overloaded method group, assign it to that delegate first. With C# 13+, overload priorities retain legacy string behavior for untyped lambdas; on older compilers, type the parameter explicitly when ambiguous.

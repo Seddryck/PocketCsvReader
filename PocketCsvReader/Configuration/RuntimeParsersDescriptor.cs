@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.Configuration;
 public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunction>>
 {
-    private Dictionary<Type, (ParseFunction Legacy, Delegate Span)> Parsers { get; } = [];
+    private Dictionary<Type, (ParseFunction Legacy, Delegate Span, Delegate Registration)> Parsers { get; } = [];
     private Dictionary<Type, Func<string?, IFormatProvider?, Delegate>>? _formatParsers;
 
     internal void AddDefaultParser<T>(ParseSpan<T> parse,
@@ -37,24 +37,30 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
     internal IEnumerable<KeyValuePair<Type, Delegate>> SpanParsers
         => Parsers.Select(parser => new KeyValuePair<Type, Delegate>(parser.Key, parser.Value.Span));
 
+    internal (Delegate Span, Delegate Registration)? FindParser(Type type)
+        => Parsers.TryGetValue(type, out var parser) ? (parser.Span, parser.Registration) : null;
+
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
     public void AddParser<T>(ParseSpan<T> parse)
     {
         ArgumentNullException.ThrowIfNull(parse);
         // Retain the existing enumerable contract for clients inspecting registrations.
-        Parsers.Add(typeof(T), (text => parse(text.AsSpan())!, parse));
+        Parsers.Add(typeof(T), (text => parse(text.AsSpan())!, parse, parse));
     }
 
     public void AddParser<T>(ParseFunction<T> parse)
-        => AddParser(typeof(T), (string str) => parse.Invoke(str)!);
+        => AddLegacyParser(typeof(T), text => parse(text)!, parse);
 
     public void AddParser(Type type, ParseFunction parse)
+        => AddLegacyParser(type, parse, parse);
+
+    private void AddLegacyParser(Type type, ParseFunction parse, Delegate registration)
     {
         var returnType = parse.Method.ReturnType;
         if (!type.IsAssignableTo(returnType))
             throw new ArgumentException($"The provided parser returns {returnType}, which is not assignable from {type}.");
 
-        Parsers.Add(type, (parse, SpanParser.Adapt(type, parse)));
+        Parsers.Add(type, (parse, SpanParser.Adapt(type, parse), registration));
     }
 
     public int Count => Parsers.Count;

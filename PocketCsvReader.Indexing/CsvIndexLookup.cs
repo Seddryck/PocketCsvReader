@@ -13,6 +13,7 @@ public static class CsvIndexLookup
         if (!Supports(query.Profile))
             throw UnsupportedSource();
 
+        index = index.ResolveRuntimeParser(query.Profile.Parsers);
         var profile = CreateProfile(query.Profile, building: true);
         var configuration = GetConfiguration(profile);
         foreach (var file in query.EnumerateFiles())
@@ -44,9 +45,10 @@ public static class CsvIndexLookup
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(index);
-        var key = index.Key;
-        var requested = ReaderLookup.ValidateKey(key, value);
+        var requested = ReaderLookup.ValidateKey(index.Key, value);
         var profile = query.Profile;
+        index = index.ResolveRuntimeParser(profile.Parsers);
+        var key = index.Key;
         var indexedProfile = Supports(profile) ? CreateProfile(profile, building: false) : null;
         var configuration = indexedProfile is null ? default : GetConfiguration(indexedProfile);
         if (index.RequiresIndex && indexedProfile is null)

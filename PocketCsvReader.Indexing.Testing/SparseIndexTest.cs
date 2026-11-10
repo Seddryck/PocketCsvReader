@@ -54,6 +54,43 @@ public class SparseIndexTest
     }
 
     [Test]
+    public void PartitionedCsvReusesTheRegisteredDateParserAndRejectsIncompatibleParsers()
+    {
+        var path = Write("orders.csv", "Date,Id\n31/01/2026,a\n17/05/2026,b\n17/05/2026,c\n01/12/2026,d\n");
+        var index = new SparseIndex(new IndexKey<DateOnly>("Date"), 1);
+        var date = new DateOnly(2026, 5, 17);
+        ParseSpan<DateOnly> parseDate = ParseOrderDate;
+        var builder = new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n"));
+        Query(path, builder.WithParsers(p => p.WithParser(parseDate))).BuildIndexes(index);
+
+        var lookup = Query(path, new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithParsers(p => p.WithParser(parseDate)));
+        Assert.That(Collect(lookup.WithIndexedLookup(index, date), 1), Is.EqualTo(new[] { "b", "c" }));
+        AssertReadFails<InvalidDataException>(Query(path).WithIndexedLookup(index, date));
+
+        var incompatible = Query(path, builder.WithParsers(p => p.WithParser<DateOnly>(
+            static (ReadOnlySpan<char> _) => throw new AssertionException("An incompatible parser must not run."))));
+        AssertReadFails<InvalidDataException>(incompatible.WithIndexedLookup(index.WithOptionalIndex(), date));
+
+        static DateOnly ParseOrderDate(ReadOnlySpan<char> text)
+            => DateOnly.ParseExact(text, "dd/MM/yyyy", CultureInfo.InvariantCulture);
+    }
+
+    [Test]
+    public void ExplicitIndexFormatTakesPrecedenceOverTheRegisteredParser()
+    {
+        var path = Write("dates.csv", "Date\n17/05/2026\n");
+        var builder = new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithParsers(p => p.WithParser<DateOnly>(
+                static (ReadOnlySpan<char> _) => throw new AssertionException("The explicit index format must win.")));
+        var query = Query(path, builder);
+        var index = new SparseIndex(new IndexKey<DateOnly>("Date", format: "dd/MM/yyyy"), 1);
+        query.BuildIndexes(index);
+
+        Assert.That(Collect(query.WithIndexedLookup(index, new DateOnly(2026, 5, 17))), Is.EqualTo(new[] { "17/05/2026" }));
+    }
+
+    [Test]
     public void StringsRoundTripCsvEscapingAndUseConfiguredEquality()
     {
         var path = Write("strings.csv", "Name,Id\n\"aa,\"\"x\"\"\ny\",1\n\"AA,\"\"X\"\"\nY\",2\nz,3\n");
