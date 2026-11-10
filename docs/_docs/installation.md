@@ -32,6 +32,8 @@ Omitting `--version` selects the latest available package. To pin a release, app
 | `PocketCsvReader.KeyValue` | LTSV and logfmt | [Key-value](../key-value-formats/) |
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C | [Web logs](../web-log-formats/) |
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF | [Security logs](../security-log-formats/) |
+| `PocketCsvReader.Arrow.ColumnarJson` | ClickHouse columnar exports and Arrow Integration JSON | [Columnar JSON](../columnar-json/) |
+| `PocketCsvReader.Arrow.NetCdf` | Textual NetCDF datasets (.cdl) | [NetCDF CDL](../netcdf-cdl/) |
 | `PocketCsvReader.Arrow` | Apache Arrow output batches | [Arrow](../apache-arrow/) |
 | `PocketCsvReader.Chrononuensis` | Temporal period parsers | [Chrononuensis](../chrononuensis/) |
 

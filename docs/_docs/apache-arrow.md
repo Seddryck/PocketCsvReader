@@ -5,6 +5,8 @@ tags: [analytics, arrow]
 
 Install the optional Arrow adapter when records need to flow into a columnar analytics pipeline. The core package does not depend on Apache Arrow.
 
+To read a [Columnar JSON](../columnar-json/) document or a [NetCDF CDL](../netcdf-cdl/) dataset directly into Arrow batches, install the extension for that input format.
+
 ```bash
 dotnet add package PocketCsvReader.Arrow
 ```
