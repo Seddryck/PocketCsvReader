@@ -26,6 +26,29 @@ public class ReaderFilteringTest
         Assert.That(calls, Is.EqualTo(new[] { "span", "span", "typed", "span", "typed", "row", "span", "typed", "row" }));
     }
 
+    [Test]
+    public async Task FileQueryAppendsRowFiltersAndUsesTheSameParsingRules()
+    {
+        var file = FileSource.Partitioned("orders.csv", true, () => Input(
+            "Channel,Status,Quantity\n" +
+            "Store,Ready,bad\n" +
+            "Web,Hold,bad\n" +
+            "Web,Ready,NULL\n" +
+            "Web,Ready,1\n" +
+            "Web,Ready,2\n"));
+        var query = Builder()
+            .WithDialect(d => d.WithNullSequence("NULL"))
+            .WithFilter("Channel", "Web")
+            .FromFiles(new[] { file }).Build()
+            .WithFilter(1, status => status.SequenceEqual("Ready"))
+            .WithFilter<int>("Quantity", quantity => quantity >= 2);
+
+        await using var reader = query.ToDataReader();
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetInt32(2), Is.EqualTo(2));
+        Assert.That(await reader.ReadAsync(), Is.False);
+    }
+
     [TestCase(false)]
     [TestCase(true)]
     public async Task Equality_DecodesQuotesAndEscapes(bool async)

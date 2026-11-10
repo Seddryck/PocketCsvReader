@@ -6,7 +6,7 @@ namespace PocketCsvReader;
 public sealed class CsvFileQuery<TPartition>
 {
     private readonly FileQuerySelection<TPartition> _selection;
-    private readonly Func<PartitionedFile<TPartition>, Stream, CsvDataReader>? _createReader;
+    private readonly Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader>? _createReader;
     internal CsvProfile Profile { get; }
 
     internal CsvFileQuery(CsvProfile profile,
@@ -21,7 +21,7 @@ public sealed class CsvFileQuery<TPartition>
     }
 
     private CsvFileQuery(CsvProfile profile, FileQuerySelection<TPartition> selection,
-        Func<PartitionedFile<TPartition>, Stream, CsvDataReader>? createReader = null)
+        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader>? createReader = null)
         => (Profile, _selection, _createReader) = (profile, selection, createReader);
 
     /// <summary>Keeps files accepted by a predicate over their complete partition metadata.</summary>
@@ -31,7 +31,36 @@ public sealed class CsvFileQuery<TPartition>
     internal CsvFileQuery<TPartition> WithNamedFilter(Func<TPartition, bool> predicate, PartitionCondition[] conditions)
         => new(Profile, _selection.WithFilter(predicate, conditions), _createReader);
 
-    internal CsvFileQuery<TPartition> WithReaderFactory(Func<PartitionedFile<TPartition>, Stream, CsvDataReader> createReader)
+    /// <summary>Keeps rows whose sanitized cell equals the expected text. Null never matches.</summary>
+    public CsvFileQuery<TPartition> WithFilter(string column, string expected, StringComparison comparison = StringComparison.Ordinal)
+        => WithFilter(column, ReaderFilter.TextEquals(expected, comparison));
+
+    /// <summary>Keeps rows whose sanitized cell at the given ordinal equals the expected text.</summary>
+    public CsvFileQuery<TPartition> WithFilter(int ordinal, string expected, StringComparison comparison = StringComparison.Ordinal)
+        => WithFilter(ordinal, ReaderFilter.TextEquals(expected, comparison));
+
+    /// <summary>Keeps rows accepted by a sanitized-span predicate. The span is valid only during the call.</summary>
+    public CsvFileQuery<TPartition> WithFilter(string column, ParseSpan<bool> predicate)
+        => AddFilter(ReaderFilter.ForCell(column, predicate));
+
+    /// <summary>Keeps rows accepted by a sanitized-span predicate at the given ordinal.</summary>
+    public CsvFileQuery<TPartition> WithFilter(int ordinal, ParseSpan<bool> predicate)
+        => AddFilter(ReaderFilter.ForCell(ordinal, predicate));
+
+    /// <summary>Keeps rows accepted by a typed predicate using the getter's parsing rules.</summary>
+    public CsvFileQuery<TPartition> WithFilter<T>(string column, Func<T, bool> predicate)
+        => AddFilter(ReaderFilter.ForCell(column, predicate));
+
+    /// <summary>Keeps rows accepted by a typed predicate at the given ordinal.</summary>
+    public CsvFileQuery<TPartition> WithFilter<T>(int ordinal, Func<T, bool> predicate)
+        => AddFilter(ReaderFilter.ForCell(ordinal, predicate));
+
+    private CsvFileQuery<TPartition> AddFilter(ReaderFilter filter)
+        => new(Profile.WithFilters(Array.AsReadOnly<ReaderFilter>([.. Profile.Filters, filter])),
+            _selection, _createReader);
+
+    internal CsvFileQuery<TPartition> WithReaderFactory(
+        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader> createReader)
     {
         if (_createReader is not null)
             throw new InvalidOperationException("The query already has a custom reader factory.");
@@ -85,5 +114,5 @@ public sealed class CsvFileQuery<TPartition>
     }
 
     private CsvBatchDataReader.ReaderInput CreateInput(PartitionedFile<TPartition> file, Stream stream)
-        => new(stream, _createReader is null ? null : input => _createReader(file, input));
+        => new(stream, _createReader is null ? null : input => _createReader(file, input, Profile));
 }

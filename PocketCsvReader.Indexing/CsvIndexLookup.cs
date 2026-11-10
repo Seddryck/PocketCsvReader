@@ -54,7 +54,7 @@ public static class CsvIndexLookup
         if (index.RequiresIndex && indexedProfile is null)
             throw UnsupportedSource();
 
-        return query.WithReaderFactory((descriptor, stream) =>
+        return query.WithReaderFactory((descriptor, stream, currentProfile) =>
         {
             CsvRecordRange? range = null;
             if (descriptor.Opener is null && stream is FileStream source && indexedProfile is not null)
@@ -67,7 +67,8 @@ public static class CsvIndexLookup
                 throw UnsupportedSource();
             }
 
-            var reader = new CsvDataReader(stream, range is null ? profile : indexedProfile!, leaveOpen: true);
+            var readerProfile = range is null ? currentProfile : indexedProfile!.WithFilters(currentProfile.Filters);
+            var reader = new CsvDataReader(stream, readerProfile, leaveOpen: true);
             int ordinal = -1;
             reader.SelectRecords(SelectRecord, stream, range);
             return reader;
