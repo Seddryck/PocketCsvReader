@@ -105,6 +105,12 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         _initialized = true;
     }
 
+    private protected void ReplaceRecordSource(IRecordSource<TProfile> source)
+    {
+        RecordSource?.Dispose();
+        CompleteInitialization(source);
+    }
+
     protected virtual IRecordSource<TProfile> CreateRecordSource(StreamReader reader, TProfile profile)
         => CreateRecordParser(reader, profile);
 

@@ -4,6 +4,9 @@ namespace PocketCsvReader;
 
 internal static class CsvStreamSource
 {
+    internal static Utf8RecordSource CreateAtRecord(Stream stream, CsvProfile profile)
+        => new(new PrefixStream(ReadOnlyMemory<byte>.Empty, stream, leaveOpen: true), profile);
+
     public static IRecordSource<CsvProfile>? Create(Stream stream, CsvProfile profile, bool leaveOpen = false)
     {
         var options = profile.StreamInitialization;

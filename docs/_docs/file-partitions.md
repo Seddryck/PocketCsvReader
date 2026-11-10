@@ -70,6 +70,26 @@ The query applies conditions with short-circuiting AND, in array order and then 
 
 CSV row filters still run on rows in the selected files. When headers are enabled, a filtered query requires `HeaderRepeat = true` so each accepted file supplies its own header.
 
+## Look up an exact key in sorted files
+
+Use a sparse index when each selected file is already sorted in ascending order by the indexed column. For example, `selected` can be a partition query over May 2026 orders sorted by `Date`.
+
+```csharp
+var dateKey = new IndexKey<DateOnly>("Date", format: "yyyy-MM-dd",
+    culture: System.Globalization.CultureInfo.InvariantCulture);
+var dateIndex = new SparseIndex(dateKey, checkpointInterval: 1024);
+
+selected.BuildIndexes(dateIndex);
+
+using var rows = selected.WithIndexedLookup(dateIndex, new DateOnly(2026, 5, 17)).ToDataReader();
+while (rows.Read())
+    Console.WriteLine(rows["OrderId"]);
+```
+
+`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. An indexed lookup returns all matching rows in source order. It validates each sidecar when the reader reaches the associated file. Rebuild the index after updating the CSV, or after changing the indexed column or its key settings. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
+
+Sparse indexing supports filesystem paths for uncompressed UTF-8 files with ASCII CSV syntax. The source may start with a UTF-8 BOM, and fields can contain Unicode text and quoted line breaks. Use a column name with headers or a zero-based ordinal. Numbered comment rows, array fields, and custom stream openers require a sequential query.
+
 ## Extract partitions from filenames
 
 Given paths such as `orders-BE-2026.csv`, capture both `country` and `year` and filter on `year` alone. Both 2026 files pass, regardless of country.

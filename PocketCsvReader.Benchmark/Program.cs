@@ -19,6 +19,7 @@ public class Program
         ["--keyvalue-buffering-matrix"] = KeyValueBuffering.RunMatrix,
         ["--labeled-layout-matrix"] = LabeledLayoutBenchmarks.RunMatrix,
         ["--position-tracking-matrix"] = PositionTracking.RunMatrix,
+        ["--sparse-index"] = SparseIndexBenchmark.Run,
     };
 
     public static void Main(string[] args)
