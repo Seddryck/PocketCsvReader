@@ -76,16 +76,16 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
         return this;
     }
 
-    /// <summary>Selects files matching a filename glob beneath a root directory.</summary>
-    public CsvDirectoryBuilder FromDirectory(string root, string searchPattern)
-        => CreateDirectoryBuilder(root, searchPattern, null);
-
     /// <summary>Configures how this builder resolves directory URIs.</summary>
     public CsvReaderBuilder WithDirectoryResolver(ICsvDirectoryResolver resolver)
     {
         _directoryResolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         return this;
     }
+
+    /// <summary>Selects files matching a filename glob beneath a root directory.</summary>
+    public CsvDirectoryBuilder FromDirectory(string root, string searchPattern)
+        => CreateDirectoryBuilder(root, searchPattern, null);
 
     /// <summary>Selects files matching a filename glob beneath an absolute directory URI.</summary>
     public CsvDirectoryBuilder FromDirectory(Uri root, string searchPattern)

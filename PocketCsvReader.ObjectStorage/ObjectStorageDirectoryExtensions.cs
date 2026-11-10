@@ -24,28 +24,8 @@ public static class ObjectStorageDirectoryExtensions
         ArgumentNullException.ThrowIfNull(prefix);
         CsvReaderBuilder.ValidateDirectorySearchPattern(searchPattern);
         var root = prefix.Length == 0 || prefix.EndsWith('/') ? prefix : prefix + "/";
-        return new(builder, new AsyncHivePartitionSource(root, searchPattern, ListAsync, OpenAsync));
-
-        async ValueTask<List<DirectoryEntry>> ListAsync(string path, CancellationToken token)
-        {
-            var request = new ListObjectsV2Request { BucketName = bucket, Prefix = path, Delimiter = "/" };
-            var entries = new List<DirectoryEntry>();
-            do
-            {
-                var page = await client.ListObjectsV2Async(request, token).ConfigureAwait(false);
-                foreach (var file in page.S3Objects ?? [])
-                {
-                    // S3 can store an object for the directory itself.
-                    if (!file.Key.EndsWith('/'))
-                        entries.Add(new(file.Key, false));
-                }
-                foreach (var child in page.CommonPrefixes ?? [])
-                    entries.Add(new(child, true));
-                request.ContinuationToken = page.IsTruncated == true ? page.NextContinuationToken : null;
-            }
-            while (request.ContinuationToken is not null);
-            return entries;
-        }
+        return new(builder, new AsyncHivePartitionSource(root, searchPattern,
+            (path, token) => ListS3DirectoryAsync(client, bucket, path, token), OpenAsync));
 
         async ValueTask<Stream> OpenAsync(string path, CancellationToken token)
         {
@@ -84,5 +64,24 @@ public static class ObjectStorageDirectoryExtensions
             var download = await client.GetFileClient(path).ReadStreamingAsync(cancellationToken: token).ConfigureAwait(false);
             return download.Value.Content;
         }
+    }
+
+    private static async ValueTask<List<DirectoryEntry>> ListS3DirectoryAsync(
+        IAmazonS3 client, string bucket, string path, CancellationToken token)
+    {
+        var request = new ListObjectsV2Request { BucketName = bucket, Prefix = path, Delimiter = "/" };
+        var entries = new List<DirectoryEntry>();
+        do
+        {
+            var page = await client.ListObjectsV2Async(request, token).ConfigureAwait(false);
+            // S3 can store an object for the directory itself.
+            entries.AddRange((page.S3Objects ?? [])
+                .Where(file => !file.Key.EndsWith('/'))
+                .Select(file => new DirectoryEntry(file.Key, false)));
+            entries.AddRange((page.CommonPrefixes ?? []).Select(child => new DirectoryEntry(child, true)));
+            request.ContinuationToken = page.IsTruncated == true ? page.NextContinuationToken : null;
+        }
+        while (request.ContinuationToken is not null);
+        return entries;
     }
 }

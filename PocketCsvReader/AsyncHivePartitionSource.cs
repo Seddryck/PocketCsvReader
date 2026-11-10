@@ -26,23 +26,10 @@ internal sealed class AsyncHivePartitionSource(
         {
             while (true)
             {
+                if (FindNextFile(entries, ref index, partitions, pattern, token) is { } file)
+                    return file;
+
                 token.ThrowIfCancellationRequested();
-                if (entries is not null && index < entries.Count)
-                {
-                    var entry = entries[index++];
-                    if (entry.IsDirectory)
-                        continue;
-
-                    var name = GetName(entry.Path);
-                    if (!FileSystemName.MatchesSimpleExpression(searchPattern, name, ignoreCase: false))
-                        continue;
-
-                    var metadata = pattern is null
-                        ? partitions
-                        : partitions.WithValues(pattern.Extract(name, entry.Path), entry.Path);
-                    return new(entry.Path, metadata, null);
-                }
-
                 entries = null;
                 if (!pending.TryPop(out var directory))
                     return null;
@@ -55,12 +42,41 @@ internal sealed class AsyncHivePartitionSource(
 
                 entries = await list(directory.Path, token).ConfigureAwait(false);
                 index = 0;
-                for (var i = entries.Count - 1; i >= 0; i--)
-                {
-                    if (entries[i].IsDirectory)
-                        pending.Push((entries[i].Path, partitions));
-                }
+                QueueChildren(entries, pending, partitions);
             }
+        }
+    }
+
+    private PartitionedFile<NamedPartitions>? FindNextFile(
+        List<DirectoryEntry>? entries, ref int index, NamedPartitions partitions,
+        FileNamePartitionPattern? pattern, CancellationToken token)
+    {
+        while (entries is not null && index < entries.Count)
+        {
+            token.ThrowIfCancellationRequested();
+            var entry = entries[index++];
+            if (entry.IsDirectory)
+                continue;
+
+            var name = GetName(entry.Path);
+            if (!FileSystemName.MatchesSimpleExpression(searchPattern, name, ignoreCase: false))
+                continue;
+
+            var metadata = pattern is null
+                ? partitions
+                : partitions.WithValues(pattern.Extract(name, entry.Path), entry.Path);
+            return new(entry.Path, metadata, null);
+        }
+        return null;
+    }
+
+    private static void QueueChildren(
+        List<DirectoryEntry> entries, Stack<(string Path, NamedPartitions Parent)> pending, NamedPartitions partitions)
+    {
+        for (var i = entries.Count - 1; i >= 0; i--)
+        {
+            if (entries[i].IsDirectory)
+                pending.Push((entries[i].Path, partitions));
         }
     }
 

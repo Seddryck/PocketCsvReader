@@ -26,7 +26,9 @@ public sealed class ObjectStorageDirectoryResolver : ICsvDirectoryResolver
         ArgumentNullException.ThrowIfNull(client);
         var uri = client.Uri;
         var endpoint = new DataLakeUriBuilder(uri);
-        ArgumentException.ThrowIfNullOrWhiteSpace(endpoint.FileSystemName, nameof(client));
+        if (string.IsNullOrWhiteSpace(endpoint.FileSystemName))
+            throw new ArgumentException("The client must be scoped to an ADLS filesystem.", nameof(client));
+
         var host = uri.IdnHost;
         var labels = host.Split('.', 3);
         if (labels.Length == 3 && labels[1] == "blob")
@@ -44,24 +46,33 @@ public sealed class ObjectStorageDirectoryResolver : ICsvDirectoryResolver
         if (root.Host.Length == 0 || !root.IsDefaultPort || root.Query.Length != 0 || root.Fragment.Length != 0)
             throw new ArgumentException("Use a storage URI with an authority and optional path, without a port, query, or fragment.", nameof(root));
 
-        var host = root.IdnHost;
         var path = root.AbsolutePath;
         // Remove the URI's path separator, preserving any leading slash in the object key.
         var directory = Uri.UnescapeDataString(path.StartsWith('/') ? path[1..] : path);
-        if (root.Scheme == "s3")
-        {
-            if (root.UserInfo.Length != 0)
-                throw new ArgumentException("An S3 directory URI must use the bucket as its authority.", nameof(root));
-            if (!_s3Clients.TryGetValue(host, out var s3Client))
-                throw new InvalidOperationException("No S3 client is registered for this bucket.");
-            return builder.FromDirectory(s3Client, host, directory, searchPattern);
-        }
+        return root.Scheme == "s3"
+            ? ResolveS3(builder, root, directory, searchPattern)
+            : ResolveAdls(builder, root, directory, searchPattern);
+    }
 
+    private CsvDirectoryBuilder ResolveS3(
+        CsvReaderBuilder builder, Uri root, string directory, string searchPattern)
+    {
+        if (root.UserInfo.Length != 0)
+            throw new ArgumentException("An S3 directory URI must use the bucket as its authority.", nameof(root));
+        var bucket = root.IdnHost;
+        if (!_s3Clients.TryGetValue(bucket, out var client))
+            throw new InvalidOperationException("No S3 client is registered for this bucket.");
+        return builder.FromDirectory(client, bucket, directory, searchPattern);
+    }
+
+    private CsvDirectoryBuilder ResolveAdls(
+        CsvReaderBuilder builder, Uri root, string directory, string searchPattern)
+    {
         var fileSystem = root.UserInfo;
         if (fileSystem.Length == 0 || fileSystem.Contains(':'))
             throw new ArgumentException("An ADLS directory URI must use a filesystem and endpoint as its authority.", nameof(root));
-        if (!_adlsClients.TryGetValue((host, fileSystem), out var adlsClient))
+        if (!_adlsClients.TryGetValue((root.IdnHost, fileSystem), out var client))
             throw new InvalidOperationException("No ADLS client is registered for this endpoint and filesystem.");
-        return builder.FromDirectory(adlsClient, directory, searchPattern);
+        return builder.FromDirectory(client, directory, searchPattern);
     }
 }
