@@ -67,9 +67,11 @@ public static class FlatFileIndexLookup
                 return Select<TProfile>(reader.ToDataReader(source), key, requested, ordered: false);
 
             var restart = range.Value.Offset;
-            source.Position = restart ?? SparseIndexSidecar.ReadUtf8BomLength(source);
+            var seekAfterHeader = reader.ReadsHeaderBeforeSeek ? restart : null;
+            source.Position = seekAfterHeader.HasValue || restart is null
+                ? SparseIndexSidecar.ReadUtf8BomLength(source) : restart.Value;
             var input = AsBaseReader<TProfile>(reader.ToDataReader(source));
-            input.UseUtf8FileInput(trackByteOffsets: false, restarted: restart.HasValue);
+            input.UseUtf8FileInput(trackByteOffsets: false, restarted: restart.HasValue, seekAfterHeader);
             return Select<TProfile>(input, key, requested, ordered: true);
         }
         catch

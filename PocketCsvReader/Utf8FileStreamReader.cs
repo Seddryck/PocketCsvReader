@@ -16,3 +16,10 @@ internal enum RecordSelection
     Include,
     Stop
 }
+
+internal interface IFileHeaderSource
+{
+    void ReadSeekHeader();
+    ValueTask ReadSeekHeaderAsync(CancellationToken cancellationToken);
+    void CopySeekHeaderFrom(IFileHeaderSource source);
+}

@@ -1,6 +1,6 @@
 namespace PocketCsvReader.WebLogs;
 
-internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositionSource, ICurrentRecordSource
+internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositionSource, ICurrentRecordSource, IFileHeaderSource
 {
     bool ICurrentRecordSource.SupportsCurrentRecord => true;
 
@@ -35,6 +35,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
     private FieldSpan[] _fields = [];
     private int _lineNumber;
     private bool _completed;
+    private bool _restartedFromHeader;
 
     public WebLogProfile Profile { get; }
     public string[]? Fields { get; private set; }
@@ -81,6 +82,40 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
             recordState = RecordState.Record;
             return false;
         }
+    }
+
+    void IFileHeaderSource.ReadSeekHeader()
+    {
+        while (Fields is null)
+        {
+            _reader.BeginOperation();
+            ParseSeekHeaderLine(_reader.ReadLineFrame());
+        }
+    }
+
+    async ValueTask IFileHeaderSource.ReadSeekHeaderAsync(CancellationToken cancellationToken)
+    {
+        while (Fields is null)
+        {
+            _reader.BeginOperation();
+            ParseSeekHeaderLine(await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false));
+        }
+    }
+
+    private void ParseSeekHeaderLine(CapturedRecord? line)
+    {
+        if (line is not { } captured)
+            throw Invalid("the file ended before the required #Fields directive");
+        ParseLine(captured.Memory.Span);
+    }
+
+    void IFileHeaderSource.CopySeekHeaderFrom(IFileHeaderSource source)
+    {
+        var header = (WebLogRecordSource)source;
+        Fields = header.Fields!;
+        _fields = new FieldSpan[Fields.Length];
+        _directives.AddRange(header._directives);
+        _restartedFromHeader = true;
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
@@ -138,7 +173,9 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
         // Directive strings are retained public metadata, rather than temporary row storage.
         var name = line[1..separator].Trim().ToString();
         var value = line[(separator + 1)..].Trim().ToString();
-        _directives.Add(new W3cDirective(name, value, _lineNumber));
+        // After a seek the source has no absolute line numbers for later directives.
+        if (!_restartedFromHeader)
+            _directives.Add(new W3cDirective(name, value, _lineNumber));
 
         if (!name.Equals("Fields", StringComparison.OrdinalIgnoreCase))
             return;

@@ -8,6 +8,7 @@ using PocketCsvReader.KeyValue.Configuration;
 using PocketCsvReader.Ndjson.Configuration;
 using PocketCsvReader.SecurityLogs.Configuration;
 using PocketCsvReader.WebLogs;
+using PocketCsvReader.WebLogs.Configuration;
 
 namespace PocketCsvReader.Indexing.Testing;
 
@@ -145,15 +146,38 @@ public class FileIndexLookupTest
     }
 
     [Test]
-    public void W3cWithHeaderDirectivesUsesTheOptionalScan()
+    public void W3cWithoutASidecarUsesTheOptionalScan()
     {
         var path = Write("w3c.log", "#Fields: sc-status cs-uri-stem\n3 /a\n2 /b\n1 /c\n2 /d\n");
         var reader = new W3cExtendedLogReader();
         var index = new SparseIndex(new IndexKey<int>("sc-status"), 1);
-        Assert.Throws<NotSupportedException>(() => reader.BuildIndexes(path, index));
-        Assert.Throws<NotSupportedException>(() => reader.WithIndexedLookup(path, index, 2));
+        Assert.Throws<FileNotFoundException>(() => reader.WithIndexedLookup(path, index, 2));
         using var rows = reader.WithIndexedLookup(path, index.WithOptionalIndex(), 2);
         Assert.That(ReadStrings(rows, "cs-uri-stem"), Is.EqualTo(new[] { "/b", "/d" }));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task W3cReadsTheHeaderAndSeeksPastEarlierRows(bool asynchronous)
+    {
+        const string header = "#Software: café\r\n#Fields: cs-uri-stem sc-status\r\n";
+        const string remaining = "/before 200\r\n/first 300\r\n#Fields: cs-uri-stem sc-status\r\n/second 300\r\n/after 400\r\n";
+        var path = Write("indexed.log", header + "/early 100\r\n" + remaining, bom: true);
+        var reader = new W3cExtendedLogReaderBuilder().WithParserOptimizations(new(BufferSize: 5)).Build();
+        var index = new SparseIndex(new IndexKey<int>("sc-status"), 1);
+        reader.BuildIndexes(path, index);
+
+        // Leave an invalid key before the selected checkpoint with the same file stamp.
+        // A scan that reads data rows between the header and checkpoint would fail.
+        var stamp = File.GetLastWriteTimeUtc(path);
+        File.WriteAllText(path, header + "/early xxx\r\n" + remaining, new UTF8Encoding(true));
+        File.SetLastWriteTimeUtc(path, stamp);
+
+        await using var rows = reader.WithIndexedLookup(path, index, 300);
+        var actual = new List<string>();
+        while (asynchronous ? await rows.ReadAsync() : rows.Read())
+            actual.Add(rows.GetString(rows.GetOrdinal("cs-uri-stem")));
+        Assert.That(actual, Is.EqualTo(new[] { "/first", "/second" }));
     }
 
     private void AssertSeek<TProfile, TDataReader>(FlatFileReader<TProfile, TDataReader> reader,

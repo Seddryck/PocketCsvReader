@@ -20,6 +20,7 @@ public abstract class FlatFileReader<TProfile, TDataReader>
 
     // A source opts in only when a fresh parser can restart at an arbitrary record boundary.
     internal virtual IEnumerable<string?>? SeekConfiguration => null;
+    internal virtual bool ReadsHeaderBeforeSeek => false;
 
     public TDataReader ToDataReader(string filename)
         => CreateDataReader(OpenRead(filename));

@@ -38,6 +38,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private bool _utf8FileInput;
     private bool _trackFileBytes;
     private bool _restartedFile;
+    private (long Start, long Checkpoint)? _headerSeek;
 
     protected BaseDataReader(Stream stream, TProfile profile, StringMapper stringMapper, bool leaveOpen = false)
         : base(profile, stringMapper)
@@ -69,10 +70,11 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     private bool ShouldProbeEncoding => Profile.StreamInitialization.ProbeEncoding && ProcessedStream!.CanSeek;
 
-    internal void UseUtf8FileInput(bool trackByteOffsets, bool restarted)
+    internal void UseUtf8FileInput(bool trackByteOffsets, bool restarted, long? seekAfterHeader = null)
     {
         if (_initialized) throw new InvalidOperationException("The reader has already started.");
         (_utf8FileInput, _trackFileBytes, _restartedFile) = (true, trackByteOffsets, restarted);
+        _headerSeek = seekAfterHeader is long checkpoint ? (RawStream.Position, checkpoint) : null;
         if (trackByteOffsets)
             Window = null;
     }
@@ -89,10 +91,66 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     private void InitializeUtf8File()
     {
-        ProcessedStream = RawStream;
-        StreamReader = new Utf8FileStreamReader(RawStream, _trackFileBytes, _restartedFile);
-        CompleteInitialization(CreateRecordSource(StreamReader, Profile));
+        if (_headerSeek is not { } seek)
+        {
+            CompleteInitialization(OpenUtf8FileSource(_restartedFile));
+            return;
+        }
+
+        using var source = OpenSeekHeaderSource(seek.Start);
+        var header = RequireSeekHeader(source);
+        header.ReadSeekHeader();
+        CompleteInitialization(RestartAfterHeader(header, seek.Checkpoint));
     }
+
+    private async ValueTask InitializeUtf8FileAsync(CancellationToken cancellationToken)
+    {
+        if (_headerSeek is not { } seek)
+        {
+            CompleteInitialization(OpenUtf8FileSource(_restartedFile));
+            return;
+        }
+
+        using var source = OpenSeekHeaderSource(seek.Start);
+        var header = RequireSeekHeader(source);
+        await header.ReadSeekHeaderAsync(cancellationToken).ConfigureAwait(false);
+        CompleteInitialization(RestartAfterHeader(header, seek.Checkpoint));
+    }
+
+    private IRecordSource<TProfile> OpenSeekHeaderSource(long start)
+    {
+        StreamReader?.Dispose();
+        RawStream.Position = start;
+        return OpenUtf8FileSource(restarted: false);
+    }
+
+    private IRecordSource<TProfile> OpenUtf8FileSource(bool restarted)
+    {
+        ProcessedStream = RawStream;
+        StreamReader = new Utf8FileStreamReader(RawStream, _trackFileBytes, restarted);
+        return CreateRecordSource(StreamReader, Profile);
+    }
+
+    private IRecordSource<TProfile> RestartAfterHeader(IFileHeaderSource header, long offset)
+    {
+        // A new text reader discards read-ahead bytes from the header without closing the file.
+        StreamReader!.Dispose();
+        RawStream.Seek(offset, SeekOrigin.Begin);
+        var source = OpenUtf8FileSource(restarted: true);
+        try
+        {
+            RequireSeekHeader(source).CopySeekHeaderFrom(header);
+            return source;
+        }
+        catch
+        {
+            source.Dispose();
+            throw;
+        }
+    }
+
+    private static IFileHeaderSource RequireSeekHeader(IRecordSource<TProfile> source)
+        => source as IFileHeaderSource ?? throw new InvalidOperationException("The record source cannot restore its header for a seek.");
 
     private void PrepareStream()
     {
@@ -350,7 +408,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         if (_initialized) return;
         if (_utf8FileInput)
         {
-            InitializeUtf8File();
+            await InitializeUtf8FileAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
         PrepareStream();
