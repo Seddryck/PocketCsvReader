@@ -104,12 +104,7 @@ public sealed class NetCdfCdlReader : IArrowStreamSource
             finally
             {
                 if (!leaveOpen)
-                {
-                    if (asynchronous)
-                        await stream.DisposeAsync().ConfigureAwait(false);
-                    else
-                        stream.Dispose();
-                }
+                    await DisposeInputAsync(stream, asynchronous).ConfigureAwait(false);
             }
 
             token.ThrowIfCancellationRequested();
@@ -120,5 +115,13 @@ public sealed class NetCdfCdlReader : IArrowStreamSource
             store.Dispose();
             throw;
         }
+    }
+
+    private static ValueTask DisposeInputAsync(Stream stream, bool asynchronous)
+    {
+        if (asynchronous)
+            return stream.DisposeAsync();
+        stream.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

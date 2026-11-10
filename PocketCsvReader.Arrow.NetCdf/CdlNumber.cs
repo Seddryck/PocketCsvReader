@@ -61,12 +61,21 @@ internal static class CdlNumber
         return Int32Type.Default;
     }
 
-    public static bool Equal(IArrowType type, ulong left, ulong right) => type.TypeId switch
+    public static bool Equal(IArrowType type, ulong left, ulong right)
     {
-        ArrowTypeId.Float => BitConverter.UInt32BitsToSingle((uint)left).Equals(BitConverter.UInt32BitsToSingle((uint)right)),
-        ArrowTypeId.Double => BitConverter.UInt64BitsToDouble(left).Equals(BitConverter.UInt64BitsToDouble(right)),
-        _ => left == right,
-    };
+        if (left == right)
+            return true;
+
+        // Distinct encodings of zero and NaN compare equal for fill and missing-value markers.
+        return type.TypeId switch
+        {
+            ArrowTypeId.Float => ((left | right) & 0x7FFF_FFFFUL) == 0
+                || (float.IsNaN(BitConverter.UInt32BitsToSingle((uint)left)) && float.IsNaN(BitConverter.UInt32BitsToSingle((uint)right))),
+            ArrowTypeId.Double => ((left | right) & 0x7FFF_FFFF_FFFF_FFFFUL) == 0
+                || (double.IsNaN(BitConverter.UInt64BitsToDouble(left)) && double.IsNaN(BitConverter.UInt64BitsToDouble(right))),
+            _ => false,
+        };
+    }
 
     private static (int Length, IArrowType? Type) SplitSuffix(ReadOnlySpan<char> text)
     {

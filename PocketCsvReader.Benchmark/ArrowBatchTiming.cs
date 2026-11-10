@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Apache.Arrow;
+using Apache.Arrow.Ipc;
 using PocketCsvReader.Arrow;
 using PocketCsvReader.Arrow.ColumnarJson;
 using PocketCsvReader.Arrow.NetCdf;
@@ -46,12 +47,11 @@ internal static class ArrowBatchTiming
             foreach (var scenario in scenarios)
                 await ReadAsync(scenario, asynchronous: false, validateValues: true).ConfigureAwait(false);
 
-            Console.Error.WriteLine($"{RuntimeInformation.FrameworkDescription}, {RuntimeInformation.OSDescription}, {RuntimeInformation.ProcessArchitecture}");
-            Console.Error.WriteLine($"{RowCount} verified rows, {BatchCount} batches of {BatchSize}, {WarmupCount} warmups and {SampleCount} measured runs per case.");
+            await Console.Error.WriteLineAsync($"{RuntimeInformation.FrameworkDescription}, {RuntimeInformation.OSDescription}, {RuntimeInformation.ProcessArchitecture}").ConfigureAwait(false);
+            await Console.Error.WriteLineAsync($"{RowCount} verified rows, {BatchCount} batches of {BatchSize}, {WarmupCount} warmups and {SampleCount} measured runs per case.").ConfigureAwait(false);
             Console.WriteLine("Mode,Reader,FirstReadMs,FirstReadyMs,SecondReadMs,SecondReadyMs,Batch64ReadyMs,FullReadMs");
-            var random = new Random(90721);
-            await MeasureAsync(scenarios, random, asynchronous: false).ConfigureAwait(false);
-            await MeasureAsync(scenarios, random, asynchronous: true).ConfigureAwait(false);
+            await MeasureAsync(scenarios, asynchronous: false).ConfigureAwait(false);
+            await MeasureAsync(scenarios, asynchronous: true).ConfigureAwait(false);
         }
         finally
         {
@@ -59,7 +59,7 @@ internal static class ArrowBatchTiming
         }
     }
 
-    private static async Task MeasureAsync(Scenario[] scenarios, Random random, bool asynchronous)
+    private static async Task MeasureAsync(Scenario[] scenarios, bool asynchronous)
     {
         foreach (var scenario in scenarios)
         {
@@ -67,20 +67,21 @@ internal static class ArrowBatchTiming
                 await ReadAsync(scenario, asynchronous).ConfigureAwait(false);
         }
 
-        var order = scenarios.ToArray();
         var samples = scenarios.ToDictionary(scenario => scenario, _ => new Sample[SampleCount]);
         for (var run = 0; run < SampleCount; run++)
         {
-            random.Shuffle(order);
-            foreach (var scenario in order)
+            for (var index = 0; index < scenarios.Length; index++)
+            {
+                var scenario = scenarios[(run + index) % scenarios.Length];
                 samples[scenario][run] = await ReadAsync(scenario, asynchronous).ConfigureAwait(false);
+            }
         }
 
         var mode = asynchronous ? "Async" : "Sync";
         foreach (var scenario in scenarios)
         {
             var result = samples[scenario];
-            Console.WriteLine(FormattableString.Invariant(
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"{mode},{scenario.Name},{Median(result, x => x.FirstRead):F3},{Median(result, x => x.FirstReady):F3},{Median(result, x => x.SecondRead):F3},{Median(result, x => x.SecondReady):F3},{Median(result, x => x.LastReady):F3},{Median(result, x => x.Total):F3}"));
         }
     }
@@ -97,9 +98,7 @@ internal static class ArrowBatchTiming
         var secondRead = 0L;
         var last = 0L;
         var batches = 0;
-        using (var stream = asynchronous
-            ? await scenario.Reader.ToArrowStreamAsync(scenario.Path).ConfigureAwait(false)
-            : scenario.Reader.ToArrowStream(scenario.Path))
+        using (var stream = await OpenStreamAsync(scenario, asynchronous).ConfigureAwait(false))
         {
             while (true)
             {
@@ -143,6 +142,10 @@ internal static class ArrowBatchTiming
             Stopwatch.GetElapsedTime(start, end).TotalMilliseconds);
     }
 
+    private static ValueTask<IArrowArrayStream> OpenStreamAsync(Scenario scenario, bool asynchronous)
+        => asynchronous ? scenario.Reader.ToArrowStreamAsync(scenario.Path)
+            : ValueTask.FromResult(scenario.Reader.ToArrowStream(scenario.Path));
+
     private static void CheckBatch(RecordBatch batch, int index, Scenario scenario, bool validateValues)
     {
         if (batch.Length != BatchSize)
@@ -160,7 +163,8 @@ internal static class ArrowBatchTiming
             if (ReadCoordinate(x, local) != Coordinate(0, row)
                 || ReadCoordinate(y, local) != Coordinate(1, row)
                 || ReadCoordinate(z, local) != Coordinate(2, row)
-                || values.GetValue(local) != Value(row))
+                || values.GetValue(local) is not { } value
+                || BitConverter.SingleToInt32Bits(value) != BitConverter.SingleToInt32Bits(Value(row)))
                 throw new InvalidDataException($"{scenario.Name} produced unexpected data at row {row}.");
         }
     }
@@ -190,8 +194,8 @@ internal static class ArrowBatchTiming
     {
         using var writer = File.CreateText(path);
         writer.WriteLine(grid
-            ? FormattableString.Invariant($"netcdf grid {{ dimensions: x={X}, y={Y}, z={Z}; variables: int x(x), y(y), z(z); float value(x,y,z); data:")
-            : FormattableString.Invariant($"netcdf flat {{ dimensions: x={RowCount}; variables: int x(x), y(x), z(x); float value(x); data:"));
+            ? string.Create(CultureInfo.InvariantCulture, $"netcdf grid {{ dimensions: x={X}, y={Y}, z={Z}; variables: int x(x), y(y), z(z); float value(x,y,z); data:")
+            : string.Create(CultureInfo.InvariantCulture, $"netcdf flat {{ dimensions: x={RowCount}; variables: int x(x), y(x), z(x); float value(x); data:"));
         int[] lengths = [X, Y, Z, RowCount];
         int[] strides = [Y * Z, Z, 1, 1];
         for (var column = 0; column < Names.Length; column++)

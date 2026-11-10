@@ -93,12 +93,20 @@ internal sealed class CdlLexer(IBufferReader input, bool asynchronous, Cancellat
         return RefillAsync();
     }
 
-    private async ValueTask<bool> RefillAsync()
+    private ValueTask<bool> RefillAsync()
     {
         token.ThrowIfCancellationRequested();
         _offset += _chunk.Length;
         _index = 0;
-        _chunk = asynchronous ? await input.ReadAsync(token).ConfigureAwait(false) : input.Read();
+        return asynchronous ? RefillChunkAsync() : ValueTask.FromResult(SetChunk(input.Read()));
+    }
+
+    private async ValueTask<bool> RefillChunkAsync()
+        => SetChunk(await input.ReadAsync(token).ConfigureAwait(false));
+
+    private bool SetChunk(ReadOnlyMemory<char> chunk)
+    {
+        _chunk = chunk;
         return !_chunk.IsEmpty;
     }
 

@@ -155,6 +155,31 @@ public sealed class NetCdfCdlReaderTests
     }
 
     [Test]
+    public void FloatingPointFillValuesMatchSignedZerosWithoutMaskingNearbyValues()
+    {
+        using var input = Input("""
+            netcdf example {
+            dimensions: x = 3;
+            variables:
+                float single(x);
+                double wide(x);
+                single:missing_value = -0.0f;
+                wide:_FillValue = 0.0;
+            data:
+                single = 0.0, -0.0, 1e-30;
+                wide = -0.0, 0.0, 1e-300;
+            }
+            """);
+        using var batch = new NetCdfCdlReader().ToArrowBatches(input).Single();
+        foreach (var column in new[] { batch.Column(1), batch.Column(2) })
+        {
+            Assert.That(column.IsNull(0), Is.True);
+            Assert.That(column.IsNull(1), Is.True);
+            Assert.That(column.IsNull(2), Is.False);
+        }
+    }
+
+    [Test]
     public void PreservesTypedGlobalAttributesAndHexadecimalFillValues()
     {
         using var input = Input("""
