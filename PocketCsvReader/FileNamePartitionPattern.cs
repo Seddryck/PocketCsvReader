@@ -37,9 +37,10 @@ internal sealed class FileNamePartitionPattern
         _keys = [.. keys];
     }
 
-    public NamedPartitions Extract(string path)
+    public NamedPartitions Extract(string path) => Extract(Path.GetFileName(path).AsSpan(), path);
+
+    internal NamedPartitions Extract(ReadOnlySpan<char> name, string path)
     {
-        var name = Path.GetFileName(path).AsSpan();
         var prefix = _literals[0];
         var suffix = _literals[^1];
         if (name.Length <= prefix.Length + suffix.Length

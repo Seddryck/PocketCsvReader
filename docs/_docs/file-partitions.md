@@ -56,7 +56,7 @@ Omit the opener to read the file at the supplied path. To look up metadata from 
 
 Building a query, enumerating its descriptors, and constructing a reader open zero input streams. Each enumeration and reader execution discovers the source independently, in source order. Use a replayable sequence and open a fresh stream on each call if you plan to discover or read more than once.
 
-The first row request opens the first needed file. This includes the database adapter's `HasRows` property, which can buffer the first row. Use `Read` or `ReadAsync` to advance the reader. Deferred custom openers run synchronously with either method. Empty input yields an empty reader. Invalid descriptor entries surface when reached, and file access errors surface on the read that reaches the file.
+The first row request opens the first needed file. On a synchronous source, the database adapter's `HasRows` property can make this request and buffer the first row. Use `Read` or `ReadAsync` to advance a synchronous source. Openers supplied as `Func<string, Stream>` run synchronously with either method. Empty input yields an empty reader. Invalid descriptor entries surface when reached, and file access errors surface on the read that reaches the file.
 
 The batch owns each stream returned by an opener. It closes the previous stream before opening the next, closes the active stream on disposal or read failure, and leaves unvisited inputs unopened. Configure CSV dialect, schema, and [row filters](../reader-filtering/) on the reader builder before selecting the files.
 
@@ -175,6 +175,40 @@ Discovery validates each child directory's name as it encounters it, before deci
 With `PartitionCondition.Equal("year", "2026")`, discovery reads the name `year=2025` and prunes that branch. A malformed directory such as `year=2025/country=` stays undiscovered. A malformed directory such as `year=2026/country=` raises an error when discovery reaches it, even if it contains no CSV files. Stopping a read early also leaves later paths undiscovered.
 
 Pass a filename pattern to `HiveStyle("orders-{batch}.csv")` to add captures after directory pruning. Discovery checks the pattern against files that match the glob in directories it lists, before applying the remaining file-level conditions. A filename capture that repeats an inherited key raises `FormatException`.
+
+### Discover partitions in object storage
+
+Install the optional `PocketCsvReader.ObjectStorage` NuGet package and import its namespace. Register your configured AWS `IAmazonS3` client for a bucket and your Azure `DataLakeFileSystemClient` for its endpoint and filesystem. Attach the resolver to the builder to use the two-argument URI overload.
+
+In this example, `analytics` is the S3 bucket name and `orders/` is the object key prefix within that bucket. Replace `analytics` in both `AddS3` and the `s3://` URI with your bucket name. The resolver uses that name to select the registered client.
+
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+using PocketCsvReader.ObjectStorage;
+
+var resolver = new ObjectStorageDirectoryResolver()
+    .AddS3("analytics", s3Client)
+    .AddAdls(warehouseFileSystemClient);
+
+var selected = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithDirectoryResolver(resolver)
+    .FromDirectory(new Uri("s3://analytics/orders/"), "*.csv")
+    .WithPartitions(p => p.HiveStyle())
+    .Build()
+    .WithPartitionFilter(PartitionCondition.Equal("year", "2026"));
+
+await using var reader = selected.ToDataReader();
+while (await reader.ReadAsync(cancellationToken))
+    Console.WriteLine(reader["OrderId"]);
+```
+
+For ADLS Gen2, pass `new Uri("abfss://warehouse@lakeaccount.dfs.core.windows.net/orders/")` as the first argument. Omitting the URI path starts at the bucket or filesystem root. Encode literal percent signs in object names as `%25` in the URI. For example, a directory named `tag=A%3DB` appears in the URI as `tag=A%253DB`.
+
+You can also pass the client directly with `.FromDirectory(s3Client, "analytics", "orders", "*.csv")` or `.FromDirectory(warehouseFileSystemClient, "orders", "*.csv")`. Each listing requests only the immediate children of a directory. A named condition that rejects a child prefix, such as `year=2025/`, skips the listing for that prefix. Filename globs match case-sensitively.
+
+Use `EnumerateFilesAsync(cancellationToken)` to list matching descriptors without opening CSV streams. Use `ReadAsync(cancellationToken)` to read rows from the cloud query. With the database adapter, call `ReadAsync` before checking `HasRows`. Keep the supplied client available until the reader finishes. The reader owns each opened stream and closes it on transition, failure, or disposal.
 
 ### Relationship to Apache Hive
 
