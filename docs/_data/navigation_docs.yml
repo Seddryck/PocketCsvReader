@@ -47,4 +47,5 @@
 - title: Integrations
   docs:
   - apache-arrow
+  - netcdf-cdl
   - chrononuensis

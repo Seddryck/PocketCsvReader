@@ -17,6 +17,7 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF |
 | `PocketCsvReader.Arrow` | Apache Arrow output |
 | `PocketCsvReader.Arrow.ColumnarJson` | Apache Arrow Integration JSON, ClickHouse JSONColumns and JSONColumnsWithMetadata |
+| `PocketCsvReader.Arrow.NetCdf` | [Textual NetCDF CDL](docs/_docs/netcdf-cdl.md) |
 | `PocketCsvReader.Chrononuensis` | Temporal period parsers |
 
 ## Columnar JSON

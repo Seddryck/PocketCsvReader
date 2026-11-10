@@ -10,38 +10,25 @@ using BenchmarkDotNet.Jobs;
 namespace PocketCsvReader.Benchmark;
 public class Program
 {
+    private static readonly Dictionary<string, Action> MatrixCommands = new(StringComparer.Ordinal)
+    {
+        ["--arrow-batch-timing"] = () => ArrowBatchTiming.RunMatrixAsync().GetAwaiter().GetResult(),
+        ["--reader-filtering-matrix"] = ReaderFiltering.RunMatrix,
+        ["--lazy-json-matrix"] = LazyJsonDecodingComparison.RunMatrix,
+        ["--json-allocation-matrix"] = JsonAllocationComparison.RunMatrix,
+        ["--keyvalue-buffering-matrix"] = KeyValueBuffering.RunMatrix,
+        ["--labeled-layout-matrix"] = LabeledLayoutBenchmarks.RunMatrix,
+        ["--position-tracking-matrix"] = PositionTracking.RunMatrix,
+    };
+
     public static void Main(string[] args)
     {
-        if (args is ["--reader-filtering-matrix"])
+        if (args is [string command] && MatrixCommands.TryGetValue(command, out var run))
         {
-            ReaderFiltering.RunMatrix();
+            run();
             return;
         }
-        if (args is ["--lazy-json-matrix"])
-        {
-            LazyJsonDecodingComparison.RunMatrix();
-            return;
-        }
-        if (args is ["--json-allocation-matrix"])
-        {
-            JsonAllocationComparison.RunMatrix();
-            return;
-        }
-        if (args is ["--keyvalue-buffering-matrix"])
-        {
-            KeyValueBuffering.RunMatrix();
-            return;
-        }
-        if (args is ["--labeled-layout-matrix"])
-        {
-            LabeledLayoutBenchmarks.RunMatrix();
-            return;
-        }
-        if (args is ["--position-tracking-matrix"])
-        {
-            PositionTracking.RunMatrix();
-            return;
-        }
+
         if (args.Length > 0)
         {
             BenchmarkSwitcher.FromTypes([typeof(LazyJsonDecodingComparison), typeof(JsonAllocationComparison), typeof(CustomParsing), typeof(ChrononuensisParsing), typeof(Utf8Input), typeof(PositionTracking), typeof(CharacterRecordParsing), typeof(CommonLogComparison), typeof(WebLogBuffering), typeof(FixedWidthBuffering)]).Run(args,

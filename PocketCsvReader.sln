@@ -89,12 +89,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.Colum
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.ColumnarJson.Testing", "PocketCsvReader.Arrow.ColumnarJson.Testing\PocketCsvReader.Arrow.ColumnarJson.Testing.csproj", "{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.NetCdf", "PocketCsvReader.Arrow.NetCdf\PocketCsvReader.Arrow.NetCdf.csproj", "{DCA3CDB3-3168-48FA-AF8C-A7CD27CC829F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Arrow.NetCdf.Testing", "PocketCsvReader.Arrow.NetCdf.Testing\PocketCsvReader.Arrow.NetCdf.Testing.csproj", "{EFC18751-1E3D-4DEC-B4E3-5C7A8BD66FBA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DCA3CDB3-3168-48FA-AF8C-A7CD27CC829F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DCA3CDB3-3168-48FA-AF8C-A7CD27CC829F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DCA3CDB3-3168-48FA-AF8C-A7CD27CC829F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DCA3CDB3-3168-48FA-AF8C-A7CD27CC829F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFC18751-1E3D-4DEC-B4E3-5C7A8BD66FBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFC18751-1E3D-4DEC-B4E3-5C7A8BD66FBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFC18751-1E3D-4DEC-B4E3-5C7A8BD66FBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFC18751-1E3D-4DEC-B4E3-5C7A8BD66FBA}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B623D3F8-5AD6-4580-A6C9-7E83A01E7CA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
