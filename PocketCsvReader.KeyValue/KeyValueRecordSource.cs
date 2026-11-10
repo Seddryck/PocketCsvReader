@@ -22,7 +22,7 @@ internal sealed class KeyValueRecordSource : IBorrowedRecordSource<KeyValueProfi
     {
         Profile = profile;
         if (profile.Projection is { } columns) _projection = new(columns);
-        if (profile.TrackPosition) _position = new();
+        _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
     }
 

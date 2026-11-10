@@ -28,6 +28,13 @@ public class NdjsonReader : FlatFileReader<NdjsonProfile, NdjsonDataReader>
 
     protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
 
+    internal override IEnumerable<string?>? SeekConfiguration
+        => GetType() == typeof(NdjsonReader) && Profile.RecordPath is null && !Profile.StableFieldLayout
+            ? ["ndjson", Dialect.LineTerminator, Dialect.CommentChar?.ToString(), new string(Dialect.Whitespaces),
+                Profile.OrderedProjection.ToString(), Profile.ProjectedProperties is null ? null : "projection",
+                .. Profile.ProjectedProperties ?? []]
+            : null;
+
     protected override NdjsonDataReader CreateDataReader(Stream stream)
         => new(stream, Profile);
 

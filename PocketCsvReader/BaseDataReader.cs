@@ -34,6 +34,11 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     protected bool IsEof { get; set; } = false;
     private int _readInProgress;
     internal RecordWindow? Window { get; set; }
+    private Func<BaseDataReader<TProfile>, RecordSelection>? _selectFileRecord;
+    private bool _utf8FileInput;
+    private bool _trackFileBytes;
+    private bool _restartedFile;
+    private (long Start, long Checkpoint)? _headerSeek;
 
     protected BaseDataReader(Stream stream, TProfile profile, StringMapper stringMapper, bool leaveOpen = false)
         : base(profile, stringMapper)
@@ -46,6 +51,11 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     public void Initialize()
     {
         if (_initialized) return;
+        if (_utf8FileInput)
+        {
+            InitializeUtf8File();
+            return;
+        }
         PrepareStream();
         var source = CreateStreamRecordSource(ProcessedStream!, Profile);
         if (source is null)
@@ -59,6 +69,88 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     }
 
     private bool ShouldProbeEncoding => Profile.StreamInitialization.ProbeEncoding && ProcessedStream!.CanSeek;
+
+    internal void UseUtf8FileInput(bool trackByteOffsets, bool restarted, long? seekAfterHeader = null)
+    {
+        if (_initialized) throw new InvalidOperationException("The reader has already started.");
+        (_utf8FileInput, _trackFileBytes, _restartedFile) = (true, trackByteOffsets, restarted);
+        _headerSeek = seekAfterHeader is long checkpoint ? (RawStream.Position, checkpoint) : null;
+        if (trackByteOffsets)
+            Window = null;
+    }
+
+    internal void SelectFileRecords(Func<BaseDataReader<TProfile>, RecordSelection> select)
+        => _selectFileRecord = select;
+
+    internal NullableSpan GetLookupField(string? name, int? ordinal)
+    {
+        if (name is not null && !TryGetOrdinal(name, out ordinal))
+            return default;
+        return ordinal is int i && (uint)i < (uint)FieldCount ? GetValueOrThrow(i) : default;
+    }
+
+    private void InitializeUtf8File()
+    {
+        if (_headerSeek is not { } seek)
+        {
+            CompleteInitialization(OpenUtf8FileSource(_restartedFile));
+            return;
+        }
+
+        using var source = OpenSeekHeaderSource(seek.Start);
+        var header = RequireSeekHeader(source);
+        header.ReadSeekHeader();
+        CompleteInitialization(RestartAfterHeader(header, seek.Checkpoint));
+    }
+
+    private async ValueTask InitializeUtf8FileAsync(CancellationToken cancellationToken)
+    {
+        if (_headerSeek is not { } seek)
+        {
+            CompleteInitialization(OpenUtf8FileSource(_restartedFile));
+            return;
+        }
+
+        using var source = OpenSeekHeaderSource(seek.Start);
+        var header = RequireSeekHeader(source);
+        await header.ReadSeekHeaderAsync(cancellationToken).ConfigureAwait(false);
+        CompleteInitialization(RestartAfterHeader(header, seek.Checkpoint));
+    }
+
+    private IRecordSource<TProfile> OpenSeekHeaderSource(long start)
+    {
+        StreamReader?.Dispose();
+        RawStream.Position = start;
+        return OpenUtf8FileSource(restarted: false);
+    }
+
+    private IRecordSource<TProfile> OpenUtf8FileSource(bool restarted)
+    {
+        ProcessedStream = RawStream;
+        StreamReader = new Utf8FileStreamReader(RawStream, _trackFileBytes, restarted);
+        return CreateRecordSource(StreamReader, Profile);
+    }
+
+    private IRecordSource<TProfile> RestartAfterHeader(IFileHeaderSource header, long offset)
+    {
+        // A new text reader discards read-ahead bytes from the header without closing the file.
+        StreamReader!.Dispose();
+        RawStream.Seek(offset, SeekOrigin.Begin);
+        var source = OpenUtf8FileSource(restarted: true);
+        try
+        {
+            RequireSeekHeader(source).CopySeekHeaderFrom(header);
+            return source;
+        }
+        catch
+        {
+            source.Dispose();
+            throw;
+        }
+    }
+
+    private static IFileHeaderSource RequireSeekHeader(IRecordSource<TProfile> source)
+        => source as IFileHeaderSource ?? throw new InvalidOperationException("The record source cannot restore its header for a seek.");
 
     private void PrepareStream()
     {
@@ -105,6 +197,12 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         _initialized = true;
     }
 
+    private protected void ReplaceRecordSource(IRecordSource<TProfile> source)
+    {
+        RecordSource?.Dispose();
+        CompleteInitialization(source);
+    }
+
     protected virtual IRecordSource<TProfile> CreateRecordSource(StreamReader reader, TProfile profile)
         => CreateRecordParser(reader, profile);
 
@@ -143,6 +241,8 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     private bool AcceptCurrentRow()
     {
+        if (_trackFileBytes) return true;
+        if (_selectFileRecord is not null && !AcceptSelectedRecord()) return false;
         if (Profile.Filters.Count == 0) return true;
         var view = _filterView ??= new RowView(this);
         view.Active = true;
@@ -176,6 +276,22 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             throw;
         }
         finally { view.Active = false; }
+    }
+
+    private bool AcceptSelectedRecord()
+    {
+        try
+        {
+            var decision = _selectFileRecord!(this);
+            if (decision == RecordSelection.Stop)
+                IsEof = true;
+            return decision == RecordSelection.Include;
+        }
+        catch
+        {
+            _hasCurrentRecord = false;
+            throw;
+        }
     }
 
     private sealed class RowView(BaseDataReader<TProfile> reader) : IRowView
@@ -290,6 +406,11 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
         if (_initialized) return;
+        if (_utf8FileInput)
+        {
+            await InitializeUtf8FileAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
         PrepareStream();
         var source = await CreateStreamRecordSourceAsync(ProcessedStream!, Profile, cancellationToken).ConfigureAwait(false);
         if (source is null)

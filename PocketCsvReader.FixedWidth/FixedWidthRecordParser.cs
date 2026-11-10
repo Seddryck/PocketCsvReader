@@ -4,7 +4,7 @@ using PocketCsvReader;
 namespace PocketCsvReader.FixedWidth;
 
 // Returned views borrow the input buffer or spill storage until the next read/disposal.
-internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>, IPositionSource
+internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>, IPositionSource, IFileHeaderSource
 {
     private readonly StreamReader _reader;
     private readonly PositionTracker? _position;
@@ -24,12 +24,13 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>,
     private bool _disposed;
 
     public FixedWidthProfile Profile { get; }
+    internal string[]? Header { get; private set; }
 
     public FixedWidthRecordParser(StreamReader reader, FixedWidthProfile profile)
     {
         _reader = reader;
         Profile = profile;
-        if (profile.TrackPosition) _position = new();
+        _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _buffer = ArrayPool<char>.Shared.Rent(profile.ParserOptimizations.BufferSize);
         _fieldSpans = profile.Descriptor.Fields
             .Select(field => new FieldSpan(field.Offset, field.Width))
@@ -76,6 +77,48 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>,
             ? new(true, RecordMemory.Empty, RecordState.Eof)
             : new(_completed, new RecordMemory(memory, _fieldSpans), RecordState.Record);
     }
+
+    internal bool ReadHeader()
+    {
+        var eof = IsEndOfFile(out var record, out _);
+        SetHeader(record.Memory.Span);
+        return eof;
+    }
+
+    internal async ValueTask<bool> ReadHeaderAsync(CancellationToken cancellationToken)
+    {
+        var result = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        SetHeader(result.Record.Span.Span);
+        return result.IsEndOfFile;
+    }
+
+    private void SetHeader(ReadOnlySpan<char> record)
+    {
+        if (record.IsEmpty) return;
+        var layout = Profile.Descriptor.Fields;
+        var names = new string[layout.Count];
+        for (var i = 0; i < names.Length; i++)
+        {
+            var field = layout[i];
+            names[i] = field.TrimPadding(record.Slice(field.Offset, field.Width)).ToString();
+        }
+        Header = names;
+    }
+
+    void IFileHeaderSource.ReadSeekHeader()
+    {
+        if (ReadHeader())
+            throw new InvalidDataException("The fixed-width file ended before the indexed data records.");
+    }
+
+    async ValueTask IFileHeaderSource.ReadSeekHeaderAsync(CancellationToken cancellationToken)
+    {
+        if (await ReadHeaderAsync(cancellationToken).ConfigureAwait(false))
+            throw new InvalidDataException("The fixed-width file ended before the indexed data records.");
+    }
+
+    void IFileHeaderSource.CopySeekHeaderFrom(IFileHeaderSource source)
+        => Header = ((FixedWidthRecordParser)source).Header;
 
     private void BeginRead()
     {

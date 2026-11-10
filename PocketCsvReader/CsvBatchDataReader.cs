@@ -9,7 +9,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private IEnumerator<Func<Stream>> Streams { get; } = null!;
     private readonly bool _usesOwnedFactories;
     private readonly bool _supportsSyncRead;
-    private IEnumerator<Func<CancellationToken, ValueTask<Stream>>>? _ownedFactories;
+    private IEnumerator<Func<CancellationToken, ValueTask<ReaderInput>>>? _ownedFactories;
     private Stream? _currentStream;
     private CsvProfile Profile { get; }
     private readonly RecordWindow? _window;
@@ -35,7 +35,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     }
 
     private CsvBatchDataReader(
-        IEnumerable<Func<CancellationToken, ValueTask<Stream>>> openers, CsvProfile profile, bool supportsSyncRead)
+        IEnumerable<Func<CancellationToken, ValueTask<ReaderInput>>> openers, CsvProfile profile, bool supportsSyncRead)
     {
         Profile = profile;
         _usesOwnedFactories = true;
@@ -56,12 +56,22 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     {
         ArgumentNullException.ThrowIfNull(openers);
         ArgumentNullException.ThrowIfNull(profile);
-        return new CsvBatchDataReader(openers, profile, supportsSyncRead: false);
+        return new CsvBatchDataReader(openers.Select<Func<CancellationToken, ValueTask<Stream>>, Func<CancellationToken, ValueTask<ReaderInput>>>(
+            open => token => OpenInput(open, token)), profile, supportsSyncRead: false);
+
+        static async ValueTask<ReaderInput> OpenInput(Func<CancellationToken, ValueTask<Stream>> open, CancellationToken token)
+        {
+            if (open is null)
+                throw new InvalidOperationException("An asynchronous stream factory is null.");
+            return new(await open(token).ConfigureAwait(false));
+        }
     }
 
-    internal static CsvBatchDataReader FromDeferredStreamFactories(IEnumerable<Func<Stream>> openers, CsvProfile profile)
-        => new(openers.Select<Func<Stream>, Func<CancellationToken, ValueTask<Stream>>>(
+    internal static CsvBatchDataReader FromDeferredInputs(IEnumerable<Func<ReaderInput>> openers, CsvProfile profile)
+        => new(openers.Select<Func<ReaderInput>, Func<CancellationToken, ValueTask<ReaderInput>>>(
             open => _ => ValueTask.FromResult(open())), profile, supportsSyncRead: true);
+
+    internal readonly record struct ReaderInput(Stream Stream, Func<Stream, CsvDataReader>? CreateReader = null);
 
     private void MoveNext()
     {
@@ -156,7 +166,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                     return true;
 
                 var fields = Current?.SourceHeaders;
-                var rowNumber = Current?.CurrentRowNumber ?? 0;
+                var rowNumber = Current?.BatchRowNumber ?? 0;
                 DisposeOwnedInput();
                 if (_window?.IsComplete == true || !factories.MoveNext())
                 {
@@ -167,8 +177,9 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 var acquisition = factories.Current(CancellationToken.None);
                 if (!acquisition.IsCompletedSuccessfully)
                     throw new InvalidOperationException("A deferred synchronous factory must complete synchronously.");
-                _currentStream = acquisition.Result;
-                SetOwnedCurrent(fields, rowNumber);
+                var input = acquisition.Result;
+                _currentStream = input.Stream;
+                SetOwnedCurrent(fields, rowNumber, input.CreateReader);
             }
             return false;
         }
@@ -223,11 +234,11 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     }
 
     private async ValueTask<bool> MoveNextFromOwnedFactoriesAsync(
-        IEnumerator<Func<CancellationToken, ValueTask<Stream>>> factories,
+        IEnumerator<Func<CancellationToken, ValueTask<ReaderInput>>> factories,
         CancellationToken cancellationToken)
     {
         var fields = Current?.SourceHeaders;
-        var rowNumber = Current?.CurrentRowNumber ?? 0;
+        var rowNumber = Current?.BatchRowNumber ?? 0;
         await DisposeOwnedInputAsync().ConfigureAwait(false);
 
         ObjectDisposedException.ThrowIf(_isClosed, this);
@@ -241,20 +252,23 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         var open = factories.Current
             ?? throw new InvalidOperationException("An asynchronous stream factory is null.");
         cancellationToken.ThrowIfCancellationRequested();
-        _currentStream = await open(cancellationToken).ConfigureAwait(false);
+        var input = await open(cancellationToken).ConfigureAwait(false);
+        _currentStream = input.Stream;
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_isClosed, this);
-        SetOwnedCurrent(fields, rowNumber);
+        SetOwnedCurrent(fields, rowNumber, input.CreateReader);
         return true;
     }
 
-    private void SetOwnedCurrent(string[]? fields, int rowNumber)
+    private void SetOwnedCurrent(string[]? fields, int rowNumber, Func<Stream, CsvDataReader>? createReader)
     {
         var stream = _currentStream ?? throw new InvalidOperationException("A stream factory returned null.");
         if (!stream.CanRead)
             throw new InvalidOperationException("A stream factory returned an unreadable stream.");
 
-        Current = new CsvDataReader(stream, Profile, leaveOpen: true) { CurrentRowNumber = rowNumber, Window = _window };
+        Current = createReader?.Invoke(stream) ?? new CsvDataReader(stream, Profile, leaveOpen: true);
+        Current.CurrentRowNumber = rowNumber;
+        Current.Window = _window;
         if (fields is not null && Profile.Dialect.Header && !Profile.Dialect.HeaderRepeat)
             Current.SetHeaders(fields);
     }

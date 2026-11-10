@@ -14,6 +14,7 @@ $packageIds = @(
     'PocketCsvReader',
     'PocketCsvReader.Json',
     'PocketCsvReader.Ndjson',
+    'PocketCsvReader.Indexing',
     'PocketCsvReader.Arrow',
     'PocketCsvReader.Arrow.ColumnarJson',
     'PocketCsvReader.Arrow.NetCdf',

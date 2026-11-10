@@ -1,6 +1,6 @@
 # Maintaining the documentation
 
-Documentation sources live in `_docs`. Navigation is defined in `_data/navigation_docs.yml`; homepage cards in `navigation_boxes.yml`. Keep eight task-oriented groups. The overview is the common Docs entry point. Compatibility pages may carry `tags: [compatibility]` and remain linked from their replacements rather than appearing in the main learning path.
+Documentation sources live in `_docs`. Navigation is defined in `_data/navigation_docs.yml` and homepage cards in `navigation_boxes.yml`. When changing navigation groups, update the expected order in [the documentation validator](../.github/tools/check_docs.py). The overview is the common Docs entry point. Compatibility pages may carry `tags: [compatibility]` and remain linked from their replacements rather than appearing in the main learning path.
 
 ## One authoritative explanation
 

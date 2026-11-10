@@ -70,6 +70,10 @@ The query applies conditions with short-circuiting AND, in array order and then 
 
 CSV row filters still run on rows in the selected files. When headers are enabled, a filtered query requires `HeaderRepeat = true` so each accepted file supplies its own header.
 
+## Look up an exact key in sorted files
+
+Partition filters select the files to search. A sparse index can then seek to an exact key within each selected file when its records are sorted by that key. With headers enabled, sparse indexing requires each partition file to supply its own header. [Use sparse indexes](../sparse-indexes/) · [Shared-header support](https://github.com/Seddryck/PocketCsvReader/issues/441)
+
 ## Extract partitions from filenames
 
 Given paths such as `orders-BE-2026.csv`, capture both `country` and `year` and filter on `year` alone. Both 2026 files pass, regardless of country.

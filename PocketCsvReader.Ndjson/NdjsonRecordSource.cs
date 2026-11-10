@@ -25,7 +25,7 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
     public NdjsonRecordSource(StreamReader reader, NdjsonProfile profile)
     {
         Profile = profile;
-        if (profile.TrackPosition) _position = new();
+        _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
         if (profile.StableFieldLayout)

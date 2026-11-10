@@ -11,6 +11,7 @@ namespace PocketCsvReader;
 public sealed class DbDataReaderAdapter : DbDataReader
 {
     private readonly IAsyncDataReader _reader;
+    private readonly Func<CancellationToken, Task<bool>>? _nextResultAsync;
     private bool? _hasRows;
     private bool _bufferedRecord;
     private int _readInProgress;
@@ -18,6 +19,9 @@ public sealed class DbDataReaderAdapter : DbDataReader
 
     public DbDataReaderAdapter(IAsyncDataReader reader)
         => _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+
+    internal DbDataReaderAdapter(IAsyncDataReader reader, Func<CancellationToken, Task<bool>> nextResultAsync)
+        : this(reader) => _nextResultAsync = nextResultAsync;
 
     /// <summary>Gets the wrapped PocketCsvReader reader.</summary>
     /// <value>The reader supplied to the constructor.</value>
@@ -97,13 +101,31 @@ public sealed class DbDataReaderAdapter : DbDataReader
         }
     }
 
-    public override bool NextResult() => _reader.NextResult();
-
-    public override Task<bool> NextResultAsync(CancellationToken cancellationToken)
+    public override bool NextResult()
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(NextResult());
+        EnterRead();
+        try
+        {
+            ResetResult();
+            return _reader.NextResult();
+        }
+        finally { ExitRead(); }
     }
+
+    public override async Task<bool> NextResultAsync(CancellationToken cancellationToken)
+    {
+        EnterRead();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ResetResult();
+            return _nextResultAsync is null ? _reader.NextResult()
+                : await _nextResultAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally { ExitRead(); }
+    }
+
+    private void ResetResult() => (_bufferedRecord, _hasRows) = (false, null);
 
     public override string GetName(int ordinal) => _reader.GetName(ordinal);
     public override string GetDataTypeName(int ordinal) => _reader.GetDataTypeName(ordinal);

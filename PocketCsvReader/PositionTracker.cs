@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace PocketCsvReader;
 
 internal interface IPositionSource
@@ -6,7 +8,7 @@ internal interface IPositionSource
 }
 
 // One optional instance per reader; snapshots are values, never boxed or allocated per record.
-internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUnit.Utf16CodeUnits)
+internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUnit.Utf16CodeUnits, bool countUtf8 = false)
 {
     public long Offset { get; private set; }
     public long PhysicalLine { get; private set; } = 1;
@@ -16,6 +18,12 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
     private long _startLine;
     private bool _previousCr;
     private bool _startPreviousCr;
+    private bool _previousHighSurrogate;
+
+    public static PositionTracker? ForTextReader(StreamReader reader, bool enabled)
+        => reader is Utf8FileStreamReader { TrackByteOffsets: true }
+            ? new(PositionOffsetUnit.Bytes, countUtf8: true)
+            : enabled && reader is not Utf8FileStreamReader { Restarted: true } ? new() : null;
 
     public void BeginRecord()
     {
@@ -32,7 +40,8 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
         long line = start.PhysicalLine;
         for (int i = 0; i < prefix.Length; i++)
             if (prefix[i] == '\r' || (prefix[i] == '\n' && (i == 0 ? !_startPreviousCr : prefix[i - 1] != '\r'))) line++;
-        CurrentPosition = new(++RecordNumber, line, start.Offset + prefix.Length, unit);
+        var length = countUtf8 ? Encoding.UTF8.GetByteCount(prefix) : prefix.Length;
+        CurrentPosition = new(++RecordNumber, line, start.Offset + length, unit);
     }
 
     public void CompleteRecord()
@@ -51,7 +60,10 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
 
     public void Advance(char value)
     {
-        Offset++;
+        if (countUtf8)
+            AdvanceUtf8Offset(new ReadOnlySpan<char>(in value));
+        else
+            Offset++;
         if (value == '\r' || (value == '\n' && !_previousCr)) PhysicalLine++;
         _previousCr = value == '\r';
     }
@@ -59,7 +71,10 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
     public void Advance(ReadOnlySpan<char> input)
     {
         if (input.IsEmpty) return;
-        Offset += input.Length;
+        if (countUtf8)
+            AdvanceUtf8Offset(input);
+        else
+            Offset += input.Length;
         int consumed = 0;
         while (true)
         {
@@ -90,5 +105,15 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
             consumed = index + 1;
         }
         _previousCr = input[^1] == '\r';
+    }
+
+    private void AdvanceUtf8Offset(ReadOnlySpan<char> input)
+    {
+        Offset += Encoding.UTF8.GetByteCount(input);
+        // A surrogate pair split across buffers counts as two three-byte replacements.
+        // Its original UTF-8 encoding is four bytes.
+        if (_previousHighSurrogate && char.IsLowSurrogate(input[0]))
+            Offset -= 2;
+        _previousHighSurrogate = char.IsHighSurrogate(input[^1]);
     }
 }

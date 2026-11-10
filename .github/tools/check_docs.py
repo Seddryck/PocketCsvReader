@@ -29,11 +29,9 @@ def check_navigation(root, pages, errors):
     if len(slugs) != len(set(slugs)):
         errors.append('Duplicate documentation navigation entries')
     groups = re.findall(r'^- title: (.+)$', nav, re.M)
-    if len(groups) != 8:
-        errors.append('Expected eight task-oriented navigation groups')
     expected_groups = ['Getting started', 'Format guides', 'Inspect and prepare input',
-                       'Reading data', 'Configuration', 'Validation and diagnostics',
-                       'Performance', 'Integrations']
+                       'Reading data', 'Partitioning and indexing', 'Configuration',
+                       'Validation and diagnostics', 'Performance', 'Integrations']
     if groups != expected_groups:
         errors.append('Navigation groups/order differ from the documented organization')
     inspect_group = nav.split('- title: Inspect and prepare input', 1)[-1].split('- title:', 1)[0]
