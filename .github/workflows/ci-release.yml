@@ -92,6 +92,10 @@ jobs:
             artifact: indexing
             project: PocketCsvReader.Indexing.Testing/PocketCsvReader.Indexing.Testing.csproj
             include: '[PocketCsvReader.Indexing]*'
+          - name: PocketCsvReader.ObjectStorage
+            artifact: object-storage
+            project: PocketCsvReader.ObjectStorage.Testing/PocketCsvReader.ObjectStorage.Testing.csproj
+            include: '[PocketCsvReader.ObjectStorage]*'
           - name: PocketCsvReader.Arrow
             artifact: arrow
             project: PocketCsvReader.Arrow.Testing/PocketCsvReader.Arrow.Testing.csproj
@@ -271,6 +275,9 @@ jobs:
           - name: PocketCsvReader.Indexing
             artifact: indexing
             project: PocketCsvReader.Indexing/PocketCsvReader.Indexing.csproj
+          - name: PocketCsvReader.ObjectStorage
+            artifact: object-storage
+            project: PocketCsvReader.ObjectStorage/PocketCsvReader.ObjectStorage.csproj
           - name: PocketCsvReader.Arrow
             artifact: arrow
             project: PocketCsvReader.Arrow/PocketCsvReader.Arrow.csproj

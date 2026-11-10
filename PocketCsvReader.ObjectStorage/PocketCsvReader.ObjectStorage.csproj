@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.ObjectStorage</PackageId>
+    <Description>Read Hive-partitioned CSV files from Amazon S3 and Azure Data Lake Storage Gen2 with PocketCsvReader.</Description>
+    <PackageTags>CSV Hive S3 ADLS Azure ObjectStorage</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.11" />
+    <PackageReference Include="Azure.Storage.Files.DataLake" Version="12.28.0" />
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

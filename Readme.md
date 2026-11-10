@@ -12,6 +12,7 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader.Json` | JSON and JSONC with projection and stable field layout for object records |
 | `PocketCsvReader.Ndjson` | NDJSON with projection and stable field layout for object records |
 | `PocketCsvReader.Indexing` | Exact-key lookup with sparse indexes for sorted files and an opt-in scan fallback |
+| `PocketCsvReader.ObjectStorage` | Async Hive partition discovery and CSV reads on Amazon S3 and Azure Data Lake Storage Gen2 |
 | `PocketCsvReader.FixedWidth` | Fixed character positions |
 | `PocketCsvReader.KeyValue` | LTSV and logfmt with column projection, aliases, and stable field layout |
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C |

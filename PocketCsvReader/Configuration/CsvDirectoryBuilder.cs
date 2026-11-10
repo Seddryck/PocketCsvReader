@@ -3,12 +3,14 @@ namespace PocketCsvReader.Configuration;
 /// <summary>Selects Hive-style partition discovery beneath a root directory.</summary>
 public sealed class CsvDirectoryBuilder
 {
-    private readonly CsvReaderBuilder _reader;
-    private readonly HivePartitionSource _source;
-    private readonly Func<string, Stream>? _open;
+    private readonly Func<FileNamePartitionPattern?, CsvFileQueryBuilder<NamedPartitions>> _configure;
 
     internal CsvDirectoryBuilder(CsvReaderBuilder reader, HivePartitionSource source, Func<string, Stream>? open)
-        => (_reader, _source, _open) = (reader, source, open);
+        => _configure = pattern => new(reader, conditions => source.Discover(conditions, pattern, open));
+
+    internal CsvDirectoryBuilder(CsvReaderBuilder reader, AsyncHivePartitionSource source)
+        => _configure = pattern => new(reader, new AsyncFileDiscovery<NamedPartitions>(
+            conditions => source.Discover(conditions, pattern), source.Open));
 
     public CsvFileQueryBuilder<NamedPartitions> WithPartitions(
         Func<CsvDirectoryBuilder, CsvFileQueryBuilder<NamedPartitions>> configure)
@@ -19,12 +21,9 @@ public sealed class CsvDirectoryBuilder
 
     /// <summary>Inherits named partitions from key=value directories below the root.</summary>
     public CsvFileQueryBuilder<NamedPartitions> HiveStyle()
-        => new(_reader, conditions => _source.Discover(conditions, null, _open));
+        => _configure(null);
 
     /// <summary>Combines inherited directory partitions with additional captures from each filename.</summary>
     public CsvFileQueryBuilder<NamedPartitions> HiveStyle(string fileNamePattern)
-    {
-        var pattern = new FileNamePartitionPattern(fileNamePattern);
-        return new(_reader, conditions => _source.Discover(conditions, pattern, _open));
-    }
+        => _configure(new FileNamePartitionPattern(fileNamePattern));
 }

@@ -5,7 +5,7 @@ namespace PocketCsvReader;
 internal sealed class HivePartitionSource(
     string root, Func<string, IEnumerable<string>> enumerateDirectories, Func<string, IEnumerable<string>> enumerateFiles)
 {
-    private static readonly NamedPartitions Empty = new([]);
+    internal static readonly NamedPartitions Empty = new([]);
     private static readonly EnumerationOptions FileOptions = new() { AttributesToSkip = 0, IgnoreInaccessible = false };
     private static readonly EnumerationOptions DirectoryOptions = new()
     {
@@ -27,11 +27,8 @@ internal sealed class HivePartitionSource(
         string directory, NamedPartitions partitions, IReadOnlyList<PartitionCondition> conditions,
         FileNamePartitionPattern? pattern, Func<string, Stream>? open)
     {
-        foreach (var condition in conditions)
-        {
-            if (partitions.TryGetValue(condition.Key, out var value) && !condition.Matches(value))
-                yield break;
-        }
+        if (ShouldPrune(partitions, conditions))
+            yield break;
 
         foreach (var path in enumerateFiles(directory))
         {
@@ -41,15 +38,24 @@ internal sealed class HivePartitionSource(
 
         foreach (var child in enumerateDirectories(directory))
         {
-            var metadata = AddDirectory(partitions, child);
+            var metadata = AddDirectory(partitions, Path.GetFileName(child), child);
             foreach (var file in Visit(child, metadata, conditions, pattern, open))
                 yield return file;
         }
     }
 
-    private static NamedPartitions AddDirectory(NamedPartitions inherited, string path)
+    internal static bool ShouldPrune(NamedPartitions partitions, IReadOnlyList<PartitionCondition> conditions)
     {
-        var name = Path.GetFileName(path);
+        foreach (var condition in conditions)
+        {
+            if (partitions.TryGetValue(condition.Key, out var value) && !condition.Matches(value))
+                return true;
+        }
+        return false;
+    }
+
+    internal static NamedPartitions AddDirectory(NamedPartitions inherited, string name, string path)
+    {
         var separator = name.IndexOf('=');
         if (separator < 0)
             return inherited;
