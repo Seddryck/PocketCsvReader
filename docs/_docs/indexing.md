@@ -7,16 +7,20 @@ Start with the part of the search you want to avoid. Partition metadata can rule
 
 ## Available index
 
-Add `PocketCsvReader.Indexing` to use sparse indexes for exact-key lookups in supported sorted files. For example, you can select a month using partition metadata and seek to a particular date within each selected file. The sparse index guide covers supported readers, setup, building sidecars, and querying them. [Use sparse indexes](../sparse-indexes/)
+Add `PocketCsvReader.Indexing` to use a sparse index. [Use sparse indexes](../sparse-indexes/)
+
+| Index | Use case and fit | Constraints |
+| --- | --- | --- |
+| Sparse index | Repeated exact-key lookups on a sorted field. For example, select a month using partition metadata, then seek to a particular date in each selected file. | Requires a supported, seekable, uncompressed UTF-8 file. Every data record needs a parseable key, and records must be in ascending order under the configured comparer. |
 
 ## Proposed index types
 
-These issues describe planned strategies. Their APIs and file-format support are tracked in the proposals.
+These proposals target CSV. They describe when each strategy fits and what limits its effectiveness.
 
-| Lookup need | Proposed strategy | Issue |
-| --- | --- | --- |
-| Skip files that cannot contain an exact key | A Bloom filter rules out definite misses. Files that might match still need an exact check. | [#430](https://github.com/Seddryck/PocketCsvReader/issues/430) |
-| Skip blocks that cannot match a range or exact value | A zone map stores a minimum and maximum per block. Candidate blocks still need an exact check. | [#431](https://github.com/Seddryck/PocketCsvReader/issues/431) |
-| Find an exact key in an unsorted file | A hash index maps each key to its matching record locations. | [#432](https://github.com/Seddryck/PocketCsvReader/issues/432) |
-| Combine equality and set-membership filters over categorical fields | Bitmap indexes combine sets of matching row ordinals. | [#433](https://github.com/Seddryck/PocketCsvReader/issues/433) |
-| Find records containing specific tokens or elements | An inverted index maps each term to the records that contain it. | [#434](https://github.com/Seddryck/PocketCsvReader/issues/434) |
+| Index | Use case and fit | Constraints | Proposal |
+| --- | --- | --- | --- |
+| Bloom filter | Skip entire files before opening them. Fits exact-key searches when many files lack the key, such as finding a customer across monthly partitions. | A possible match still requires reading the file and checking exact equality. Hashing must be stable and consistent with the key equality rules. | [#430](https://github.com/Seddryck/PocketCsvReader/issues/430) |
+| Zone map | Skip blocks for range or equality filters. Fits files where nearby rows have similar values, even if the file is unsorted. | Stores minimum and maximum values per block. Overlapping or unavailable bounds leave a block to scan. The proposal starts with seekable, uncompressed UTF-8 CSV. | [#431](https://github.com/Seddryck/PocketCsvReader/issues/431) |
+| Hash index | Find matching records by exact key inside an unsorted file, such as orders for one customer in a file sorted by date. | Stores a location for every indexed record, including duplicates. Persisted hashes must be stable, and collisions are resolved by checking exact equality. The proposal starts with seekable, uncompressed UTF-8 CSV. | [#432](https://github.com/Seddryck/PocketCsvReader/issues/432) |
+| Bitmap index | Combine equality and set-membership filters, such as status in a set of values and region equal to `EU`. Fits columns with few distinct values. | Uses one bitmap per distinct value. Combining fields requires a common data-row numbering scheme within each file. | [#433](https://github.com/Seddryck/PocketCsvReader/issues/433) |
+| Inverted index | Find records containing any or all requested tokens or elements, such as both `urgent` and `refund` tags. | Requires a term extractor and consistent normalization and equality rules. Storage grows with the number of distinct term-to-record entries. | [#434](https://github.com/Seddryck/PocketCsvReader/issues/434) |
