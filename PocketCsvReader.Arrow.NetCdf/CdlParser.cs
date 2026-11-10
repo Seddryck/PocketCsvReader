@@ -5,6 +5,9 @@ namespace PocketCsvReader.Arrow.NetCdf;
 
 internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToken token)
 {
+    private const string VariablesSection = "variables";
+    private const string DataSection = "data";
+
     private readonly CdlDataset _dataset = new();
     private CdlToken _current;
 
@@ -21,9 +24,9 @@ internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToke
 
         if (_current.IsWord("dimensions"))
             await ReadDimensionsAsync().ConfigureAwait(false);
-        if (_current.IsWord("variables"))
+        if (_current.IsWord(VariablesSection))
             await ReadVariablesAsync().ConfigureAwait(false);
-        if (_current.IsWord("data"))
+        if (_current.IsWord(DataSection))
             await ReadDataAsync().ConfigureAwait(false);
 
         await ExpectAsync('}').ConfigureAwait(false);
@@ -38,109 +41,92 @@ internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToke
     private async ValueTask ReadDimensionsAsync()
     {
         await ReadSectionAsync("dimensions").ConfigureAwait(false);
-        while (_current.Kind == 'w' && !_current.IsWord("variables") && !_current.IsWord("data"))
+        while (IsDimensionDeclaration())
         {
-            var name = Name();
-            await AdvanceAsync().ConfigureAwait(false);
-            await ExpectAsync('=').ConfigureAwait(false);
-
-            var unlimited = _current.Kind == 'w' && _current.Text.Span.Equals("UNLIMITED", StringComparison.OrdinalIgnoreCase);
-            var extent = 0L;
-            if (unlimited)
-            {
-                if (_dataset.Unlimited is not null)
-                    throw _current.Error("Only one unlimited dimension is supported");
-            }
-            else if (_current.Kind != 'w' || !long.TryParse(_current.Text.Span, NumberStyles.None, CultureInfo.InvariantCulture, out extent))
-            {
-                throw _current.Error($"Expected a nonnegative Int64 extent for dimension '{name}'");
-            }
-
-            var dimension = new CdlDimension(name, extent, unlimited);
-            if (!_dataset.Dimensions.TryAdd(name, dimension))
-                throw _current.Error($"Duplicate dimension '{name}'");
-            if (unlimited)
-                _dataset.Unlimited = dimension;
-
-            await AdvanceAsync().ConfigureAwait(false);
+            await ReadDimensionAsync().ConfigureAwait(false);
             if (_current.Kind is not (';' or ','))
                 throw _current.Error("Expected ',' or ';' after dimension extent");
             var separator = _current.Kind;
             await AdvanceAsync().ConfigureAwait(false);
-            if (separator == ',' && (_current.Kind != 'w' || _current.IsWord("variables") || _current.IsWord("data")))
+            if (separator == ',' && !IsDimensionDeclaration())
                 throw _current.Error("Expected another dimension declaration");
         }
     }
 
+    private bool IsDimensionDeclaration()
+        => _current.Kind == 'w' && !_current.IsWord(VariablesSection) && !_current.IsWord(DataSection);
+
+    private async ValueTask ReadDimensionAsync()
+    {
+        var name = Name();
+        await AdvanceAsync().ConfigureAwait(false);
+        await ExpectAsync('=').ConfigureAwait(false);
+
+        var unlimited = _current.Kind == 'w' && _current.Text.Span.Equals("UNLIMITED", StringComparison.OrdinalIgnoreCase);
+        var extent = 0L;
+        if (unlimited && _dataset.Unlimited is not null)
+            throw _current.Error("Only one unlimited dimension is supported");
+        if (!unlimited && (_current.Kind != 'w' || !long.TryParse(_current.Text.Span, NumberStyles.None, CultureInfo.InvariantCulture, out extent)))
+            throw _current.Error($"Expected a nonnegative Int64 extent for dimension '{name}'");
+
+        var dimension = new CdlDimension(name, extent, unlimited);
+        if (!_dataset.Dimensions.TryAdd(name, dimension))
+            throw _current.Error($"Duplicate dimension '{name}'");
+        if (unlimited)
+            _dataset.Unlimited = dimension;
+        await AdvanceAsync().ConfigureAwait(false);
+    }
+
     private async ValueTask ReadVariablesAsync()
     {
-        await ReadSectionAsync("variables").ConfigureAwait(false);
-        while (_current.Kind != '}' && !_current.IsWord("data"))
+        await ReadSectionAsync(VariablesSection).ConfigureAwait(false);
+        while (_current.Kind != '}' && !_current.IsWord(DataSection))
+            await ReadVariableEntryAsync().ConfigureAwait(false);
+    }
+
+    private async ValueTask ReadVariableEntryAsync()
+    {
+        if (_current.Kind == ':')
         {
-            if (_current.Kind == ':')
-            {
-                await ReadAttributeAsync(null, null, false).ConfigureAwait(false);
-                continue;
-            }
-
-            var name = Name();
-            var type = CdlNumber.GetType(name.ToLowerInvariant());
-            var textType = name.Equals("char", StringComparison.OrdinalIgnoreCase) || name.Equals("string", StringComparison.OrdinalIgnoreCase);
-            await AdvanceAsync().ConfigureAwait(false);
-            if (type is not null || textType)
-            {
-                if (_current.Kind == ':')
-                {
-                    await ReadAttributeAsync(null, type, textType).ConfigureAwait(false);
-                    continue;
-                }
-
-                var target = Name();
-                await AdvanceAsync().ConfigureAwait(false);
-                if (_current.Kind == ':')
-                    await ReadAttributeAsync(FindVariable(target), type, textType).ConfigureAwait(false);
-                else if (type is not null)
-                    await ReadDeclarationsAsync(type, target).ConfigureAwait(false);
-                else
-                    throw _current.Error($"CDL variables of type '{name}' are unsupported");
-            }
-            else if (_current.Kind == ':')
-            {
-                await ReadAttributeAsync(FindVariable(name), null, false).ConfigureAwait(false);
-            }
-            else
-            {
-                throw _current.Error($"Unsupported CDL variable type or construct '{name}'");
-            }
+            await ReadAttributeAsync(null, null, false).ConfigureAwait(false);
+            return;
         }
+
+        var name = Name();
+        var type = CdlNumber.GetType(name.ToLowerInvariant());
+        var textType = name.Equals("char", StringComparison.OrdinalIgnoreCase) || name.Equals("string", StringComparison.OrdinalIgnoreCase);
+        var hasType = type is not null || textType;
+        await AdvanceAsync().ConfigureAwait(false);
+        if (_current.Kind == ':')
+        {
+            await ReadAttributeAsync(hasType ? null : FindVariable(name), type, textType).ConfigureAwait(false);
+            return;
+        }
+
+        if (!hasType)
+            throw _current.Error($"Unsupported CDL variable type or construct '{name}'");
+
+        await ReadTypedVariableEntryAsync(name, type, textType).ConfigureAwait(false);
+    }
+
+    private async ValueTask ReadTypedVariableEntryAsync(string typeName, IArrowType? type, bool textType)
+    {
+        var target = Name();
+        await AdvanceAsync().ConfigureAwait(false);
+        if (_current.Kind == ':')
+            await ReadAttributeAsync(FindVariable(target), type, textType).ConfigureAwait(false);
+        else if (type is not null)
+            await ReadDeclarationsAsync(type, target).ConfigureAwait(false);
+        else
+            throw _current.Error($"CDL variables of type '{typeName}' are unsupported");
     }
 
     private async ValueTask ReadDeclarationsAsync(IArrowType type, string name)
     {
         while (true)
         {
-            var dimensions = new List<CdlDimension>();
-            if (_current.Kind == '(')
-            {
-                do
-                {
-                    await AdvanceAsync().ConfigureAwait(false);
-                    var dimensionName = Name();
-                    if (!_dataset.Dimensions.TryGetValue(dimensionName, out var dimension))
-                        throw _current.Error($"Unknown dimension '{dimensionName}' in variable '{name}'");
-                    if (dimensions.Contains(dimension))
-                        throw _current.Error($"Variable '{name}' repeats dimension '{dimensionName}'");
-                    if (dimension.Unlimited && dimensions.Count > 0)
-                        throw _current.Error($"Unlimited dimension '{dimensionName}' must be first in variable '{name}'");
-                    dimensions.Add(dimension);
-                    await AdvanceAsync().ConfigureAwait(false);
-                }
-                while (_current.Kind == ',');
-
-                await ExpectAsync(')').ConfigureAwait(false);
-            }
-
-            if (!_dataset.Variables.TryAdd(name, new CdlVariable(name, type, dimensions.ToArray())))
+            var dimensions = await ReadVariableDimensionsAsync(name).ConfigureAwait(false);
+            if (!_dataset.Variables.TryAdd(name, new CdlVariable(name, type, dimensions)))
                 throw _current.Error($"Duplicate variable '{name}'");
             if (_current.Kind != ',')
                 break;
@@ -150,6 +136,31 @@ internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToke
         }
 
         await ExpectAsync(';').ConfigureAwait(false);
+    }
+
+    private async ValueTask<CdlDimension[]> ReadVariableDimensionsAsync(string name)
+    {
+        if (_current.Kind != '(')
+            return [];
+
+        var dimensions = new List<CdlDimension>();
+        do
+        {
+            await AdvanceAsync().ConfigureAwait(false);
+            var dimensionName = Name();
+            if (!_dataset.Dimensions.TryGetValue(dimensionName, out var dimension))
+                throw _current.Error($"Unknown dimension '{dimensionName}' in variable '{name}'");
+            if (dimensions.Contains(dimension))
+                throw _current.Error($"Variable '{name}' repeats dimension '{dimensionName}'");
+            if (dimension.Unlimited && dimensions.Count > 0)
+                throw _current.Error($"Unlimited dimension '{dimensionName}' must be first in variable '{name}'");
+            dimensions.Add(dimension);
+            await AdvanceAsync().ConfigureAwait(false);
+        }
+        while (_current.Kind == ',');
+
+        await ExpectAsync(')').ConfigureAwait(false);
+        return dimensions.ToArray();
     }
 
     private async ValueTask ReadAttributeAsync(CdlVariable? variable, IArrowType? type, bool textType)
@@ -162,41 +173,51 @@ internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToke
         await AdvanceAsync().ConfigureAwait(false);
         await ExpectAsync('=').ConfigureAwait(false);
 
-        var isFill = variable is not null && name == "_FillValue";
-        var isMissing = variable is not null && name == "missing_value";
+        var sentinel = name is "_FillValue" or "missing_value" ? variable : null;
+        bool? quoted = textType || type is not null ? textType : null;
+        var value = await ReadAttributeValuesAsync(name, type, quoted, sentinel).ConfigureAwait(false);
+        attributes.Add(name, value);
+        await ExpectAsync(';').ConfigureAwait(false);
+    }
+
+    private async ValueTask<string> ReadAttributeValuesAsync(string name, IArrowType? type, bool? quoted, CdlVariable? sentinel)
+    {
         var literals = new List<string>();
         string? singleText = null;
-        bool? quoted = textType ? true : type is null ? null : false;
-        do
+        while (true)
         {
-            if (literals.Count > 0)
-                await AdvanceAsync().ConfigureAwait(false);
-            if (isFill && literals.Count > 0)
-                throw _current.Error($"Variable '{variable!.Name}' requires a single _FillValue");
-            if (isFill || isMissing)
-                variable!.MissingValues.Add(CdlNumber.Parse(_current, variable.Type));
-
-            var isText = _current.Kind == '"';
-            quoted ??= isText;
-            if (quoted != isText)
-                throw _current.Error($"Attribute '{name}' mixes numeric and text values");
-            if (isText)
-                singleText = DecodeText(_current);
-            else
-                CdlNumber.Parse(_current, type ?? ((isFill || isMissing) ? variable!.Type : CdlNumber.InferType(_current.Text.Span)));
-            var raw = _current.Text.ToString();
-            literals.Add(isText ? $"\"{raw}\"" : raw);
+            quoted ??= _current.Kind == '"';
+            var literal = ReadAttributeLiteral(name, type, quoted.Value, sentinel);
+            literals.Add(literal.Raw);
+            singleText = literal.Text;
             await AdvanceAsync().ConfigureAwait(false);
-        }
-        while (_current.Kind == ',');
+            if (_current.Kind != ',')
+                break;
 
-        attributes.Add(name, literals.Count == 1 && singleText is not null ? singleText : string.Join(", ", literals));
-        await ExpectAsync(';').ConfigureAwait(false);
+            await AdvanceAsync().ConfigureAwait(false);
+            if (sentinel is not null && name == "_FillValue")
+                throw _current.Error($"Variable '{sentinel.Name}' requires a single _FillValue");
+        }
+
+        return literals.Count == 1 && singleText is not null ? singleText : string.Join(", ", literals);
+    }
+
+    private (string Raw, string? Text) ReadAttributeLiteral(string name, IArrowType? type, bool quoted, CdlVariable? sentinel)
+    {
+        if (sentinel is not null)
+            sentinel.MissingValues.Add(CdlNumber.Parse(_current, sentinel.Type));
+        if (quoted != (_current.Kind == '"'))
+            throw _current.Error($"Attribute '{name}' mixes numeric and text values");
+        if (quoted)
+            return ($"\"{_current.Text.ToString()}\"", DecodeText(_current));
+
+        CdlNumber.Parse(_current, type ?? sentinel?.Type ?? CdlNumber.InferType(_current.Text.Span));
+        return (_current.Text.ToString(), null);
     }
 
     private async ValueTask ReadDataAsync()
     {
-        await ReadSectionAsync("data").ConfigureAwait(false);
+        await ReadSectionAsync(DataSection).ConfigureAwait(false);
         while (_current.Kind != '}')
         {
             var variable = FindVariable(Name());

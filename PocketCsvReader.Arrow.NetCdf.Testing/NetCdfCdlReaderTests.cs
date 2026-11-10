@@ -155,6 +155,26 @@ public sealed class NetCdfCdlReaderTests
     }
 
     [Test]
+    public void PreservesTypedGlobalAttributesAndHexadecimalFillValues()
+    {
+        using var input = Input("""
+            netcdf example {
+            variables:
+                int reading;
+                char :title = "Sample";
+                reading:valid_range = 0x2f, 10;
+                int reading:_FillValue = 0xff;
+            data:
+                reading = 0xff;
+            }
+            """);
+        using var batch = new NetCdfCdlReader().ToArrowBatches(input).Single();
+        Assert.That(batch.Schema.Metadata["title"], Is.EqualTo("Sample"));
+        Assert.That(batch.Schema.FieldsList[0].Metadata["valid_range"], Is.EqualTo("0x2f, 10"));
+        Assert.That(batch.Column(0).IsNull(0), Is.True);
+    }
+
+    [Test]
     public void InfersUnlimitedExtentAndPadsPartialRecord()
     {
         using var input = Input("""

@@ -56,9 +56,9 @@ internal static class CdlNumber
         if (type is not null)
             return type;
         var number = text[..length];
-        return IsHex(number)
-            ? Int32Type.Default
-            : number.IndexOfAny('.', 'e', 'E') >= 0 || IsSpecial(number) ? DoubleType.Default : Int32Type.Default;
+        if (!IsHex(number) && (number.IndexOfAny('.', 'e', 'E') >= 0 || IsSpecial(number)))
+            return DoubleType.Default;
+        return Int32Type.Default;
     }
 
     public static bool Equal(IArrowType type, ulong left, ulong right) => type.TypeId switch
@@ -70,13 +70,9 @@ internal static class CdlNumber
 
     private static (int Length, IArrowType? Type) SplitSuffix(ReadOnlySpan<char> text)
     {
-        if (text.IsEmpty || char.IsAsciiDigit(text[^1]))
+        if (text.IsEmpty || char.IsAsciiDigit(text[^1]) || IsSpecial(text))
             return (text.Length, null);
 
-        // In a hexadecimal constant a trailing b, d or f is a digit.
-        var hex = IsHex(text);
-        if (IsSpecial(text))
-            return (text.Length, null);
         if (text.EndsWith("ull", StringComparison.OrdinalIgnoreCase))
             return (text.Length - 3, UInt64Type.Default);
         if (text.EndsWith("ub", StringComparison.OrdinalIgnoreCase))
@@ -85,18 +81,21 @@ internal static class CdlNumber
             return (text.Length - 2, UInt16Type.Default);
         if (text.EndsWith("ll", StringComparison.OrdinalIgnoreCase))
             return (text.Length - 2, Int64Type.Default);
-        var type = char.ToLowerInvariant(text[^1]) switch
-        {
-            'u' => UInt32Type.Default,
-            's' => Int16Type.Default,
-            'l' => Int32Type.Default,
-            'b' when !hex => Int8Type.Default,
-            'f' when !hex => FloatType.Default,
-            'd' when !hex => DoubleType.Default,
-            _ => (IArrowType?)null,
-        };
+        var type = SingleSuffixType(char.ToLowerInvariant(text[^1]), IsHex(text));
         return (type is null ? text.Length : text.Length - 1, type);
     }
+
+    // In a hexadecimal constant a trailing b, d or f is a digit.
+    private static IArrowType? SingleSuffixType(char suffix, bool hex) => suffix switch
+    {
+        'u' => UInt32Type.Default,
+        's' => Int16Type.Default,
+        'l' => Int32Type.Default,
+        'b' when !hex => Int8Type.Default,
+        'f' when !hex => FloatType.Default,
+        'd' when !hex => DoubleType.Default,
+        _ => null,
+    };
 
     private static ReadOnlySpan<char> WithoutSign(ReadOnlySpan<char> text)
         => !text.IsEmpty && text[0] is '+' or '-' ? text[1..] : text;
