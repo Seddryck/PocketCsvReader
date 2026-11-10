@@ -119,7 +119,7 @@ public class SparseIndexTest
         var index = new SparseIndex(new IndexKey<int>("Key"), 1);
         query.WithPartitionFilter(selected => selected).BuildIndexes(index);
 
-        Assert.That(Collect(query.WithIndexedLookup(index, 2), 1), Is.EqualTo(new[] { "b", "e", "g" }));
+        Assert.That(Collect(query.WithIndexedLookup(index.WithOptionalIndex(), 2), 1), Is.EqualTo(new[] { "b", "e", "g" }));
         Assert.That(File.Exists(unsorted + ".sparse.idx"), Is.False);
     }
 
@@ -132,8 +132,8 @@ public class SparseIndexTest
             .WithSkip(1).WithTake(1).FromFiles(files).Build();
         var index = new SparseIndex(new IndexKey<int>("Key"), 1);
 
-        Assert.That(Collect(query.WithIndexedLookup(index, 2), 1), Is.EqualTo(new[] { "d" }));
-        AssertReadFails<NotSupportedException>(query.WithIndexedLookup(index, 2, requireIndex: true));
+        Assert.That(Collect(query.WithIndexedLookup(index.WithOptionalIndex(), 2), 1), Is.EqualTo(new[] { "d" }));
+        AssertReadFails<NotSupportedException>(query.WithIndexedLookup(index, 2));
     }
 
     [Test]
@@ -171,7 +171,7 @@ public class SparseIndexTest
         {
             case "missing":
                 File.Delete(sidecar);
-                AssertReadFails<FileNotFoundException>(query.WithIndexedLookup(index, 2, requireIndex: true));
+                AssertReadFails<FileNotFoundException>(query.WithIndexedLookup(index, 2));
                 return;
             case "corrupt":
                 File.WriteAllText(sidecar, File.ReadAllText(sidecar).Replace("checkpoint,6,2", "checkpoint,5,2"));

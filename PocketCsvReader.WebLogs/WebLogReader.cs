@@ -10,6 +10,11 @@ public abstract class WebLogReader : FlatFileReader<WebLogProfile, WebLogDataRea
 
     protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
 
+    internal override IEnumerable<string?>? SeekConfiguration => this is CommonLogReader or CombinedLogReader
+        ? ["web-log", Profile.Format.ToString(), Profile.ParserOptimizations.HandleSpecialValues.ToString(),
+            Profile.ParserOptimizations.UnescapeChars.ToString()]
+        : null;
+
     protected override WebLogDataReader CreateDataReader(Stream stream)
         => new(stream, Profile);
 

@@ -10,6 +10,11 @@ public abstract class SecurityLogReader : FlatFileReader<SecurityLogProfile, Sec
 
     protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
 
+    internal override IEnumerable<string?>? SeekConfiguration => this is CefReader or LeefReader && Profile.Attributes is { } attributes
+        ? ["security-log", Profile.Format.ToString(), Profile.ParserOptimizations.HandleSpecialValues.ToString(),
+            Profile.ParserOptimizations.UnescapeChars.ToString(), .. attributes]
+        : null;
+
     protected override SecurityLogDataReader CreateDataReader(Stream stream)
         => new(stream, Profile);
 

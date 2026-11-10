@@ -15,7 +15,7 @@ public class ReaderLookupTest
     {
         var csv = new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n")).Build();
         using var input = new MemoryStream("Date,Id\n2026-12-31,1\n2026-05-17,2\n2026-01-01,3\n2026-05-17,4\n"u8.ToArray());
-        var index = new SparseIndex(new IndexKey<DateOnly>("Date"), 2);
+        var index = new SparseIndex(new IndexKey<DateOnly>("Date"), 2).WithOptionalIndex();
         using var rows = csv.ToDataReader(input).WithIndexedLookup(index, new DateOnly(2026, 5, 17));
 
         var found = new List<int>();
@@ -37,7 +37,8 @@ public class ReaderLookupTest
             """;
         using var input = new MemoryStream(Encoding.UTF8.GetBytes(json));
         var source = Ndjson().ToDataReader(input);
-        using (var rows = source.WithIndexedLookup(new IndexKey<DateOnly>("date"), new DateOnly(2026, 5, 17)))
+        var index = new SparseIndex(new IndexKey<DateOnly>("date"), 2).WithOptionalIndex();
+        using (var rows = source.WithIndexedLookup(index, new DateOnly(2026, 5, 17)))
         {
             var found = new List<int>();
             Assert.That(rows.HasRows, Is.True);
@@ -53,7 +54,8 @@ public class ReaderLookupTest
     {
         var input = new AsyncOnlyStream(Encoding.UTF8.GetBytes("{\"key\":\"z\"}\n{\"key\":\"AbC\"}\n{\"key\":\"abc\"}"));
         var source = Ndjson().ToDataReader(input);
-        var index = new SparseIndex(new IndexKey<string>("key", comparison: StringComparison.OrdinalIgnoreCase), 2);
+        var index = new SparseIndex(new IndexKey<string>("key", comparison: StringComparison.OrdinalIgnoreCase), 2)
+            .WithOptionalIndex();
 
         await using (var rows = source.WithIndexedLookup(index, "ABC"))
         {
@@ -76,7 +78,9 @@ public class ReaderLookupTest
         second.Rows.Add(2);
         second.Rows.Add(3);
         using IDataReader input = new DataTableReader([first, second]);
-        using var rows = input.WithIndexedLookup(new IndexKey<int>("key"), 3);
+        var index = new SparseIndex(new IndexKey<int>("key"), 2).WithOptionalIndex();
+        Assert.Throws<NotSupportedException>(() => input.WithIndexedLookup(index.WithRequiredIndex(), 3));
+        using var rows = input.WithIndexedLookup(index, 3);
 
         Assert.That(rows.HasRows, Is.False);
         Assert.That(await rows.NextResultAsync(), Is.True);

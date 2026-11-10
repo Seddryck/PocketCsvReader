@@ -16,61 +16,40 @@ internal static class SparseIndexSidecar
     public static FileStream OpenSource(string path, int bufferSize, bool building = false)
         => new(path, FileMode.Open, FileAccess.Read, building ? FileShare.ReadWrite : FileShare.Read, bufferSize, useAsync: true);
 
-    public static bool Supports(CsvProfile source)
-        => Utf8RecordSource.Supports(source) && string.IsNullOrEmpty(source.Resource?.Compression)
-            && (string.IsNullOrEmpty(source.Resource?.Encoding) || Encoding.GetEncoding(source.Resource.Encoding).CodePage == Encoding.UTF8.CodePage)
-            && source.Dialect.CommentRows is not { Length: > 0 } && !source.ParserOptimizations.RowCountAtStart
-            && (!source.Dialect.Header || source.Dialect.HeaderRepeat);
-
-    public static CsvProfile CreateProfile(CsvProfile source, bool building)
-        => new(source.Dialect, building ? null : source.Schema, building ? null : source.Resource, building ? null : source.Parsers)
-        {
-            Filters = building ? [] : source.Filters,
-            Skip = building ? 0 : source.Skip,
-            Take = building ? null : source.Take,
-            RowNumber = building ? null : source.RowNumber,
-            StreamInitialization = new(ProbeEncoding: true, InputMode: CsvInputMode.Utf8Bytes),
-            ParserOptimizations = source.ParserOptimizations with { TrackPosition = building }
-        };
-    public static void Build(string path, CsvProfile profile, SparseIndex index)
+    public static void Build<TReader>(string path, int bufferSize, SparseIndex index, SourceConfiguration configuration,
+        Func<FileStream, int, TReader> openReader, ReadKey<TReader> readKey, Func<TReader, int> readFieldCount)
+        where TReader : IAsyncDataReader
     {
-        using var stream = OpenSource(path, profile.ParserOptimizations.BufferSize, building: true);
+        using var stream = OpenSource(path, bufferSize, building: true);
         var before = SourceStamp.Read(stream);
-        Span<byte> prefix = stackalloc byte[3];
-        var prefixLength = stream.ReadAtLeast(prefix, prefix.Length, throwOnEndOfStream: false);
-        var bomLength = prefix[..prefixLength].StartsWith(Encoding.UTF8.Preamble) ? Encoding.UTF8.Preamble.Length : 0;
-        stream.Position = 0;
-
+        var bomLength = ReadUtf8BomLength(stream);
+        using var reader = openReader(stream, bomLength);
         var checkpoints = new List<Checkpoint>();
-        int rowCount = 0, fieldCount;
-        using (var reader = new CsvDataReader(stream, profile, leaveOpen: true))
+        int rowCount = 0;
+        object? previous = null;
+        while (reader.Read())
         {
-            int ordinal = -1;
-            object? previous = null;
-            while (reader.Read())
-            {
-                if (ordinal < 0)
-                    ordinal = CsvIndexLookup.ResolveOrdinal(reader, index.Key);
-                var field = reader.GetDecodedField(ordinal);
-                if (!field.HasValue)
-                    throw new InvalidDataException($"Data record {reader.RowCount} has no value for the indexed column.");
-                var keyText = field.Value;
-                var key = index.Key.Parse(keyText);
-                if (previous is not null && index.Key.Compare(previous, key) > 0)
-                    throw new InvalidDataException($"The sparse index key in '{path}' is out of ascending order at data record {rowCount + 1}.");
+            var field = readKey(reader);
+            if (!field.HasValue)
+                throw new InvalidDataException($"Data record {rowCount + 1} has no value for the indexed key.");
+            var keyText = field.Value;
+            var key = index.Key.Parse(keyText);
+            if (previous is not null && index.Key.Compare(previous, key) > 0)
+                throw new InvalidDataException($"The sparse index key in '{path}' is out of ascending order at data record {rowCount + 1}.");
 
-                if (rowCount % index.CheckpointInterval == 0)
-                    checkpoints.Add(new(checked(reader.CurrentPosition!.Value.Offset + bomLength), keyText.ToString()));
-                previous = key;
-                rowCount = checked(rowCount + 1);
+            if (rowCount % index.CheckpointInterval == 0)
+            {
+                if (reader.CurrentPosition is not { OffsetUnit: PositionOffsetUnit.Bytes } position)
+                    throw new InvalidDataException("The reader did not provide a parser-confirmed byte position.");
+                checkpoints.Add(new(checked(position.Offset + bomLength), keyText.ToString()));
             }
-            if (rowCount == 0 && profile.Dialect.Header)
-                CsvIndexLookup.ResolveOrdinal(reader, index.Key);
-            fieldCount = reader.SourceHeaders?.Length ?? 0;
+            previous = key;
+            rowCount = checked(rowCount + 1);
         }
+        var fieldCount = readFieldCount(reader);
 
         RequireUnchanged(stream, before);
-        var metadata = CreateMetadata(index, profile, before, rowCount, fieldCount);
+        var metadata = CreateMetadata(index, configuration, before, rowCount, fieldCount);
         metadata.Add("checksum", Checksum(metadata, checkpoints));
         var target = stream.Name + ".sparse.idx";
         var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -95,9 +74,11 @@ internal static class SparseIndexSidecar
         }
     }
 
-    public static CsvRecordRange Find(FileStream source, CsvProfile profile, SparseIndex index, object requested)
+    public static SparseRecordRange? Find(FileStream source, SourceConfiguration configuration, SparseIndex index, object requested)
     {
-        using var file = new FileStream(source.Name + ".sparse.idx", FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        using var file = OpenSidecar(source.Name, index);
+        if (file is null)
+            return null;
         using var reader = new CsvDataReader(file, SidecarProfile);
         if (!reader.Read() || reader.FieldCount != 3 || reader.GetString(0) != "format"
             || reader.GetString(1) != "pocket-sparse-index" || reader.GetString(2) != "1")
@@ -134,7 +115,7 @@ internal static class SparseIndexSidecar
             || !int.TryParse(fields, NumberStyles.None, Invariant, out var fieldCount))
             throw new InvalidDataException("The sparse index is corrupt.");
 
-        var expected = CreateMetadata(index, profile, sourceStamp, rowCount, fieldCount);
+        var expected = CreateMetadata(index, configuration, sourceStamp, rowCount, fieldCount);
         // The on-disk interval controls the interpretation of checkpoints. A caller
         // can use an existing index even if its next build would use a different interval.
         if (!metadata.TryGetValue("checkpointInterval", out var intervalText)
@@ -142,7 +123,7 @@ internal static class SparseIndexSidecar
             throw new InvalidDataException("Invalid sparse index checkpoint interval.");
         expected["checkpointInterval"] = intervalText;
         if (metadata.Count != expected.Count || expected.Any(pair => !metadata.TryGetValue(pair.Key, out var value) || value != pair.Value))
-            throw new InvalidDataException("The sparse index is incompatible with the selected key or CSV configuration.");
+            throw new InvalidDataException("The sparse index is incompatible with the selected key or reader configuration.");
 
         if (checkpoints.Count != (rowCount == 0 ? 0 : ((rowCount - 1) / interval) + 1))
             throw new InvalidDataException("The sparse index has the wrong number of checkpoints.");
@@ -171,26 +152,45 @@ internal static class SparseIndexSidecar
         }
 
         int start = low - 1;
-        return new(start < 0 ? null : checkpoints[start].Offset,
+        return new SparseRecordRange(start < 0 ? null : checkpoints[start].Offset,
             start < 0 ? 0 : checked(start * interval), rowCount, fieldCount);
+    }
+
+    public static int ReadUtf8BomLength(FileStream stream)
+    {
+        Span<byte> prefix = stackalloc byte[4];
+        var count = stream.ReadAtLeast(prefix, prefix.Length, throwOnEndOfStream: false);
+        stream.Position = 0;
+        if (prefix[..count].StartsWith(Encoding.UTF8.Preamble))
+            return Encoding.UTF8.Preamble.Length;
+        if (prefix[..count].StartsWith(Encoding.Unicode.Preamble)
+            || prefix[..count].StartsWith(Encoding.BigEndianUnicode.Preamble)
+            || prefix[..count].StartsWith(new UTF32Encoding(true, true).Preamble))
+            throw new NotSupportedException("Sparse indexes require UTF-8 input.");
+        return 0;
+    }
+
+    private static FileStream? OpenSidecar(string path, SparseIndex index)
+    {
+        try
+        {
+            return new(path + ".sparse.idx", FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        }
+        catch (FileNotFoundException) when (!index.RequiresIndex)
+        {
+            return null;
+        }
     }
 
     private static void RequireUnchanged(FileStream source, SourceStamp before)
     {
         if (SourceStamp.Read(source) != before)
-            throw new IOException($"The CSV '{source.Name}' changed while building its sparse index.");
+            throw new IOException($"The file '{source.Name}' changed while building its sparse index.");
     }
 
-    private static Dictionary<string, string> CreateMetadata(SparseIndex index, CsvProfile profile, SourceStamp stamp,
-        int rowCount, int fieldCount)
+    private static Dictionary<string, string> CreateMetadata(SparseIndex index, SourceConfiguration configuration,
+        SourceStamp stamp, int rowCount, int fieldCount)
     {
-        var dialect = profile.Dialect;
-        var configuration = Fingerprint([
-            dialect.Header.ToString(), string.Join(",", dialect.HeaderRows.Select(row => row.ToString(Invariant))),
-            dialect.HeaderJoin, dialect.HeaderRepeat.ToString(), dialect.CommentChar?.ToString(),
-            dialect.Delimiter.ToString(), dialect.LineTerminator, dialect.QuoteChar?.ToString(),
-            dialect.DoubleQuote.ToString(), dialect.EscapeChar?.ToString(), dialect.SkipInitialSpace.ToString()
-        ]);
         return new(StringComparer.Ordinal)
         {
             [index.Key.ColumnName is null ? "columnOrdinal" : "columnName"] =
@@ -199,7 +199,7 @@ internal static class SparseIndexSidecar
             ["checkpointInterval"] = index.CheckpointInterval.ToString(Invariant),
             ["sourceByteLength"] = stamp.Length.ToString(Invariant),
             ["sourceLastWriteUtc"] = stamp.LastWriteUtc.ToString("O", Invariant),
-            ["csvConfigurationId"] = configuration,
+            [configuration.Field] = configuration.Id,
             ["compatibilityId"] = index.Key.CompatibilityId,
             ["dataRowCount"] = rowCount.ToString(Invariant),
             ["fieldCount"] = fieldCount.ToString(Invariant)
@@ -252,3 +252,9 @@ internal static class SparseIndexSidecar
 
     private readonly record struct Checkpoint(long Offset, string Text);
 }
+
+internal delegate NullableSpan ReadKey<in TReader>(TReader reader);
+
+internal readonly record struct SourceConfiguration(string Field, string Id);
+
+internal readonly record struct SparseRecordRange(long? Offset, int SkippedRows, int RowCount, int FieldCount);

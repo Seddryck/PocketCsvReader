@@ -11,6 +11,14 @@ public sealed class FixedWidthReader : FlatFileReader<FixedWidthProfile, FixedWi
 
     protected override int StreamBufferSize => Profile.ParserOptimizations.BufferSize;
 
+    internal override IEnumerable<string?>? SeekConfiguration => Profile.Descriptor.Header ? null :
+        ["fixed-width", Profile.Descriptor.LineTerminator, Profile.Descriptor.AllowTrailingCharacters.ToString(),
+            Profile.ParserOptimizations.HandleSpecialValues.ToString(),
+            .. Profile.Descriptor.Fields.SelectMany(field => new[] { field.Name,
+                field.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                field.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                field.Padding.ToString(), field.PaddingChar.ToString() })];
+
     protected override FixedWidthDataReader CreateDataReader(Stream stream)
         => new(stream, Profile);
 

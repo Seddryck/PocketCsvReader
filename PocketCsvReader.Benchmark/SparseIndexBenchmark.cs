@@ -43,8 +43,8 @@ internal static class SparseIndexBenchmark
             Console.WriteLine("Date        Rows   Sequential (ms)   Indexed (ms)    Speedup");
             foreach (var date in new[] { first, first.AddDays(Days / 2), first.AddDays(Days - 1) })
             {
-                var sequential = scan.WithIndexedLookup(index, date);
-                var indexed = query.WithIndexedLookup(index, date, requireIndex: true);
+                var sequential = scan.WithIndexedLookup(index.WithOptionalIndex(), date);
+                var indexed = query.WithIndexedLookup(index, date);
                 var expected = ReadMatches(sequential);
                 for (int i = 0; i < 8; i++)
                 {

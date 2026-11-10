@@ -6,24 +6,34 @@ namespace PocketCsvReader.Indexing;
 /// <summary>Applies exact-key lookup to records exposed by an ADO.NET data reader.</summary>
 public static class ReaderLookup
 {
-    /// <summary>Scans the reader for matching records and transfers ownership to the returned reader.</summary>
-    /// <remarks>Missing and null fields are skipped. The key column may contain typed values or text.</remarks>
-    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, IIndexKey key, TKey value)
+    /// <summary>Scans an existing reader using an optional index definition.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, SparseIndex index, TKey value)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        ArgumentNullException.ThrowIfNull(key);
-        var requested = ValidateKey(key, value);
+        ArgumentNullException.ThrowIfNull(index);
+        var requested = ValidateKey(index.Key, value);
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a format reader and path, or use an optional index.");
+        return Scan(reader, index.Key, requested);
+    }
+
+    internal static DbDataReader Scan(IDataReader reader, IIndexKey key, object requested)
+    {
         var scan = new ScanningDataReader(reader, row => Matches(row, key, requested));
         return reader is DbDataReader db
             ? new DbDataReaderAdapter(scan, db.NextResultAsync)
             : new DbDataReaderAdapter(scan);
     }
 
-    /// <summary>Scans a reader using the sparse index's key definition.</summary>
-    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, SparseIndex index, TKey value)
+    internal static RecordSelection Select(NullableSpan field, IIndexKey key, object requested, bool ordered)
     {
-        ArgumentNullException.ThrowIfNull(index);
-        return reader.WithIndexedLookup(index.Key, value);
+        if (!field.HasValue)
+            return RecordSelection.Skip;
+        var comparison = key.Compare(key.Parse(field.Value), requested);
+        if (comparison == 0)
+            return RecordSelection.Include;
+        return comparison > 0 && ordered ? RecordSelection.Stop : RecordSelection.Skip;
     }
 
     internal static object ValidateKey<TKey>(IIndexKey key, TKey value)

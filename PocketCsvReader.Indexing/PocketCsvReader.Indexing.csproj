@@ -2,7 +2,7 @@
   <PropertyGroup>
     <PackageId>PocketCsvReader.Indexing</PackageId>
     <PackageTags>CSV sparse index equality lookup DataReader</PackageTags>
-    <Description>Exact-key lookup for data readers with optional sparse indexes for sorted CSV files.</Description>
+    <Description>Exact-key lookup with sparse indexes for sorted files and an opt-in scan fallback.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />

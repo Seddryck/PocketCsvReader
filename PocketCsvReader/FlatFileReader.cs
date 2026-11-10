@@ -16,6 +16,11 @@ public abstract class FlatFileReader<TProfile, TDataReader>
 
     protected abstract TDataReader CreateDataReader(Stream stream);
 
+    internal int FileBufferSize => StreamBufferSize;
+
+    // A source opts in only when a fresh parser can restart at an arbitrary record boundary.
+    internal virtual IEnumerable<string?>? SeekConfiguration => null;
+
     public TDataReader ToDataReader(string filename)
         => CreateDataReader(OpenRead(filename));
 

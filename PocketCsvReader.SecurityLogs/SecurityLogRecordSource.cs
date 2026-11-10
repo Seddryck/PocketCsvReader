@@ -4,17 +4,21 @@ namespace PocketCsvReader.SecurityLogs;
 internal sealed class SecurityLogRecordSource : IRecordSource<SecurityLogProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
-    private readonly PositionTracker _position = new();
+    private readonly PositionTracker _position;
+    private readonly bool _reportPosition;
     private readonly SecurityLogParser _parser = new();
     private FieldSpan[] _fields = [];
     public string[]? Fields { get; private set; }
     public SecurityLogProfile Profile { get; }
-    PositionTracker? IPositionSource.Tracker => Profile.TrackPosition ? _position : null;
-    public RecordPosition? CurrentPosition => Profile.TrackPosition ? _position.CurrentPosition : null;
+    PositionTracker? IPositionSource.Tracker => _reportPosition ? _position : null;
+    public RecordPosition? CurrentPosition => _reportPosition ? _position.CurrentPosition : null;
 
     public SecurityLogRecordSource(StreamReader reader, SecurityLogProfile profile)
     {
         Profile = profile;
+        var position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
+        _position = position ?? new();
+        _reportPosition = position is not null;
         // Tracking also supplies absolute line/offset diagnostics when public tracking is disabled.
         _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         if (profile.Attributes is not null)

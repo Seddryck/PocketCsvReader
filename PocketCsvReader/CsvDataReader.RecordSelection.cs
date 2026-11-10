@@ -1,17 +1,10 @@
 namespace PocketCsvReader;
 
-internal enum CsvRecordDecision
-{
-    Skip,
-    Include,
-    Stop
-}
-
 internal readonly record struct CsvRecordRange(long? Offset, int SkippedRows, int RowCount, int FieldCount);
 
 public partial class CsvDataReader
 {
-    private Func<CsvDataReader, CsvRecordDecision>? _selectRecord;
+    private Func<CsvDataReader, RecordSelection>? _selectRecord;
     private CsvRecordRange? _recordRange;
     private Stream? _rangeStream;
     private int? _fileStartRow;
@@ -21,7 +14,7 @@ public partial class CsvDataReader
         ? checked(start + range.RowCount)
         : CurrentRowNumber;
 
-    internal void SelectRecords(Func<CsvDataReader, CsvRecordDecision> select, Stream stream, CsvRecordRange? range)
+    internal void SelectRecords(Func<CsvDataReader, RecordSelection> select, Stream stream, CsvRecordRange? range)
         => (_selectRecord, _rangeStream, _recordRange) = (select, stream, range);
 
     internal NullableSpan GetDecodedField(int ordinal)
@@ -51,8 +44,8 @@ public partial class CsvDataReader
         while (ReadRow())
         {
             var decision = _selectRecord!(this);
-            if (decision != CsvRecordDecision.Skip)
-                return decision == CsvRecordDecision.Include;
+            if (decision != RecordSelection.Skip)
+                return decision == RecordSelection.Include;
         }
         return false;
     }
@@ -75,8 +68,8 @@ public partial class CsvDataReader
         while (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
         {
             var decision = _selectRecord!(this);
-            if (decision != CsvRecordDecision.Skip)
-                return decision == CsvRecordDecision.Include;
+            if (decision != RecordSelection.Skip)
+                return decision == RecordSelection.Include;
         }
         return false;
     }

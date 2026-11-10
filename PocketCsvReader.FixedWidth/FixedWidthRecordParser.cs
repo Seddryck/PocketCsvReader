@@ -29,7 +29,7 @@ internal sealed class FixedWidthRecordParser : IRecordSource<FixedWidthProfile>,
     {
         _reader = reader;
         Profile = profile;
-        if (profile.TrackPosition) _position = new();
+        _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _buffer = ArrayPool<char>.Shared.Rent(profile.ParserOptimizations.BufferSize);
         _fieldSpans = profile.Descriptor.Fields
             .Select(field => new FieldSpan(field.Offset, field.Width))

@@ -147,13 +147,25 @@ public sealed class IndexKey<TKey> : IIndexKey
 public sealed class SparseIndex
 {
     public SparseIndex(IIndexKey key, int checkpointInterval)
+        : this(key, checkpointInterval, requiresIndex: true)
+    { }
+
+    private SparseIndex(IIndexKey key, int checkpointInterval, bool requiresIndex)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(checkpointInterval);
         Key = key;
         CheckpointInterval = checkpointInterval;
+        RequiresIndex = requiresIndex;
     }
 
     public IIndexKey Key { get; }
     public int CheckpointInterval { get; }
+    internal bool RequiresIndex { get; }
+
+    /// <summary>Requires a usable index for each source. This is the default.</summary>
+    public SparseIndex WithRequiredIndex() => RequiresIndex ? this : new(Key, CheckpointInterval, requiresIndex: true);
+
+    /// <summary>Scans a source when no index is available.</summary>
+    public SparseIndex WithOptionalIndex() => RequiresIndex ? new(Key, CheckpointInterval, requiresIndex: false) : this;
 }

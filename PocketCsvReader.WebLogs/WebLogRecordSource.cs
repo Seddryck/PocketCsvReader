@@ -42,7 +42,7 @@ internal sealed class WebLogRecordSource : IRecordSource<WebLogProfile>, IPositi
 
     public WebLogRecordSource(StreamReader reader, WebLogProfile profile)
     {
-        if (profile.TrackPosition) _position = new();
+        _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         Profile = profile;
         if (profile.Format is WebLogFormat.Common or WebLogFormat.Combined)

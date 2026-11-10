@@ -88,16 +88,18 @@ while (rows.Read())
     Console.WriteLine(rows["OrderId"]);
 ```
 
-`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. A lookup returns all matching rows in source order. It seeks when the file has a valid sidecar and scans when the sidecar is absent or the source cannot be indexed. Pass `requireIndex: true` to require a sidecar for every file. A stale, corrupt, unreadable, or incompatible sidecar for an indexable file fails the lookup. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
+`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. A lookup returns all matching rows in source order. A `SparseIndex` requires a valid sidecar by default. Use `dateIndex.WithOptionalIndex()` to scan when the sidecar is absent or when the reader configuration cannot seek. Use `WithRequiredIndex()` to return to strict lookup. Both methods return an index definition with the requested policy. A stale, corrupt, unreadable, or incompatible sidecar for a seekable source fails either policy. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
 
-Sparse sidecars support filesystem paths for uncompressed UTF-8 files with ASCII CSV syntax. The source may start with a UTF-8 BOM, and fields can contain Unicode text and quoted line breaks. Use a column name with headers or a zero-based ordinal.
-
-The same lookup works directly with any `IDataReader`, including an NDJSON reader. This overload scans the reader, skips missing or null keys, and owns the input reader until disposal. It accepts an `IndexKey<TKey>` or a `SparseIndex`.
+For a single file, pass the path to the format reader. This uses the same sidecar format and lookup rules as a partitioned CSV query. Both CSV and NDJSON require an ascending key to build a sparse index. The index key must be present on each indexed record.
 
 ```csharp
-using var jsonRows = ndjsonReader.ToDataReader("orders.ndjson")
-    .WithIndexedLookup(dateKey, new DateOnly(2026, 5, 17));
+ndjsonReader.BuildIndexes("orders.ndjson", dateIndex);
+using var jsonRows = ndjsonReader.WithIndexedLookup("orders.ndjson", dateIndex, new DateOnly(2026, 5, 17));
 ```
+
+Sparse sidecars support uncompressed UTF-8 filesystem files, including files with a UTF-8 BOM. Seekable configurations include CSV with ASCII syntax, NDJSON with one record per root and dynamic or projected fields, headerless fixed-width, logfmt and LTSV with dynamic or projected fields, Common and Combined web logs, and CEF and LEEF with explicit attribute columns. Configurations that depend on earlier records, such as W3C header directives and first-record field layout discovery, can use an optional scan.
+
+An already-open `IDataReader` can use `WithIndexedLookup(dateIndex.WithOptionalIndex(), date)`. This overload scans the reader, skips missing or null keys, and owns the input reader until disposal. A scan can also find matches in unsorted input.
 
 ## Extract partitions from filenames
 
