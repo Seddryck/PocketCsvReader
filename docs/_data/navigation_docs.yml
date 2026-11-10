@@ -26,8 +26,12 @@
   - mapper-object-builder
   - async-reading
   - batch-reading
-  - file-partitions
   - stream-lifetimes
+- title: Partitioning and indexing
+  docs:
+  - file-partitions
+  - indexing
+  - sparse-indexes
 - title: Configuration
   docs:
   - fluent-api-profile-configuration

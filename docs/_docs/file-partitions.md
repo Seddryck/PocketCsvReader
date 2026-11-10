@@ -72,36 +72,7 @@ CSV row filters still run on rows in the selected files. When headers are enable
 
 ## Look up an exact key in sorted files
 
-Add the `PocketCsvReader.Indexing` package to use sparse indexes with files sorted in ascending order by the indexed column. For example, `selected` can be a partition query over May 2026 orders sorted by `Date`.
-
-```csharp
-using PocketCsvReader.Indexing;
-
-var dateKey = new IndexKey<DateOnly>("Date", format: "yyyy-MM-dd",
-    culture: System.Globalization.CultureInfo.InvariantCulture);
-var dateIndex = new SparseIndex(dateKey, checkpointInterval: 1024);
-
-selected.BuildIndexes(dateIndex);
-
-using var rows = selected.WithIndexedLookup(dateIndex, new DateOnly(2026, 5, 17)).ToDataReader();
-while (rows.Read())
-    Console.WriteLine(rows["OrderId"]);
-```
-
-`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. A lookup returns all matching rows in source order. A `SparseIndex` requires a valid sidecar by default. Use `dateIndex.WithOptionalIndex()` to scan when the sidecar is absent or when the reader configuration cannot seek. Use `WithRequiredIndex()` to return to strict lookup. Both methods return an index definition with the requested policy. A stale, corrupt, unreadable, or incompatible sidecar for a seekable source fails either policy. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
-
-For a single file, pass the path to the format reader. This uses the same sidecar format and lookup rules as a partitioned CSV query. Both CSV and NDJSON require an ascending key to build a sparse index. The index key must be present on each indexed record.
-
-```csharp
-ndjsonReader.BuildIndexes("orders.ndjson", dateIndex);
-using var jsonRows = ndjsonReader.WithIndexedLookup("orders.ndjson", dateIndex, new DateOnly(2026, 5, 17));
-```
-
-Sparse sidecars support uncompressed UTF-8 filesystem files, including files with a UTF-8 BOM. Seekable configurations include CSV with ASCII syntax, NDJSON with one record per root and dynamic or projected fields, fixed-width, logfmt and LTSV with dynamic or projected fields, Common and Combined web logs, W3C Extended logs, and CEF and LEEF with explicit attribute columns. CSV and fixed-width load their configured headers before seeking. W3C reads the leading `#Fields` layout before seeking, and the index build rejects later directives that change that layout. Configurations that depend on first-record field layout discovery can use an optional scan.
-
-Sparse indexing is unsupported for partitioned CSV with headers enabled and `HeaderRepeat = false`. Each indexed partition file must carry its own header. [Shared-header support is tracked in issue #441](https://github.com/Seddryck/PocketCsvReader/issues/441).
-
-An already-open `IDataReader` can use `WithIndexedLookup(dateIndex.WithOptionalIndex(), date)`. This overload scans the reader, skips missing or null keys, and owns the input reader until disposal. A scan can also find matches in unsorted input.
+Partition filters select the files to search. A sparse index can then seek to an exact key within each selected file when its records are sorted by that key. With headers enabled, sparse indexing requires each partition file to supply its own header. [Use sparse indexes](../sparse-indexes/) · [Shared-header support](https://github.com/Seddryck/PocketCsvReader/issues/441)
 
 ## Extract partitions from filenames
 
