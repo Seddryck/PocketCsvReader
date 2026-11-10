@@ -178,16 +178,21 @@ Pass a filename pattern to `HiveStyle("orders-{batch}.csv")` to add captures aft
 
 ### Discover partitions in object storage
 
-Install the optional `PocketCsvReader.ObjectStorage` NuGet package and import its namespace. Pass a configured AWS `IAmazonS3` client with a bucket and prefix, or an Azure `DataLakeFileSystemClient` with a filesystem-relative directory. An empty prefix or directory starts at the bucket or filesystem root.
+Install the optional `PocketCsvReader.ObjectStorage` NuGet package and import its namespace. Register your configured AWS `IAmazonS3` client for a bucket and your Azure `DataLakeFileSystemClient` for its endpoint and filesystem. Attach the resolver to the builder to use the two-argument URI overload.
 
 ```csharp
 using PocketCsvReader;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.ObjectStorage;
 
+var resolver = new ObjectStorageDirectoryResolver()
+    .AddS3("analytics", s3Client)
+    .AddAdls(warehouseFileSystemClient);
+
 var selected = new CsvReaderBuilder()
     .WithDialect(d => d.WithHeader())
-    .FromDirectory(s3Client, "analytics", "orders", "*.csv")
+    .WithDirectoryResolver(resolver)
+    .FromDirectory(new Uri("s3://analytics/orders/"), "*.csv")
     .WithPartitions(p => p.HiveStyle())
     .Build()
     .WithPartitionFilter(PartitionCondition.Equal("year", "2026"));
@@ -197,7 +202,9 @@ while (await reader.ReadAsync(cancellationToken))
     Console.WriteLine(reader["OrderId"]);
 ```
 
-For ADLS Gen2, use `.FromDirectory(dataLakeFileSystemClient, "orders", "*.csv")`. Each listing requests only the immediate children of a directory. A named condition that rejects a child prefix, such as `year=2025/`, skips the listing for that prefix. Filename globs match case-sensitively.
+For ADLS Gen2, pass `new Uri("abfss://warehouse@lakeaccount.dfs.core.windows.net/orders/")` as the first argument. Omitting the URI path starts at the bucket or filesystem root. Encode literal percent signs in object names as `%25` in the URI. For example, a directory named `tag=A%3DB` appears in the URI as `tag=A%253DB`.
+
+You can also pass the client directly with `.FromDirectory(s3Client, "analytics", "orders", "*.csv")` or `.FromDirectory(warehouseFileSystemClient, "orders", "*.csv")`. Each listing requests only the immediate children of a directory. A named condition that rejects a child prefix, such as `year=2025/`, skips the listing for that prefix. Filename globs match case-sensitively.
 
 Use `EnumerateFilesAsync(cancellationToken)` to list matching descriptors without opening CSV streams. Use `ReadAsync(cancellationToken)` to read rows from the cloud query. With the database adapter, call `ReadAsync` before checking `HasRows`. Keep the supplied client available until the reader finishes. The reader owns each opened stream and closes it on transition, failure, or disposal.
 

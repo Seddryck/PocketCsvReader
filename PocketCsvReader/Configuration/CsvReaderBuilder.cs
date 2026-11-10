@@ -9,6 +9,7 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
     private RowNumberOptions? _rowNumber;
+    private ICsvDirectoryResolver? _directoryResolver;
 
     /// <summary>Selects paths whose partition metadata will be configured with WithPartitions.</summary>
     public CsvFilePathBuilder FromFiles(IEnumerable<string> paths)
@@ -78,6 +79,26 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
     /// <summary>Selects files matching a filename glob beneath a root directory.</summary>
     public CsvDirectoryBuilder FromDirectory(string root, string searchPattern)
         => CreateDirectoryBuilder(root, searchPattern, null);
+
+    /// <summary>Configures how this builder resolves directory URIs.</summary>
+    public CsvReaderBuilder WithDirectoryResolver(ICsvDirectoryResolver resolver)
+    {
+        _directoryResolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+        return this;
+    }
+
+    /// <summary>Selects files matching a filename glob beneath an absolute directory URI.</summary>
+    public CsvDirectoryBuilder FromDirectory(Uri root, string searchPattern)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        if (!root.IsAbsoluteUri)
+            throw new ArgumentException("An absolute directory URI is required.", nameof(root));
+        ValidateDirectorySearchPattern(searchPattern);
+
+        var resolver = _directoryResolver
+            ?? throw new InvalidOperationException("Configure a directory URI resolver with WithDirectoryResolver first.");
+        return resolver.Resolve(this, root, searchPattern);
+    }
 
     /// <summary>Selects files beneath a root directory and supplies a deferred opener for accepted paths.</summary>
     public CsvDirectoryBuilder FromDirectory(string root, string searchPattern, Func<string, Stream> open)
