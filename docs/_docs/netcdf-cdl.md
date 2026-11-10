@@ -1,6 +1,6 @@
 ---
-title: NetCDF CDL as Arrow record batches
-tags: [analytics, arrow, netcdf]
+title: NetCDF CDL
+tags: [formats, arrow, netcdf]
 ---
 
 Install the optional package to read UTF-8 Common Data Language files (.cdl), the textual representation of a NetCDF dataset. Binary NetCDF files (.nc) require a separate NetCDF library. [Unidata CDL specification](https://docs.unidata.ucar.edu/nug/current/_c_d_l.html)

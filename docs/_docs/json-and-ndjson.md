@@ -3,6 +3,8 @@ title: JSON and JSONC
 tags: [formats]
 ---
 
+For column-oriented ClickHouse exports or Apache Arrow JSON fixtures, see [Columnar JSON](../columnar-json/).
+
 ## Complete JSON example
 
 Input is a top-level array, `[{"id":1,"name":"Ada"}]`. Each array element becomes a row. Install `PocketCsvReader.Json`.

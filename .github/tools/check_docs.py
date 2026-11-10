@@ -29,7 +29,7 @@ def check_navigation(root, pages, errors):
     if len(slugs) != len(set(slugs)):
         errors.append('Duplicate documentation navigation entries')
     groups = re.findall(r'^- title: (.+)$', nav, re.M)
-    expected_groups = ['Getting started', 'Format guides', 'Inspect and prepare input',
+    expected_groups = ['Getting started', 'Format guides', 'Arrow input formats', 'Inspect and prepare input',
                        'Reading data', 'Partitioning and indexing', 'Configuration',
                        'Validation and diagnostics', 'Performance', 'Integrations']
     if groups != expected_groups:
@@ -189,7 +189,8 @@ def examples_check(root, examples):
     projects = ['PocketCsvReader', 'PocketCsvReader.Json', 'PocketCsvReader.Ndjson',
                 'PocketCsvReader.FixedWidth', 'PocketCsvReader.KeyValue',
                 'PocketCsvReader.WebLogs', 'PocketCsvReader.SecurityLogs',
-                'PocketCsvReader.Arrow', 'PocketCsvReader.Chrononuensis']
+                'PocketCsvReader.Arrow', 'PocketCsvReader.Arrow.ColumnarJson',
+                'PocketCsvReader.Chrononuensis']
     references = '\n'.join(f'<ProjectReference Include="{(root / p / (p + ".csproj")).as_posix()}" />' for p in projects)
     (work / 'DocumentationExamples.csproj').write_text(f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>

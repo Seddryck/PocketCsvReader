@@ -25,6 +25,13 @@ PocketCsvReader reads structured text through a forward-only data reader. Start 
 
 JSON and NDJSON support property projection and stable field layout for object records. Logfmt and LTSV support column projection with aliases and stable field layout. See [JSON and NDJSON projection](../json-projection/) and [logfmt and LTSV projection](../key-value-formats/#project-a-fixed-set-of-columns).
 
+## Inputs that produce Arrow batches directly
+
+| Input | Guide | Package |
+| --- | --- | --- |
+| ClickHouse JSONColumns, JSONColumnsWithMetadata, and Arrow Integration JSON | [Columnar JSON](../columnar-json/) | `PocketCsvReader.Arrow.ColumnarJson` |
+| Textual NetCDF datasets (.cdl) | [NetCDF CDL](../netcdf-cdl/) | `PocketCsvReader.Arrow.NetCdf` |
+
 ## Prepare and interpret input
 
 If the CSV structure is unknown, [infer a schema and dialect](../schema-inference/), inspect diagnostics, then accept or adjust the result. Inference reads a sample; it is a discovery step before explicit configuration.

@@ -12,6 +12,10 @@
   - key-value-formats
   - web-log-formats
   - security-log-formats
+- title: Arrow input formats
+  docs:
+  - columnar-json
+  - netcdf-cdl
 - title: Inspect and prepare input
   docs:
   - schema-inference
@@ -51,5 +55,4 @@
 - title: Integrations
   docs:
   - apache-arrow
-  - netcdf-cdl
   - chrononuensis
