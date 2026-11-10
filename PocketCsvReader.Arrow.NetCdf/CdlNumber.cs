@@ -70,6 +70,9 @@ internal static class CdlNumber
 
     private static (int Length, IArrowType? Type) SplitSuffix(ReadOnlySpan<char> text)
     {
+        if (text.IsEmpty || char.IsAsciiDigit(text[^1]))
+            return (text.Length, null);
+
         // In a hexadecimal constant a trailing b, d or f is a digit.
         var hex = IsHex(text);
         if (IsSpecial(text))
@@ -82,9 +85,6 @@ internal static class CdlNumber
             return (text.Length - 2, UInt16Type.Default);
         if (text.EndsWith("ll", StringComparison.OrdinalIgnoreCase))
             return (text.Length - 2, Int64Type.Default);
-        if (text.IsEmpty)
-            return (0, null);
-
         var type = char.ToLowerInvariant(text[^1]) switch
         {
             'u' => UInt32Type.Default,

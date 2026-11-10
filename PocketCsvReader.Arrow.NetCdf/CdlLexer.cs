@@ -18,37 +18,70 @@ internal sealed class CdlLexer(IBufferReader input, bool asynchronous, Cancellat
     private int _index;
     private long _offset;
 
-    public async ValueTask<CdlToken> ReadAsync()
+    public ValueTask<CdlToken> ReadAsync()
     {
         token.ThrowIfCancellationRequested();
-        while (await HasInputAsync().ConfigureAwait(false))
-        {
-            var current = _chunk.Span[_index];
-            var position = _offset + _index;
-            if (char.IsWhiteSpace(current))
-            {
-                _index++;
-                continue;
-            }
+        return TryReadBuffered(out var current) ? ValueTask.FromResult(current) : ReadSlowAsync();
+    }
 
-            switch (current)
-            {
-                case '/':
-                    _index++;
-                    await SkipCommentAsync(position).ConfigureAwait(false);
-                    continue;
-                case '{' or '}' or '(' or ')' or ':' or ';' or ',' or '=':
-                    _index++;
-                    return new(current, default, position);
-                case '"':
-                    _index++;
-                    return await ReadTextAsync('"', position).ConfigureAwait(false);
-                default:
-                    return await ReadTextAsync('w', position).ConfigureAwait(false);
-            }
+    private bool TryReadBuffered(out CdlToken token)
+    {
+        token = default;
+        var span = _chunk.Span;
+        while (_index < span.Length && char.IsWhiteSpace(span[_index]))
+            _index++;
+        if (_index == span.Length)
+            return false;
+
+        var start = _index;
+        var position = _offset + start;
+        switch (span[start])
+        {
+            case '/' or '"':
+                return false;
+            case '{' or '}' or '(' or ')' or ':' or ';' or ',' or '=':
+                _index++;
+                token = new(span[start], default, position);
+                return true;
         }
 
-        return new('\0', default, _offset + _index);
+        var end = FindWordEnd(span, start);
+        if (end == span.Length && !input.IsEof)
+            return false;
+        _index = end;
+        token = new('w', _chunk[start..end], position);
+        return true;
+    }
+
+    private async ValueTask<CdlToken> ReadSlowAsync()
+    {
+        while (true)
+        {
+            if (_index == _chunk.Length)
+            {
+                if (!await HasInputAsync().ConfigureAwait(false))
+                    return new('\0', default, _offset + _index);
+            }
+            else
+            {
+                var position = _offset + _index;
+                switch (_chunk.Span[_index])
+                {
+                    case '/':
+                        _index++;
+                        await SkipCommentAsync(position).ConfigureAwait(false);
+                        break;
+                    case '"':
+                        _index++;
+                        return await ReadQuotedAsync(position).ConfigureAwait(false);
+                    default:
+                        return await ReadCrossBufferWordAsync(position).ConfigureAwait(false);
+                }
+            }
+
+            if (TryReadBuffered(out var current))
+                return current;
+        }
     }
 
     private ValueTask<bool> HasInputAsync()
@@ -77,39 +110,66 @@ internal sealed class CdlLexer(IBufferReader input, bool asynchronous, Cancellat
         switch (_chunk.Span[_index++])
         {
             case '/':
-                while (await HasInputAsync().ConfigureAwait(false))
-                {
-                    var end = _chunk.Span[_index..].IndexOfAny('\r', '\n');
-                    if (end >= 0)
-                    {
-                        _index += end + 1;
-                        return;
-                    }
-
-                    _index = _chunk.Length;
-                }
-
+                await SkipLineCommentAsync().ConfigureAwait(false);
                 return;
             case '*':
-                var star = false;
-                while (await HasInputAsync().ConfigureAwait(false))
-                {
-                    while (_index < _chunk.Length)
-                    {
-                        var next = _chunk.Span[_index++];
-                        if (star && next == '/')
-                            return;
-                        star = next == '*';
-                    }
-                }
-
-                throw new CdlToken('/', default, position).Error("Unterminated block comment");
+                await SkipBlockCommentAsync(position).ConfigureAwait(false);
+                return;
             default:
                 throw new CdlToken('/', default, position).Error("Expected // or /* comment");
         }
     }
 
-    private async ValueTask<CdlToken> ReadTextAsync(char kind, long position)
+    private async ValueTask SkipLineCommentAsync()
+    {
+        while (await HasInputAsync().ConfigureAwait(false))
+        {
+            var end = _chunk.Span[_index..].IndexOfAny('\r', '\n');
+            if (end >= 0)
+            {
+                _index += end + 1;
+                return;
+            }
+
+            _index = _chunk.Length;
+        }
+    }
+
+    private async ValueTask SkipBlockCommentAsync(long position)
+    {
+        var star = false;
+        while (await HasInputAsync().ConfigureAwait(false))
+        {
+            while (_index < _chunk.Length)
+            {
+                var next = _chunk.Span[_index++];
+                if (star && next == '/')
+                    return;
+                star = next == '*';
+            }
+        }
+
+        throw new CdlToken('/', default, position).Error("Unterminated block comment");
+    }
+
+    private async ValueTask<CdlToken> ReadCrossBufferWordAsync(long position)
+    {
+        _overflow.Clear();
+        do
+        {
+            var start = _index;
+            var span = _chunk.Span;
+            _index = FindWordEnd(span, start);
+            Append(position, span[start.._index]);
+            if (_index < span.Length)
+                break;
+        }
+        while (await HasInputAsync().ConfigureAwait(false));
+
+        return new('w', _overflow.WrittenMemory, position);
+    }
+
+    private async ValueTask<CdlToken> ReadQuotedAsync(long position)
     {
         _overflow.Clear();
         var escaped = false;
@@ -121,48 +181,53 @@ internal sealed class CdlLexer(IBufferReader input, bool asynchronous, Cancellat
             {
                 var next = span[_index];
                 if (next == '\0')
-                    throw new CdlToken(kind, default, _offset + _index).Error("Unexpected NUL in CDL text");
-                if (kind == 'w')
+                    throw NulError(_index);
+                if (!escaped && next == '"')
                 {
-                    if (char.IsWhiteSpace(next) || next is '{' or '}' or '(' or ')' or ':' or ';' or ',' or '=' or '/' or '"')
-                        return Complete(kind, position, start);
-                }
-                else
-                {
-                    if (!escaped && next == '"')
-                    {
-                        var literal = Complete(kind, position, start);
-                        _index++;
-                        return literal;
-                    }
-
-                    if (next is '\r' or '\n')
-                        throw new CdlToken(kind, default, position).Error("Unterminated quoted string");
-                    escaped = !escaped && next == '\\';
+                    var literal = CompleteQuoted(position, start);
+                    _index++;
+                    return literal;
                 }
 
+                if (next is '\r' or '\n')
+                    throw new CdlToken('"', default, position).Error("Unterminated quoted string");
+                escaped = !escaped && next == '\\';
                 _index++;
             }
 
-            if (kind == 'w' && input.IsEof)
-                return Complete(kind, position, start);
             Append(position, span[start..]);
         }
         while (await HasInputAsync().ConfigureAwait(false));
 
-        if (kind == '"')
-            throw new CdlToken(kind, default, position).Error("Unterminated quoted string");
-        return new(kind, _overflow.WrittenMemory, position);
+        throw new CdlToken('"', default, position).Error("Unterminated quoted string");
     }
 
-    private CdlToken Complete(char kind, long position, int start)
+    private int FindWordEnd(ReadOnlySpan<char> span, int index)
+    {
+        while (index < span.Length)
+        {
+            var next = span[index];
+            if (next == '\0')
+                throw NulError(index);
+            if (char.IsWhiteSpace(next) || next is '{' or '}' or '(' or ')' or ':' or ';' or ',' or '=' or '/' or '"')
+                break;
+            index++;
+        }
+
+        return index;
+    }
+
+    private InvalidDataException NulError(int index)
+        => new CdlToken('\0', default, _offset + index).Error("Unexpected NUL in CDL text");
+
+    private CdlToken CompleteQuoted(long position, int start)
     {
         var segment = _chunk[start.._index];
         if (_overflow.WrittenCount == 0)
-            return new(kind, segment, position);
+            return new('"', segment, position);
 
         Append(position, segment.Span);
-        return new(kind, _overflow.WrittenMemory, position);
+        return new('"', _overflow.WrittenMemory, position);
     }
 
     private void Append(long position, ReadOnlySpan<char> segment)

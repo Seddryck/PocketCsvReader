@@ -210,26 +210,39 @@ internal sealed class CdlParser(CdlLexer lexer, CdlStore store, CancellationToke
             await AdvanceAsync().ConfigureAwait(false);
             await ExpectAsync('=').ConfigureAwait(false);
 
-            do
-            {
-                if (variable.ValueCount > 0)
-                    await AdvanceAsync().ConfigureAwait(false);
-                if (size == 0 || (!unlimited && variable.ValueCount >= size))
-                    throw _current.Error($"Too many values for variable '{variable.Name}' with dimensions [{string.Join(", ", variable.Dimensions.Select(dimension => dimension.Name))}]");
-                await store.AppendAsync(ReadValue(variable, _current), token).ConfigureAwait(false);
-                variable.ValueCount++;
-                await AdvanceAsync().ConfigureAwait(false);
-            }
-            while (_current.Kind == ',');
-
+            var limit = unlimited && size > 0 ? long.MaxValue : size;
+            var count = await ReadAssignedValuesAsync(variable, limit).ConfigureAwait(false);
             await ExpectAsync(';').ConfigureAwait(false);
+            variable.ValueCount = count;
             _dataset.HasValues = true;
             if (unlimited)
             {
-                var records = ((variable.ValueCount - 1) / size) + 1;
+                var records = ((count - 1) / size) + 1;
                 var dimension = variable.Dimensions[0];
                 dimension.Extent = Math.Max(dimension.Extent, records);
             }
+        }
+    }
+
+    private async ValueTask<long> ReadAssignedValuesAsync(CdlVariable variable, long limit)
+    {
+        var count = 0L;
+        var current = _current;
+        while (true)
+        {
+            if (count >= limit)
+                throw current.Error($"Too many values for variable '{variable.Name}' with dimensions [{string.Join(", ", variable.Dimensions.Select(dimension => dimension.Name))}]");
+            await store.AppendAsync(ReadValue(variable, current), token).ConfigureAwait(false);
+            count++;
+
+            var separator = await lexer.ReadAsync().ConfigureAwait(false);
+            if (separator.Kind != ',')
+            {
+                _current = separator;
+                return count;
+            }
+
+            current = await lexer.ReadAsync().ConfigureAwait(false);
         }
     }
 

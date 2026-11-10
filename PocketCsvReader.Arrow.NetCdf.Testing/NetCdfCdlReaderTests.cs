@@ -327,6 +327,28 @@ public sealed class NetCdfCdlReaderTests
     }
 
     [Test]
+    public async Task PreservesTokenPositionsAtChunkBoundaries()
+    {
+        using var input = Input("1234,//x\n5678;\"a\\\"b\"");
+        using var reader = new StreamReader(input);
+        using var buffer = new SingleBuffer(reader, 4);
+        var lexer = new CdlLexer(buffer, asynchronous: true, default);
+
+        var first = await lexer.ReadAsync();
+        Assert.That(first.Text.ToString(), Is.EqualTo("1234"));
+        Assert.That(first.Position, Is.Zero);
+        Assert.That((await lexer.ReadAsync()).Position, Is.EqualTo(4));
+        var second = await lexer.ReadAsync();
+        Assert.That(second.Text.ToString(), Is.EqualTo("5678"));
+        Assert.That(second.Position, Is.EqualTo(9));
+        Assert.That((await lexer.ReadAsync()).Kind, Is.EqualTo(';'));
+        var quoted = await lexer.ReadAsync();
+        Assert.That(quoted.Text.ToString(), Is.EqualTo("a\\\"b"));
+        Assert.That(quoted.Position, Is.EqualTo(14));
+        Assert.That((await lexer.ReadAsync()).Position, Is.EqualTo(20));
+    }
+
+    [Test]
     public void ReadsUtf8WithBomFromNonSeekableInput()
     {
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(Weather)).ToArray();
