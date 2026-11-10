@@ -97,7 +97,9 @@ ndjsonReader.BuildIndexes("orders.ndjson", dateIndex);
 using var jsonRows = ndjsonReader.WithIndexedLookup("orders.ndjson", dateIndex, new DateOnly(2026, 5, 17));
 ```
 
-Sparse sidecars support uncompressed UTF-8 filesystem files, including files with a UTF-8 BOM. Seekable configurations include CSV with ASCII syntax, NDJSON with one record per root and dynamic or projected fields, fixed-width, logfmt and LTSV with dynamic or projected fields, Common and Combined web logs, W3C Extended logs, and CEF and LEEF with explicit attribute columns. CSV and fixed-width load their configured headers before seeking. Each indexed file in a partitioned CSV query must carry its own header when headers are enabled. W3C reads the leading `#Fields` layout before seeking, and the index build rejects later directives that change that layout. Configurations that depend on first-record field layout discovery can use an optional scan.
+Sparse sidecars support uncompressed UTF-8 filesystem files, including files with a UTF-8 BOM. Seekable configurations include CSV with ASCII syntax, NDJSON with one record per root and dynamic or projected fields, fixed-width, logfmt and LTSV with dynamic or projected fields, Common and Combined web logs, W3C Extended logs, and CEF and LEEF with explicit attribute columns. CSV and fixed-width load their configured headers before seeking. W3C reads the leading `#Fields` layout before seeking, and the index build rejects later directives that change that layout. Configurations that depend on first-record field layout discovery can use an optional scan.
+
+Sparse indexing is unsupported for partitioned CSV with headers enabled and `HeaderRepeat = false`. Each indexed partition file must carry its own header. [Shared-header support is tracked in issue #441](https://github.com/Seddryck/PocketCsvReader/issues/441).
 
 An already-open `IDataReader` can use `WithIndexedLookup(dateIndex.WithOptionalIndex(), date)`. This overload scans the reader, skips missing or null keys, and owns the input reader until disposal. A scan can also find matches in unsorted input.
 
