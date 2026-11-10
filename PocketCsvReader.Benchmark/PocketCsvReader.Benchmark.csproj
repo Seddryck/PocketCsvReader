@@ -17,6 +17,8 @@
     <ProjectReference Include="..\PocketCsvReader.WebLogs\PocketCsvReader.WebLogs.csproj" />
     <ProjectReference Include="..\PocketCsvReader.KeyValue\PocketCsvReader.KeyValue.csproj" />
     <ProjectReference Include="..\PocketCsvReader.Chrononuensis\PocketCsvReader.Chrononuensis.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Arrow.ColumnarJson\PocketCsvReader.Arrow.ColumnarJson.csproj" />
+    <ProjectReference Include="..\PocketCsvReader.Arrow.NetCdf\PocketCsvReader.Arrow.NetCdf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

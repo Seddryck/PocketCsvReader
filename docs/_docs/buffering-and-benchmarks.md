@@ -66,6 +66,19 @@ The repository retains reproducible projects, environment details, and measureme
 
 For example, run the existing benchmark project in Release with `--filter '*Utf8Input*'` or `--filter '*CustomParsing*'`. Record hardware/runtime, warmup, job settings, and materialization work when comparing results. The current benchmark runner preserves the machine power plan.
 
+### Arrow batch timing
+
+```powershell
+dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --arrow-batch-timing
+```
+
+The command compares flat CDL, gridded CDL with dense or run-end encoded coordinates,
+and Arrow Integration JSON over the same 262,144 rows. It checks the generated
+values before timing, then reports median milliseconds over 11 warmed file reads
+per case in sync and async modes. `FirstReadMs` and `SecondReadMs` time individual
+batch calls. The `ReadyMs` columns include opening the file, and `FullReadMs`
+includes all 64 batches and stream disposal. The result is CSV on standard output.
+
 ## Chrononuensis measurement example
 
 The following historical local measurements are retained from the integration guide. They describe that recorded workload and environment, not a new benchmark run for this documentation change.

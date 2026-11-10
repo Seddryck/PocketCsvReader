@@ -12,6 +12,12 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        if (args is ["--arrow-batch-timing"])
+        {
+            ArrowBatchTiming.RunMatrixAsync().GetAwaiter().GetResult();
+            return;
+        }
+
         if (args is ["--reader-filtering-matrix"])
         {
             ReaderFiltering.RunMatrix();
