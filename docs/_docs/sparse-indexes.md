@@ -27,7 +27,7 @@ var csv = new CsvReaderBuilder()
 var dateIndex = new SparseIndex(new IndexKey<DateOnly>("Date"), checkpointInterval: 1024);
 ```
 
-`IndexKey<DateOnly>("Date")` uses `yyyy-MM-dd`, invariant culture, and the default `DateOnly` comparer. Supply `format` or `culture` if the input uses different date settings. The checkpoint interval is explicit. A smaller interval records more checkpoints and reduces the number of rows between the starting checkpoint and the target.
+`IndexKey<DateOnly>("Date")` uses the reader's registered `DateOnly` runtime parser if available. Otherwise it uses `yyyy-MM-dd` with invariant culture. Both use the default `DateOnly` comparer. An explicit `format` or `culture` on the index key takes precedence over the runtime parser. A smaller checkpoint interval records more checkpoints and reduces the number of rows between the starting checkpoint and the target.
 
 ## Build the sidecar
 
@@ -41,7 +41,7 @@ csv.BuildIndexes("orders.csv", dateIndex);
 
 ## Look up a key
 
-Use the same reader and key settings to load the existing sidecar. This can run in a separate process from the build step.
+Use the same reader settings, parser registration, and index key settings to load the existing sidecar. This can run in a separate process from the build step.
 
 ```csharp
 var date = new DateOnly(2026, 5, 17);
@@ -57,6 +57,31 @@ The lookup returns all matching rows in source order. By default, it requires a 
 For partitioned CSV, call `selected.BuildIndexes(dateIndex)` during preparation. At lookup time, call `selected.WithIndexedLookup(dateIndex, date).ToDataReader()` on the selected partition query. With headers enabled, each indexed partition must carry its own header. Sparse indexing is unsupported for partitioned CSV with `HeaderRepeat = false`. [Read partitioned CSV files](../file-partitions/) · [Shared-header support](https://github.com/Seddryck/PocketCsvReader/issues/441)
 
 An already-open `IDataReader` can use `WithIndexedLookup(dateIndex.WithOptionalIndex(), date)`. It scans the reader, skips missing or null keys, and owns the input reader until disposal. The scan works on unsorted records.
+
+## Use the reader's runtime parser
+
+If the source stores dates as `dd/MM/yyyy`, register the parser on the reader and keep the same index definition. Use this reader in both the build and lookup steps above.
+
+```csharp
+using System.Globalization;
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+using PocketCsvReader.Indexing;
+
+ParseSpan<DateOnly> parseDate = ParseOrderDate;
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+    .WithParsers(p => p.WithParser(parseDate))
+    .Build();
+var dateIndex = new SparseIndex(new IndexKey<DateOnly>("Date"), checkpointInterval: 1024);
+
+static DateOnly ParseOrderDate(ReadOnlySpan<char> text)
+    => DateOnly.ParseExact(text, "dd/MM/yyyy", CultureInfo.InvariantCulture);
+```
+
+PocketCsvReader uses this parser for the source keys and the checkpoint text. It derives the compatibility ID internally and checks it before parsing any checkpoints. Rebuild the sidecar if the parser or its compiled module changes.
+
+Persisted indexes require a deterministic static method or non-capturing lambda. Avoid dependencies on mutable settings, ambient culture, or the clock because PocketCsvReader cannot detect changes in that state. A capturing lambda or instance method can still be used for a file scan when the index is optional and no sidecar is present. [Register custom parsers](../fluent-api-runtime-parsers/)
 
 ## Detect a stale sidecar
 

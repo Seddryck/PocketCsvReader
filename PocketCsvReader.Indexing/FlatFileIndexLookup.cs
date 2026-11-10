@@ -24,6 +24,7 @@ public static class FlatFileIndexLookup
         }
 
         var configuration = GetConfiguration(reader) ?? throw UnsupportedSource();
+        index = index.ResolveRuntimeParser(reader.Profile.Parsers);
         SparseIndexSidecar.Build(path, reader.FileBufferSize, index, configuration,
             (source, bomLength) =>
             {
@@ -45,11 +46,12 @@ public static class FlatFileIndexLookup
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(index);
-        var key = index.Key;
-        var requested = ReaderLookup.ValidateKey(key, value);
+        var requested = ReaderLookup.ValidateKey(index.Key, value);
         if (reader is CsvReader csv && reader.GetType() == typeof(CsvReader))
             return CsvIndexLookup.ForFile(csv, path).WithIndexedLookup(index, value).ToDbDataReader();
 
+        index = index.ResolveRuntimeParser(reader.Profile.Parsers);
+        var key = index.Key;
         var configuration = GetConfiguration(reader);
         if (configuration is null)
         {

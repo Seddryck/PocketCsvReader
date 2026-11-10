@@ -20,6 +20,7 @@ internal static class SparseIndexSidecar
         Func<FileStream, int, TReader> openReader, ReadKey<TReader> readKey, Func<TReader, int> readFieldCount)
         where TReader : IAsyncDataReader
     {
+        var compatibilityId = index.Key.CompatibilityId;
         using var stream = OpenSource(path, bufferSize, building: true);
         var before = SourceStamp.Read(stream);
         var bomLength = ReadUtf8BomLength(stream);
@@ -49,7 +50,7 @@ internal static class SparseIndexSidecar
         var fieldCount = readFieldCount(reader);
 
         RequireUnchanged(stream, before);
-        var metadata = CreateMetadata(index, configuration, before, rowCount, fieldCount);
+        var metadata = CreateMetadata(index, configuration, before, rowCount, fieldCount, compatibilityId);
         metadata.Add("checksum", Checksum(metadata, checkpoints));
         var target = stream.Name + ".sparse.idx";
         var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -115,7 +116,7 @@ internal static class SparseIndexSidecar
             || !int.TryParse(fields, NumberStyles.None, Invariant, out var fieldCount))
             throw new InvalidDataException("The sparse index is corrupt.");
 
-        var expected = CreateMetadata(index, configuration, sourceStamp, rowCount, fieldCount);
+        var expected = CreateMetadata(index, configuration, sourceStamp, rowCount, fieldCount, index.Key.CompatibilityId);
         // The on-disk interval controls the interpretation of checkpoints. A caller
         // can use an existing index even if its next build would use a different interval.
         if (!metadata.TryGetValue("checkpointInterval", out var intervalText)
@@ -189,7 +190,7 @@ internal static class SparseIndexSidecar
     }
 
     private static Dictionary<string, string> CreateMetadata(SparseIndex index, SourceConfiguration configuration,
-        SourceStamp stamp, int rowCount, int fieldCount)
+        SourceStamp stamp, int rowCount, int fieldCount, string compatibilityId)
     {
         return new(StringComparer.Ordinal)
         {
@@ -200,7 +201,7 @@ internal static class SparseIndexSidecar
             ["sourceByteLength"] = stamp.Length.ToString(Invariant),
             ["sourceLastWriteUtc"] = stamp.LastWriteUtc.ToString("O", Invariant),
             [configuration.Field] = configuration.Id,
-            ["compatibilityId"] = index.Key.CompatibilityId,
+            ["compatibilityId"] = compatibilityId,
             ["dataRowCount"] = rowCount.ToString(Invariant),
             ["fieldCount"] = fieldCount.ToString(Invariant)
         };

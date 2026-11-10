@@ -34,7 +34,11 @@ public class RuntimeParsersDescriptorBuilder
     }
 
     public RuntimeParsersDescriptorBuilder WithParser<T>(ParseFunction<T> parse)
-        => WithParser(typeof(T), (string str) => parse.Invoke(str)!);
+    {
+        ArgumentNullException.ThrowIfNull(parse);
+        _types[typeof(T)] = descriptor => descriptor.AddParser(parse);
+        return this;
+    }
 
     public RuntimeParsersDescriptorBuilder WithParser(Type type, ParseFunction parse)
     {

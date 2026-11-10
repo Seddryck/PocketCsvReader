@@ -59,6 +59,45 @@ public class FileIndexLookupTest
     }
 
     [Test]
+    public void NdjsonReusesTheRegisteredStringDelegateForBuildAndLookup()
+    {
+        var path = Write("orders.ndjson", "{\"date\":\"31/01/2026\",\"id\":\"a\"}\n"
+            + "{\"date\":\"17/05/2026\",\"id\":\"b\"}\n{\"date\":\"01/12/2026\",\"id\":\"c\"}\n");
+        var reader = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n"))
+            .WithParsers(p => p.WithParser<DateOnly>((string text) =>
+                DateOnly.ParseExact(text, "dd/MM/yyyy", CultureInfo.InvariantCulture))).Build();
+        var index = new SparseIndex(new IndexKey<DateOnly>("date"), 1);
+        var date = new DateOnly(2026, 5, 17);
+
+        using (var scan = reader.WithIndexedLookup(path, index.WithOptionalIndex(), date))
+            Assert.That(ReadStrings(scan, "id"), Is.EqualTo(new[] { "b" }));
+
+        reader.BuildIndexes(path, index);
+        using var indexed = reader.WithIndexedLookup(path, index, date);
+        Assert.That(ReadStrings(indexed, "id"), Is.EqualTo(new[] { "b" }));
+    }
+
+    [Test]
+    public void CapturingRuntimeParserCanScanButCannotUseAPersistedIndex()
+    {
+        var path = Write("orders.ndjson", "{\"date\":\"2026-05-17\"}\n");
+        var format = "yyyy-MM-dd";
+        var reader = new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n"))
+            .WithParsers(p => p.WithParser<DateOnly>((ReadOnlySpan<char> text) =>
+                DateOnly.ParseExact(text, format, CultureInfo.InvariantCulture))).Build();
+        var index = new SparseIndex(new IndexKey<DateOnly>("date"), 1);
+        var date = new DateOnly(2026, 5, 17);
+
+        Assert.Throws<NotSupportedException>(() => reader.BuildIndexes(path, index));
+        Assert.That(File.Exists(path + ".sparse.idx"), Is.False);
+        using (var scan = reader.WithIndexedLookup(path, index.WithOptionalIndex(), date))
+            Assert.That(ReadStrings(scan, "date"), Is.EqualTo(new[] { "2026-05-17" }));
+
+        new NdjsonReaderBuilder().WithDialect(d => d.WithLineTerminator("\n")).Build().BuildIndexes(path, index);
+        Assert.Throws<NotSupportedException>(() => reader.WithIndexedLookup(path, index.WithOptionalIndex(), date));
+    }
+
+    [Test]
     public void RequiredIsDefaultAndOptionalScansAnUnsortedNdjsonFile()
     {
         var path = Write("unsorted.ndjson", "{\"key\":4}\n{\"key\":2}\n{\"key\":3}\n{\"key\":2}\n");

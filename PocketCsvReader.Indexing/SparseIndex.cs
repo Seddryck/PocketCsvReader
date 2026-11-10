@@ -1,4 +1,8 @@
 using System.Globalization;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
+using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Indexing;
 
@@ -11,10 +15,14 @@ public interface IIndexKey
     internal string CompatibilityId { get; }
     internal object Parse(ReadOnlySpan<char> text);
     internal int Compare(object left, object right);
+    internal IIndexKey ResolveRuntimeParser(RuntimeParsersDescriptor? parsers) => this;
 }
 
 /// <summary>Defines a key using library-supported parsing and comparison settings.</summary>
-/// <remarks>Culture settings use standard culture data without user overrides.</remarks>
+/// <remarks>
+/// A file reader's registered runtime parser is used unless a format or culture is specified.
+/// Culture settings use standard culture data without user overrides.
+/// </remarks>
 public sealed class IndexKey<TKey> : IIndexKey
     where TKey : ISpanParsable<TKey>
 {
@@ -25,6 +33,7 @@ public sealed class IndexKey<TKey> : IIndexKey
     private readonly ParseSpan<TKey> _parse;
     private readonly IComparer<TKey> _comparer;
     private readonly string _compatibilityId;
+    private readonly bool _useRuntimeParser;
 
     public IndexKey(string columnName, string? format = null, CultureInfo? culture = null,
         StringComparison? comparison = null)
@@ -44,6 +53,7 @@ public sealed class IndexKey<TKey> : IIndexKey
 
     private IndexKey(string? format, CultureInfo? culture, StringComparison? comparison)
     {
+        _useRuntimeParser = format is null && culture is null;
         var effectiveCulture = CultureInfo.GetCultureInfo(culture?.Name ?? "");
         _comparer = Comparer<TKey>.Default;
         if (typeof(TKey) == typeof(string))
@@ -141,6 +151,40 @@ public sealed class IndexKey<TKey> : IIndexKey
     string IIndexKey.CompatibilityId => _compatibilityId;
     object IIndexKey.Parse(ReadOnlySpan<char> text) => _parse(text)!;
     int IIndexKey.Compare(object left, object right) => _comparer.Compare((TKey)left, (TKey)right);
+
+    IIndexKey IIndexKey.ResolveRuntimeParser(RuntimeParsersDescriptor? parsers)
+        => _useRuntimeParser && parsers?.FindParser(KeyType) is { } parser
+            ? new RegisteredKey(this, (ParseSpan<TKey>)parser.Span, parser.Registration)
+            : this;
+
+    private sealed class RegisteredKey(IndexKey<TKey> key, ParseSpan<TKey> parse, Delegate registration) : IIndexKey
+    {
+        public Type KeyType => key.KeyType;
+        string? IIndexKey.ColumnName => key.ColumnName;
+        int? IIndexKey.ColumnOrdinal => key.ColumnOrdinal;
+        string IIndexKey.CompatibilityId => key.GetRegisteredCompatibilityId(registration);
+        object IIndexKey.Parse(ReadOnlySpan<char> text) => parse(text)!;
+        int IIndexKey.Compare(object left, object right) => key._comparer.Compare((TKey)left, (TKey)right);
+    }
+
+    private string GetRegisteredCompatibilityId(Delegate registration)
+    {
+        var method = registration.Method;
+        if (registration.GetInvocationList().Length != 1 || method is DynamicMethod || method.Module.Assembly.IsDynamic
+            || (registration.Target is { } target && (method.IsStatic || !IsStatelessLambda(target.GetType()))))
+        {
+            throw new NotSupportedException("A persisted sparse index requires a static runtime parser or a non-capturing lambda.");
+        }
+
+        return SparseIndexSidecar.Fingerprint(["runtime-parser-v1", _compatibilityId,
+            method.Module.ModuleVersionId.ToString(), method.MetadataToken.ToString(CultureInfo.InvariantCulture),
+            method.DeclaringType?.AssemblyQualifiedName, registration.GetType().AssemblyQualifiedName,
+            Environment.Version.ToString(), .. method.GetGenericArguments().Select(type => type.AssemblyQualifiedName)]);
+    }
+
+    private static bool IsStatelessLambda(Type type)
+        => type.BaseType == typeof(object) && type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false)
+            && type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Length == 0;
 }
 
 /// <summary>Defines a sparse index and the number of data records between checkpoints.</summary>
@@ -162,6 +206,12 @@ public sealed class SparseIndex
     public IIndexKey Key { get; }
     public int CheckpointInterval { get; }
     internal bool RequiresIndex { get; }
+
+    internal SparseIndex ResolveRuntimeParser(RuntimeParsersDescriptor? parsers)
+    {
+        var key = Key.ResolveRuntimeParser(parsers);
+        return ReferenceEquals(key, Key) ? this : new(key, CheckpointInterval, RequiresIndex);
+    }
 
     /// <summary>Requires a usable index for each source. This is the default.</summary>
     public SparseIndex WithRequiredIndex() => RequiresIndex ? this : new(Key, CheckpointInterval, requiresIndex: true);
