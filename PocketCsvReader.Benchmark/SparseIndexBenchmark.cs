@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using PocketCsvReader.Configuration;
+using PocketCsvReader.Indexing;
 
 namespace PocketCsvReader.Benchmark;
 
@@ -21,10 +22,13 @@ internal static class SparseIndexBenchmark
         try
         {
             var path = Path.Combine(directory.FullName, "orders.csv");
+            var scanPath = Path.Combine(directory.FullName, "unindexed.csv");
             var first = new DateOnly(2026, 1, 1);
             Generate(path, first);
+            File.Copy(path, scanPath);
             var files = new[] { FileSource.Partitioned(path, 2026) };
             var query = Builder().FromFiles(files).Build();
+            var scan = Builder().FromFiles(new[] { FileSource.Partitioned(scanPath, 2026) }).Build();
             var index = new SparseIndex(new IndexKey<DateOnly>("Date", format: DateFormat, culture: Culture), Interval);
 
             query.BuildIndexes(index);
@@ -39,10 +43,8 @@ internal static class SparseIndexBenchmark
             Console.WriteLine("Date        Rows   Sequential (ms)   Indexed (ms)    Speedup");
             foreach (var date in new[] { first, first.AddDays(Days / 2), first.AddDays(Days - 1) })
             {
-                var sequential = Builder()
-                    .WithFilter("Date", text => DateOnly.ParseExact(text, DateFormat, Culture) == date)
-                    .FromFiles(files).Build();
-                var indexed = query.WithIndexedLookup(index, date);
+                var sequential = scan.WithIndexedLookup(index, date);
+                var indexed = query.WithIndexedLookup(index, date, requireIndex: true);
                 var expected = ReadMatches(sequential);
                 for (int i = 0; i < 8; i++)
                 {

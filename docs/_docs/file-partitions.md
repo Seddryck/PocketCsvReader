@@ -72,9 +72,11 @@ CSV row filters still run on rows in the selected files. When headers are enable
 
 ## Look up an exact key in sorted files
 
-Use a sparse index when each selected file is already sorted in ascending order by the indexed column. For example, `selected` can be a partition query over May 2026 orders sorted by `Date`.
+Add the `PocketCsvReader.Indexing` package to use sparse indexes with files sorted in ascending order by the indexed column. For example, `selected` can be a partition query over May 2026 orders sorted by `Date`.
 
 ```csharp
+using PocketCsvReader.Indexing;
+
 var dateKey = new IndexKey<DateOnly>("Date", format: "yyyy-MM-dd",
     culture: System.Globalization.CultureInfo.InvariantCulture);
 var dateIndex = new SparseIndex(dateKey, checkpointInterval: 1024);
@@ -86,9 +88,16 @@ while (rows.Read())
     Console.WriteLine(rows["OrderId"]);
 ```
 
-`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. An indexed lookup returns all matching rows in source order. It validates each sidecar when the reader reaches the associated file. Rebuild the index after updating the CSV, or after changing the indexed column or its key settings. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
+`BuildIndexes` scans each selected file and writes its sidecar beside the source, for example `orders.csv.sparse.idx`. A lookup returns all matching rows in source order. It seeks when the file has a valid sidecar and scans when the sidecar is absent or the source cannot be indexed. Pass `requireIndex: true` to require a sidecar for every file. A stale, corrupt, unreadable, or incompatible sidecar for an indexable file fails the lookup. A source edit that preserves both its byte length and its UTC last-write time can go undetected.
 
-Sparse indexing supports filesystem paths for uncompressed UTF-8 files with ASCII CSV syntax. The source may start with a UTF-8 BOM, and fields can contain Unicode text and quoted line breaks. Use a column name with headers or a zero-based ordinal. Numbered comment rows, array fields, and custom stream openers require a sequential query.
+Sparse sidecars support filesystem paths for uncompressed UTF-8 files with ASCII CSV syntax. The source may start with a UTF-8 BOM, and fields can contain Unicode text and quoted line breaks. Use a column name with headers or a zero-based ordinal.
+
+The same lookup works directly with any `IDataReader`, including an NDJSON reader. This overload scans the reader, skips missing or null keys, and owns the input reader until disposal. It accepts an `IndexKey<TKey>` or a `SparseIndex`.
+
+```csharp
+using var jsonRows = ndjsonReader.ToDataReader("orders.ndjson")
+    .WithIndexedLookup(dateKey, new DateOnly(2026, 5, 17));
+```
 
 ## Extract partitions from filenames
 

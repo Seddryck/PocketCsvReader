@@ -166,10 +166,10 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     /// Advances the reader to the next CSV record.
     /// </summary>
     /// <returns><c>true</c> if a new record was read; <c>false</c> if the end of the file has been reached.</returns>
-    protected override bool ReadCore() => _indexedLookup is null ? ReadRow() : ReadIndexedRow();
+    protected override bool ReadCore() => _selectRecord is null ? ReadRow() : ReadSelectedRow();
 
     protected override ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
-        => _indexedLookup is null ? ReadRowAsync(cancellationToken) : ReadIndexedRowAsync(cancellationToken);
+        => _selectRecord is null ? ReadRowAsync(cancellationToken) : ReadSelectedRowAsync(cancellationToken);
 
     /// <summary>
     /// Reads the next non-comment CSV row, handling headers and end-of-file conditions as needed.

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace PocketCsvReader;
+namespace PocketCsvReader.Indexing;
 
 internal static class SparseIndexSidecar
 {
@@ -16,14 +16,14 @@ internal static class SparseIndexSidecar
     public static FileStream OpenSource(string path, int bufferSize, bool building = false)
         => new(path, FileMode.Open, FileAccess.Read, building ? FileShare.ReadWrite : FileShare.Read, bufferSize, useAsync: true);
 
-    public static CsvProfile CreateProfile(CsvProfile source, bool building)
-    {
-        if (!Utf8RecordSource.Supports(source) || !string.IsNullOrEmpty(source.Resource?.Compression)
-            || (source.Resource?.Encoding is { Length: > 0 } encoding && Encoding.GetEncoding(encoding).CodePage != Encoding.UTF8.CodePage)
-            || source.Dialect.CommentRows is { Length: > 0 } || source.ParserOptimizations.RowCountAtStart)
-            throw new NotSupportedException("Sparse indexes require uncompressed UTF-8 CSV with ASCII syntax and without array fields, numbered comment rows, a leading row count, or a bad-data policy.");
+    public static bool Supports(CsvProfile source)
+        => Utf8RecordSource.Supports(source) && string.IsNullOrEmpty(source.Resource?.Compression)
+            && (string.IsNullOrEmpty(source.Resource?.Encoding) || Encoding.GetEncoding(source.Resource.Encoding).CodePage == Encoding.UTF8.CodePage)
+            && source.Dialect.CommentRows is not { Length: > 0 } && !source.ParserOptimizations.RowCountAtStart
+            && (!source.Dialect.Header || source.Dialect.HeaderRepeat);
 
-        return new(source.Dialect, building ? null : source.Schema, building ? null : source.Resource, building ? null : source.Parsers)
+    public static CsvProfile CreateProfile(CsvProfile source, bool building)
+        => new(source.Dialect, building ? null : source.Schema, building ? null : source.Resource, building ? null : source.Parsers)
         {
             Filters = building ? [] : source.Filters,
             Skip = building ? 0 : source.Skip,
@@ -32,8 +32,6 @@ internal static class SparseIndexSidecar
             StreamInitialization = new(ProbeEncoding: true, InputMode: CsvInputMode.Utf8Bytes),
             ParserOptimizations = source.ParserOptimizations with { TrackPosition = building }
         };
-    }
-
     public static void Build(string path, CsvProfile profile, SparseIndex index)
     {
         using var stream = OpenSource(path, profile.ParserOptimizations.BufferSize, building: true);
@@ -52,8 +50,11 @@ internal static class SparseIndexSidecar
             while (reader.Read())
             {
                 if (ordinal < 0)
-                    ordinal = reader.ResolveIndexOrdinal(index.Key);
-                var keyText = reader.GetIndexKeyText(ordinal);
+                    ordinal = CsvIndexLookup.ResolveOrdinal(reader, index.Key);
+                var field = reader.GetDecodedField(ordinal);
+                if (!field.HasValue)
+                    throw new InvalidDataException($"Data record {reader.RowCount} has no value for the indexed column.");
+                var keyText = field.Value;
                 var key = index.Key.Parse(keyText);
                 if (previous is not null && index.Key.Compare(previous, key) > 0)
                     throw new InvalidDataException($"The sparse index key in '{path}' is out of ascending order at data record {rowCount + 1}.");
@@ -64,7 +65,7 @@ internal static class SparseIndexSidecar
                 rowCount = checked(rowCount + 1);
             }
             if (rowCount == 0 && profile.Dialect.Header)
-                reader.ResolveIndexOrdinal(index.Key);
+                CsvIndexLookup.ResolveOrdinal(reader, index.Key);
             fieldCount = reader.SourceHeaders?.Length ?? 0;
         }
 
@@ -94,7 +95,7 @@ internal static class SparseIndexSidecar
         }
     }
 
-    public static Selection Find(FileStream source, CsvProfile profile, SparseIndex index, object requested)
+    public static CsvRecordRange Find(FileStream source, CsvProfile profile, SparseIndex index, object requested)
     {
         using var file = new FileStream(source.Name + ".sparse.idx", FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         using var reader = new CsvDataReader(file, SidecarProfile);
@@ -170,7 +171,7 @@ internal static class SparseIndexSidecar
         }
 
         int start = low - 1;
-        return new(index.Key, requested, start < 0 ? null : checkpoints[start].Offset,
+        return new(start < 0 ? null : checkpoints[start].Offset,
             start < 0 ? 0 : checked(start * interval), rowCount, fieldCount);
     }
 
@@ -250,5 +251,4 @@ internal static class SparseIndexSidecar
     }
 
     private readonly record struct Checkpoint(long Offset, string Text);
-    internal sealed record Selection(IIndexKey Key, object Value, long? Offset, int SkippedRows, int RowCount, int FieldCount);
 }

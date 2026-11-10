@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace PocketCsvReader;
+namespace PocketCsvReader.Indexing;
 
 /// <summary>Describes the column and typed rules used by an index.</summary>
 public interface IIndexKey

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Indexing</PackageId>
+    <PackageTags>CSV sparse index equality lookup DataReader</PackageTags>
+    <Description>Exact-key lookup for data readers with optional sparse indexes for sorted CSV files.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>

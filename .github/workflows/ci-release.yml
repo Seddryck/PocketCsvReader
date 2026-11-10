@@ -88,6 +88,10 @@ jobs:
             artifact: ndjson
             project: PocketCsvReader.Ndjson.Testing/PocketCsvReader.Ndjson.Testing.csproj
             include: '[PocketCsvReader*]*'
+          - name: PocketCsvReader.Indexing
+            artifact: indexing
+            project: PocketCsvReader.Indexing.Testing/PocketCsvReader.Indexing.Testing.csproj
+            include: '[PocketCsvReader.Indexing]*'
           - name: PocketCsvReader.Arrow
             artifact: arrow
             project: PocketCsvReader.Arrow.Testing/PocketCsvReader.Arrow.Testing.csproj
@@ -264,6 +268,9 @@ jobs:
           - name: PocketCsvReader.Ndjson
             artifact: ndjson
             project: PocketCsvReader.Ndjson/PocketCsvReader.Ndjson.csproj
+          - name: PocketCsvReader.Indexing
+            artifact: indexing
+            project: PocketCsvReader.Indexing/PocketCsvReader.Indexing.csproj
           - name: PocketCsvReader.Arrow
             artifact: arrow
             project: PocketCsvReader.Arrow/PocketCsvReader.Arrow.csproj

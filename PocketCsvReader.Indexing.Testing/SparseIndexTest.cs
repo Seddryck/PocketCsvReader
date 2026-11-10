@@ -3,7 +3,7 @@ using System.Text;
 using NUnit.Framework;
 using PocketCsvReader.Configuration;
 
-namespace PocketCsvReader.Testing;
+namespace PocketCsvReader.Indexing.Testing;
 
 [TestFixture]
 public class SparseIndexTest
@@ -109,6 +109,34 @@ public class SparseIndexTest
     }
 
     [Test]
+    public void AQueryCombinesIndexedFilesAndUnsortedScanFallbacks()
+    {
+        var sorted = Write("sorted.csv", "Key,Id\n1,a\n2,b\n3,c\n");
+        var unsorted = Write("unsorted.csv", "Key,Id\n3,d\n2,e\n1,f\n2,g\n");
+        var descriptors = new[] { FileSource.Partitioned(sorted, true), FileSource.Partitioned(unsorted, false) };
+        var query = new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .FromFiles(descriptors).Build();
+        var index = new SparseIndex(new IndexKey<int>("Key"), 1);
+        query.WithPartitionFilter(selected => selected).BuildIndexes(index);
+
+        Assert.That(Collect(query.WithIndexedLookup(index, 2), 1), Is.EqualTo(new[] { "b", "e", "g" }));
+        Assert.That(File.Exists(unsorted + ".sparse.idx"), Is.False);
+    }
+
+    [Test]
+    public void ACustomCsvSourceUsesTheScanFallbackBeforeTheQueryWindow()
+    {
+        var files = new[] { FileSource.Partitioned("virtual.csv", true,
+            () => new MemoryStream("Key,Id\n3,a\n2,b\n1,c\n2,d\n"u8.ToArray())) };
+        var query = new CsvReaderBuilder().WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithSkip(1).WithTake(1).FromFiles(files).Build();
+        var index = new SparseIndex(new IndexKey<int>("Key"), 1);
+
+        Assert.That(Collect(query.WithIndexedLookup(index, 2), 1), Is.EqualTo(new[] { "d" }));
+        AssertReadFails<NotSupportedException>(query.WithIndexedLookup(index, 2, requireIndex: true));
+    }
+
+    [Test]
     public void IncompatibleColumnParserAndSourceDialectAreRejected()
     {
         var path = Write("dates.csv", "Date,Other\n2026-01-01,2026-01-01\n2026-05-17,2026-05-17\n");
@@ -143,7 +171,7 @@ public class SparseIndexTest
         {
             case "missing":
                 File.Delete(sidecar);
-                AssertReadFails<FileNotFoundException>(query.WithIndexedLookup(index, 2));
+                AssertReadFails<FileNotFoundException>(query.WithIndexedLookup(index, 2, requireIndex: true));
                 return;
             case "corrupt":
                 File.WriteAllText(sidecar, File.ReadAllText(sidecar).Replace("checkpoint,6,2", "checkpoint,5,2"));
