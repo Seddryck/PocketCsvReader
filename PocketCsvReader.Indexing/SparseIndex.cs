@@ -15,6 +15,8 @@ public interface IIndexKey
     internal string CompatibilityId { get; }
     internal object Parse(ReadOnlySpan<char> text);
     internal int Compare(object left, object right);
+    internal ulong GetBloomHash(object value) => throw new NotSupportedException("This key does not support Bloom indexes.");
+    internal string? BloomHashCompatibility => null;
     internal IIndexKey ResolveRuntimeParser(RuntimeParsersDescriptor? parsers) => this;
 }
 
@@ -34,6 +36,8 @@ public sealed class IndexKey<TKey> : IIndexKey
     private readonly IComparer<TKey> _comparer;
     private readonly string _compatibilityId;
     private readonly bool _useRuntimeParser;
+    private readonly StringComparison _stringComparison;
+    private readonly CompareInfo? _comparisonSort;
 
     public IndexKey(string columnName, string? format = null, CultureInfo? culture = null,
         StringComparison? comparison = null)
@@ -68,15 +72,20 @@ public sealed class IndexKey<TKey> : IIndexKey
                     => CultureInfo.InvariantCulture,
                 _ => null
             };
+            _stringComparison = effectiveComparison;
+            _comparisonSort = comparisonCulture?.CompareInfo;
             var comparer = comparisonCulture is null ? StringComparer.FromComparison(effectiveComparison)
                 : StringComparer.Create(comparisonCulture, effectiveComparison is
                     StringComparison.CurrentCultureIgnoreCase or StringComparison.InvariantCultureIgnoreCase);
             _comparer = (IComparer<TKey>)(object)comparer;
             _parse = text => (TKey)(object)text.ToString();
-            _compatibilityId = SparseIndexSidecar.Fingerprint(
-                [KeyType.FullName, effectiveComparison.ToString(), comparisonCulture?.Name,
-                 comparisonCulture?.CompareInfo.Version.SortId.ToString(),
-                 comparisonCulture?.CompareInfo.Version.FullVersion.ToString(CultureInfo.InvariantCulture)]);
+            _compatibilityId = SparseIndexSidecar.Fingerprint([
+                KeyType.FullName,
+                effectiveComparison.ToString(),
+                comparisonCulture?.Name,
+                comparisonCulture?.CompareInfo.Version.SortId.ToString(),
+                comparisonCulture?.CompareInfo.Version.FullVersion.ToString(CultureInfo.InvariantCulture)
+            ]);
             return;
         }
 
@@ -111,7 +120,7 @@ public sealed class IndexKey<TKey> : IIndexKey
         }
         else
         {
-            throw new NotSupportedException($"Sparse index rules for '{typeof(TKey)}' are not supported.");
+            throw new NotSupportedException($"Index key rules for '{typeof(TKey)}' are not supported.");
         }
     }
 
@@ -149,6 +158,10 @@ public sealed class IndexKey<TKey> : IIndexKey
     }
 
     string IIndexKey.CompatibilityId => _compatibilityId;
+    ulong IIndexKey.GetBloomHash(object value) => BloomKeyHash.Compute(value, _stringComparison, _comparisonSort);
+    string? IIndexKey.BloomHashCompatibility => _stringComparison == StringComparison.OrdinalIgnoreCase
+        ? SparseIndexSidecar.Fingerprint([CultureInfo.InvariantCulture.CompareInfo.Version.SortId.ToString(),
+            Environment.Version.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSDescription]) : null;
     object IIndexKey.Parse(ReadOnlySpan<char> text) => _parse(text)!;
     int IIndexKey.Compare(object left, object right) => _comparer.Compare((TKey)left, (TKey)right);
 
@@ -163,6 +176,8 @@ public sealed class IndexKey<TKey> : IIndexKey
         string? IIndexKey.ColumnName => key.ColumnName;
         int? IIndexKey.ColumnOrdinal => key.ColumnOrdinal;
         string IIndexKey.CompatibilityId => key.GetRegisteredCompatibilityId(registration);
+        ulong IIndexKey.GetBloomHash(object value) => ((IIndexKey)key).GetBloomHash(value);
+        string? IIndexKey.BloomHashCompatibility => ((IIndexKey)key).BloomHashCompatibility;
         object IIndexKey.Parse(ReadOnlySpan<char> text) => parse(text)!;
         int IIndexKey.Compare(object left, object right) => key._comparer.Compare((TKey)left, (TKey)right);
     }
@@ -173,7 +188,7 @@ public sealed class IndexKey<TKey> : IIndexKey
         if (registration.GetInvocationList().Length != 1 || method is DynamicMethod || method.Module.Assembly.IsDynamic
             || (registration.Target is { } target && (method.IsStatic || !IsStatelessLambda(target.GetType()))))
         {
-            throw new NotSupportedException("A persisted sparse index requires a static runtime parser or a non-capturing lambda.");
+            throw new NotSupportedException("A persisted index requires a static runtime parser or a non-capturing lambda.");
         }
 
         return SparseIndexSidecar.Fingerprint(["runtime-parser-v1", _compatibilityId,

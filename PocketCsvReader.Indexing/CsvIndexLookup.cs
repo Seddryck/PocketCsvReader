@@ -88,7 +88,7 @@ public static class CsvIndexLookup
         return new(reader.Profile.ForSingleFile(), _ => [file]);
     }
 
-    private static int ResolveOrdinal(CsvDataReader reader, IIndexKey key)
+    internal static int ResolveOrdinal(CsvDataReader reader, IIndexKey key)
     {
         if (key.ColumnOrdinal is int ordinal)
             return checked(ordinal + (reader.HasRowNumber ? 1 : 0));
@@ -99,7 +99,7 @@ public static class CsvIndexLookup
         return index + (reader.HasRowNumber ? 1 : 0);
     }
 
-    private static bool Supports(CsvProfile source)
+    internal static bool Supports(CsvProfile source)
         => Utf8RecordSource.Supports(source) && FlatFileIndexLookup.IsUncompressedUtf8(source)
             && source.Dialect.CommentRows is not { Length: > 0 } && !source.ParserOptimizations.RowCountAtStart
             && (!source.Dialect.Header || source.Dialect.HeaderRepeat);
@@ -115,7 +115,7 @@ public static class CsvIndexLookup
             ParserOptimizations = source.ParserOptimizations with { TrackPosition = building }
         };
 
-    private static SourceConfiguration GetConfiguration(CsvProfile profile)
+    internal static SourceConfiguration GetConfiguration(CsvProfile profile)
     {
         var dialect = profile.Dialect;
         return new("csvConfigurationId", SparseIndexSidecar.Fingerprint([

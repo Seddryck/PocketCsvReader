@@ -294,9 +294,11 @@ public class SparseIndexTest
         Assert.That(File.Exists(path + ".sparse.idx"), Is.False);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void SourceChangingDuringTheScanDoesNotPublishASidecar(bool lengthChanges)
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public void SourceChangingDuringTheScanDoesNotPublishASidecar(bool lengthChanges, bool bloom)
     {
         var path = Write("numbers.csv", "Key\n1\n2\n");
         var stamp = File.GetLastWriteTimeUtc(path);
@@ -310,9 +312,21 @@ public class SparseIndexTest
             }
             File.SetLastWriteTimeUtc(path, lengthChanges ? stamp : stamp.AddHours(-1));
         });
-        var index = new SparseIndex(key, 1);
-        Assert.Throws<IOException>(() => Query(path).BuildIndexes(index));
-        Assert.That(File.Exists(path + ".sparse.idx"), Is.False);
+        var query = Query(path);
+        if (bloom)
+        {
+            var valid = new BloomIndex(new IndexKey<int>("Key"));
+            query.BuildIndexes(valid);
+            var sidecar = path + ".bloom.idx";
+            var original = File.ReadAllBytes(sidecar);
+            Assert.Throws<IOException>(() => query.BuildIndexes(new BloomIndex(key)));
+            Assert.That(File.ReadAllBytes(sidecar), Is.EqualTo(original));
+        }
+        else
+        {
+            Assert.Throws<IOException>(() => query.BuildIndexes(new SparseIndex(key, 1)));
+            Assert.That(File.Exists(path + ".sparse.idx"), Is.False);
+        }
     }
 
     private sealed class MutatingKey(Action mutate) : IIndexKey
@@ -324,6 +338,7 @@ public class SparseIndexTest
         int? IIndexKey.ColumnOrdinal => _inner.ColumnOrdinal;
         string IIndexKey.CompatibilityId => _inner.CompatibilityId;
         int IIndexKey.Compare(object left, object right) => _inner.Compare(left, right);
+        ulong IIndexKey.GetBloomHash(object value) => _inner.GetBloomHash(value);
 
         object IIndexKey.Parse(ReadOnlySpan<char> text)
         {

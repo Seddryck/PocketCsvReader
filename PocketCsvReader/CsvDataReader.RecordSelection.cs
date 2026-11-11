@@ -17,6 +17,8 @@ public partial class CsvDataReader
     internal void SelectRecords(Func<CsvDataReader, RecordSelection> select, Stream stream, CsvRecordRange? range)
         => (_selectRecord, _rangeStream, _recordRange) = (select, stream, range);
 
+    internal void SelectRecords(Func<CsvDataReader, RecordSelection> select) => _selectRecord = select;
+
     internal NullableSpan GetDecodedField(int ordinal)
     {
         var fields = CurrentFieldSpans!;
@@ -25,6 +27,9 @@ public partial class CsvDataReader
         var text = GetCurrentFieldMemory(ordinal).Span;
         return fields[ordinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
     }
+
+    internal NullableSpan GetIndexField(int ordinal)
+        => (uint)ordinal < (uint)CurrentFieldSpans!.Length ? GetValueOrThrow(ordinal) : default;
 
     private bool ReadSelectedRow()
     {
