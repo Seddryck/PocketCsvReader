@@ -7,7 +7,8 @@ namespace PocketCsvReader;
 
 public class CsvProfile : IProfile
 {
-    public IReadOnlyList<ReaderFilter> Filters { get; init; } = Array.Empty<ReaderFilter>();
+    private IReadOnlyList<ReaderFilter> _filters = Array.Empty<ReaderFilter>();
+    public IReadOnlyList<ReaderFilter> Filters { get => _filters; init => _filters = value; }
     public int Skip { get; init; }
     public int? Take { get; init; }
     public DialectDescriptor Dialect { get; private set; }
@@ -34,6 +35,16 @@ public class CsvProfile : IProfile
     }
 
     public virtual string EmptyCell { get; private set; }
+
+    internal CsvProfile WithFilters(IReadOnlyList<ReaderFilter> filters)
+    {
+        if (ReferenceEquals(_filters, filters))
+            return this;
+
+        var profile = (CsvProfile)MemberwiseClone();
+        profile._filters = filters;
+        return profile;
+    }
 
     internal CsvProfile ForSingleFile()
     {

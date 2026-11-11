@@ -70,7 +70,7 @@ public class ObjectStorageDirectoryTest
         {
             var source = useUri ? builder.FromDirectory(uri, "*.csv")
                 : builder.FromDirectory(client.Object, "analytics", prefix, "*.csv");
-            var query = source.HiveStyle("orders-{batch}.csv").Build().WithPartitionFilter(condition);
+            var query = source.HiveStyle("orders-{batch}.csv").Build().WithPartitionFilter(condition).WithFilter("Id", "42");
             dataReader = query.ToDataReader();
             files = query.EnumerateFilesAsync(token);
             Assert.Throws<NotSupportedException>(() => query.EnumerateFiles());
@@ -98,7 +98,7 @@ public class ObjectStorageDirectoryTest
         var read = reader.ReadAsync(token);
         await openStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.That(read.IsCompleted, Is.False);
-        var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id\n42\n"));
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes("Id\n41\n42\n"));
         open.SetResult(new GetObjectResponse { ResponseStream = stream });
         Assert.That(await read, Is.True);
         Assert.That(reader["Id"], Is.EqualTo("42"));
