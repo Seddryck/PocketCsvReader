@@ -1,6 +1,6 @@
 namespace PocketCsvReader;
 
-// A CSV batch shares this state across all of its input readers.
+// A file batch shares this state across all of its input readers.
 internal sealed class RecordWindow(int skip, int? take)
 {
     private int _skipRemaining = skip;

@@ -27,62 +27,35 @@ public abstract class ReaderBuilder<TBuilder>
 
     /// <summary>Keeps rows whose sanitized cell equals the expected text. Null never matches.</summary>
     public TBuilder WithFilter(string column, string expected, StringComparison comparison = StringComparison.Ordinal)
-    {
-        ArgumentNullException.ThrowIfNull(expected);
-        if (!Enum.IsDefined(comparison)) throw new ArgumentOutOfRangeException(nameof(comparison));
-        return WithFilter(column, value => value.Equals(expected.AsSpan(), comparison));
-    }
+        => WithFilter(column, ReaderFilter.TextEquals(expected, comparison));
 
     public TBuilder WithFilter(int ordinal, string expected, StringComparison comparison = StringComparison.Ordinal)
-    {
-        ArgumentNullException.ThrowIfNull(expected);
-        if (!Enum.IsDefined(comparison)) throw new ArgumentOutOfRangeException(nameof(comparison));
-        return WithFilter(ordinal, value => value.Equals(expected.AsSpan(), comparison));
-    }
+        => WithFilter(ordinal, ReaderFilter.TextEquals(expected, comparison));
 
     /// <summary>Keeps rows accepted by a sanitized-span predicate. The span is valid only during the call.</summary>
     public TBuilder WithFilter(string column, ParseSpan<bool> predicate)
-    {
-        ArgumentNullException.ThrowIfNull(column);
-        ArgumentNullException.ThrowIfNull(predicate);
-        _filters.Add(new(column, 0, predicate, null));
-        return (TBuilder)this;
-    }
+        => AddFilter(ReaderFilter.ForCell(column, predicate));
 
     public TBuilder WithFilter(int ordinal, ParseSpan<bool> predicate)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(ordinal);
-        ArgumentNullException.ThrowIfNull(predicate);
-        _filters.Add(new(null, ordinal, predicate, null));
-        return (TBuilder)this;
-    }
+        => AddFilter(ReaderFilter.ForCell(ordinal, predicate));
 
     /// <summary>Keeps rows accepted by a typed predicate using the getter's parsing rules.</summary>
     public TBuilder WithFilter<T>(string column, Func<T, bool> predicate)
-    {
-        ArgumentNullException.ThrowIfNull(column);
-        ArgumentNullException.ThrowIfNull(predicate);
-        _filters.Add(new(column, 0, null, (row, i) => Accept(row, i, predicate)));
-        return (TBuilder)this;
-    }
+        => AddFilter(ReaderFilter.ForCell(column, predicate));
 
     public TBuilder WithFilter<T>(int ordinal, Func<T, bool> predicate)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(ordinal);
-        ArgumentNullException.ThrowIfNull(predicate);
-        _filters.Add(new(null, ordinal, null, (row, i) => Accept(row, i, predicate)));
-        return (TBuilder)this;
-    }
-
-    private static bool Accept<T>(IRowView row, int ordinal, Func<T, bool> predicate)
-        => !(typeof(T).IsValueType && Nullable.GetUnderlyingType(typeof(T)) is null && row.IsDBNull(ordinal))
-            && predicate(row.GetFieldValue<T>(ordinal));
+        => AddFilter(ReaderFilter.ForCell(ordinal, predicate));
 
     /// <summary>Adds a read-only row predicate. Conditions run in registration order and short-circuit.</summary>
     public TBuilder WithRowFilter(Func<IRowView, bool> predicate)
     {
         ArgumentNullException.ThrowIfNull(predicate);
-        _filters.Add(new(predicate));
+        return AddFilter(new(predicate));
+    }
+
+    private TBuilder AddFilter(ReaderFilter filter)
+    {
+        _filters.Add(filter);
         return (TBuilder)this;
     }
 

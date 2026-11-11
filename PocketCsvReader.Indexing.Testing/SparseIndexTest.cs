@@ -145,6 +145,42 @@ public class SparseIndexTest
         Assert.That(numbers, Is.EqualTo(new[] { 3, 8 }));
     }
 
+    [TestCase(true)]
+    [TestCase(false)]
+    public void QueryRowFilterWorksBeforeOrAfterLookup(bool useSidecar)
+    {
+        var orders = Write("orders-BE.csv",
+            "Date,Status,OrderId,Channel\n" +
+            "2026-05-16,Shipped,older,Web\n" +
+            "2026-05-17,Pending,pending,Web\n" +
+            "2026-05-17,shipped,lowercase,Web\n" +
+            "2026-05-17,Shipped,store,Store\n" +
+            "2026-05-17,Shipped,first,Web\n" +
+            "2026-05-17,Shipped,second,Web\n" +
+            "2026-05-18,Shipped,later,Web\n");
+        var excluded = Path.Combine(_directory, "orders-FR.csv");
+        var files = new[] { FileSource.Partitioned(orders, true), FileSource.Partitioned(excluded, false) };
+        var selected = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithFilter("Channel", "Web")
+            .WithSkip(1).WithTake(1)
+            .FromFiles(files).Build().WithPartitionFilter(keep => keep);
+        var index = new SparseIndex(new IndexKey<DateOnly>("Date"), 1);
+        if (useSidecar)
+            selected.WithFilter("Status", "Unmatched").BuildIndexes(index);
+        else
+            index = index.WithOptionalIndex();
+
+        var date = new DateOnly(2026, 5, 17);
+        var before = selected.WithFilter("Status", "Shipped").WithIndexedLookup(index, date);
+        var lookup = selected.WithIndexedLookup(index, date);
+        var after = lookup.WithFilter("Status", "Shipped");
+
+        Assert.That(Collect(before, 2), Is.EqualTo(new[] { "second" }));
+        Assert.That(Collect(after, 2), Is.EqualTo(new[] { "second" }));
+        Assert.That(Collect(lookup, 2), Is.EqualTo(new[] { "lowercase" }));
+    }
+
     [Test]
     public void AQueryCombinesIndexedFilesAndUnsortedScanFallbacks()
     {

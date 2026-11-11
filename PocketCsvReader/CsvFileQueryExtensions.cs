@@ -8,12 +8,8 @@ public static class CsvFileQueryExtensions
         this CsvFileQuery<NamedPartitions> query, params PartitionCondition[] conditions)
     {
         ArgumentNullException.ThrowIfNull(query);
-        ArgumentNullException.ThrowIfNull(conditions);
-        var snapshot = conditions.ToArray();
-        if (snapshot.Any(condition => condition is null))
-            throw new ArgumentException("The conditions array contains a null entry.", nameof(conditions));
-
+        var snapshot = NamedPartitionFilter.Snapshot(conditions);
         return snapshot.Length == 0 ? query : query.WithNamedFilter(
-            partitions => snapshot.All(condition => condition.Matches(partitions[condition.Key])), snapshot);
+            partitions => NamedPartitionFilter.Accepts(partitions, snapshot), snapshot);
     }
 }
