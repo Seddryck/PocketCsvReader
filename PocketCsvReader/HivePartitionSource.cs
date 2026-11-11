@@ -19,6 +19,13 @@ internal sealed class HivePartitionSource(
     {
     }
 
+    internal static void ValidateSearchPattern(string searchPattern)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
+        if (searchPattern.IndexOfAny(['/', '\\', '\0']) >= 0 || Path.IsPathRooted(searchPattern) || searchPattern == "..")
+            throw new ArgumentException("The search pattern must be a filename glob.", nameof(searchPattern));
+    }
+
     public IEnumerable<PartitionedFile<NamedPartitions>> Discover(
         IReadOnlyList<PartitionCondition> conditions, FileNamePartitionPattern? pattern, Func<string, Stream>? open)
         => Visit(root, Empty, conditions, pattern, open);

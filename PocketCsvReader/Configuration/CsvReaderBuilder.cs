@@ -93,7 +93,7 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
         ArgumentNullException.ThrowIfNull(root);
         if (!root.IsAbsoluteUri)
             throw new ArgumentException("An absolute directory URI is required.", nameof(root));
-        ValidateDirectorySearchPattern(searchPattern);
+        HivePartitionSource.ValidateSearchPattern(searchPattern);
 
         var resolver = _directoryResolver
             ?? throw new InvalidOperationException("Configure a directory URI resolver with WithDirectoryResolver first.");
@@ -110,15 +110,8 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
     private CsvDirectoryBuilder CreateDirectoryBuilder(string root, string searchPattern, Func<string, Stream>? open)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        ValidateDirectorySearchPattern(searchPattern);
+        HivePartitionSource.ValidateSearchPattern(searchPattern);
         return new(this, new HivePartitionSource(Path.GetFullPath(root), searchPattern), open);
-    }
-
-    internal static void ValidateDirectorySearchPattern(string searchPattern)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
-        if (searchPattern.IndexOfAny(['/', '\\', '\0']) >= 0 || Path.IsPathRooted(searchPattern) || searchPattern == "..")
-            throw new ArgumentException("The search pattern must be a filename glob.", nameof(searchPattern));
     }
 
     public CsvReader Build()

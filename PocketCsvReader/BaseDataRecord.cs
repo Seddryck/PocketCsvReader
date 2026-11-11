@@ -15,6 +15,9 @@ namespace PocketCsvReader;
 public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader
     where TProfile : IProfile
 {
+    internal IReadOnlyList<ReaderFilter>? FileQueryFilters { get; set; }
+    internal IReadOnlyList<ReaderFilter> RowFilters => FileQueryFilters ?? Profile.Filters;
+
     // Allocate lazily: span-only filtering and unfiltered readers never create a value cache.
     // Values of struct types are boxed once per cached conversion.
     private Dictionary<(int Ordinal, Type Type, Delegate Parser), object?>? _rowValues;
@@ -22,7 +25,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private T ParseCached<T>(int i, ParseSpan<T> parse, ReadOnlySpan<char> span)
     {
-        if (Profile.Filters.Count == 0) return parse(span);
+        if (RowFilters.Count == 0) return parse(span);
         var key = (i, typeof(T), (Delegate)parse);
         if (_rowValues?.TryGetValue(key, out var cached) is true) return (T)cached!;
         var value = parse(span);
@@ -32,7 +35,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private object ParseBoxedCached(int i, ParseSpan<object> parse, ReadOnlySpan<char> span)
     {
-        if (Profile.Filters.Count == 0) return parse(span);
+        if (RowFilters.Count == 0) return parse(span);
         // Boxed and typed getters share the original typed delegate as their identity.
         var entry = Parser.TryGetEntry(i, out var fieldEntry) ? fieldEntry : null;
         if (entry is null && TryGetFieldDescriptor(i, out var field))
@@ -172,7 +175,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetNumeric<T>(int i)
     {
-        if (Profile.Filters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
         try
         {
             if (Parser.TryGetParser<T>(i, out var parse))
@@ -429,7 +432,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public T GetFieldValue<T>(int i)
     {
-        if (Profile.Filters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
         if (IsNullFieldValue<T>(i))
             return default!;
         try

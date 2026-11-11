@@ -243,14 +243,15 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     {
         if (_trackFileBytes) return true;
         if (_selectFileRecord is not null && !AcceptSelectedRecord()) return false;
-        if (Profile.Filters.Count == 0) return true;
+        var filters = RowFilters;
+        if (filters.Count == 0) return true;
         var view = _filterView ??= new RowView(this);
         view.Active = true;
         try
         {
-            for (var index = 0; index < Profile.Filters.Count; index++)
+            for (var index = 0; index < filters.Count; index++)
             {
-                var filter = Profile.Filters[index];
+                var filter = filters[index];
                 if (filter.RowPredicate is { } row)
                 {
                     if (!row(view)) return false;
