@@ -30,9 +30,37 @@ public static class ReaderLookup
         return Scan(reader, index.Key, requested);
     }
 
-    internal static DbDataReader Scan(IDataReader reader, IIndexKey key, object requested)
+    /// <summary>Scans an existing reader for exact equality using an optional zone map.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, ZoneMapIndex index, TKey value)
     {
-        var scan = new ScanningDataReader(reader, row => Matches(row, key, requested));
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        return Scan(reader, index, ZoneMapPredicate.EqualTo(index.Key, value));
+    }
+
+    /// <summary>Scans an existing reader for a typed range using an optional zone map.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, ZoneMapIndex index, IndexRange<TKey> range)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        return Scan(reader, index, ZoneMapPredicate.InRange(index.Key, range));
+    }
+
+    private static DbDataReader Scan(IDataReader reader, ZoneMapIndex index, ZoneMapPredicate predicate)
+    {
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a CSV reader and path, or use an optional index.");
+        return Scan(reader, index.Key, predicate.Contains);
+    }
+
+    internal static DbDataReader Scan(IDataReader reader, IIndexKey key, object requested)
+        => Scan(reader, key, value => key.Compare(value, requested) == 0);
+
+    private static DbDataReader Scan(IDataReader reader, IIndexKey key, Func<object, bool> matches)
+    {
+        var scan = new ScanningDataReader(reader, row => Matches(row, key, matches));
         return reader is DbDataReader db
             ? new DbDataReaderAdapter(scan, db.NextResultAsync)
             : new DbDataReaderAdapter(scan);
@@ -56,7 +84,7 @@ public static class ReaderLookup
         return value;
     }
 
-    private static bool Matches(IDataRecord row, IIndexKey key, object requested)
+    private static bool Matches(IDataRecord row, IIndexKey key, Func<object, bool> matches)
     {
         var ordinal = key.ColumnOrdinal ?? FindOrdinal(row, key.ColumnName!);
         if ((uint)ordinal >= (uint)row.FieldCount || row.IsDBNull(ordinal))
@@ -71,7 +99,7 @@ public static class ReaderLookup
             return false;
         if (!key.KeyType.IsInstanceOfType(field))
             throw new InvalidCastException($"The lookup column must contain '{key.KeyType}' values or text.");
-        return key.Compare(field, requested) == 0;
+        return matches(field);
     }
 
     private static int FindOrdinal(IDataRecord row, string column)

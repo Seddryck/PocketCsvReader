@@ -37,6 +37,7 @@
   - indexing
   - sparse-indexes
   - bloom-indexes
+  - zone-map-indexes
 - title: Configuration
   docs:
   - fluent-api-profile-configuration

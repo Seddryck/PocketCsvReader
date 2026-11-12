@@ -17,6 +17,7 @@ public interface IIndexKey
     internal int Compare(object left, object right);
     internal ulong GetBloomHash(object value) => throw new NotSupportedException("This key does not support Bloom indexes.");
     internal string? BloomHashCompatibility => null;
+    internal string? OrderingCompatibility => null;
     internal IIndexKey ResolveRuntimeParser(RuntimeParsersDescriptor? parsers) => this;
 }
 
@@ -159,9 +160,11 @@ public sealed class IndexKey<TKey> : IIndexKey
 
     string IIndexKey.CompatibilityId => _compatibilityId;
     ulong IIndexKey.GetBloomHash(object value) => BloomKeyHash.Compute(value, _stringComparison, _comparisonSort);
-    string? IIndexKey.BloomHashCompatibility => _stringComparison == StringComparison.OrdinalIgnoreCase
+    private string? OrdinalIgnoreCaseCompatibility => _stringComparison == StringComparison.OrdinalIgnoreCase
         ? SparseIndexSidecar.Fingerprint([CultureInfo.InvariantCulture.CompareInfo.Version.SortId.ToString(),
             Environment.Version.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSDescription]) : null;
+    string? IIndexKey.BloomHashCompatibility => OrdinalIgnoreCaseCompatibility;
+    string? IIndexKey.OrderingCompatibility => OrdinalIgnoreCaseCompatibility;
     object IIndexKey.Parse(ReadOnlySpan<char> text) => _parse(text)!;
     int IIndexKey.Compare(object left, object right) => _comparer.Compare((TKey)left, (TKey)right);
 
@@ -178,6 +181,7 @@ public sealed class IndexKey<TKey> : IIndexKey
         string IIndexKey.CompatibilityId => key.GetRegisteredCompatibilityId(registration);
         ulong IIndexKey.GetBloomHash(object value) => ((IIndexKey)key).GetBloomHash(value);
         string? IIndexKey.BloomHashCompatibility => ((IIndexKey)key).BloomHashCompatibility;
+        string? IIndexKey.OrderingCompatibility => ((IIndexKey)key).OrderingCompatibility;
         object IIndexKey.Parse(ReadOnlySpan<char> text) => parse(text)!;
         int IIndexKey.Compare(object left, object right) => key._comparer.Compare((TKey)left, (TKey)right);
     }

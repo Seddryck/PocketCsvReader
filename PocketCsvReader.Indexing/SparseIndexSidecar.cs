@@ -158,17 +158,19 @@ internal static class SparseIndexSidecar
     }
 
     public static int ReadUtf8BomLength(FileStream stream)
+        => TryReadUtf8BomLength(stream, out var length) ? length
+            : throw new NotSupportedException("Sparse indexes require UTF-8 input.");
+
+    internal static bool TryReadUtf8BomLength(FileStream stream, out int length)
     {
         Span<byte> prefix = stackalloc byte[4];
         var count = stream.ReadAtLeast(prefix, prefix.Length, throwOnEndOfStream: false);
         stream.Position = 0;
-        if (prefix[..count].StartsWith(Encoding.UTF8.Preamble))
-            return Encoding.UTF8.Preamble.Length;
-        if (prefix[..count].StartsWith(Encoding.Unicode.Preamble)
-            || prefix[..count].StartsWith(Encoding.BigEndianUnicode.Preamble)
-            || prefix[..count].StartsWith(new UTF32Encoding(true, true).Preamble))
-            throw new NotSupportedException("Sparse indexes require UTF-8 input.");
-        return 0;
+        var bytes = prefix[..count];
+        length = bytes.StartsWith(Encoding.UTF8.Preamble) ? Encoding.UTF8.Preamble.Length : 0;
+        return !bytes.StartsWith(Encoding.Unicode.Preamble)
+            && !bytes.StartsWith(Encoding.BigEndianUnicode.Preamble)
+            && !bytes.StartsWith(new UTF32Encoding(true, true).Preamble);
     }
 
     private static FileStream? OpenSidecar(string path, SparseIndex index)

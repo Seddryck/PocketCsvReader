@@ -57,6 +57,14 @@ public class CsvProfile : IProfile
         return profile;
     }
 
+    internal CsvProfile ForIndexSeeking(bool trackPosition)
+    {
+        var profile = (CsvProfile)MemberwiseClone();
+        profile.StreamInitialization = new(ProbeEncoding: true, InputMode: CsvInputMode.Utf8Bytes);
+        profile.ParserOptimizations = ParserOptimizations with { TrackPosition = trackPosition };
+        return profile;
+    }
+
     /// <summary>
     /// Initializes a new CsvProfile with the specified field separator and record separator, using double quotes as the text qualifier and no header row.
     /// </summary>
