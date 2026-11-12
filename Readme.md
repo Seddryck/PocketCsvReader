@@ -1,6 +1,6 @@
 # PocketCsvReader
 
-PocketCsvReader reads CSV and other structured text through forward-only data readers and streaming row outputs. Optional packages support JSON/JSONC, NDJSON, fixed-width, LTSV, logfmt, web logs, and security logs. The projects target .NET 8, 9, and 10.
+PocketCsvReader reads CSV and other structured text through forward-only data readers and streaming row outputs. Optional packages support JSON/JSONC, NDJSON, fixed-width, Markdown tables, LTSV, logfmt, web logs, and security logs. The projects target .NET 8, 9, and 10.
 
 [Documentation](https://seddryck.github.io/PocketCsvReader/docs/why-pocketcsvreader/) · [Installation](https://seddryck.github.io/PocketCsvReader/docs/installation/) · [Contributing](contributing.md)
 
@@ -14,6 +14,7 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader.Indexing` | Exact-key lookup with sparse indexes for sorted files, Bloom filters for CSV files, and an opt-in scan fallback |
 | `PocketCsvReader.ObjectStorage` | Async Hive partition discovery and CSV reads on Amazon S3 and Azure Data Lake Storage Gen2 |
 | `PocketCsvReader.FixedWidth` | Fixed character positions |
+| `PocketCsvReader.Markdown` | [GitHub Flavored Markdown pipe tables](https://seddryck.github.io/PocketCsvReader/docs/markdown-tables/) |
 | `PocketCsvReader.KeyValue` | LTSV and logfmt with column projection, aliases, and stable field layout |
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C |
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF |

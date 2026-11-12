@@ -112,6 +112,10 @@ jobs:
             artifact: fixed-width
             project: PocketCsvReader.FixedWidth.Testing/PocketCsvReader.FixedWidth.Testing.csproj
             include: '[PocketCsvReader.FixedWidth]*'
+          - name: PocketCsvReader.Markdown
+            artifact: markdown
+            project: PocketCsvReader.Markdown.Testing/PocketCsvReader.Markdown.Testing.csproj
+            include: '[PocketCsvReader.Markdown]*'
           - name: PocketCsvReader.KeyValue
             artifact: key-value
             project: PocketCsvReader.KeyValue.Testing/PocketCsvReader.KeyValue.Testing.csproj
@@ -290,6 +294,9 @@ jobs:
           - name: PocketCsvReader.FixedWidth
             artifact: fixed-width
             project: PocketCsvReader.FixedWidth/PocketCsvReader.FixedWidth.csproj
+          - name: PocketCsvReader.Markdown
+            artifact: markdown
+            project: PocketCsvReader.Markdown/PocketCsvReader.Markdown.csproj
           - name: PocketCsvReader.KeyValue
             artifact: key-value
             project: PocketCsvReader.KeyValue/PocketCsvReader.KeyValue.csproj

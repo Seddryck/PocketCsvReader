@@ -49,6 +49,30 @@ internal sealed class BufferedRecordReader : IDisposable
         Return(ref _protectedBuffer);
     }
 
+    public void BeginOperation(CapturedRecord? retained)
+    {
+        if (retained is null)
+        {
+            BeginOperation();
+            return;
+        }
+
+        _protectedCapture = retained;
+        var backingArray = retained.Value.BackingArray;
+        if (_protectedBuffer != backingArray)
+            Return(ref _protectedBuffer);
+        if (_ownedRecord is not null && _ownedRecord == backingArray)
+        {
+            // Keep the retained line in a separate slot while the next line is captured.
+            _protectedBuffer = _ownedRecord;
+            _ownedRecord = null;
+        }
+        else
+        {
+            Return(ref _ownedRecord);
+        }
+    }
+
     public int Peek()
     {
         EnsureAvailable();
@@ -282,7 +306,16 @@ internal sealed class BufferedRecordReader : IDisposable
 
         PrepareForRefill();
         var buffer = _pool.Rent(_bufferSize);
-        var length = await _reader.ReadAsync(buffer.AsMemory(0, _bufferSize), cancellationToken).ConfigureAwait(false);
+        int length;
+        try
+        {
+            length = await _reader.ReadAsync(buffer.AsMemory(0, _bufferSize), cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _pool.Return(buffer);
+            throw;
+        }
         if (length == 0)
         {
             _pool.Return(buffer);

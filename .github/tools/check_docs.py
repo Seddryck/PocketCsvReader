@@ -187,7 +187,7 @@ def examples_check(root, examples):
     work = root / 'artifacts/docs-examples'
     work.mkdir(parents=True, exist_ok=True)
     projects = ['PocketCsvReader', 'PocketCsvReader.Json', 'PocketCsvReader.Ndjson',
-                'PocketCsvReader.FixedWidth', 'PocketCsvReader.KeyValue',
+                'PocketCsvReader.FixedWidth', 'PocketCsvReader.Markdown', 'PocketCsvReader.KeyValue',
                 'PocketCsvReader.WebLogs', 'PocketCsvReader.SecurityLogs',
                 'PocketCsvReader.Arrow', 'PocketCsvReader.Arrow.ColumnarJson',
                 'PocketCsvReader.Chrononuensis']

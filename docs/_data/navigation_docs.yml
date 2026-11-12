@@ -9,6 +9,7 @@
   - json-and-ndjson
   - ndjson
   - fixed-width
+  - markdown-tables
   - key-value-formats
   - web-log-formats
   - security-log-formats

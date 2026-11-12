@@ -29,6 +29,7 @@ Omitting `--version` selects the latest available package. To pin a release, app
 | `PocketCsvReader.Json` | JSON and JSONC | [JSON](../json-and-ndjson/) |
 | `PocketCsvReader.Ndjson` | Newline-delimited JSON | [NDJSON](../ndjson/) |
 | `PocketCsvReader.FixedWidth` | Fixed character positions | [Fixed-width](../fixed-width/) |
+| `PocketCsvReader.Markdown` | GitHub Flavored Markdown pipe tables | [Markdown tables](../markdown-tables/) |
 | `PocketCsvReader.KeyValue` | LTSV and logfmt | [Key-value](../key-value-formats/) |
 | `PocketCsvReader.WebLogs` | Common, Combined, W3C | [Web logs](../web-log-formats/) |
 | `PocketCsvReader.SecurityLogs` | CEF and LEEF | [Security logs](../security-log-formats/) |
