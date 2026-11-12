@@ -14,7 +14,7 @@ public class CsvIndexChainingTest
     private static readonly BitmapPredicate Categories = BitmapPredicate.In("Status", "shipped", "delivered")
         .And(BitmapPredicate.Equal("Region", "EU"));
     private static readonly TermPredicate Tags = TermPredicate.ContainsAll("urgent", "refund");
-    private const string Orders = """
+    private static readonly string Orders = """
         Id,Date,Customer,Amount,Status,Region,Tags,Warehouse,Keep
         before,2026-05-16,ACME,150,shipped,EU,"urgent,refund",17,yes
         a,2026-05-17,acme,100,shipped,EU,"URGENT,refund,urgent",17,yes
@@ -27,7 +27,7 @@ public class CsvIndexChainingTest
         hidden,2026-05-17,acme,175,delivered,EU,"refund,urgent",17,no
         c,2026-05-17,Acme,199,shipped,EU,"refund,urgent",17,yes
         after,2026-05-18,ACME,150,shipped,EU,"urgent,refund",17,yes
-        """;
+        """.ReplaceLineEndings("\n");
 
     private string _directory = null!;
 
