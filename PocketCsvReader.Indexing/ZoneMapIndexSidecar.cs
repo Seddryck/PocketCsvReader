@@ -25,8 +25,8 @@ internal static class ZoneMapIndexSidecar
                 if (block is { Min: { } min, Max: { } max })
                 {
                     writer.Write(true);
-                    WriteKey(writer, min);
-                    WriteKey(writer, max);
+                    IndexKeyBinary.Write(writer, min);
+                    IndexKeyBinary.Write(writer, max);
                 }
                 else
                 {
@@ -110,76 +110,11 @@ internal static class ZoneMapIndexSidecar
             throw Corrupt();
 
         var key = predicate.Key;
-        var min = ReadKey(reader, key.KeyType);
-        var max = ReadKey(reader, key.KeyType);
+        var min = IndexKeyBinary.Read(reader, key.KeyType);
+        var max = IndexKeyBinary.Read(reader, key.KeyType);
         if (key.Compare(min, max) > 0)
             throw Corrupt();
         return predicate.Intersects(min, max);
-    }
-
-    private static void WriteKey(BinaryWriter writer, object value)
-    {
-        switch (value)
-        {
-            case string text:
-                // Preserve the comparer input exactly, including surrogate code units
-                // that a registered parser may return.
-                writer.Write(text.Length);
-                foreach (var character in text)
-                    writer.Write((ushort)character);
-                break;
-            case DateOnly date: writer.Write(date.DayNumber); break;
-            case sbyte number: writer.Write(number); break;
-            case byte number: writer.Write(number); break;
-            case short number: writer.Write(number); break;
-            case ushort number: writer.Write(number); break;
-            case int number: writer.Write(number); break;
-            case uint number: writer.Write(number); break;
-            case long number: writer.Write(number); break;
-            case ulong number: writer.Write(number); break;
-            case decimal number: writer.Write(number); break;
-            default: throw new NotSupportedException($"Zone map bounds for '{value.GetType()}' are not supported.");
-        }
-    }
-
-    private static object ReadKey(BinaryReader reader, Type type)
-    {
-        try
-        {
-            if (type == typeof(DateOnly))
-                return DateOnly.FromDayNumber(reader.ReadInt32());
-            return Type.GetTypeCode(type) switch
-            {
-                TypeCode.String => ReadText(reader),
-                TypeCode.SByte => reader.ReadSByte(),
-                TypeCode.Byte => reader.ReadByte(),
-                TypeCode.Int16 => reader.ReadInt16(),
-                TypeCode.UInt16 => reader.ReadUInt16(),
-                TypeCode.Int32 => reader.ReadInt32(),
-                TypeCode.UInt32 => reader.ReadUInt32(),
-                TypeCode.Int64 => reader.ReadInt64(),
-                TypeCode.UInt64 => reader.ReadUInt64(),
-                TypeCode.Decimal => reader.ReadDecimal(),
-                _ => throw new NotSupportedException($"Zone map bounds for '{type}' are not supported.")
-            };
-        }
-        catch (ArgumentException exception)
-        {
-            throw new InvalidDataException("The zone map contains an invalid bound.", exception);
-        }
-    }
-
-    private static string ReadText(BinaryReader reader)
-    {
-        var length = reader.ReadInt32();
-        var file = reader.BaseStream;
-        if (length < 0 || length > (file.Length - file.Position) / sizeof(ushort))
-            throw Corrupt();
-        return string.Create(length, reader, static (text, input) =>
-        {
-            for (int i = 0; i < text.Length; i++)
-                text[i] = (char)input.ReadUInt16();
-        });
     }
 
     private static InvalidDataException Corrupt() => new("The zone map is corrupt.");
