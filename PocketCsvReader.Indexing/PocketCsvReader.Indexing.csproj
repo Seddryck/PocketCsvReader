@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>PocketCsvReader.Indexing</PackageId>
-    <PackageTags>CSV sparse Bloom index equality lookup DataReader</PackageTags>
-    <Description>Exact-key lookup with sparse indexes for sorted files, Bloom filters for CSV files, and an opt-in scan fallback.</Description>
+    <PackageTags>CSV sparse Bloom hash zone map index equality range lookup DataReader</PackageTags>
+    <Description>Equality and range lookup with sparse indexes, CSV Bloom filters, zone maps, and CSV hash indexes.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Clast.BloomFilter" Version="0.2.0" />
