@@ -299,8 +299,8 @@ public class BloomIndexTest
         string? IIndexKey.ColumnName => key.ColumnName;
         int? IIndexKey.ColumnOrdinal => key.ColumnOrdinal;
         string IIndexKey.CompatibilityId => key.CompatibilityId;
-        string IIndexKey.BloomHashCompatibility => "incompatible-hash-v2";
-        ulong IIndexKey.GetBloomHash(object value) => ~key.GetBloomHash(value);
+        string IIndexKey.HashCompatibility => "incompatible-hash-v2";
+        ulong IIndexKey.GetStableHash(object value) => ~key.GetStableHash(value);
         int IIndexKey.Compare(object left, object right) => key.Compare(left, right);
         object IIndexKey.Parse(ReadOnlySpan<char> text) => key.Parse(text);
     }

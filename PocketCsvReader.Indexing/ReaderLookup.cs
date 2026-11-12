@@ -30,6 +30,18 @@ public static class ReaderLookup
         return Scan(reader, index.Key, requested);
     }
 
+    /// <summary>Scans an existing reader for exact equality using an optional hash index.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, HashIndex index, TKey value)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        var requested = ValidateKey(index.Key, value);
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a CSV reader and path, or use an optional index.");
+        return Scan(reader, index.Key, requested);
+    }
+
     /// <summary>Scans an existing reader for exact equality using an optional zone map.</summary>
     /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
     public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, ZoneMapIndex index, TKey value)
