@@ -55,3 +55,47 @@ Each cell shows median elapsed time and speed relative to the scan for that quer
 The three-index chain fits the selective layout. Bloom can reject ten of the twelve files, the zone map keeps one amount block per day in the surviving files, and sparse seeking and ordered stop limit the read to the requested day. The chain was 2.8× faster than the six-index chain and used about 0.26% of the source CSV size in sidecars. The broader query spans all files and amount blocks, so sparse alone had the lowest median. All three Bloom configurations rejected the absent customer at the file stage and took about half a millisecond.
 
 The bitmap-only lookup illustrates the cost of a common, scattered category. Its sidecars yield many eligible records, and the remaining five predicates still have to be checked. This workload's layout and selectivity drive these results. See the separate [zone-map layout benchmark](ZoneMapBenchmark.md) for measurements with different clustering.
+
+## 100× dataset
+
+```shell
+dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --csv-index-comparison-100x
+```
+
+This run has 19,660,800 rows across 120 files of 163,840 rows each. Each sorted day group repeats its original 4,096-row pattern ten times, and each of the 12 file layouts occurs ten times. Order IDs are unique across the dataset. The same predicates return 800 selective matches, 2,368,800 broader matches, and zero matches for the absent customer. Bloom can still reject five out of six files for the selective customer, and zone maps use the same 512-row blocks.
+
+The larger run validates the exact ordered IDs once per configuration, then takes the median of three warm-cache lookups. Each round starts at a different point in the nine-configuration sequence. Build time is one timed build from scratch per configuration. The runner generates data one file at a time, keeps the matching IDs for the current query in memory, and removes its temporary CSVs and sidecars when it exits. Allow about 15 GB of temporary space for the nine source copies and their sidecars.
+
+Measured on the same Windows x64 host with .NET 10.0.15. The 120 source CSVs totaled 1,311,142,250 bytes.
+
+### Lookup time at 100×
+
+Each cell shows the median of three samples and speed relative to the scan for that query.
+
+| Configuration | Selective | Broader | Absent customer |
+| --- | ---: | ---: | ---: |
+| Scan | 9.421 s | 9.868 s | 9.532 s |
+| Bloom | 1.564 s (6.02×) | 9.921 s (0.99×) | 0.009 s (1051×) |
+| Zone map | 1.302 s (7.24×) | 9.986 s (0.99×) | 1.304 s (7.31×) |
+| Bitmap | 11.607 s (0.81×) | 8.500 s (1.16×) | 11.602 s (0.82×) |
+| Inverted | 4.519 s (2.08×) | 12.400 s (0.80×) | 4.456 s (2.14×) |
+| Hash | 4.466 s (2.11×) | 10.141 s (0.97×) | 4.410 s (2.16×) |
+| Sparse | 2.560 s (3.68×) | 3.169 s (3.11×) | 2.591 s (3.68×) |
+| Bloom + zone map + sparse | 0.081 s (116×) | 3.191 s (3.09×) | 0.009 s (1037×) |
+| All six | 0.504 s (18.70×) | 6.671 s (1.48×) | 0.009 s (1069×) |
+
+### Build cost and allocations at 100×
+
+| Configuration | Sidecar bytes | Build time | Selective allocated bytes | Broader allocated bytes | Absent allocated bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scan | 0 | — | 781,334,880 | 2,144,662,240 | 781,335,104 |
+| Bloom | 99,840 | 11.073 s | 130,742,584 | 2,145,260,184 | 722,632 |
+| Zone map | 818,400 | 10.291 s | 237,025,312 | 2,147,485,240 | 237,025,312 |
+| Bitmap | 254,385,840 | 12.149 s | 4,063,516,152 | 2,697,263,576 | 4,063,471,456 |
+| Inverted | 471,881,520 | 13.129 s | 1,372,538,720 | 5,120,837,336 | 1,372,545,680 |
+| Hash | 471,871,200 | 12.148 s | 1,501,340,984 | 3,199,685,384 | 1,501,344,568 |
+| Sparse | 868,178 | 10.512 s | 403,348,840 | 1,766,707,656 | 403,348,840 |
+| Bloom + zone map + sparse | 1,786,418 | 31.363 s | 32,435,904 | 1,769,661,576 | 726,408 |
+| All six | 1,199,924,978 | 70.229 s | 169,220,960 | 4,771,409,304 | 722,408 |
+
+Bloom + zone map + sparse completed the selective query in 81 ms with about 1.79 MB of sidecars. The six-index chain took 504 ms and used about 1.20 GB of sidecars. Sparse alone led the broader query, with the three-index chain within 22 ms. For the absent customer, all three Bloom configurations completed in about 9 ms after rejecting the files at the Bloom stage.
