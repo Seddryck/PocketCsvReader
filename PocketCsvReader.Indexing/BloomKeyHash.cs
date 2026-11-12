@@ -47,24 +47,31 @@ internal static class BloomKeyHash
         {
             var options = comparison is StringComparison.CurrentCultureIgnoreCase or StringComparison.InvariantCultureIgnoreCase
                 ? CompareOptions.IgnoreCase : CompareOptions.None;
-            var length = compareInfo.GetSortKeyLength(text, options);
-            byte[]? rented = length > 512 ? ArrayPool<byte>.Shared.Rent(length) : null;
-            Span<byte> sortKey = rented is null ? stackalloc byte[length] : rented;
-            try
-            {
-                var written = compareInfo.GetSortKey(text, sortKey, options);
-                return XxHash64.HashToUInt64(sortKey[..written]);
-            }
-            finally
-            {
-                if (rented is not null)
-                    ArrayPool<byte>.Shared.Return(rented);
-            }
+            return HashSortKey(text, compareInfo, options);
         }
 
-        if (comparison == StringComparison.Ordinal)
-            return HashUtf8(text);
+        return comparison == StringComparison.Ordinal ? HashUtf8(text) : HashUpperInvariant(text);
+    }
 
+    private static ulong HashSortKey(string text, CompareInfo compareInfo, CompareOptions options)
+    {
+        var length = compareInfo.GetSortKeyLength(text, options);
+        byte[]? rented = length > 512 ? ArrayPool<byte>.Shared.Rent(length) : null;
+        Span<byte> sortKey = rented is null ? stackalloc byte[length] : rented;
+        try
+        {
+            var written = compareInfo.GetSortKey(text, sortKey, options);
+            return XxHash64.HashToUInt64(sortKey[..written]);
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    private static ulong HashUpperInvariant(string text)
+    {
         // OrdinalIgnoreCase compares as if both strings were uppercased invariantly.
         char[]? buffer = text.Length > 256 ? ArrayPool<char>.Shared.Rent(text.Length) : null;
         Span<char> upper = buffer is null ? stackalloc char[text.Length] : buffer;
