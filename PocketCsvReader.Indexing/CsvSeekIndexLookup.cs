@@ -2,8 +2,52 @@ namespace PocketCsvReader.Indexing;
 
 internal delegate RecordSelection SelectIndexField(NullableSpan field);
 
-internal readonly record struct CsvIndexedReadPlan(IReadOnlyList<CsvRecordBlock> Blocks, int RowCount, int FieldCount)
+internal readonly record struct CsvIndexedReadPlan(IReadOnlyList<CsvRecordBlock>? Blocks, int RowCount, int FieldCount)
 {
+    internal CsvIndexedReadPlan Intersect(CsvIndexedReadPlan other)
+    {
+        if (RowCount != other.RowCount || FieldCount != other.FieldCount)
+            throw new InvalidDataException("CSV indexes disagree on the source row or field count.");
+        if (Blocks is null)
+            return other;
+        if (other.Blocks is null)
+            return this;
+        return this with { Blocks = IntersectBlocks(Blocks, other.Blocks) };
+    }
+
+    private static List<CsvRecordBlock> IntersectBlocks(IReadOnlyList<CsvRecordBlock> left, IReadOnlyList<CsvRecordBlock> right)
+    {
+        var result = new List<CsvRecordBlock>();
+        int i = 0, j = 0;
+        while (i < left.Count && j < right.Count)
+        {
+            var first = left[i];
+            var second = right[j];
+            int firstEnd = first.SkippedDataRows + first.RowCount;
+            int secondEnd = second.SkippedDataRows + second.RowCount;
+            var start = LaterStart(first, second);
+            int end = Math.Min(firstEnd, secondEnd);
+            if (start.SkippedDataRows < end)
+                AddCandidate(result, start with { RowCount = end - start.SkippedDataRows });
+            if (firstEnd <= secondEnd)
+                i++;
+            if (secondEnd <= firstEnd)
+                j++;
+        }
+        return result;
+    }
+
+    private static CsvRecordBlock LaterStart(CsvRecordBlock first, CsvRecordBlock second)
+    {
+        if (first.SkippedDataRows != second.SkippedDataRows)
+            return first.SkippedDataRows > second.SkippedDataRows ? first : second;
+        if (first.Offset != second.Offset)
+            throw new InvalidDataException("CSV indexes disagree on a record offset.");
+        // Sparse sidecars store data-row counts at checkpoints. Other sidecars
+        // also account for comment records in the physical row count.
+        return first.SkippedRows >= second.SkippedRows ? first : second;
+    }
+
     internal static void AddCandidate(List<CsvRecordBlock> candidates, CsvRecordBlock block)
     {
         // Keep the same parser and its read-ahead when consecutive records qualify.
@@ -20,30 +64,20 @@ internal static class CsvSeekIndexLookup
     internal static bool Supports<TPartition>(CsvFileQuery<TPartition> query)
         => !query.RequiresAsyncSource && CsvIndexLookup.Supports(query.Profile);
 
-    internal static CsvFileQuery<TPartition> WithLookup<TPartition>(CsvFileQuery<TPartition> query, IIndexKey key,
+    internal static CsvFileQuery<TPartition> WithLookup<TPartition>(CsvFileQuery<TPartition> query, CsvIndexKind kind, IIndexKey key,
         SelectIndexField select, Func<FileStream, int, CsvIndexedReadPlan?> find, bool required, string indexName)
-        => WithLookup(query, _ => CreateSelector(key, select), find, required, indexName);
+        => WithLookup(query, kind, _ => CreateSelector(key, select), find, required, indexName);
 
-    internal static CsvFileQuery<TPartition> WithLookup<TPartition>(CsvFileQuery<TPartition> query,
-        Func<bool, Func<CsvDataReader, RecordSelection>> createSelector,
+    internal static CsvFileQuery<TPartition> WithLookup<TPartition>(CsvFileQuery<TPartition> query, CsvIndexKind kind,
+        Func<bool, Func<CsvDataReader, RecordSelection>?> createSelector,
         Func<FileStream, int, CsvIndexedReadPlan?> find, bool required, string indexName)
     {
         var supported = Supports(query);
         if (!supported && required)
             throw UnsupportedSource(indexName);
 
-        return query.WithReaderFactory((file, stream, profile) =>
-        {
-            CsvIndexedReadPlan? plan = null;
-            if (supported && file.Opener is null && stream is FileStream { CanSeek: true } source
-                && SparseIndexSidecar.TryReadUtf8BomLength(source, out var bomLength))
-                plan = find(source, bomLength);
-            else if (required)
-                throw UnsupportedSource(indexName);
-
-            var readerProfile = plan is null ? profile : profile.ForIndexSeeking(trackPosition: false);
-            return Select(new CsvDataReader(stream, readerProfile, leaveOpen: true), createSelector(plan.HasValue), stream, plan);
-        });
+        return CsvIndexPipeline<TPartition>.Add(query,
+            new(kind, createSelector, required ? indexName : null, Find: supported ? find : null));
     }
 
     internal static CsvDataReader Select(CsvDataReader reader, IIndexKey key, SelectIndexField select)

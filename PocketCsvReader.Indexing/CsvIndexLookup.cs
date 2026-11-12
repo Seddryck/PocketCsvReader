@@ -5,6 +5,8 @@ namespace PocketCsvReader.Indexing;
 /// <summary>Builds sparse indexes for partitioned CSV queries and applies exact-key lookups.</summary>
 public static class CsvIndexLookup
 {
+    private const string IndexName = "Sparse indexes";
+
     /// <summary>Builds or replaces the sparse sidecar for each selected CSV file.</summary>
     public static void BuildIndexes<TPartition>(this CsvFileQuery<TPartition> query, SparseIndex index)
     {
@@ -14,7 +16,7 @@ public static class CsvIndexLookup
             throw UnsupportedSource();
 
         index = index.ResolveRuntimeParser(query.Profile.Parsers);
-        var profile = CreateProfile(query.Profile, building: true);
+        var profile = CreateBuildProfile(query.Profile);
         var configuration = GetConfiguration(profile);
         foreach (var file in query.EnumerateFiles())
         {
@@ -49,37 +51,29 @@ public static class CsvIndexLookup
         var profile = query.Profile;
         index = index.ResolveRuntimeParser(profile.Parsers);
         var key = index.Key;
-        var indexedProfile = Supports(profile) ? CreateProfile(profile, building: false) : null;
-        var configuration = indexedProfile is null ? default : GetConfiguration(indexedProfile);
-        if (index.RequiresIndex && indexedProfile is null)
-            throw UnsupportedSource();
+        var configuration = GetConfiguration(profile);
+        return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.Sparse, CreateSelector, (source, _) =>
+            SparseIndexSidecar.Find(source, configuration, index, requested) is { } found ? ToReadPlan(found) : null,
+            index.RequiresIndex, IndexName);
 
-        return query.WithReaderFactory((descriptor, stream, currentProfile) =>
+        Func<CsvDataReader, RecordSelection> CreateSelector(bool indexed)
         {
-            CsvRecordRange? range = null;
-            if (descriptor.Opener is null && stream is FileStream source && indexedProfile is not null)
-            {
-                if (SparseIndexSidecar.Find(source, configuration, index, requested) is { } found)
-                    range = new(found.Offset, found.SkippedRows, found.RowCount, found.FieldCount);
-            }
-            else if (index.RequiresIndex)
-            {
-                throw UnsupportedSource();
-            }
-
-            var readerProfile = range is null ? currentProfile : indexedProfile!.WithFilters(currentProfile.Filters);
-            var reader = new CsvDataReader(stream, readerProfile, leaveOpen: true);
             int ordinal = -1;
-            reader.SelectRecords(SelectRecord, stream, range);
-            return reader;
-
-            RecordSelection SelectRecord(CsvDataReader row)
+            return row =>
             {
                 if (ordinal < 0)
                     ordinal = ResolveOrdinal(row, key);
-                return ReaderLookup.Select(row.GetDecodedField(ordinal), key, requested, ordered: range is not null);
-            }
-        });
+                return ReaderLookup.Select(row.GetDecodedField(ordinal), key, requested, ordered: indexed);
+            };
+        }
+    }
+
+    private static CsvIndexedReadPlan ToReadPlan(SparseRecordRange range)
+    {
+        IReadOnlyList<CsvRecordBlock>? blocks = null;
+        if (range.Offset is long offset)
+            blocks = [new(offset, range.SkippedRows, range.SkippedRows, range.RowCount - range.SkippedRows)];
+        return new(blocks, range.RowCount, range.FieldCount);
     }
 
     internal static CsvFileQuery<bool> ForFile(CsvReader reader, string path)
@@ -104,15 +98,11 @@ public static class CsvIndexLookup
             && source.Dialect.CommentRows is not { Length: > 0 } && !source.ParserOptimizations.RowCountAtStart
             && (!source.Dialect.Header || source.Dialect.HeaderRepeat);
 
-    private static CsvProfile CreateProfile(CsvProfile source, bool building)
-        => new(source.Dialect, building ? null : source.Schema, building ? null : source.Resource, building ? null : source.Parsers)
+    private static CsvProfile CreateBuildProfile(CsvProfile source)
+        => new(source.Dialect)
         {
-            Filters = building ? [] : source.Filters,
-            Skip = building ? 0 : source.Skip,
-            Take = building ? null : source.Take,
-            RowNumber = building ? null : source.RowNumber,
             StreamInitialization = new(ProbeEncoding: true, InputMode: CsvInputMode.Utf8Bytes),
-            ParserOptimizations = source.ParserOptimizations with { TrackPosition = building }
+            ParserOptimizations = source.ParserOptimizations with { TrackPosition = true }
         };
 
     internal static SourceConfiguration GetConfiguration(CsvProfile profile)
@@ -147,5 +137,5 @@ public static class CsvIndexLookup
             .SelectMany(pair => new[] { pair.Key.ToString(), pair.Value?.ToString() }));
 
     private static NotSupportedException UnsupportedSource()
-        => new("Sparse indexes require filesystem CSV paths, uncompressed UTF-8, ASCII syntax, and per-file headers when enabled. Numbered comment rows, array fields, leading row counts, and bad-data policies are unsupported.");
+        => CsvSeekIndexLookup.UnsupportedSource(IndexName);
 }

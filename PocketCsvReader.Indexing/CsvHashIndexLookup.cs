@@ -66,7 +66,8 @@ public static class CsvHashIndexLookup
         // Optional scans need neither a persistent parser identity nor a hash.
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key));
         var hash = new Lazy<ulong>(() => key.GetStableHash(requested));
-        return CsvSeekIndexLookup.WithLookup(query, key, field => ReaderLookup.Select(field, key, requested, ordered: false),
+        return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.Hash, key,
+            field => ReaderLookup.Select(field, key, requested, ordered: false),
             (source, bomLength) => HashIndexSidecar.Find(source, bomLength, index, compatibility, hash),
             index.RequiresIndex, IndexName);
     }

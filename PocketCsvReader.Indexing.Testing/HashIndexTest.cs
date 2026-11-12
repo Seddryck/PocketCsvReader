@@ -65,6 +65,12 @@ public class HashIndexTest
         using (var absent = csv.WithIndexedLookup(path, collision, "charlie"))
             Assert.That(absent.Read(), Is.False);
 
+        var zone = new ZoneMapIndex(new IndexKey<int>("Id"), 2);
+        csv.BuildIndexes(path, zone);
+        var query = Builder().FromFiles(new[] { FileSource.Partitioned(path, true) }).Build();
+        using (var chained = query.WithIndexedLookup(collision, "bob").WithIndexedLookup(zone, new IndexRange<int>(1, 4)).ToDataReader())
+            Assert.That(Collect(chained), Is.EqualTo(new[] { "1", "3" }));
+
         using var incompatible = csv.WithIndexedLookup(path, new HashIndex(key).WithOptionalIndex(), "bob");
         Assert.Throws<InvalidDataException>(() => incompatible.Read());
     }

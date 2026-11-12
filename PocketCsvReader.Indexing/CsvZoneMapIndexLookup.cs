@@ -88,7 +88,7 @@ public static class CsvZoneMapIndexLookup
         var key = predicate.Key.ResolveRuntimeParser(profile.Parsers);
         predicate = predicate.WithKey(key);
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key));
-        return CsvSeekIndexLookup.WithLookup(query, key, predicate.Select,
+        return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.ZoneMap, key, predicate.Select,
             (source, bomLength) => ZoneMapIndexSidecar.Find(source, bomLength, index, compatibility, predicate),
             index.RequiresIndex, IndexName);
     }

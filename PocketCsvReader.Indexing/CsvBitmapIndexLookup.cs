@@ -64,8 +64,8 @@ public static class CsvBitmapIndexLookup
         var keys = index.ResolveKeys(profile.Parsers);
         var lookup = predicate.Bind(keys);
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, keys));
-        return CsvSeekIndexLookup.WithLookup(query,
-            indexed => indexed ? static _ => RecordSelection.Include : lookup.CreateCsvSelector(),
+        return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.Bitmap,
+            indexed => indexed ? null : lookup.CreateCsvSelector(),
             (source, bomLength) => BitmapIndexSidecar.Find(source, bomLength, index.RequiresIndex, keys, lookup, compatibility),
             index.RequiresIndex, IndexName);
     }
