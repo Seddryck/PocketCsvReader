@@ -245,12 +245,6 @@ internal static class SparseIndexSidecar
         }
     }
 
-    private readonly record struct SourceStamp(long Length, DateTime LastWriteUtc)
-    {
-        public static SourceStamp Read(FileStream source)
-            => new(source.Length, File.GetLastWriteTimeUtc(source.SafeFileHandle));
-    }
-
     private readonly record struct Checkpoint(long Offset, string Text);
 }
 

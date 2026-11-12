@@ -18,6 +18,18 @@ public static class ReaderLookup
         return Scan(reader, index.Key, requested);
     }
 
+    /// <summary>Scans an existing reader using an optional Bloom index definition.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, BloomIndex index, TKey value)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        var requested = ValidateKey(index.Key, value);
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a CSV reader and path, or use an optional index.");
+        return Scan(reader, index.Key, requested);
+    }
+
     internal static DbDataReader Scan(IDataReader reader, IIndexKey key, object requested)
     {
         var scan = new ScanningDataReader(reader, row => Matches(row, key, requested));
@@ -28,9 +40,9 @@ public static class ReaderLookup
 
     internal static RecordSelection Select(NullableSpan field, IIndexKey key, object requested, bool ordered)
     {
-        if (!field.HasValue)
+        if (!field.HasValue || key.Parse(field.Value) is not { } parsed)
             return RecordSelection.Skip;
-        var comparison = key.Compare(key.Parse(field.Value), requested);
+        var comparison = key.Compare(parsed, requested);
         if (comparison == 0)
             return RecordSelection.Include;
         return comparison > 0 && ordered ? RecordSelection.Stop : RecordSelection.Skip;
@@ -55,6 +67,8 @@ public static class ReaderLookup
             return false;
         if (field is string text && key.KeyType != typeof(string))
             field = key.Parse(text.AsSpan());
+        if (field is null)
+            return false;
         if (!key.KeyType.IsInstanceOfType(field))
             throw new InvalidCastException($"The lookup column must contain '{key.KeyType}' values or text.");
         return key.Compare(field, requested) == 0;

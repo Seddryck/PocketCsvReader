@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>PocketCsvReader.Indexing</PackageId>
-    <PackageTags>CSV sparse index equality lookup DataReader</PackageTags>
-    <Description>Exact-key lookup with sparse indexes for sorted files and an opt-in scan fallback.</Description>
+    <PackageTags>CSV sparse Bloom index equality lookup DataReader</PackageTags>
+    <Description>Exact-key lookup with sparse indexes for sorted files, Bloom filters for CSV files, and an opt-in scan fallback.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Clast.BloomFilter" Version="0.2.0" />
+    <PackageReference Include="System.IO.Hashing" Version="9.0.0" />
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
   </ItemGroup>
 </Project>

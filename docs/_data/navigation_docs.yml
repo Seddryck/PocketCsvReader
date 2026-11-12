@@ -36,6 +36,7 @@
   - file-partitions
   - indexing
   - sparse-indexes
+  - bloom-indexes
 - title: Configuration
   docs:
   - fluent-api-profile-configuration

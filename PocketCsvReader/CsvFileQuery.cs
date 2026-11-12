@@ -2,12 +2,17 @@ using System.Data.Common;
 
 namespace PocketCsvReader;
 
+// A skipped input contributes source row numbers but owns no stream.
+internal readonly record struct CsvFileReadPlan(int? SkippedRows = null, Action<Stream>? Validate = null);
+
 /// <summary>Discovers partitioned CSV files and creates independent readers over them.</summary>
 public sealed class CsvFileQuery<TPartition>
 {
     private readonly FileQuerySelection<TPartition> _selection;
     private readonly Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader>? _createReader;
+    private readonly Func<PartitionedFile<TPartition>, CsvFileReadPlan>? _planRead;
     internal CsvProfile Profile { get; }
+    internal bool RequiresAsyncSource => _selection.RequiresAsync;
 
     internal CsvFileQuery(CsvProfile profile,
         Func<IReadOnlyList<PartitionCondition>, IEnumerable<PartitionedFile<TPartition>>> discover)
@@ -21,15 +26,16 @@ public sealed class CsvFileQuery<TPartition>
     }
 
     private CsvFileQuery(CsvProfile profile, FileQuerySelection<TPartition> selection,
-        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader>? createReader = null)
-        => (Profile, _selection, _createReader) = (profile, selection, createReader);
+        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader>? createReader = null,
+        Func<PartitionedFile<TPartition>, CsvFileReadPlan>? planRead = null)
+        => (Profile, _selection, _createReader, _planRead) = (profile, selection, createReader, planRead);
 
     /// <summary>Keeps files accepted by a predicate over their complete partition metadata.</summary>
     public CsvFileQuery<TPartition> WithPartitionFilter(Func<TPartition, bool> predicate)
-        => new(Profile, _selection.WithFilter(predicate), _createReader);
+        => new(Profile, _selection.WithFilter(predicate), _createReader, _planRead);
 
     internal CsvFileQuery<TPartition> WithNamedFilter(Func<TPartition, bool> predicate, PartitionCondition[] conditions)
-        => new(Profile, _selection.WithFilter(predicate, conditions), _createReader);
+        => new(Profile, _selection.WithFilter(predicate, conditions), _createReader, _planRead);
 
     /// <summary>Keeps rows whose sanitized cell equals the expected text. Null never matches.</summary>
     public CsvFileQuery<TPartition> WithFilter(string column, string expected, StringComparison comparison = StringComparison.Ordinal)
@@ -57,14 +63,15 @@ public sealed class CsvFileQuery<TPartition>
 
     private CsvFileQuery<TPartition> AddFilter(ReaderFilter filter)
         => new(Profile.WithFilters(Array.AsReadOnly<ReaderFilter>([.. Profile.Filters, filter])),
-            _selection, _createReader);
+            _selection, _createReader, _planRead);
 
     internal CsvFileQuery<TPartition> WithReaderFactory(
-        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader> createReader)
+        Func<PartitionedFile<TPartition>, Stream, CsvProfile, CsvDataReader> createReader,
+        Func<PartitionedFile<TPartition>, CsvFileReadPlan>? planRead = null)
     {
         if (_createReader is not null)
             throw new InvalidOperationException("The query already has a custom reader factory.");
-        return new(Profile, _selection, createReader);
+        return new(Profile, _selection, createReader, planRead);
     }
 
     /// <summary>Discovers matching file descriptors without opening their input streams.</summary>
@@ -106,11 +113,24 @@ public sealed class CsvFileQuery<TPartition>
 
     private CsvBatchDataReader.ReaderInput OpenInput(PartitionedFile<TPartition> file)
     {
+        var plan = _planRead?.Invoke(file) ?? default;
+        if (plan.SkippedRows is int skipped)
+            return new(null, SkippedRows: skipped);
+
         var stream = file.Opener is { } open
             ? open()
             : new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.Read,
                 Profile.ParserOptimizations.BufferSize, useAsync: true);
-        return CreateInput(file, stream);
+        try
+        {
+            plan.Validate?.Invoke(stream);
+            return CreateInput(file, stream);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     private CsvBatchDataReader.ReaderInput CreateInput(PartitionedFile<TPartition> file, Stream stream)
