@@ -20,6 +20,7 @@ public class Program
         ["--labeled-layout-matrix"] = LabeledLayoutBenchmarks.RunMatrix,
         ["--position-tracking-matrix"] = PositionTracking.RunMatrix,
         ["--sparse-index"] = SparseIndexBenchmark.Run,
+        ["--zone-map"] = ZoneMapBenchmark.Run,
     };
 
     public static void Main(string[] args)
