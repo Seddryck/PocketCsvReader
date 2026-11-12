@@ -7,7 +7,7 @@ Start with the part of the search you want to avoid. Partition metadata can rule
 
 ## Available indexes
 
-Add `PocketCsvReader.Indexing` to use [sparse indexes](../sparse-indexes/), [Bloom indexes](../bloom-indexes/), [zone maps](../zone-map-indexes/), [hash indexes](../hash-indexes/), and [bitmap indexes](../bitmap-indexes/).
+Add `PocketCsvReader.Indexing` to use [sparse indexes](../sparse-indexes/), [Bloom indexes](../bloom-indexes/), [zone maps](../zone-map-indexes/), [hash indexes](../hash-indexes/), [bitmap indexes](../bitmap-indexes/), and [inverted indexes](../inverted-indexes/).
 
 | Index | Use case and fit | Constraints |
 | --- | --- | --- |
@@ -16,11 +16,4 @@ Add `PocketCsvReader.Indexing` to use [sparse indexes](../sparse-indexes/), [Blo
 | Zone map | Range and exact-key lookups on CSV columns whose values tend to cluster within blocks, including unsorted files. | Stores typed minimum and maximum values per block. Blocks with overlapping or unavailable bounds are scanned. Requires seekable, uncompressed UTF-8 CSV. |
 | Hash index | Direct exact-key lookups on unsorted CSV columns, such as customer IDs in a file sorted by date. | Stores a hash and record location per non-null key, including duplicates. Lookup reads candidate records and checks exact equality. Requires seekable, uncompressed UTF-8 CSV. |
 | Bitmap index | Typed equality and set membership across low-cardinality CSV columns, such as status and region. | Stores a bitmap per distinct value and combines them before reading CSV records. Requires seekable, uncompressed UTF-8 CSV. |
-
-## Proposed index types
-
-These proposals target CSV. They describe when each strategy fits and what limits its effectiveness.
-
-| Index | Use case and fit | Constraints | Proposal |
-| --- | --- | --- | --- |
-| Inverted index | Find records containing any or all requested tokens or elements, such as both `urgent` and `refund` tags. | Requires a term extractor and consistent normalization and equality rules. Storage grows with the number of distinct term-to-record entries. | [#434](https://github.com/Seddryck/PocketCsvReader/issues/434) |
+| Inverted index | Finds records containing any or all requested terms extracted from a typed CSV field, such as both `urgent` and `refund` tags. | Stores a posting per distinct term in each record. Requires a deterministic extractor and seekable, uncompressed UTF-8 CSV. |

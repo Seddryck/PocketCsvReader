@@ -54,6 +54,19 @@ public static class ReaderLookup
         return Scan(reader, predicate.Bind(index.Keys).Matches);
     }
 
+    /// <summary>Scans an existing reader for the terms of an optional inverted index.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup(this IDataReader reader, InvertedIndex index, TermPredicate predicate)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        ArgumentNullException.ThrowIfNull(predicate);
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a CSV reader and path, or use an optional index.");
+        var lookup = predicate.Bind(index);
+        return lookup.Terms.Count == 0 ? Scan(reader, static _ => false) : Scan(reader, index.Key, lookup.CreateMatcher());
+    }
+
     /// <summary>Scans an existing reader for exact equality using an optional zone map.</summary>
     /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
     public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, ZoneMapIndex index, TKey value)

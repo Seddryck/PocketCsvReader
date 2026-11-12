@@ -64,7 +64,7 @@ internal static class CsvSeekIndexLookup
         return reader;
     }
 
-    private static Func<CsvDataReader, RecordSelection> CreateSelector(IIndexKey key, SelectIndexField select)
+    internal static Func<CsvDataReader, RecordSelection> CreateSelector(IIndexKey key, SelectIndexField select)
     {
         int ordinal = -1;
         return row =>
