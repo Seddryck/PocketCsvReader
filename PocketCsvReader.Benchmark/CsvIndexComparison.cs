@@ -14,30 +14,30 @@ internal static class CsvIndexComparison
     private const int DayCount = 4;
     private const int RowsPerDay = 4_096;
     private const int BlockSize = 512;
-    private const int LookupSamples = 18;
-    private const int BuildSamples = 3;
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
-    public static void Run()
+    public static void Run() => Run(new(FileCount, 1, 18, 3, 3));
+
+    public static void Run100X() => Run(new(FileCount * 10, 10, 3, 1, 0));
+
+    private static void Run(Settings settings)
     {
         var root = Directory.CreateTempSubdirectory("pocket-csv-index-comparison-").FullName;
         try
         {
-            var orders = GenerateOrders();
-            var scanPaths = WriteSources(root, orders);
-            long sourceBytes = scanPaths.Sum(path => new FileInfo(path).Length);
-            var modes = PrepareModes(root, scanPaths, new Indexes());
             Console.WriteLine($"{RuntimeInformation.FrameworkDescription} | {RuntimeInformation.OSDescription} | {RuntimeInformation.ProcessArchitecture}");
+            var scanPaths = WriteSources(root, settings);
+            long sourceBytes = scanPaths.Sum(path => new FileInfo(path).Length);
+            int rowsPerFile = DayCount * RowsPerDay * settings.DayRepeats;
             Console.WriteLine(string.Create(Culture,
-                $"{orders.Length:N0} rows in {FileCount} files | {sourceBytes:N0} CSV bytes | {LookupSamples} lookup samples | {BuildSamples} build samples"));
+                $"{settings.Files * rowsPerFile:N0} rows in {settings.Files} files of {rowsPerFile:N0} rows | {sourceBytes:N0} CSV bytes | {settings.LookupSamples} lookup samples | {settings.BuildSamples} build samples"));
             Console.WriteLine("Mode,SidecarBytes,BuildMedianMs");
-            foreach (var mode in modes)
-                Console.WriteLine(string.Create(Culture, $"{mode.Name},{mode.SidecarBytes},{mode.BuildMilliseconds:F3}"));
+            var modes = PrepareModes(root, scanPaths, new Indexes(), settings.BuildSamples);
 
             Console.WriteLine("Workload,Mode,Matches,LookupMedianMs,LookupMedianAllocatedBytes,Speedup");
-            RunWorkload(new("selective", "target", 3, 300, 400, 17, Broad: false), orders, modes);
-            RunWorkload(new("broader", "shared", 3, 100, 900, 23, Broad: true), orders, modes);
-            RunWorkload(new("absent-customer", "missing", 3, 300, 400, 17, Broad: false), orders, modes);
+            RunWorkload(new("selective", "target", 3, 300, 400, 17, Broad: false), settings, modes);
+            RunWorkload(new("broader", "shared", 3, 100, 900, 23, Broad: true), settings, modes);
+            RunWorkload(new("absent-customer", "missing", 3, 300, 400, 17, Broad: false), settings, modes);
         }
         finally
         {
@@ -45,7 +45,7 @@ internal static class CsvIndexComparison
         }
     }
 
-    private static Mode[] PrepareModes(string root, string[] scanPaths, Indexes indexes)
+    private static Mode[] PrepareModes(string root, string[] scanPaths, Indexes indexes, int buildSamples)
     {
         var modes = new List<Mode>();
         var definitions = new (string Name, Sidecars Indexes)[]
@@ -68,20 +68,22 @@ internal static class CsvIndexComparison
                 .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
                 .WithStreamInitialization(StreamInitializationOptions.Utf8)
                 .FromFiles(paths.Select(path => FileSource.Partitioned(path, true))).Build();
-            double build = MeasureBuild(source, indexes, enabled);
+            double build = MeasureBuild(source, indexes, enabled, buildSamples);
             long sidecarBytes = Directory.EnumerateFiles(directory, "*.idx").Sum(path => new FileInfo(path).Length);
-            modes.Add(new(name, sidecarBytes, build, workload => indexes.Lookup(source, enabled, workload)));
+            Console.WriteLine(string.Create(Culture, $"{name},{sidecarBytes},{build:F3}"));
+            modes.Add(new(name, workload => indexes.Lookup(source, enabled, workload)));
         }
         return modes.ToArray();
     }
 
-    private static double MeasureBuild(CsvFileQuery<bool> source, Indexes indexes, Sidecars enabled)
+    private static double MeasureBuild(CsvFileQuery<bool> source, Indexes indexes, Sidecars enabled, int buildSamples)
     {
         if (enabled == Sidecars.None)
             return 0;
 
-        indexes.Build(source, enabled);
-        var samples = new double[BuildSamples];
+        if (buildSamples > 1)
+            indexes.Build(source, enabled);
+        var samples = new double[buildSamples];
         for (int sample = 0; sample < samples.Length; sample++)
         {
             long start = Stopwatch.GetTimestamp();
@@ -91,28 +93,35 @@ internal static class CsvIndexComparison
         return Median(samples);
     }
 
-    private static void RunWorkload(Workload workload, Order[] orders, Mode[] modes)
+    private static void RunWorkload(Workload workload, Settings settings, Mode[] modes)
     {
-        var expected = orders.Where(workload.Matches).Select(order => order.Id).ToArray();
+        var expected = Enumerable.Range(0, settings.Files)
+            .SelectMany(file => GenerateOrders(file, settings.DayRepeats))
+            .Where(workload.Matches)
+            .Select(order => order.Id)
+            .ToArray();
+        Console.Error.WriteLine($"Checking {workload.Name} result order in all configurations.");
         Result expectedResult = default;
         foreach (int id in expected)
             expectedResult = expectedResult.Add(id);
 
         var queries = modes.Select(mode => mode.Lookup(workload)).ToArray();
-        var timings = queries.Select(_ => new Sample[LookupSamples]).ToArray();
+        var timings = queries.Select(_ => new Sample[settings.LookupSamples]).ToArray();
         foreach (var query in queries)
         {
             AssertOrder(query, expected);
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < settings.WarmupSamples; i++)
                 Measure(query, expectedResult);
         }
 
-        // Each mode occupies each position twice per workload.
-        for (int sample = 0; sample < LookupSamples; sample++)
+        // Spread the shorter run's starting positions evenly across the modes.
+        int rotation = Math.Max(1, modes.Length / settings.LookupSamples);
+        for (int sample = 0; sample < settings.LookupSamples; sample++)
         {
+            Console.Error.WriteLine($"Measuring {workload.Name}, sample {sample + 1}/{settings.LookupSamples}.");
             for (int offset = 0; offset < modes.Length; offset++)
             {
-                int index = (sample + offset) % modes.Length;
+                int index = ((sample * rotation) + offset) % modes.Length;
                 timings[index][sample] = Measure(queries[index], expectedResult);
             }
         }
@@ -156,37 +165,40 @@ internal static class CsvIndexComparison
         return new(elapsed, bytes);
     }
 
-    private static Order[] GenerateOrders()
+    private static IEnumerable<Order> GenerateOrders(int file, int dayRepeats)
     {
-        var orders = new Order[FileCount * DayCount * RowsPerDay];
-        for (int id = 0; id < orders.Length; id++)
+        int layout = file % FileCount;
+        var localCustomers = Enumerable.Range(0, 503)
+            .Select(customer => string.Create(Culture, $"local-{layout:D2}-{customer:D3}")).ToArray();
+        int rowsPerDay = RowsPerDay * dayRepeats;
+        int id = file * DayCount * rowsPerDay;
+        for (int day = 1; day <= DayCount; day++)
         {
-            int file = id / (DayCount * RowsPerDay);
-            int day = ((id / RowsPerDay) % DayCount) + 1;
-            int row = id % RowsPerDay;
-            string customer = row % 4 != 0 ? "shared"
-                : file is 2 or 9 ? "target" : string.Create(Culture, $"local-{file:D2}-{row % 503:D3}");
-            string status = ((row / 4) % 4) switch { 0 => "pending", 1 => "delivered", _ => "shipped" };
-            string region = (row / 16) % 4 == 3 ? "US" : "EU";
-            string tags = ((row / 64) % 4) switch { 0 => "urgent|refund", 1 => "urgent|delivery", _ => "routine" };
-            int amount = 100 + (100 * (row / BlockSize)) + (row % 100);
-            int warehouse = (row / 8) % 7 == 0 ? 17 : 23;
-            orders[id] = new(id, day, customer, amount, status, region, tags, warehouse);
+            for (int position = 0; position < rowsPerDay; position++)
+            {
+                int row = position % RowsPerDay;
+                string customer = row % 4 != 0 ? "shared"
+                    : layout is 2 or 9 ? "target" : localCustomers[row % localCustomers.Length];
+                string status = ((row / 4) % 4) switch { 0 => "pending", 1 => "delivered", _ => "shipped" };
+                string region = (row / 16) % 4 == 3 ? "US" : "EU";
+                string tags = ((row / 64) % 4) switch { 0 => "urgent|refund", 1 => "urgent|delivery", _ => "routine" };
+                int amount = 100 + (100 * (row / BlockSize)) + (row % 100);
+                int warehouse = (row / 8) % 7 == 0 ? 17 : 23;
+                yield return new(id++, day, customer, amount, status, region, tags, warehouse);
+            }
         }
-        return orders;
     }
 
-    private static string[] WriteSources(string root, Order[] orders)
+    private static string[] WriteSources(string root, Settings settings)
     {
         var directory = Directory.CreateDirectory(Path.Combine(root, Sidecars.None.ToString())).FullName;
-        var paths = new string[FileCount];
-        int rowsPerFile = DayCount * RowsPerDay;
+        var paths = new string[settings.Files];
         for (int file = 0; file < paths.Length; file++)
         {
             paths[file] = Path.Combine(directory, string.Create(Culture, $"orders-{file:D2}.csv"));
             using var writer = new StreamWriter(paths[file], append: false, new UTF8Encoding(false)) { NewLine = "\n" };
             writer.WriteLine("Id,Day,Customer,Amount,Status,Region,Tags,Warehouse,Notes");
-            foreach (var row in orders.AsSpan(file * rowsPerFile, rowsPerFile))
+            foreach (var row in GenerateOrders(file, settings.DayRepeats))
             {
                 string notes = row.Id % 4_096 == 0 ? "\"Call customer,\nthen confirm\"" : "Standard delivery";
                 writer.WriteLine(string.Create(Culture,
@@ -230,8 +242,9 @@ internal static class CsvIndexComparison
         All = Bloom | ZoneMap | Bitmap | Inverted | Hash | Sparse
     }
 
-    private sealed record Mode(string Name, long SidecarBytes, double BuildMilliseconds,
-        Func<Workload, CsvFileQuery<bool>> Lookup);
+    private sealed record Settings(int Files, int DayRepeats, int LookupSamples, int BuildSamples, int WarmupSamples);
+
+    private sealed record Mode(string Name, Func<Workload, CsvFileQuery<bool>> Lookup);
 
     private readonly record struct Order(int Id, int Day, string Customer, int Amount, string Status, string Region,
         string Tags, int Warehouse);
