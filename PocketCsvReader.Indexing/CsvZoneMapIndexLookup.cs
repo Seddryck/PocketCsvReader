@@ -5,6 +5,8 @@ namespace PocketCsvReader.Indexing;
 /// <summary>Builds zone maps and applies typed equality and range lookups to CSV sources.</summary>
 public static class CsvZoneMapIndexLookup
 {
+    private const string IndexName = "Zone maps";
+
     /// <summary>Builds or replaces the zone map for one CSV file.</summary>
     public static void BuildIndexes(this CsvReader reader, string path, ZoneMapIndex index)
     {
@@ -12,7 +14,7 @@ public static class CsvZoneMapIndexLookup
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(index);
         if (reader.GetType() != typeof(CsvReader))
-            throw UnsupportedSource();
+            throw CsvSeekIndexLookup.UnsupportedSource(IndexName);
         CsvIndexLookup.ForFile(reader, path).BuildIndexes(index);
     }
 
@@ -21,8 +23,8 @@ public static class CsvZoneMapIndexLookup
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(index);
-        if (!Supports(query))
-            throw UnsupportedSource();
+        if (!CsvSeekIndexLookup.Supports(query))
+            throw CsvSeekIndexLookup.UnsupportedSource(IndexName);
 
         var profile = query.Profile.ForIndexSeeking(trackPosition: true).WithFilters([]);
         var key = index.Key.ResolveRuntimeParser(query.Profile.Parsers);
@@ -30,7 +32,7 @@ public static class CsvZoneMapIndexLookup
         foreach (var file in query.EnumerateFiles())
         {
             if (file.Opener is not null)
-                throw UnsupportedSource();
+                throw CsvSeekIndexLookup.UnsupportedSource(IndexName);
             BuildFile(file.Path, profile, index, key, compatibility);
         }
     }
@@ -72,10 +74,10 @@ public static class CsvZoneMapIndexLookup
         if (reader.GetType() == typeof(CsvReader))
             return Lookup(CsvIndexLookup.ForFile(reader, path), index, predicate).ToDbDataReader();
         if (index.RequiresIndex)
-            throw UnsupportedSource();
+            throw CsvSeekIndexLookup.UnsupportedSource(IndexName);
 
         var key = predicate.Key.ResolveRuntimeParser(reader.Profile.Parsers);
-        return new DbDataReaderAdapter(Select(reader.ToDataReader(path), predicate.WithKey(key)));
+        return new DbDataReaderAdapter(CsvSeekIndexLookup.Select(reader.ToDataReader(path), key, predicate.WithKey(key).Select));
     }
 
     private static CsvFileQuery<TPartition> Lookup<TPartition>(CsvFileQuery<TPartition> query, ZoneMapIndex index,
@@ -85,42 +87,10 @@ public static class CsvZoneMapIndexLookup
         var profile = query.Profile;
         var key = predicate.Key.ResolveRuntimeParser(profile.Parsers);
         predicate = predicate.WithKey(key);
-        var supported = Supports(query);
-        if (!supported && index.RequiresIndex)
-            throw UnsupportedSource();
-
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key));
-        return query.WithReaderFactory((file, stream, currentProfile) =>
-        {
-            ZoneMapIndexSidecar.ReadPlan? plan = null;
-            if (supported && file.Opener is null && stream is FileStream source
-                && SparseIndexSidecar.TryReadUtf8BomLength(source, out var bomLength))
-                plan = ZoneMapIndexSidecar.Find(source, bomLength, index, compatibility, predicate);
-            else if (index.RequiresIndex)
-                throw UnsupportedSource();
-
-            var readerProfile = plan is null ? currentProfile : currentProfile.ForIndexSeeking(trackPosition: false);
-            return Select(new CsvDataReader(stream, readerProfile, leaveOpen: true), predicate, stream, plan);
-        });
-    }
-
-    private static CsvDataReader Select(CsvDataReader reader, ZoneMapPredicate predicate, Stream? stream = null,
-        ZoneMapIndexSidecar.ReadPlan? plan = null)
-    {
-        int ordinal = -1;
-        var key = predicate.Key;
-        if (plan is { } indexed && stream is not null)
-            reader.SelectRecordBlocks(SelectRow, stream, indexed.Blocks, indexed.RowCount, indexed.FieldCount);
-        else
-            reader.SelectRecords(SelectRow);
-        return reader;
-
-        RecordSelection SelectRow(CsvDataReader row)
-        {
-            if (ordinal < 0)
-                ordinal = CsvIndexLookup.ResolveOrdinal(row, key);
-            return predicate.Select(row.GetIndexField(ordinal));
-        }
+        return CsvSeekIndexLookup.WithLookup(query, key, predicate.Select,
+            (source, bomLength) => ZoneMapIndexSidecar.Find(source, bomLength, index, compatibility, predicate),
+            index.RequiresIndex, IndexName);
     }
 
     private static void BuildFile(string path, CsvProfile profile, ZoneMapIndex index, IIndexKey key, byte[] compatibility)
@@ -128,7 +98,7 @@ public static class CsvZoneMapIndexLookup
         using var source = SparseIndexSidecar.OpenSource(path, profile.ParserOptimizations.BufferSize, building: true);
         var stamp = SourceStamp.Read(source);
         if (!SparseIndexSidecar.TryReadUtf8BomLength(source, out var bomLength))
-            throw UnsupportedSource();
+            throw CsvSeekIndexLookup.UnsupportedSource(IndexName);
 
         using var reader = new CsvDataReader(source, profile, leaveOpen: true) { Window = null };
         var (blocks, rowCount) = BuildBlocks(reader, index.BlockSize, bomLength, key);
@@ -148,11 +118,7 @@ public static class CsvZoneMapIndexLookup
             if (ordinal < 0)
                 ordinal = CsvIndexLookup.ResolveOrdinal(reader, key);
             if (rowCount % blockSize == 0)
-            {
-                if (reader.CurrentPosition is not { OffsetUnit: PositionOffsetUnit.Bytes } position)
-                    throw new InvalidDataException("The reader did not provide a parser-confirmed byte position.");
-                block = new(checked(position.Offset + bomLength), reader.RowCount - 1, null, null);
-            }
+                block = new(CsvSeekIndexLookup.GetRecordOffset(reader, bomLength), reader.RowCount - 1, null, null);
 
             block = ExtendBounds(block, reader.GetIndexField(ordinal), key);
             rowCount = checked(rowCount + 1);
@@ -176,14 +142,8 @@ public static class CsvZoneMapIndexLookup
         return block;
     }
 
-    private static bool Supports<TPartition>(CsvFileQuery<TPartition> query)
-        => !query.RequiresAsyncSource && CsvIndexLookup.Supports(query.Profile);
-
     private static byte[] GetCompatibility(CsvProfile profile, IIndexKey key)
         => Convert.FromHexString(SparseIndexSidecar.Fingerprint([
             key.OrderingCompatibility, .. CsvIndexLookup.GetKeyCompatibilitySettings(profile, key)
         ]));
-
-    private static NotSupportedException UnsupportedSource()
-        => new("Zone maps require filesystem CSV paths, uncompressed UTF-8, ASCII syntax, and per-file headers when enabled. Numbered comment rows, array fields, leading row counts, and bad-data policies are unsupported.");
 }

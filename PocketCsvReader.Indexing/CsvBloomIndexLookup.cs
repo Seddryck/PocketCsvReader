@@ -68,7 +68,7 @@ public static class CsvBloomIndexLookup
         // Missing sidecars may use even a stateful parser in optional scan mode.
         // Only require a persistable parser identity when consulting a sidecar.
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key));
-        var requestedHash = new Lazy<ulong>(() => key.GetBloomHash(requested));
+        var requestedHash = new Lazy<ulong>(() => key.GetStableHash(requested));
         return query.WithReaderFactory((_, stream, currentProfile) =>
             Select(new CsvDataReader(stream, currentProfile, leaveOpen: true), key, requested),
             supported ? file => PlanRead(file, index, compatibility, requestedHash) : null);
@@ -87,7 +87,7 @@ public static class CsvBloomIndexLookup
                 ordinal = CsvIndexLookup.ResolveOrdinal(reader, key);
             var field = reader.GetIndexField(ordinal);
             if (field.HasValue && key.Parse(field.Value) is { } value)
-                filter.AddHash(key.GetBloomHash(value));
+                filter.AddHash(key.GetStableHash(value));
             rowCount = checked(rowCount + 1);
         }
 
@@ -138,7 +138,7 @@ public static class CsvBloomIndexLookup
 
     private static byte[] GetCompatibility(CsvProfile profile, IIndexKey key)
         => Convert.FromHexString(SparseIndexSidecar.Fingerprint([
-            "parquet-split-block-le-v1", BloomKeyHash.Format, key.BloomHashCompatibility,
+            "parquet-split-block-le-v1", StableIndexKeyHash.Format, key.HashCompatibility,
             .. CsvIndexLookup.GetKeyCompatibilitySettings(profile, key)
         ]));
 

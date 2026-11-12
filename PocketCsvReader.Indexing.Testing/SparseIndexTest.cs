@@ -329,19 +329,29 @@ public class SparseIndexTest
         }
     }
 
-    [Test]
-    public void SourceChangingDuringTheScanDoesNotReplaceTheZoneMap()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void SourceChangingDuringTheScanDoesNotReplaceTheSeekIndex(bool hash)
     {
         var path = Write("numbers.csv", "Key\n1\n2\n");
         var stamp = File.GetLastWriteTimeUtc(path);
         var query = Query(path);
-        var sidecar = path + ".zonemap.idx";
-        query.BuildIndexes(new ZoneMapIndex(new IndexKey<int>("Key"), 1));
+        var key = new IndexKey<int>("Key");
+        var sidecar = path + (hash ? ".hash.idx" : ".zonemap.idx");
+        Build(key);
         var original = File.ReadAllBytes(sidecar);
-        var key = new MutatingKey(() => File.SetLastWriteTimeUtc(path, stamp.AddHours(-1)));
-        Assert.Throws<IOException>(() => query.BuildIndexes(new ZoneMapIndex(key, 1)));
+        var mutating = new MutatingKey(() => File.SetLastWriteTimeUtc(path, stamp.AddHours(-1)));
+        Assert.Throws<IOException>(() => Build(mutating));
         Assert.That(File.ReadAllBytes(sidecar), Is.EqualTo(original));
         Assert.That(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"), Is.Empty);
+
+        void Build(IIndexKey indexKey)
+        {
+            if (hash)
+                query.BuildIndexes(new HashIndex(indexKey));
+            else
+                query.BuildIndexes(new ZoneMapIndex(indexKey, 1));
+        }
     }
 
     private sealed class MutatingKey(Action mutate) : IIndexKey
@@ -353,7 +363,7 @@ public class SparseIndexTest
         int? IIndexKey.ColumnOrdinal => _inner.ColumnOrdinal;
         string IIndexKey.CompatibilityId => _inner.CompatibilityId;
         int IIndexKey.Compare(object left, object right) => _inner.Compare(left, right);
-        ulong IIndexKey.GetBloomHash(object value) => _inner.GetBloomHash(value);
+        ulong IIndexKey.GetStableHash(object value) => _inner.GetStableHash(value);
 
         object IIndexKey.Parse(ReadOnlySpan<char> text)
         {

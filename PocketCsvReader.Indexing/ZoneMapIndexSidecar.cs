@@ -1,79 +1,50 @@
-using System.Security.Cryptography;
-
 namespace PocketCsvReader.Indexing;
 
 internal static class ZoneMapIndexSidecar
 {
     private static ReadOnlySpan<byte> Magic => "PKZMIDX1"u8;
-    private const int DigestBytes = 32;
+    private const string Suffix = ".zonemap.idx";
+    private const string IndexName = "zone map";
     private const int BlockHeaderBytes = sizeof(long) + sizeof(int) + sizeof(byte);
 
     internal static void Publish(FileStream source, SourceStamp stamp, ZoneMapIndex index, byte[] compatibility,
         int rowCount, int fieldCount, IReadOnlyList<Block> blocks)
-    {
-        var target = source.Name + ".zonemap.idx";
-        var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
+        => SeekIndexFile.Publish(source, stamp, Suffix, IndexName, writer =>
         {
-            using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
-            using (var writer = new BinaryWriter(file))
+            writer.Write(Magic);
+            writer.Write(stamp.Length);
+            writer.Write(stamp.LastWriteUtc.Ticks);
+            writer.Write(index.BlockSize);
+            writer.Write(rowCount);
+            writer.Write(fieldCount);
+            writer.Write(compatibility);
+            foreach (var block in blocks)
             {
-                file.Position = DigestBytes;
-                writer.Write(Magic);
-                writer.Write(stamp.Length);
-                writer.Write(stamp.LastWriteUtc.Ticks);
-                writer.Write(index.BlockSize);
-                writer.Write(rowCount);
-                writer.Write(fieldCount);
-                writer.Write(compatibility);
-                foreach (var block in blocks)
+                writer.Write(block.Offset);
+                writer.Write(block.SkippedRows);
+                if (block is { Min: { } min, Max: { } max })
                 {
-                    writer.Write(block.Offset);
-                    writer.Write(block.SkippedRows);
-                    if (block is { Min: { } min, Max: { } max })
-                    {
-                        writer.Write(true);
-                        WriteKey(writer, min);
-                        WriteKey(writer, max);
-                    }
-                    else
-                    {
-                        writer.Write(false);
-                    }
+                    writer.Write(true);
+                    WriteKey(writer, min);
+                    WriteKey(writer, max);
                 }
-
-                writer.Flush();
-                file.Position = DigestBytes;
-                var checksum = SHA256.HashData(file);
-                file.Position = 0;
-                writer.Write(checksum);
+                else
+                {
+                    writer.Write(false);
+                }
             }
+        });
 
-            if (SourceStamp.Read(source) != stamp || SourceStamp.Read(source.Name) != stamp)
-                throw new IOException($"The file '{source.Name}' changed while building its zone map.");
-            File.Move(temporary, target, overwrite: true);
-        }
-        finally
-        {
-            File.Delete(temporary);
-        }
-    }
-
-    internal static ReadPlan? Find(FileStream source, int bomLength, ZoneMapIndex index, Lazy<byte[]> compatibility,
+    internal static CsvIndexedReadPlan? Find(FileStream source, int bomLength, ZoneMapIndex index, Lazy<byte[]> compatibility,
         ZoneMapPredicate predicate)
     {
-        using var file = Open(source.Name, index.RequiresIndex);
+        using var file = SeekIndexFile.Open(source.Name, Suffix, index.RequiresIndex);
         if (file is null)
             return null;
         using var reader = new BinaryReader(file);
         try
         {
-            Span<byte> checksum = stackalloc byte[DigestBytes];
-            file.ReadExactly(checksum);
-            if (!checksum.SequenceEqual(SHA256.HashData(file)))
-                throw Corrupt();
-
-            file.Position = DigestBytes;
+            SeekIndexFile.ValidateChecksum(file, IndexName);
             if (!reader.ReadBytes(Magic.Length).AsSpan().SequenceEqual(Magic))
                 throw new InvalidDataException("Invalid or unsupported zone map format.");
 
@@ -85,13 +56,11 @@ internal static class ZoneMapIndexSidecar
             if (blockSize <= 0 || rowCount < 0 || fieldCount < 0)
                 throw Corrupt();
 
-            if (blockSize != index.BlockSize || !reader.ReadBytes(DigestBytes).AsSpan().SequenceEqual(compatibility.Value))
+            if (blockSize != index.BlockSize || !reader.ReadBytes(SeekIndexFile.DigestBytes).AsSpan().SequenceEqual(compatibility.Value))
                 throw new InvalidDataException("The zone map is incompatible with the selected key, block size, or reader configuration.");
 
             var blocks = ReadBlocks(reader, bomLength, sourceLength, blockSize, rowCount, predicate);
-            var stamp = SourceStamp.Read(source);
-            if (stamp.Length != sourceLength || stamp.LastWriteUtc.Ticks != lastWrite || SourceStamp.Read(source.Name) != stamp)
-                throw new InvalidDataException("The zone map is stale.");
+            SeekIndexFile.ValidateSource(source, sourceLength, lastWrite, IndexName);
             return new(blocks, rowCount, fieldCount);
         }
         catch (EndOfStreamException exception)
@@ -125,7 +94,7 @@ internal static class ZoneMapIndexSidecar
 
             var skippedDataRows = i * blockSize;
             var count = Math.Min(blockSize, rowCount - skippedDataRows);
-            AddCandidate(candidates, new(offset, skippedRows, skippedDataRows, count));
+            CsvIndexedReadPlan.AddCandidate(candidates, new(offset, skippedRows, skippedDataRows, count));
         }
         if (file.Position != file.Length)
             throw Corrupt();
@@ -146,28 +115,6 @@ internal static class ZoneMapIndexSidecar
         if (key.Compare(min, max) > 0)
             throw Corrupt();
         return predicate.Intersects(min, max);
-    }
-
-    private static void AddCandidate(List<CsvRecordBlock> candidates, CsvRecordBlock block)
-    {
-        // Keep the same parser and its read-ahead when consecutive blocks qualify.
-        if (candidates.Count > 0 && candidates[^1] is var previous
-            && previous.SkippedDataRows + previous.RowCount == block.SkippedDataRows)
-            candidates[^1] = previous with { RowCount = previous.RowCount + block.RowCount };
-        else
-            candidates.Add(block);
-    }
-
-    private static FileStream? Open(string path, bool required)
-    {
-        try
-        {
-            return new(path + ".zonemap.idx", FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
-        }
-        catch (FileNotFoundException) when (!required)
-        {
-            return null;
-        }
     }
 
     private static void WriteKey(BinaryWriter writer, object value)
@@ -238,5 +185,4 @@ internal static class ZoneMapIndexSidecar
     private static InvalidDataException Corrupt() => new("The zone map is corrupt.");
 
     internal readonly record struct Block(long Offset, int SkippedRows, object? Min, object? Max);
-    internal readonly record struct ReadPlan(IReadOnlyList<CsvRecordBlock> Blocks, int RowCount, int FieldCount);
 }

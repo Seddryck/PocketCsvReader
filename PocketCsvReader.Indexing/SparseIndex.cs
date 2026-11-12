@@ -15,8 +15,8 @@ public interface IIndexKey
     internal string CompatibilityId { get; }
     internal object Parse(ReadOnlySpan<char> text);
     internal int Compare(object left, object right);
-    internal ulong GetBloomHash(object value) => throw new NotSupportedException("This key does not support Bloom indexes.");
-    internal string? BloomHashCompatibility => null;
+    internal ulong GetStableHash(object value) => throw new NotSupportedException("This key does not support stable index hashing.");
+    internal string? HashCompatibility => null;
     internal string? OrderingCompatibility => null;
     internal IIndexKey ResolveRuntimeParser(RuntimeParsersDescriptor? parsers) => this;
 }
@@ -159,11 +159,11 @@ public sealed class IndexKey<TKey> : IIndexKey
     }
 
     string IIndexKey.CompatibilityId => _compatibilityId;
-    ulong IIndexKey.GetBloomHash(object value) => BloomKeyHash.Compute(value, _stringComparison, _comparisonSort);
+    ulong IIndexKey.GetStableHash(object value) => StableIndexKeyHash.Compute(value, _stringComparison, _comparisonSort);
     private string? OrdinalIgnoreCaseCompatibility => _stringComparison == StringComparison.OrdinalIgnoreCase
         ? SparseIndexSidecar.Fingerprint([CultureInfo.InvariantCulture.CompareInfo.Version.SortId.ToString(),
             Environment.Version.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSDescription]) : null;
-    string? IIndexKey.BloomHashCompatibility => OrdinalIgnoreCaseCompatibility;
+    string? IIndexKey.HashCompatibility => OrdinalIgnoreCaseCompatibility;
     string? IIndexKey.OrderingCompatibility => OrdinalIgnoreCaseCompatibility;
     object IIndexKey.Parse(ReadOnlySpan<char> text) => _parse(text)!;
     int IIndexKey.Compare(object left, object right) => _comparer.Compare((TKey)left, (TKey)right);
@@ -179,8 +179,8 @@ public sealed class IndexKey<TKey> : IIndexKey
         string? IIndexKey.ColumnName => key.ColumnName;
         int? IIndexKey.ColumnOrdinal => key.ColumnOrdinal;
         string IIndexKey.CompatibilityId => key.GetRegisteredCompatibilityId(registration);
-        ulong IIndexKey.GetBloomHash(object value) => ((IIndexKey)key).GetBloomHash(value);
-        string? IIndexKey.BloomHashCompatibility => ((IIndexKey)key).BloomHashCompatibility;
+        ulong IIndexKey.GetStableHash(object value) => ((IIndexKey)key).GetStableHash(value);
+        string? IIndexKey.HashCompatibility => ((IIndexKey)key).HashCompatibility;
         string? IIndexKey.OrderingCompatibility => ((IIndexKey)key).OrderingCompatibility;
         object IIndexKey.Parse(ReadOnlySpan<char> text) => parse(text)!;
         int IIndexKey.Compare(object left, object right) => key._comparer.Compare((TKey)left, (TKey)right);

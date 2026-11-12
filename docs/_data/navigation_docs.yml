@@ -38,6 +38,7 @@
   - sparse-indexes
   - bloom-indexes
   - zone-map-indexes
+  - hash-indexes
 - title: Configuration
   docs:
   - fluent-api-profile-configuration

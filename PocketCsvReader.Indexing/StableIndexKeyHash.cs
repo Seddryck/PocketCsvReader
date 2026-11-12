@@ -6,7 +6,7 @@ using System.Text;
 
 namespace PocketCsvReader.Indexing;
 
-internal static class BloomKeyHash
+internal static class StableIndexKeyHash
 {
     internal const string Format = "xxhash64-seed0-canonical-key-v1";
 
@@ -35,7 +35,7 @@ internal static class BloomKeyHash
             uint n => n,
             ulong n => n,
             DateOnly date => (ulong)date.DayNumber,
-            _ => throw new NotSupportedException("This key type cannot be hashed for a Bloom index.")
+            _ => throw new NotSupportedException("This key type does not support stable index hashing.")
         };
         BinaryPrimitives.WriteUInt64LittleEndian(bytes, integer);
         return XxHash64.HashToUInt64(bytes);
