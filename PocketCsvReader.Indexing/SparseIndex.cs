@@ -1,7 +1,4 @@
 using System.Globalization;
-using System.Reflection;
-using System.Reflection.Emit;
-using System.Runtime.CompilerServices;
 using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Indexing;
@@ -187,23 +184,9 @@ public sealed class IndexKey<TKey> : IIndexKey
     }
 
     private string GetRegisteredCompatibilityId(Delegate registration)
-    {
-        var method = registration.Method;
-        if (registration.GetInvocationList().Length != 1 || method is DynamicMethod || method.Module.Assembly.IsDynamic
-            || (registration.Target is { } target && (method.IsStatic || !IsStatelessLambda(target.GetType()))))
-        {
-            throw new NotSupportedException("A persisted index requires a static runtime parser or a non-capturing lambda.");
-        }
-
-        return SparseIndexSidecar.Fingerprint(["runtime-parser-v1", _compatibilityId,
-            method.Module.ModuleVersionId.ToString(), method.MetadataToken.ToString(CultureInfo.InvariantCulture),
-            method.DeclaringType?.AssemblyQualifiedName, registration.GetType().AssemblyQualifiedName,
-            Environment.Version.ToString(), .. method.GetGenericArguments().Select(type => type.AssemblyQualifiedName)]);
-    }
-
-    private static bool IsStatelessLambda(Type type)
-        => type.BaseType == typeof(object) && type.IsDefined(typeof(CompilerGeneratedAttribute), inherit: false)
-            && type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Length == 0;
+        => SparseIndexSidecar.Fingerprint([
+            "runtime-parser-v1", _compatibilityId, .. IndexDelegateIdentity.GetSettings(registration, "runtime parser")
+        ]);
 }
 
 /// <summary>Defines a sparse index and the number of data records between checkpoints.</summary>
