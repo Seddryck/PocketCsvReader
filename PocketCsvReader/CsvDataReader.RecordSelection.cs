@@ -29,7 +29,7 @@ public partial class CsvDataReader
     }
 
     internal NullableSpan GetIndexField(int ordinal)
-        => (uint)ordinal < (uint)CurrentFieldSpans!.Length ? GetValueOrThrow(ordinal) : default;
+        => CurrentFieldSpans is { } fields && (uint)ordinal < (uint)fields.Length ? GetValueOrThrow(ordinal) : default;
 
     private bool ReadSelectedRow()
     {

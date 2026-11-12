@@ -181,32 +181,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 if (Current is not null && Current.Read())
                     return true;
 
-                var fields = Current?.SourceHeaders;
-                var rowNumber = Current?.BatchRowNumber ?? 0;
-                DisposeOwnedInput();
-                while (true)
-                {
-                    if (_window?.IsComplete == true || !factories.MoveNext())
-                    {
-                        DisposeOwnedFactories();
-                        return false;
-                    }
-
-                    var acquisition = factories.Current(CancellationToken.None);
-                    if (!acquisition.IsCompletedSuccessfully)
-                        throw new InvalidOperationException("A deferred synchronous factory must complete synchronously.");
-                    var input = acquisition.Result;
-                    if (input.SkippedRows is int skipped)
-                    {
-                        if (HasRowNumber)
-                            rowNumber = checked(rowNumber + skipped);
-                        continue;
-                    }
-
-                    _currentStream = input.Stream;
-                    SetOwnedCurrent(fields, rowNumber, input.CreateReader);
-                    break;
-                }
+                if (!MoveNextFromDeferredFactories(factories))
+                    return false;
             }
             return false;
         }
@@ -223,6 +199,35 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
             }
             throw;
         }
+    }
+
+    private bool MoveNextFromDeferredFactories(IEnumerator<Func<CancellationToken, ValueTask<ReaderInput>>> factories)
+    {
+        var fields = Current?.SourceHeaders;
+        var rowNumber = Current?.BatchRowNumber ?? 0;
+        DisposeOwnedInput();
+
+        while (_window?.IsComplete != true && factories.MoveNext())
+        {
+            var acquisition = factories.Current(CancellationToken.None);
+            if (!acquisition.IsCompletedSuccessfully)
+                throw new InvalidOperationException("A deferred synchronous factory must complete synchronously.");
+
+            var input = acquisition.Result;
+            if (input.SkippedRows is int skipped)
+            {
+                if (HasRowNumber)
+                    rowNumber = checked(rowNumber + skipped);
+                continue;
+            }
+
+            _currentStream = input.Stream;
+            SetOwnedCurrent(fields, rowNumber, input.CreateReader);
+            return true;
+        }
+
+        DisposeOwnedFactories();
+        return false;
     }
 
     private async ValueTask<bool> ReadFromOwnedFactoriesAsync(CancellationToken cancellationToken)

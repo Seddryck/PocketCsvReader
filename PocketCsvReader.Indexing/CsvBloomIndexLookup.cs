@@ -17,22 +17,6 @@ public static class CsvBloomIndexLookup
         CsvIndexLookup.ForFile(reader, path).BuildIndexes(index);
     }
 
-    /// <summary>Applies exact equality to one CSV file, skipping it if the sidecar rules it out.</summary>
-    public static DbDataReader WithIndexedLookup<TKey>(this CsvReader reader, string path, BloomIndex index, TKey value)
-    {
-        ArgumentNullException.ThrowIfNull(reader);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        ArgumentNullException.ThrowIfNull(index);
-        if (reader.GetType() == typeof(CsvReader))
-            return CsvIndexLookup.ForFile(reader, path).WithIndexedLookup(index, value).ToDbDataReader();
-        if (index.RequiresIndex)
-            throw UnsupportedSource();
-
-        var key = index.Key.ResolveRuntimeParser(reader.Profile.Parsers);
-        var requested = ReaderLookup.ValidateKey(key, value);
-        return new DbDataReaderAdapter(Select(reader.ToDataReader(path), key, requested));
-    }
-
     /// <summary>Builds or replaces the Bloom sidecar for every selected CSV file.</summary>
     public static void BuildIndexes<TPartition>(this CsvFileQuery<TPartition> query, BloomIndex index)
     {
@@ -49,25 +33,24 @@ public static class CsvBloomIndexLookup
             if (file.Opener is not null)
                 throw UnsupportedSource();
 
-            var filter = new SplitBlockBloomFilterBuilder(index.PayloadBytes);
-            using var stream = SparseIndexSidecar.OpenSource(file.Path, profile.ParserOptimizations.BufferSize, building: true);
-            var stamp = SourceStamp.Read(stream);
-            using var reader = new CsvDataReader(stream, profile, leaveOpen: true) { Window = null };
-            int ordinal = -1, rowCount = 0;
-            while (reader.Read())
-            {
-                if (ordinal < 0)
-                    ordinal = CsvIndexLookup.ResolveOrdinal(reader, key);
-                var field = reader.GetIndexField(ordinal);
-                if (field.HasValue && key.Parse(field.Value) is { } value)
-                    filter.AddHash(key.GetBloomHash(value));
-                rowCount = checked(rowCount + 1);
-            }
-
-            if (profile.Dialect.Header && ordinal < 0)
-                CsvIndexLookup.ResolveOrdinal(reader, key);
-            BloomIndexSidecar.Publish(stream, stamp, rowCount, compatibility, filter.Data);
+            BuildFile(file.Path, profile, key, index.PayloadBytes, compatibility);
         }
+    }
+
+    /// <summary>Applies exact equality to one CSV file, skipping it if the sidecar rules it out.</summary>
+    public static DbDataReader WithIndexedLookup<TKey>(this CsvReader reader, string path, BloomIndex index, TKey value)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(index);
+        if (reader.GetType() == typeof(CsvReader))
+            return CsvIndexLookup.ForFile(reader, path).WithIndexedLookup(index, value).ToDbDataReader();
+        if (index.RequiresIndex)
+            throw UnsupportedSource();
+
+        var key = index.Key.ResolveRuntimeParser(reader.Profile.Parsers);
+        var requested = ReaderLookup.ValidateKey(key, value);
+        return new DbDataReaderAdapter(Select(reader.ToDataReader(path), key, requested));
     }
 
     /// <summary>Prunes files using their sidecars, then applies exact typed equality to the remaining files.</summary>
@@ -89,29 +72,54 @@ public static class CsvBloomIndexLookup
         var requestedHash = new Lazy<ulong>(() => key.GetBloomHash(requested));
         return query.WithReaderFactory((_, stream, currentProfile) =>
             Select(new CsvDataReader(stream, currentProfile, leaveOpen: true), key, requested),
-            supported ? PlanRead : null);
+            supported ? file => PlanRead(file, index, compatibility, requestedHash) : null);
+    }
 
-        CsvFileReadPlan PlanRead(PartitionedFile<TPartition> file)
+    private static void BuildFile(string path, CsvProfile profile, IIndexKey key, int payloadBytes, byte[] compatibility)
+    {
+        var filter = new SplitBlockBloomFilterBuilder(payloadBytes);
+        using var stream = SparseIndexSidecar.OpenSource(path, profile.ParserOptimizations.BufferSize, building: true);
+        var stamp = SourceStamp.Read(stream);
+        using var reader = new CsvDataReader(stream, profile, leaveOpen: true) { Window = null };
+        int ordinal = -1, rowCount = 0;
+        while (reader.Read())
         {
-            if (file.Opener is not null)
-            {
-                if (index.RequiresIndex)
-                    throw UnsupportedSource();
-                return default;
-            }
-
-            var probe = BloomIndexSidecar.Probe(file.Path, index, compatibility, requestedHash);
-            if (probe is not { } result)
-                return default;
-            if (!result.MightContain)
-                return new(SkippedRows: result.RowCount);
-
-            return new(Validate: stream =>
-            {
-                if (stream is not FileStream source || SourceStamp.Read(source) != result.Stamp)
-                    throw new InvalidDataException("The CSV source changed after validating its Bloom index.");
-            });
+            if (ordinal < 0)
+                ordinal = CsvIndexLookup.ResolveOrdinal(reader, key);
+            var field = reader.GetIndexField(ordinal);
+            if (field.HasValue && key.Parse(field.Value) is { } value)
+                filter.AddHash(key.GetBloomHash(value));
+            rowCount = checked(rowCount + 1);
         }
+
+        if (profile.Dialect.Header && ordinal < 0)
+            CsvIndexLookup.ResolveOrdinal(reader, key);
+        BloomIndexSidecar.Publish(stream, stamp, rowCount, compatibility, filter.Data);
+    }
+
+    private static CsvFileReadPlan PlanRead<TPartition>(PartitionedFile<TPartition> file, BloomIndex index,
+        Lazy<byte[]> compatibility, Lazy<ulong> requestedHash)
+    {
+        if (file.Opener is not null)
+        {
+            if (index.RequiresIndex)
+                throw UnsupportedSource();
+            return default;
+        }
+
+        var probe = BloomIndexSidecar.Probe(file.Path, index, compatibility, requestedHash);
+        if (probe is not { } result)
+            return default;
+        if (!result.MightContain)
+            return new(SkippedRows: result.RowCount);
+
+        return new(Validate: stream => ValidateOpenedSource(stream, result.Stamp));
+    }
+
+    private static void ValidateOpenedSource(Stream stream, SourceStamp stamp)
+    {
+        if (stream is not FileStream source || SourceStamp.Read(source) != stamp)
+            throw new InvalidDataException("The CSV source changed after validating its Bloom index.");
     }
 
     private static CsvDataReader Select(CsvDataReader reader, IIndexKey key, object requested)

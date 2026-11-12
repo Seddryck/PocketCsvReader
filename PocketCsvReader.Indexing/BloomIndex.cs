@@ -41,7 +41,8 @@ public sealed class BloomIndex
             var ln2 = Math.Log(2);
             var blocks = Math.Ceiling(-ExpectedDistinctCount * Math.Log(FalsePositiveProbability)
                 / (ln2 * ln2 * 8 * BlockBytes));
-            return (int)Math.Clamp(blocks, 1, MaxBytes / BlockBytes) * BlockBytes;
+            var maxBlocks = Math.Floor((double)MaxBytes / BlockBytes);
+            return (int)Math.Clamp(blocks, 1, maxBlocks) * BlockBytes;
         }
     }
 

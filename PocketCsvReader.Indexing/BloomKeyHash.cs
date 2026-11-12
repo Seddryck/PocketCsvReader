@@ -48,8 +48,8 @@ internal static class BloomKeyHash
             var options = comparison is StringComparison.CurrentCultureIgnoreCase or StringComparison.InvariantCultureIgnoreCase
                 ? CompareOptions.IgnoreCase : CompareOptions.None;
             var length = compareInfo.GetSortKeyLength(text, options);
-            byte[]? rented = null;
-            Span<byte> sortKey = length <= 512 ? stackalloc byte[length] : (rented = ArrayPool<byte>.Shared.Rent(length));
+            byte[]? rented = length > 512 ? ArrayPool<byte>.Shared.Rent(length) : null;
+            Span<byte> sortKey = rented is null ? stackalloc byte[length] : rented;
             try
             {
                 var written = compareInfo.GetSortKey(text, sortKey, options);
@@ -66,9 +66,8 @@ internal static class BloomKeyHash
             return HashUtf8(text);
 
         // OrdinalIgnoreCase compares as if both strings were uppercased invariantly.
-        char[]? buffer = null;
-        Span<char> upper = text.Length <= 256 ? stackalloc char[text.Length]
-            : (buffer = ArrayPool<char>.Shared.Rent(text.Length));
+        char[]? buffer = text.Length > 256 ? ArrayPool<char>.Shared.Rent(text.Length) : null;
+        Span<char> upper = buffer is null ? stackalloc char[text.Length] : buffer;
         try
         {
             var written = text.AsSpan().ToUpperInvariant(upper);
@@ -84,8 +83,8 @@ internal static class BloomKeyHash
     private static ulong HashUtf8(ReadOnlySpan<char> text)
     {
         var length = Encoding.UTF8.GetByteCount(text);
-        byte[]? rented = null;
-        Span<byte> bytes = length <= 512 ? stackalloc byte[length] : (rented = ArrayPool<byte>.Shared.Rent(length));
+        byte[]? rented = length > 512 ? ArrayPool<byte>.Shared.Rent(length) : null;
+        Span<byte> bytes = rented is null ? stackalloc byte[length] : rented;
         try
         {
             var written = Encoding.UTF8.GetBytes(text, bytes);
