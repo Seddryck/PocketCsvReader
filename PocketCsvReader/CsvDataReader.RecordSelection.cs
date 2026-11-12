@@ -1,33 +1,33 @@
 namespace PocketCsvReader;
 
-internal readonly record struct CsvRecordRange(long? Offset, int SkippedRows, int RowCount, int FieldCount);
 internal readonly record struct CsvRecordBlock(long Offset, int SkippedRows, int SkippedDataRows, int RowCount);
 
 public partial class CsvDataReader
 {
     private Func<CsvDataReader, RecordSelection>? _selectRecord;
-    private CsvRecordRange? _recordRange;
     private IReadOnlyList<CsvRecordBlock>? _recordBlocks;
+    private int? _indexedRowCount;
+    private int _indexedFieldCount;
     private int _nextBlock;
     private int _remainingBlockRows;
     private Stream? _rangeStream;
     private int? _fileStartRow;
     private FieldParsing.FieldEscaper? _fieldEscaper;
 
-    internal int BatchRowNumber => HasRowNumber && _fileStartRow is int start && _recordRange is { } range
-        ? checked(start + range.RowCount)
+    internal int BatchRowNumber => HasRowNumber && _fileStartRow is int start && _indexedRowCount is int count
+        ? checked(start + count)
         : CurrentRowNumber;
-
-    internal void SelectRecords(Func<CsvDataReader, RecordSelection> select, Stream stream, CsvRecordRange? range)
-        => (_selectRecord, _rangeStream, _recordRange) = (select, stream, range);
 
     internal void SelectRecords(Func<CsvDataReader, RecordSelection> select) => _selectRecord = select;
 
     internal void SelectRecordBlocks(Func<CsvDataReader, RecordSelection> select, Stream stream,
-        IReadOnlyList<CsvRecordBlock> blocks, int rowCount, int fieldCount)
+        IReadOnlyList<CsvRecordBlock>? blocks, int rowCount, int fieldCount)
     {
-        SelectRecords(select, stream, new(null, 0, rowCount, fieldCount));
+        _selectRecord = select;
+        _rangeStream = stream;
         _recordBlocks = blocks;
+        _indexedRowCount = rowCount;
+        _indexedFieldCount = fieldCount;
     }
 
     internal NullableSpan GetDecodedField(int ordinal)
@@ -47,13 +47,12 @@ public partial class CsvDataReader
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (GetSeekHeaderFieldCount() is int fieldCount)
+            if (_recordBlocks is { Count: > 0 })
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(CsvHeaders.Read(RecordSource!), "field_");
                 else
-                    RegisterHeader([new string?[fieldCount]], "field_");
-                SeekSparseCheckpoint();
+                    RegisterHeader([new string?[_indexedFieldCount]], "field_");
             }
         }
 
@@ -73,13 +72,12 @@ public partial class CsvDataReader
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (GetSeekHeaderFieldCount() is int fieldCount)
+            if (_recordBlocks is { Count: > 0 })
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false), "field_");
                 else
-                    RegisterHeader([new string?[fieldCount]], "field_");
-                SeekSparseCheckpoint();
+                    RegisterHeader([new string?[_indexedFieldCount]], "field_");
             }
         }
 
@@ -92,16 +90,6 @@ public partial class CsvDataReader
                 return decision == RecordSelection.Include;
         }
         return false;
-    }
-
-    private int? GetSeekHeaderFieldCount()
-        => _recordRange is { } range && (range.Offset.HasValue || _recordBlocks is { Count: > 0 })
-            ? range.FieldCount : null;
-
-    private void SeekSparseCheckpoint()
-    {
-        if (_recordRange is { Offset: long offset } range)
-            SeekRecord(offset, range.SkippedRows, range.SkippedRows);
     }
 
     private bool PrepareSelectedRow()

@@ -6,6 +6,8 @@ namespace PocketCsvReader.Indexing;
 /// <summary>Builds and applies per-file Bloom filters for filesystem CSV queries.</summary>
 public static class CsvBloomIndexLookup
 {
+    private const string IndexName = "Bloom indexes";
+
     /// <summary>Builds or replaces the sidecar for a single CSV file.</summary>
     public static void BuildIndexes(this CsvReader reader, string path, BloomIndex index)
     {
@@ -49,7 +51,8 @@ public static class CsvBloomIndexLookup
 
         var key = index.Key.ResolveRuntimeParser(reader.Profile.Parsers);
         var requested = ReaderLookup.ValidateKey(key, value);
-        return new DbDataReaderAdapter(Select(reader.ToDataReader(path), key, requested));
+        return new DbDataReaderAdapter(CsvSeekIndexLookup.Select(reader.ToDataReader(path), key,
+            field => ReaderLookup.Select(field, key, requested, ordered: false)));
     }
 
     /// <summary>Prunes files using their sidecars, then applies exact typed equality to the remaining files.</summary>
@@ -69,9 +72,10 @@ public static class CsvBloomIndexLookup
         // Only require a persistable parser identity when consulting a sidecar.
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key));
         var requestedHash = new Lazy<ulong>(() => key.GetStableHash(requested));
-        return query.WithReaderFactory((_, stream, currentProfile) =>
-            Select(new CsvDataReader(stream, currentProfile, leaveOpen: true), key, requested),
-            supported ? file => PlanRead(file, index, compatibility, requestedHash) : null);
+        return CsvIndexPipeline<TPartition>.Add(query, new(CsvIndexKind.Bloom,
+            _ => CsvSeekIndexLookup.CreateSelector(key, field => ReaderLookup.Select(field, key, requested, ordered: false)),
+            index.RequiresIndex ? IndexName : null,
+            Probe: supported ? path => BloomIndexSidecar.Probe(path, index, compatibility, requestedHash) : null));
     }
 
     private static void BuildFile(string path, CsvProfile profile, IIndexKey key, int payloadBytes, byte[] compatibility)
@@ -96,43 +100,6 @@ public static class CsvBloomIndexLookup
         BloomIndexSidecar.Publish(stream, stamp, rowCount, compatibility, filter.Data);
     }
 
-    private static CsvFileReadPlan PlanRead<TPartition>(PartitionedFile<TPartition> file, BloomIndex index,
-        Lazy<byte[]> compatibility, Lazy<ulong> requestedHash)
-    {
-        if (file.Opener is not null)
-        {
-            if (index.RequiresIndex)
-                throw UnsupportedSource();
-            return default;
-        }
-
-        var probe = BloomIndexSidecar.Probe(file.Path, index, compatibility, requestedHash);
-        if (probe is not { } result)
-            return default;
-        if (!result.MightContain)
-            return new(SkippedRows: result.RowCount);
-
-        return new(Validate: stream => ValidateOpenedSource(stream, result.Stamp));
-    }
-
-    private static void ValidateOpenedSource(Stream stream, SourceStamp stamp)
-    {
-        if (stream is not FileStream source || SourceStamp.Read(source) != stamp)
-            throw new InvalidDataException("The CSV source changed after validating its Bloom index.");
-    }
-
-    private static CsvDataReader Select(CsvDataReader reader, IIndexKey key, object requested)
-    {
-        int ordinal = -1;
-        reader.SelectRecords(row =>
-        {
-            if (ordinal < 0)
-                ordinal = CsvIndexLookup.ResolveOrdinal(row, key);
-            return ReaderLookup.Select(row.GetIndexField(ordinal), key, requested, ordered: false);
-        });
-        return reader;
-    }
-
     private static bool Supports<TPartition>(CsvFileQuery<TPartition> query)
         => !query.RequiresAsyncSource && CsvIndexLookup.Supports(query.Profile);
 
@@ -143,5 +110,5 @@ public static class CsvBloomIndexLookup
         ]));
 
     private static NotSupportedException UnsupportedSource()
-        => new("Bloom indexes require filesystem CSV paths, uncompressed UTF-8, ASCII syntax, and per-file headers when enabled. Numbered comment rows, array fields, leading row counts, and bad-data policies are unsupported.");
+        => CsvSeekIndexLookup.UnsupportedSource(IndexName);
 }

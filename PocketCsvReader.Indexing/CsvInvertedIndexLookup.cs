@@ -65,8 +65,8 @@ public static class CsvInvertedIndexLookup
         var key = index.Key.ResolveRuntimeParser(profile.Parsers);
         var lookup = predicate.Bind(index);
         var compatibility = new Lazy<byte[]>(() => GetCompatibility(profile, key, index.TermRules));
-        return CsvSeekIndexLookup.WithLookup(query,
-            indexed => indexed ? static _ => RecordSelection.Include : CreateSelector(key, lookup),
+        return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.Inverted,
+            indexed => indexed ? null : CreateSelector(key, lookup),
             (source, bomLength) => InvertedIndexSidecar.Find(source, bomLength, index, lookup, compatibility),
             index.RequiresIndex, IndexName);
     }
