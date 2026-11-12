@@ -42,6 +42,18 @@ public static class ReaderLookup
         return Scan(reader, index.Key, requested);
     }
 
+    /// <summary>Scans an existing reader with the predicate of an optional bitmap index.</summary>
+    /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
+    public static DbDataReader WithIndexedLookup(this IDataReader reader, BitmapIndex index, BitmapPredicate predicate)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(index);
+        ArgumentNullException.ThrowIfNull(predicate);
+        if (index.RequiresIndex)
+            throw new NotSupportedException("An existing data reader cannot use a sidecar. Supply a CSV reader and path, or use an optional index.");
+        return Scan(reader, predicate.Bind(index.Keys).Matches);
+    }
+
     /// <summary>Scans an existing reader for exact equality using an optional zone map.</summary>
     /// <remarks>The returned reader owns the input. Missing and null fields are skipped.</remarks>
     public static DbDataReader WithIndexedLookup<TKey>(this IDataReader reader, ZoneMapIndex index, TKey value)
@@ -71,8 +83,11 @@ public static class ReaderLookup
         => Scan(reader, key, value => key.Compare(value, requested) == 0);
 
     private static DbDataReader Scan(IDataReader reader, IIndexKey key, Func<object, bool> matches)
+        => Scan(reader, row => ReadKey(row, key) is { } field && matches(field));
+
+    private static DbDataReader Scan(IDataReader reader, Func<IDataRecord, bool> matches)
     {
-        var scan = new ScanningDataReader(reader, row => Matches(row, key, matches));
+        var scan = new ScanningDataReader(reader, matches);
         return reader is DbDataReader db
             ? new DbDataReaderAdapter(scan, db.NextResultAsync)
             : new DbDataReaderAdapter(scan);
@@ -96,22 +111,22 @@ public static class ReaderLookup
         return value;
     }
 
-    private static bool Matches(IDataRecord row, IIndexKey key, Func<object, bool> matches)
+    internal static object? ReadKey(IDataRecord row, IIndexKey key)
     {
         var ordinal = key.ColumnOrdinal ?? FindOrdinal(row, key.ColumnName!);
         if ((uint)ordinal >= (uint)row.FieldCount || row.IsDBNull(ordinal))
-            return false;
+            return null;
 
         var field = row.GetValue(ordinal);
         if (field is null or DBNull)
-            return false;
+            return null;
         if (field is string text && key.KeyType != typeof(string))
             field = key.Parse(text.AsSpan());
         if (field is null)
-            return false;
+            return null;
         if (!key.KeyType.IsInstanceOfType(field))
             throw new InvalidCastException($"The lookup column must contain '{key.KeyType}' values or text.");
-        return matches(field);
+        return field;
     }
 
     private static int FindOrdinal(IDataRecord row, string column)

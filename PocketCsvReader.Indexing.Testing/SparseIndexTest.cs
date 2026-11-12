@@ -329,15 +329,16 @@ public class SparseIndexTest
         }
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void SourceChangingDuringTheScanDoesNotReplaceTheSeekIndex(bool hash)
+    [TestCase("zonemap")]
+    [TestCase("hash")]
+    [TestCase("bitmap")]
+    public void SourceChangingDuringTheScanDoesNotReplaceTheSeekIndex(string indexKind)
     {
         var path = Write("numbers.csv", "Key\n1\n2\n");
         var stamp = File.GetLastWriteTimeUtc(path);
         var query = Query(path);
         var key = new IndexKey<int>("Key");
-        var sidecar = path + (hash ? ".hash.idx" : ".zonemap.idx");
+        var sidecar = $"{path}.{indexKind}.idx";
         Build(key);
         var original = File.ReadAllBytes(sidecar);
         var mutating = new MutatingKey(() => File.SetLastWriteTimeUtc(path, stamp.AddHours(-1)));
@@ -347,10 +348,18 @@ public class SparseIndexTest
 
         void Build(IIndexKey indexKey)
         {
-            if (hash)
-                query.BuildIndexes(new HashIndex(indexKey));
-            else
-                query.BuildIndexes(new ZoneMapIndex(indexKey, 1));
+            switch (indexKind)
+            {
+                case "hash":
+                    query.BuildIndexes(new HashIndex(indexKey));
+                    break;
+                case "bitmap":
+                    query.BuildIndexes(new BitmapIndex(indexKey));
+                    break;
+                default:
+                    query.BuildIndexes(new ZoneMapIndex(indexKey, 1));
+                    break;
+            }
         }
     }
 

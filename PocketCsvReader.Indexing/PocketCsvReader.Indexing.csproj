@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>PocketCsvReader.Indexing</PackageId>
-    <PackageTags>CSV sparse Bloom hash zone map index equality range lookup DataReader</PackageTags>
-    <Description>Equality and range lookup with sparse indexes, CSV Bloom filters, zone maps, and CSV hash indexes.</Description>
+    <PackageTags>CSV sparse Bloom hash bitmap zone map index equality range lookup DataReader</PackageTags>
+    <Description>Equality, membership, and range lookup with sparse indexes, CSV Bloom filters, zone maps, hash indexes, and bitmap indexes.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Clast.BloomFilter" Version="0.2.0" />

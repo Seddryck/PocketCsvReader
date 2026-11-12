@@ -39,6 +39,7 @@
   - bloom-indexes
   - zone-map-indexes
   - hash-indexes
+  - bitmap-indexes
 - title: Configuration
   docs:
   - fluent-api-profile-configuration
