@@ -108,8 +108,9 @@ public static class CsvZoneMapIndexLookup
         ZoneMapIndexSidecar.ReadPlan? plan = null)
     {
         int ordinal = -1;
-        if (plan is { } indexed)
-            reader.SelectRecordBlocks(SelectRow, stream!, indexed.Blocks, indexed.RowCount, indexed.FieldCount);
+        var key = predicate.Key;
+        if (plan is { } indexed && stream is not null)
+            reader.SelectRecordBlocks(SelectRow, stream, indexed.Blocks, indexed.RowCount, indexed.FieldCount);
         else
             reader.SelectRecords(SelectRow);
         return reader;
@@ -117,7 +118,7 @@ public static class CsvZoneMapIndexLookup
         RecordSelection SelectRow(CsvDataReader row)
         {
             if (ordinal < 0)
-                ordinal = CsvIndexLookup.ResolveOrdinal(row, predicate.Key);
+                ordinal = CsvIndexLookup.ResolveOrdinal(row, key);
             return predicate.Select(row.GetIndexField(ordinal));
         }
     }
@@ -130,6 +131,15 @@ public static class CsvZoneMapIndexLookup
             throw UnsupportedSource();
 
         using var reader = new CsvDataReader(source, profile, leaveOpen: true) { Window = null };
+        var (blocks, rowCount) = BuildBlocks(reader, index.BlockSize, bomLength, key);
+        if (profile.Dialect.Header && rowCount == 0)
+            CsvIndexLookup.ResolveOrdinal(reader, key);
+        ZoneMapIndexSidecar.Publish(source, stamp, index, compatibility, rowCount, reader.SourceHeaders?.Length ?? 0, blocks);
+    }
+
+    private static (List<ZoneMapIndexSidecar.Block> Blocks, int RowCount) BuildBlocks(CsvDataReader reader,
+        int blockSize, int bomLength, IIndexKey key)
+    {
         var blocks = new List<ZoneMapIndexSidecar.Block>();
         int ordinal = -1, rowCount = 0;
         ZoneMapIndexSidecar.Block block = default;
@@ -137,32 +147,33 @@ public static class CsvZoneMapIndexLookup
         {
             if (ordinal < 0)
                 ordinal = CsvIndexLookup.ResolveOrdinal(reader, key);
-            if (rowCount % index.BlockSize == 0)
+            if (rowCount % blockSize == 0)
             {
                 if (reader.CurrentPosition is not { OffsetUnit: PositionOffsetUnit.Bytes } position)
                     throw new InvalidDataException("The reader did not provide a parser-confirmed byte position.");
                 block = new(checked(position.Offset + bomLength), reader.RowCount - 1, null, null);
             }
 
-            var field = reader.GetIndexField(ordinal);
-            if (field.HasValue && key.Parse(field.Value) is { } value)
-            {
-                if (block.Min is null || key.Compare(value, block.Min) < 0)
-                    block = block with { Min = value };
-                if (block.Max is null || key.Compare(value, block.Max) > 0)
-                    block = block with { Max = value };
-            }
-
+            block = ExtendBounds(block, reader.GetIndexField(ordinal), key);
             rowCount = checked(rowCount + 1);
-            if (rowCount % index.BlockSize == 0)
+            if (rowCount % blockSize == 0)
                 blocks.Add(block);
         }
 
-        if (rowCount % index.BlockSize != 0)
+        if (rowCount % blockSize != 0)
             blocks.Add(block);
-        if (profile.Dialect.Header && ordinal < 0)
-            CsvIndexLookup.ResolveOrdinal(reader, key);
-        ZoneMapIndexSidecar.Publish(source, stamp, index, compatibility, rowCount, reader.SourceHeaders?.Length ?? 0, blocks);
+        return (blocks, rowCount);
+    }
+
+    private static ZoneMapIndexSidecar.Block ExtendBounds(ZoneMapIndexSidecar.Block block, NullableSpan field, IIndexKey key)
+    {
+        if (!field.HasValue || key.Parse(field.Value) is not { } value)
+            return block;
+        if (block.Min is null || key.Compare(value, block.Min) < 0)
+            block = block with { Min = value };
+        if (block.Max is null || key.Compare(value, block.Max) > 0)
+            block = block with { Max = value };
+        return block;
     }
 
     private static bool Supports<TPartition>(CsvFileQuery<TPartition> query)

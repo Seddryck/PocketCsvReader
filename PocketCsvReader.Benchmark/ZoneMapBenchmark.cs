@@ -18,7 +18,10 @@ internal static class ZoneMapBenchmark
 
     public static void Run()
     {
+        // The seed keeps the synthetic benchmark data reproducible.
+#pragma warning disable S2245
         var random = new Random(431);
+#pragma warning restore S2245
         var clustered = Generate(random);
         var shifted = new Order[clustered.Length];
         var shift = BlockSize / 3;
@@ -34,7 +37,7 @@ internal static class ZoneMapBenchmark
         var narrow = new Query("narrow", 42 * BandWidth, 43 * BandWidth);
 
         Console.WriteLine($"{RuntimeInformation.FrameworkDescription} | {RuntimeInformation.OSDescription} | {RuntimeInformation.ProcessArchitecture}");
-        Console.WriteLine(FormattableString.Invariant(
+        Console.WriteLine(string.Create(Culture,
             $"{clustered.Length:N0} rows, {BlockCount} blocks of {BlockSize:N0} rows, {LookupSamples} paired lookup samples, {BuildSamples} build samples."));
         Console.WriteLine("Layout,Query,Matches,CandidateBlocks,TotalBlocks,ScanMedianMs,ZoneMedianMs,ScanMedianBytes,ZoneMedianBytes,Speedup");
 
@@ -98,7 +101,7 @@ internal static class ZoneMapBenchmark
             indexed.BuildIndexes(index);
             builds[sample] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         }
-        Console.WriteLine(FormattableString.Invariant(
+        Console.WriteLine(string.Create(Culture,
             $"# {layout} | csv bytes {new FileInfo(indexedPath).Length} | sidecar bytes {new FileInfo(sidecar).Length} | build median {Median(builds):F3} ms"));
 
         foreach (var query in queries)
@@ -140,7 +143,7 @@ internal static class ZoneMapBenchmark
             long scanBytes = Median(scan.Select(sample => sample.Bytes).ToArray());
             long zoneBytes = Median(zone.Select(sample => sample.Bytes).ToArray());
             int candidates = CountCandidateBlocks(data, query);
-            Console.WriteLine(FormattableString.Invariant(
+            Console.WriteLine(string.Create(Culture,
                 $"{layout},{query.Name},{expected.Length},{candidates},{BlockCount},{scanTime:F3},{zoneTime:F3},{scanBytes},{zoneBytes},{scanTime / zoneTime:F3}"));
         }
     }
@@ -169,8 +172,9 @@ internal static class ZoneMapBenchmark
         writer.WriteLine("Id,Amount,Region,Channel,Notes");
         foreach (var order in data)
         {
-            string notes = order.Id % 4096 == 0 ? "\"Call customer,\nthen confirm\""
-                : order.Id % 17 == 0 ? "\"Café pickup, paid\"" : "Standard delivery";
+            string notes = order.Id % 17 == 0 ? "\"Café pickup, paid\"" : "Standard delivery";
+            if (order.Id % 4096 == 0)
+                notes = "\"Call customer,\nthen confirm\"";
             writer.WriteLine(string.Create(Culture,
                 $"{order.Id},{order.Amount / 100m:F2},{regions[order.Id % regions.Length]},web,{notes}"));
         }
@@ -179,10 +183,10 @@ internal static class ZoneMapBenchmark
     private static void AssertOrder(CsvFileQuery<bool> query, int[] expected)
     {
         using var rows = query.ToDataReader();
-        foreach (int id in expected)
+        for (int i = 0; i < expected.Length; i++)
         {
-            if (!rows.Read() || rows.GetInt32(0) != id)
-                throw new InvalidOperationException($"Lookup disagreed with the expected order at ID {id}.");
+            if (!rows.Read() || rows.GetInt32(0) != expected[i])
+                throw new InvalidOperationException($"Lookup disagreed with the expected order at ID {expected[i]}.");
         }
         if (rows.Read())
             throw new InvalidOperationException("Lookup returned extra rows.");
