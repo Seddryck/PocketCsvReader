@@ -1,5 +1,4 @@
 using System.Data.Common;
-using System.Globalization;
 using Clast.BloomFilter;
 
 namespace PocketCsvReader.Indexing;
@@ -138,26 +137,10 @@ public static class CsvBloomIndexLookup
         => !query.RequiresAsyncSource && CsvIndexLookup.Supports(query.Profile);
 
     private static byte[] GetCompatibility(CsvProfile profile, IIndexKey key)
-    {
-        var optimization = profile.ParserOptimizations;
-        var schema = profile.Schema;
-        return Convert.FromHexString(SparseIndexSidecar.Fingerprint([
+        => Convert.FromHexString(SparseIndexSidecar.Fingerprint([
             "parquet-split-block-le-v1", BloomKeyHash.Format, key.BloomHashCompatibility,
-            key.ColumnName, key.ColumnOrdinal?.ToString(CultureInfo.InvariantCulture), key.CompatibilityId,
-            CsvIndexLookup.GetConfiguration(profile).Id,
-            profile.Dialect.NullSequence, profile.Dialect.MissingCell,
-            profile.Resource?.Encoding, profile.StreamInitialization.ProbeEncoding.ToString(),
-            profile.StreamInitialization.InputMode.ToString(), optimization.NoTextQualifier.ToString(),
-            optimization.UnescapeChars.ToString(), optimization.HandleSpecialValues.ToString(),
-            SequenceId(profile.Resource?.Sequences), schema?.IsMatchingByName.ToString(),
-            schema is null ? null : SparseIndexSidecar.Fingerprint(schema.Fields.Select(field =>
-                SparseIndexSidecar.Fingerprint([field.Name, SequenceId(field.Sequences)])))
+            .. CsvIndexLookup.GetKeyCompatibilitySettings(profile, key)
         ]));
-    }
-
-    private static string? SequenceId(Configuration.ImmutableSequenceCollection? sequences)
-        => sequences is null ? null : SparseIndexSidecar.Fingerprint(sequences
-            .SelectMany(pair => new[] { pair.Key.ToString(), pair.Value?.ToString() }));
 
     private static NotSupportedException UnsupportedSource()
         => new("Bloom indexes require filesystem CSV paths, uncompressed UTF-8, ASCII syntax, and per-file headers when enabled. Numbered comment rows, array fields, leading row counts, and bad-data policies are unsupported.");

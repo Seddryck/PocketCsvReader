@@ -126,6 +126,26 @@ public static class CsvIndexLookup
         ]));
     }
 
+    internal static string?[] GetKeyCompatibilitySettings(CsvProfile profile, IIndexKey key)
+    {
+        var optimization = profile.ParserOptimizations;
+        var schema = profile.Schema;
+        return [
+            key.ColumnName, key.ColumnOrdinal?.ToString(CultureInfo.InvariantCulture), key.CompatibilityId,
+            GetConfiguration(profile).Id, profile.Dialect.NullSequence, profile.Dialect.MissingCell,
+            profile.Resource?.Encoding, profile.StreamInitialization.ProbeEncoding.ToString(),
+            profile.StreamInitialization.InputMode.ToString(), optimization.NoTextQualifier.ToString(),
+            optimization.UnescapeChars.ToString(), optimization.HandleSpecialValues.ToString(),
+            SequenceId(profile.Resource?.Sequences), schema?.IsMatchingByName.ToString(),
+            schema is null ? null : SparseIndexSidecar.Fingerprint(schema.Fields.Select(field =>
+                SparseIndexSidecar.Fingerprint([field.Name, SequenceId(field.Sequences)])))
+        ];
+    }
+
+    private static string? SequenceId(Configuration.ImmutableSequenceCollection? sequences)
+        => sequences is null ? null : SparseIndexSidecar.Fingerprint(sequences
+            .SelectMany(pair => new[] { pair.Key.ToString(), pair.Value?.ToString() }));
+
     private static NotSupportedException UnsupportedSource()
         => new("Sparse indexes require filesystem CSV paths, uncompressed UTF-8, ASCII syntax, and per-file headers when enabled. Numbered comment rows, array fields, leading row counts, and bad-data policies are unsupported.");
 }
