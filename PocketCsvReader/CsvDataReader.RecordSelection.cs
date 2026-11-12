@@ -47,12 +47,12 @@ public partial class CsvDataReader
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (NeedsSeekHeader())
+            if (GetSeekHeaderFieldCount() is int fieldCount)
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(CsvHeaders.Read(RecordSource!), "field_");
                 else
-                    RegisterHeader([new string?[_recordRange!.Value.FieldCount]], "field_");
+                    RegisterHeader([new string?[fieldCount]], "field_");
                 SeekSparseCheckpoint();
             }
         }
@@ -73,12 +73,12 @@ public partial class CsvDataReader
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (NeedsSeekHeader())
+            if (GetSeekHeaderFieldCount() is int fieldCount)
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false), "field_");
                 else
-                    RegisterHeader([new string?[_recordRange!.Value.FieldCount]], "field_");
+                    RegisterHeader([new string?[fieldCount]], "field_");
                 SeekSparseCheckpoint();
             }
         }
@@ -94,7 +94,9 @@ public partial class CsvDataReader
         return false;
     }
 
-    private bool NeedsSeekHeader() => _recordRange?.Offset is not null || _recordBlocks is { Count: > 0 };
+    private int? GetSeekHeaderFieldCount()
+        => _recordRange is { } range && (range.Offset.HasValue || _recordBlocks is { Count: > 0 })
+            ? range.FieldCount : null;
 
     private void SeekSparseCheckpoint()
     {
@@ -121,7 +123,7 @@ public partial class CsvDataReader
         stream.Seek(offset, SeekOrigin.Begin);
         ReplaceRecordSource(CsvStreamSource.CreateAtRecord(stream, Profile));
         RowCount = skippedRows;
-        if (HasRowNumber)
-            CurrentRowNumber = checked(_fileStartRow!.Value + skippedDataRows);
+        if (HasRowNumber && _fileStartRow is int start)
+            CurrentRowNumber = checked(start + skippedDataRows);
     }
 }
