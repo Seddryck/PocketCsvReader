@@ -30,11 +30,15 @@ internal static class ZoneMapIndexSidecar
                 {
                     writer.Write(block.Offset);
                     writer.Write(block.SkippedRows);
-                    writer.Write(block.Min is not null);
-                    if (block.Min is { } min)
+                    if (block is { Min: { } min, Max: { } max })
                     {
+                        writer.Write(true);
                         WriteKey(writer, min);
-                        WriteKey(writer, block.Max!);
+                        WriteKey(writer, max);
+                    }
+                    else
+                    {
+                        writer.Write(false);
                     }
                 }
 
@@ -107,7 +111,6 @@ internal static class ZoneMapIndexSidecar
         var candidates = new List<CsvRecordBlock>();
         long previousOffset = bomLength - 1L;
         long minimumSkippedRows = 0;
-        var keyType = predicate.Key.KeyType;
         for (var i = 0; i < blockCount; i++)
         {
             var offset = reader.ReadInt64();
@@ -117,34 +120,42 @@ internal static class ZoneMapIndexSidecar
             previousOffset = offset;
             minimumSkippedRows = (long)skippedRows + blockSize;
 
-            switch (reader.ReadByte())
-            {
-                case 0:
-                    break;
-                case 1:
-                    var min = ReadKey(reader, keyType);
-                    var max = ReadKey(reader, keyType);
-                    if (predicate.Key.Compare(min, max) > 0)
-                        throw Corrupt();
-                    if (!predicate.Intersects(min, max))
-                        continue;
-                    break;
-                default:
-                    throw Corrupt();
-            }
+            if (!ReadBoundsOverlap(reader, predicate))
+                continue;
 
             var skippedDataRows = i * blockSize;
             var count = Math.Min(blockSize, rowCount - skippedDataRows);
-            // Keep the same parser and its read-ahead when consecutive blocks qualify.
-            if (candidates.Count > 0 && candidates[^1] is var previous
-                && previous.SkippedDataRows + previous.RowCount == skippedDataRows)
-                candidates[^1] = previous with { RowCount = previous.RowCount + count };
-            else
-                candidates.Add(new(offset, skippedRows, skippedDataRows, count));
+            AddCandidate(candidates, new(offset, skippedRows, skippedDataRows, count));
         }
         if (file.Position != file.Length)
             throw Corrupt();
         return candidates;
+    }
+
+    private static bool ReadBoundsOverlap(BinaryReader reader, ZoneMapPredicate predicate)
+    {
+        var boundsFlag = reader.ReadByte();
+        if (boundsFlag == 0)
+            return true;
+        if (boundsFlag != 1)
+            throw Corrupt();
+
+        var key = predicate.Key;
+        var min = ReadKey(reader, key.KeyType);
+        var max = ReadKey(reader, key.KeyType);
+        if (key.Compare(min, max) > 0)
+            throw Corrupt();
+        return predicate.Intersects(min, max);
+    }
+
+    private static void AddCandidate(List<CsvRecordBlock> candidates, CsvRecordBlock block)
+    {
+        // Keep the same parser and its read-ahead when consecutive blocks qualify.
+        if (candidates.Count > 0 && candidates[^1] is var previous
+            && previous.SkippedDataRows + previous.RowCount == block.SkippedDataRows)
+            candidates[^1] = previous with { RowCount = previous.RowCount + block.RowCount };
+        else
+            candidates.Add(block);
     }
 
     private static FileStream? Open(string path, bool required)
