@@ -78,52 +78,66 @@ internal sealed class MarkdownRecordSource : IBorrowedRecordSource<MarkdownProfi
     private CurrentRecordResult? ProcessLine(CapturedRecord? capture, long offset)
     {
         if (capture is not { } frame)
-        {
-            var last = _pending;
-            _pending = null;
-            bool reading = _state == ScanState.ReadRows;
-            _state = ScanState.Finished;
-            return reading && last is { } row ? PublishRow(row) : EndOfFile;
-        }
+            return CompleteInput();
 
         var line = new Line(frame, ++_physicalLine, offset);
         var text = frame.Memory.Span.TrimStart();
-        if (_state == ScanState.FindMarker)
+        return _state switch
         {
-            if (text.TrimEnd().SequenceEqual(Profile.TextMarker.AsSpan()))
-                _state = ScanState.FindMarkedHeader;
-            return null;
-        }
+            ScanState.FindMarker => FindMarker(text),
+            ScanState.FindMarkedHeader => FindMarkedHeader(line, text),
+            ScanState.ReadRows => ReadTableLine(line, text),
+            _ => FindTable(line, text)
+        };
+    }
 
-        bool startsWithPipe = text is ['|', ..];
-        if (_state == ScanState.FindMarkedHeader)
-        {
-            if (text.IsEmpty) return null;
-            if (!startsWithPipe) return Finish();
-            _pending = line;
-            _state = ScanState.FindMarkedDelimiter;
-            return null;
-        }
+    private CurrentRecordResult? CompleteInput()
+    {
+        var last = _pending;
+        bool reading = _state == ScanState.ReadRows;
+        var end = Finish();
+        return reading && last is { } row ? PublishRow(row) : end;
+    }
 
+    private CurrentRecordResult? FindMarker(ReadOnlySpan<char> text)
+    {
+        if (text.TrimEnd().SequenceEqual(Profile.TextMarker.AsSpan()))
+            _state = ScanState.FindMarkedHeader;
+        return null;
+    }
+
+    private CurrentRecordResult? FindMarkedHeader(Line line, ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty) return null;
+        if (text is not ['|', ..]) return Finish();
+        _pending = line;
+        _state = ScanState.FindMarkedDelimiter;
+        return null;
+    }
+
+    private CurrentRecordResult? FindTable(Line line, ReadOnlySpan<char> text)
+    {
         var previous = _pending;
-        _pending = null;
-        if (startsWithPipe && previous is { } candidate && TryGetTableWidth(candidate, text, out int width))
+        _pending = text is ['|', ..] ? line : null;
+        if (_pending is not null && previous is { } header && TryGetTableWidth(header, text, out int width))
         {
-            if (_state == ScanState.ReadRows)
-                return Finish();
+            _pending = null;
             if (_tablesToSkip > 0)
                 _tablesToSkip--;
             else
-                SelectTable(candidate, width);
+                SelectTable(header, width);
             return null;
         }
+        return _state == ScanState.FindMarkedDelimiter ? Finish() : null;
+    }
 
-        if (_state == ScanState.FindMarkedDelimiter)
+    private CurrentRecordResult? ReadTableLine(Line line, ReadOnlySpan<char> text)
+    {
+        var previous = _pending;
+        _pending = text is ['|', ..] ? line : null;
+        if (_pending is not null && previous is { } header && TryGetTableWidth(header, text, out _))
             return Finish();
-        if (startsWithPipe)
-            _pending = line;
-        if (_state != ScanState.ReadRows)
-            return null;
+
         if (text.IsEmpty)
             _state = ScanState.Finished;
         return previous is { } bodyRow ? PublishRow(bodyRow) : null;
@@ -139,7 +153,7 @@ internal sealed class MarkdownRecordSource : IBorrowedRecordSource<MarkdownProfi
     {
         var names = new string[width];
         var cells = new MarkdownTableRow.Cells(header.Capture.Memory.Span);
-        for (int i = 0; cells.TryRead(out var cell); i++)
+        for (int i = 0; i < width && cells.TryRead(out var cell); i++)
         {
             var value = header.Capture.Memory.Slice(cell.Value.Start, cell.Value.Length);
             names[i] = cell.Value.IsEscaped ? MarkdownTableRow.DecodePipeEscapes(value) : value.ToString();

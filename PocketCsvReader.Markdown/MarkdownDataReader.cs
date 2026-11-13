@@ -12,15 +12,15 @@ public sealed class MarkdownDataReader(Stream stream, MarkdownProfile profile)
 
     public override string GetRawString(int i)
     {
-        ValidateOrdinal(i);
+        _ = GetFields(i);
         return GetCurrentFieldMemory(i).ToString();
     }
 
     protected override NullableSpan GetValueOrThrow(int i)
     {
-        ValidateOrdinal(i);
+        var fields = GetFields(i);
         var memory = GetCurrentFieldMemory(i);
-        ref var field = ref CurrentFieldSpans![i];
+        ref var field = ref fields[i];
         var value = field.Value.IsEscaped
             ? (field.DecodedValue ??= MarkdownTableRow.DecodePipeEscapes(memory)).AsSpan()
             : memory.Span;
@@ -34,7 +34,7 @@ public sealed class MarkdownDataReader(Stream stream, MarkdownProfile profile)
 
     private bool Accept(CurrentRecordResult result)
     {
-        Fields = ((MarkdownRecordSource)RecordSource!).Header;
+        Fields = (RecordSource as MarkdownRecordSource)?.Header;
         IsEof = result.IsEndOfFile;
         SetRecord(result.Record);
         if (result.State != RecordState.Record) return false;
@@ -42,10 +42,12 @@ public sealed class MarkdownDataReader(Stream stream, MarkdownProfile profile)
         return true;
     }
 
-    private void ValidateOrdinal(int i)
+    private FieldSpan[] GetFields(int i)
     {
-        if (CurrentFieldSpans is null)
+        if (CurrentFieldSpans is not { } fields)
             throw new InvalidOperationException("Read must be called before accessing field values.");
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)i, (uint)FieldCount, nameof(i));
+        if ((uint)i >= (uint)fields.Length)
+            throw new ArgumentOutOfRangeException(nameof(i));
+        return fields;
     }
 }
