@@ -21,6 +21,8 @@ public class Program
         ["--position-tracking-matrix"] = PositionTracking.RunMatrix,
         ["--sparse-index"] = SparseIndexBenchmark.Run,
         ["--zone-map"] = ZoneMapBenchmark.Run,
+        ["--csv-index-comparison"] = CsvIndexComparison.Run,
+        ["--csv-index-comparison-100x"] = CsvIndexComparison.Run100X,
     };
 
     public static void Main(string[] args)
