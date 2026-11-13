@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>PocketCsvReader.Markdown</PackageId>
+    <PackageTags>Markdown GFM table DataReader Parser</PackageTags>
+    <Description>PocketCsvReader.Markdown extends PocketCsvReader with a streaming reader for GitHub Flavored Markdown pipe tables.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+  </ItemGroup>
+</Project>
