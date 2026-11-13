@@ -6,7 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Clast.BloomFilter" Version="0.2.0" />
-    <PackageReference Include="System.IO.Hashing" Version="9.0.0" />
+    <PackageReference Include="System.IO.Hashing" Version="11.0.0" />
     <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
   </ItemGroup>
 </Project>
