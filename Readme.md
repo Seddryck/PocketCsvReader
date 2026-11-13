@@ -11,13 +11,13 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader` | CSV/TSV and shared APIs |
 | `PocketCsvReader.Json` | JSON and JSONC with projection and stable field layout for object records |
 | `PocketCsvReader.Ndjson` | NDJSON with projection and stable field layout for object records |
-| `PocketCsvReader.Indexing` | Exact-key lookup with sparse indexes for sorted files, Bloom filters for CSV files, and an opt-in scan fallback |
-| `PocketCsvReader.ObjectStorage` | Async Hive partition discovery and CSV reads on Amazon S3 and Azure Data Lake Storage Gen2 |
-| `PocketCsvReader.FixedWidth` | Fixed character positions |
+| `PocketCsvReader.Indexing` | [Indexed lookups](https://seddryck.github.io/PocketCsvReader/docs/indexing/) with sparse, Bloom, zone map, hash, bitmap, and inverted indexes, plus an opt-in scan fallback |
+| `PocketCsvReader.ObjectStorage` | [Async Hive-style partition discovery and reads](https://seddryck.github.io/PocketCsvReader/docs/file-partitions/#discover-partitions-in-object-storage) for CSV and other supported flat-file formats on Amazon S3 and Azure Data Lake Storage Gen2 |
+| `PocketCsvReader.FixedWidth` | [Fixed-width text](https://seddryck.github.io/PocketCsvReader/docs/fixed-width/) with fields at fixed character positions |
 | `PocketCsvReader.Markdown` | [GitHub Flavored Markdown pipe tables](https://seddryck.github.io/PocketCsvReader/docs/markdown-tables/) |
-| `PocketCsvReader.KeyValue` | LTSV and logfmt with column projection, aliases, and stable field layout |
-| `PocketCsvReader.WebLogs` | Common, Combined, W3C |
-| `PocketCsvReader.SecurityLogs` | CEF and LEEF |
+| `PocketCsvReader.KeyValue` | [LTSV and logfmt](https://seddryck.github.io/PocketCsvReader/docs/key-value-formats/) with column projection, aliases, and stable field layout |
+| `PocketCsvReader.WebLogs` | [Common, Combined, and W3C web logs](https://seddryck.github.io/PocketCsvReader/docs/web-log-formats/) |
+| `PocketCsvReader.SecurityLogs` | [CEF and LEEF security logs](https://seddryck.github.io/PocketCsvReader/docs/security-log-formats/) |
 | `PocketCsvReader.Arrow` | Apache Arrow output |
 | `PocketCsvReader.Arrow.ColumnarJson` | [Columnar JSON](https://seddryck.github.io/PocketCsvReader/docs/columnar-json/) (ClickHouse exports and Arrow fixtures) |
 | `PocketCsvReader.Arrow.NetCdf` | [Textual NetCDF CDL](https://seddryck.github.io/PocketCsvReader/docs/netcdf-cdl/) |
