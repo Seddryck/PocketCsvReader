@@ -22,7 +22,7 @@ internal static class JsonValues
     {
         if (allowQuoted && !value.IsEmpty && value[0] == '"')
             value = Text(value, scratch);
-        if (value.IsEmpty || value[0] is not ('-' or >= '0' and <= '9'))
+        if (value.IsEmpty || value[0] is not ('-' or (>= '0' and <= '9')))
             throw new InvalidDataException("Expected a JSON number.");
         return value;
     }

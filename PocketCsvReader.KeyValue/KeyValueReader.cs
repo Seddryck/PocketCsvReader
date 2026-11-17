@@ -14,7 +14,8 @@ public sealed class KeyValueReader : FlatFileReader<KeyValueProfile, KeyValueDat
 
     internal override IEnumerable<string?>? SeekConfiguration => Profile.StableFieldLayout ? null :
         ["key-value", Profile.Format.ToString(), Profile.Projection is null ? null : "projection",
-            .. Profile.Projection?.SelectMany(column => new[] { column.Key, column.Name }) ?? []];
+            .. Profile.Projection?.SelectMany(column => new[] { column.Key, column.Name }) ?? []
+        ];
 
     protected override KeyValueDataReader CreateDataReader(Stream stream)
         => new(stream, Profile);

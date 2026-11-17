@@ -148,7 +148,8 @@ public class RowNumberTest
         profile = new CsvProfile(profile.Dialect with { HeaderRepeat = repeat }) { RowNumber = new() };
         await using var reader = new CsvBatchDataReader(
             [StreamOf((header ? "name\n" : "") + "Alice\n"), StreamOf(""),
-                StreamOf((header && repeat ? "name\n" : "") + "Bob\n")], profile);
+                StreamOf((header && repeat ? "name\n" : "") + "Bob\n")
+            ], profile);
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetInt32(0), Is.EqualTo(1));
         Assert.That(await reader.ReadAsync(), Is.True);
