@@ -331,6 +331,18 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         }
     }
 
+    /// <inheritdoc />
+    public override string GetString(int i)
+    {
+        if (Profile.Parsers?.FindParser(typeof(string)) is not null
+            || (i >= 0 && i < FieldCount && TryGetFieldDescriptor(i, out var field)
+                && field.RuntimeType == typeof(string)
+                && HasCustomParser(field)))
+            return GetFieldValue<string>(i)!;
+
+        return base.GetString(i);
+    }
+
     protected virtual object GetNullValue(int i)
         => throw new InvalidCastException($"Field index '{i}' is null.");
 

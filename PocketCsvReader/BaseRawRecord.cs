@@ -182,7 +182,7 @@ public abstract class BaseRawRecord<TProfile>
 
     protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
-    public string GetString(int i)
+    public virtual string GetString(int i)
         => _current.IsUtf8 && TryGetDirectString(i, out var value)
             ? value : GetStringValue(i);
 
