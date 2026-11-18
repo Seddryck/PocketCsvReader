@@ -23,7 +23,13 @@ Create `csv` with the complete [first-CSV example](../basic-usage/). The current
 ### Accessing Typed Field Values
 Use `GetInt32`, `GetInt64`, `GetBoolean`, `GetDecimal`, `GetString`, `GetDateTime`, or `GetFieldValue<T>` on the concrete reader. Access by ordinal or supported name overload. Getters parse on demand with field/runtime settings; a declared schema controls boxed values and reported types. See [schemas and cultures](../fluent-api-schema/).
 
-`GetString` returns logical text after applicable format decoding/sanitization. `GetRawString` returns encoded/raw field text according to the format, including quote/escape syntax where retained. JSON/logfmt decoding differs from CSV sequence replacement; see [value handling](../sequences/).
+| Accessor | Result |
+| --- | --- |
+| `GetRawString(ordinal)` | Encoded field text, including quotes and escapes where the format retains them. |
+| `GetDecodedString(ordinal)` | Field text after decoding, unescaping, and sanitization. Skips schema and runtime conversion. Returns an empty string for a decoded empty field and throws `InvalidCastException` for a null field. Use `IsDBNull` to check for nulls. |
+| `GetString(ordinal)` | Reads the field as a string. Applies configured string parsers with the same precedence as `GetFieldValue<string>(ordinal)`. With no applicable parser, returns the decoded text. |
+
+Use `GetDecodedString` to inspect input such as a malformed date after a typed getter throws. For format-specific decoding and sanitization rules, see [value handling](../sequences/).
 
 ### Generic and Custom Type Access
 `GetFieldValue<T>(ordinal, parser)` and name overloads support string delegates or explicitly typed `ReadOnlySpan<char>` delegates. See [custom parsers](../fluent-api-runtime-parsers/) for complete definitions, precedence and lifetime rules. Null/reference typed reads can return default without invoking the delegate.

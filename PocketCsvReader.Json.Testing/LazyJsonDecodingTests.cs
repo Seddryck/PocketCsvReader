@@ -33,7 +33,7 @@ public class LazyJsonDecodingTests<TProfile>
             Assert.That(reader.IsDBNull(0), Is.False);
             _ = reader.GetRawString(0);
             Assert.That(fields[0].DecodedValue, Is.Null, "Null checks and raw getters must not decode.");
-            Assert.That(reader.GetString(0), Is.EqualTo(expected[row]));
+            Assert.That(reader.GetDecodedString(0), Is.EqualTo(expected[row]));
             Assert.That(fields[0].DecodedValue, Is.EqualTo(expected[row]));
             var decoded = fields[0].DecodedValue;
             Assert.That(reader.GetString(0), Is.SameAs(decoded));

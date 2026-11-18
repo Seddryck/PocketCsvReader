@@ -18,7 +18,8 @@ public sealed class FixedWidthReader : FlatFileReader<FixedWidthProfile, FixedWi
                 field.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 field.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 field.Padding.ToString(), field.PaddingChar.ToString() }),
-            .. (Profile.Descriptor.Header ? new[] { "header" } : [])];
+            .. (Profile.Descriptor.Header ? new[] { "header" } : [])
+        ];
 
     internal override bool ReadsHeaderBeforeSeek => Profile.Descriptor.Header;
 
