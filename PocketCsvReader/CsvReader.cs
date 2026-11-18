@@ -15,7 +15,7 @@ namespace PocketCsvReader
     /// It supports customizable profiles for parsing and encoding detection. Use this class to load CSV data
     /// into memory or stream it efficiently, depending on your application's requirements.
     /// </remarks>
-    public class CsvReader : FlatFileReader<CsvProfile, CsvDataReader>
+    public partial class CsvReader : FlatFileReader<CsvProfile, CsvDataReader>
     {
         public event ProgressStatusHandler? ProgressStatusChanged;
         protected IEncodingDetector EncodingDetector { get; set; } = new EncodingDetector();
@@ -292,8 +292,7 @@ namespace PocketCsvReader
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                yield return Profile.Filters.Count != 0 && spanMapper is null
-                    ? FilteredObjectMapper<T>.Map(reader) : reader.MapCurrent(mapper);
+                yield return reader.MapCurrent(mapper, defaultMapper: spanMapper is null);
             }
         }
 
@@ -324,8 +323,7 @@ namespace PocketCsvReader
 
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                yield return Profile.Filters.Count != 0 && spanMapper is null
-                    ? FilteredObjectMapper<T>.Map(reader) : reader.MapCurrent(mapper);
+                yield return reader.MapCurrent(mapper, defaultMapper: spanMapper is null);
             }
         }
     }

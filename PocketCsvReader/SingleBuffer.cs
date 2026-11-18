@@ -12,6 +12,10 @@ public class SingleBuffer : IBufferReader
     private StreamBuffer _streamBuffer;
 
     public SingleBuffer(StreamReader reader, int maxLength, ArrayPool<char>? pool = null)
+        : this((TextReader)reader, maxLength, pool)
+    { }
+
+    internal SingleBuffer(TextReader reader, int maxLength, ArrayPool<char>? pool = null)
         => _streamBuffer = new StreamBuffer(reader, maxLength, pool);
 
     public ReadOnlyMemory<char> Read()

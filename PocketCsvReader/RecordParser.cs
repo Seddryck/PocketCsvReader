@@ -23,10 +23,15 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     /// <param name="profile">The CsvProfile defining parsing rules and optimizations.</param>
     /// <param name="pool">An optional ArrayPool&lt;char&gt; for buffer management.</param>
     public RecordParser(StreamReader reader, CsvProfile profile, ArrayPool<char>? pool)
-        : base(profile, profile.ParserOptimizations.ReadAhead
+        : this(profile, profile.ParserOptimizations.ReadAhead
                     ? new DoubleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
                     : new SingleBuffer(reader, profile.ParserOptimizations.BufferSize, pool)
-              , pool, (p) => FieldParserFactory.Create(p.Dialect))
+              , pool)
+    { }
+
+    // Caller-supplied text is forward-only. Refill on demand with no background reads.
+    internal RecordParser(TextReader reader, CsvProfile profile)
+        : this(profile, new SingleBuffer(reader, profile.ParserOptimizations.BufferSize, ArrayPool<char>.Shared), ArrayPool<char>.Shared)
     { }
 
     /// <summary>

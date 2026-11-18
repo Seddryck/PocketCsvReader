@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace PocketCsvReader;
 internal class StreamBuffer : IDisposable
 {
-    private StreamReader Reader { get; }
+    private TextReader Reader { get; }
     private int MaxLength { get; }
     private ArrayPool<char>? Pool { get; }
     private char[] _arrayChar;
@@ -20,7 +20,7 @@ internal class StreamBuffer : IDisposable
     public bool IsEmpty => !_length.HasValue;
     public bool IsEof { get; private set; }
 
-    public StreamBuffer(StreamReader reader, int maxLength, ArrayPool<char>? pool = null)
+    public StreamBuffer(TextReader reader, int maxLength, ArrayPool<char>? pool = null)
     {
         Reader = reader;
         MaxLength = maxLength;
@@ -34,7 +34,7 @@ internal class StreamBuffer : IDisposable
     {
         _length = null;
         int length = await Reader.ReadAsync(_arrayChar.AsMemory(0, MaxLength), cancellationToken).ConfigureAwait(false);
-        // StreamReader may return a short read before EOF on forward-only inputs.
+        // A forward-only reader may return a short read before EOF.
         while (length > 0 && length < MaxLength)
         {
             int read = await Reader.ReadAsync(_arrayChar.AsMemory(length, MaxLength - length), cancellationToken).ConfigureAwait(false);
@@ -48,10 +48,10 @@ internal class StreamBuffer : IDisposable
 
     public void Read()
     {
-        int length = Reader.Read(_arrayChar, 0, MaxLength);
+        int length = Reader.Read(_arrayChar.AsSpan(0, MaxLength));
         while (length > 0 && length < MaxLength)
         {
-            int read = Reader.Read(_arrayChar, length, MaxLength - length);
+            int read = Reader.Read(_arrayChar.AsSpan(length, MaxLength - length));
             if (read == 0) break;
             length += read;
         }
@@ -62,8 +62,10 @@ internal class StreamBuffer : IDisposable
 
     public void Reset()
     {
-        Reader.BaseStream.Position = 0;
-        Reader.DiscardBufferedData();
+        if (Reader is not StreamReader reader)
+            throw new NotSupportedException("The character input cannot be rewound.");
+        reader.BaseStream.Position = 0;
+        reader.DiscardBufferedData();
         IsEof = false;
         _length = null;
     }

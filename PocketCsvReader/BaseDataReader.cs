@@ -26,10 +26,12 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     protected IRecordSource<TProfile>? RecordSource { get; private set; }
     private ICurrentRecordSource? _currentRecordSource;
     protected BaseRecordParser<TProfile>? RecordParser => RecordSource as BaseRecordParser<TProfile>;
-    private Stream RawStream { get; }
+    private Stream? RawStream { get; }
     private Stream? ProcessedStream { get; set; }
     private StreamReader? StreamReader { get; set; }
     private bool LeaveOpen { get; }
+    private readonly Func<IRecordSource<TProfile>>? _createSuppliedSource;
+    private TextReader? _ownedTextReader;
     protected EncodingInfo? FileEncoding { get; set; }
     protected bool IsEof { get; set; } = false;
     private int _readInProgress;
@@ -41,16 +43,31 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private (long Start, long Checkpoint)? _headerSeek;
 
     protected BaseDataReader(Stream stream, TProfile profile, StringMapper stringMapper, bool leaveOpen = false)
-        : base(profile, stringMapper)
+        : this(profile, stringMapper)
     {
         RawStream = stream;
         LeaveOpen = leaveOpen;
+    }
+
+    private protected BaseDataReader(TProfile profile, StringMapper stringMapper,
+        Func<IRecordSource<TProfile>> createSource, TextReader? ownedTextReader)
+        : this(profile, stringMapper)
+    {
+        _createSuppliedSource = createSource;
+        _ownedTextReader = ownedTextReader;
+    }
+
+    private BaseDataReader(TProfile profile, StringMapper stringMapper)
+        : base(profile, stringMapper)
+    {
         Window = RecordWindow.Create(profile);
     }
 
     public void Initialize()
     {
+        ObjectDisposedException.ThrowIf(_isClosed || _disposed, this);
         if (_initialized) return;
+        if (TryInitializeSuppliedSource()) return;
         if (_utf8FileInput)
         {
             InitializeUtf8File();
@@ -74,7 +91,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     {
         if (_initialized) throw new InvalidOperationException("The reader has already started.");
         (_utf8FileInput, _trackFileBytes, _restartedFile) = (true, trackByteOffsets, restarted);
-        _headerSeek = seekAfterHeader is long checkpoint ? (RawStream.Position, checkpoint) : null;
+        _headerSeek = seekAfterHeader is long checkpoint ? (RawStream!.Position, checkpoint) : null;
         if (trackByteOffsets)
             Window = null;
     }
@@ -120,14 +137,14 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private IRecordSource<TProfile> OpenSeekHeaderSource(long start)
     {
         StreamReader?.Dispose();
-        RawStream.Position = start;
+        RawStream!.Position = start;
         return OpenUtf8FileSource(restarted: false);
     }
 
     private IRecordSource<TProfile> OpenUtf8FileSource(bool restarted)
     {
         ProcessedStream = RawStream;
-        StreamReader = new Utf8FileStreamReader(RawStream, _trackFileBytes, restarted);
+        StreamReader = new Utf8FileStreamReader(RawStream!, _trackFileBytes, restarted);
         return CreateRecordSource(StreamReader, Profile);
     }
 
@@ -135,7 +152,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     {
         // A new text reader discards read-ahead bytes from the header without closing the file.
         StreamReader!.Dispose();
-        RawStream.Seek(offset, SeekOrigin.Begin);
+        RawStream!.Seek(offset, SeekOrigin.Begin);
         var source = OpenUtf8FileSource(restarted: true);
         try
         {
@@ -162,7 +179,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             var factory = (FileEncoding?.BomBytesCount ?? 0) < 0
                 ? DecompressorFactory.Streaming()
                 : DecompressorFactory.Buffered();
-            ProcessedStream = factory.GetDecompressor(Profile.Resource.Compression).Decompress(RawStream);
+            ProcessedStream = factory.GetDecompressor(Profile.Resource.Compression).Decompress(RawStream!);
         }
         else
         {
@@ -195,6 +212,14 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         // eligibility checks once, rather than on every synchronous/async row.
         _currentRecordSource = source is ICurrentRecordSource { SupportsCurrentRecord: true } current ? current : null;
         _initialized = true;
+    }
+
+    private bool TryInitializeSuppliedSource()
+    {
+        if (_createSuppliedSource is null)
+            return false;
+        CompleteInitialization(_createSuppliedSource());
+        return true;
     }
 
     private protected void ReplaceRecordSource(IRecordSource<TProfile> source)
@@ -406,7 +431,9 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     private async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_isClosed || _disposed, this);
         if (_initialized) return;
+        if (TryInitializeSuppliedSource()) return;
         if (_utf8FileInput)
         {
             await InitializeUtf8FileAsync(cancellationToken).ConfigureAwait(false);
@@ -440,12 +467,12 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         if (!_isClosed)
         {
             _isClosed = true;
-            RecordSource?.Dispose();
+            DisposeRecordSource();
             StreamReader?.Dispose();
             if (ProcessedStream is not null && ProcessedStream != RawStream)
                 ProcessedStream.Dispose();
             if (!LeaveOpen)
-                RawStream.Dispose();
+                RawStream?.Dispose();
         }
     }
 
@@ -462,11 +489,11 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             return;
         _disposed = true;
 
-        RecordSource?.Dispose();
+        DisposeRecordSource();
         StreamReader?.Dispose();
         if (ProcessedStream is not null && ProcessedStream != RawStream)
             await ProcessedStream.DisposeAsync().ConfigureAwait(false);
-        if (!LeaveOpen)
+        if (!LeaveOpen && RawStream is not null)
             await RawStream.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
@@ -479,12 +506,26 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         if (disposing)
         {
             // free managed resources
-            RecordSource?.Dispose();
+            DisposeRecordSource();
             StreamReader?.Dispose();
             if (ProcessedStream is not null && ProcessedStream != RawStream)
                 ProcessedStream.Dispose();
             if (!LeaveOpen)
-                RawStream.Dispose();
+                RawStream?.Dispose();
+        }
+    }
+
+    private void DisposeRecordSource()
+    {
+        var ownedTextReader = _ownedTextReader;
+        _ownedTextReader = null;
+        try
+        {
+            RecordSource?.Dispose();
+        }
+        finally
+        {
+            ownedTextReader?.Dispose();
         }
     }
     ~BaseDataReader()
