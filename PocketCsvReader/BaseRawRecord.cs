@@ -183,8 +183,15 @@ public abstract class BaseRawRecord<TProfile>
     protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
     public string GetString(int i)
-        => _current.IsUtf8 && TryGetDirectString(i, out var value)
-            ? value : GetStringValue(i);
+        => GetDecodedString(i);
+
+    /// <summary>Returns the field text after format decoding and sanitization, before value conversion.</summary>
+    /// <param name="ordinal">The zero-based index of the field.</param>
+    /// <returns>The decoded field text.</returns>
+    /// <exception cref="InvalidCastException">The field is null.</exception>
+    public string GetDecodedString(int ordinal)
+        => _current.IsUtf8 && TryGetDirectString(ordinal, out var value)
+            ? value : GetStringValue(ordinal);
 
     protected virtual string GetStringValue(int i)
         => StringMapper.Map(GetValueOrThrow(i))!;
