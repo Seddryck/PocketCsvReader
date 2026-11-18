@@ -418,6 +418,19 @@ public class CsvDataReaderTest
     }
 
     [Test]
+    public void Read_WithBlankCellsInMultipleHeaderRows_JoinsOnlyNonEmptyCells()
+    {
+        using var stream = CreateStream("id,name,\r\n,first,value\r\n1,a,2");
+        var profile = new CsvProfile(new DialectDescriptor(HeaderRows: [1, 2]));
+        using var dataReader = new CsvDataReader(stream, profile);
+
+        Assert.That(dataReader.Read(), Is.True);
+        var names = Enumerable.Range(0, dataReader.FieldCount).Select(dataReader.GetName).ToArray();
+
+        Assert.That(names, Is.EqualTo(new[] { "id", "name first", "value" }));
+    }
+
+    [Test]
     [TestCase("field;field\r\n0;1\r\nfoo;bar")]
     [TestCase("field\r\n0;1\r\nfoo;bar")]
     public void Read_WithHeadersSkippingSomeRows_CorrectParsing(string record)
