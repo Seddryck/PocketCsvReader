@@ -182,7 +182,7 @@ public abstract class BaseRawRecord<TProfile>
 
     protected virtual bool IsNull(int i)
         => !GetValueOrThrow(i).HasValue;
-    public string GetString(int i)
+    public virtual string GetString(int i)
         => GetDecodedString(i);
 
     /// <summary>Returns the field text after format decoding and sanitization, before value conversion.</summary>

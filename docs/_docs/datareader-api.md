@@ -27,7 +27,7 @@ Use `GetInt32`, `GetInt64`, `GetBoolean`, `GetDecimal`, `GetString`, `GetDateTim
 | --- | --- |
 | `GetRawString(ordinal)` | Encoded field text, including quotes and escapes where the format retains them. |
 | `GetDecodedString(ordinal)` | Field text after decoding, unescaping, and sanitization. Skips schema and runtime conversion. Returns an empty string for a decoded empty field and throws `InvalidCastException` for a null field. Use `IsDBNull` to check for nulls. |
-| `GetString(ordinal)` | Reads the field as a string. It currently returns the same decoded text. Configured string parser support is tracked in [issue #485](https://github.com/Seddryck/PocketCsvReader/issues/485). |
+| `GetString(ordinal)` | Reads the field as a string. Applies configured string parsers with the same precedence as `GetFieldValue<string>(ordinal)`. With no applicable parser, returns the decoded text. |
 
 Use `GetDecodedString` to inspect input such as a malformed date after a typed getter throws. For format-specific decoding and sanitization rules, see [value handling](../sequences/).
 

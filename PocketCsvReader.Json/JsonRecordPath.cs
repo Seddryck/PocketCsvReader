@@ -116,7 +116,7 @@ internal sealed class JsonRecordPath(string?[] segments)
     }
 
     private static bool IsNameFirst(char value)
-        => value is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '_' or >= '\u0080';
+        => value is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or '_' or >= '\u0080';
 
     private static bool ValidUnicode(string value)
     {
