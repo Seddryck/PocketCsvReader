@@ -11,7 +11,7 @@ Choose the row shape and lifetime you need before choosing an optimization. Most
 | --- | --- | --- | --- |
 | `ToDataReader` | Current row, typed/raw getters | Yes | Dispose the reader; it owns the input unless explicitly constructed otherwise |
 | `ToDbDataReader` | Standard ADO.NET adapter | Yes, including async reads | Dispose the adapter |
-| `To<T>` | Constructor-mapped or custom-mapped objects | Yes | See format-specific mapping and stream rules |
+| `To<T>` | Header/property-mapped, constructor-mapped, or custom-mapped objects | Yes | See format-specific mapping and stream rules |
 | CSV `ToAsync<T>` | Async mapped objects | Yes | File closes; caller-provided stream remains open |
 | `ToArrayString` | `string?[]` in current field order | Yes | Enumerator disposes reader and input |
 | `ToObjectArrays` | `object?[]`, parsed values | Yes | Enumerator disposes reader and input |
