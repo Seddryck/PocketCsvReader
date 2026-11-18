@@ -9,6 +9,41 @@ internal static class CsvHeaders
     public static ValueTask<string[][]> ReadAsync(IRecordSource<CsvProfile> source, CancellationToken cancellationToken)
         => source is RecordParser parser ? parser.ReadHeadersAsync(cancellationToken) : ReadCoreAsync(source, cancellationToken);
 
+    public static string[] GetFieldNames(string?[][] headers, DialectDescriptor dialect)
+    {
+        var names = new string[headers.Max(header => header.Length)];
+        if (dialect.Header)
+        {
+            foreach (var header in headers)
+            {
+                string? last = null;
+                for (var i = 0; i < names.Length; i++)
+                {
+                    if (i < header.Length)
+                    {
+                        var cell = header[i];
+                        if (!string.IsNullOrEmpty(cell))
+                            last = cell;
+                        else if (headers.Length > 1)
+                            continue;
+                    }
+
+                    // A short row still extends its last label into omitted columns.
+                    if (last is not null)
+                        names[i] = names[i] is { } name ? string.Concat(name, dialect.HeaderJoin, last) : last;
+                }
+            }
+        }
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(names[i]))
+                names[i] = $"field_{(dialect.Header ? i + 1 : i)}";
+        }
+
+        return names;
+    }
+
     internal static string[][] ReadCore(IRecordSource<CsvProfile> source)
     {
         var headers = new HeaderRows(source.Profile.Dialect);

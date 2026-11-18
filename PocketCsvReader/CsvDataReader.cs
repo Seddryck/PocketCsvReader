@@ -179,7 +179,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     {
         var firstRow = RowCount == 0;
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
-            RegisterHeader(CsvHeaders.Read(RecordSource!), "field_");
+            RegisterHeader(CsvHeaders.Read(RecordSource!));
 
         CurrentRecordResult result;
         RecordState state;
@@ -202,7 +202,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || state == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
-            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.Fields!.Length)], "field_");
+            RegisterHeader([new string?[result.Record.Fields!.Length]]);
 
         SetRecord(result.Record, copyMetadataOnMaterialization: true);
         CompleteRecord();
@@ -213,7 +213,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     {
         var firstRow = RowCount == 0;
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
-            RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false), "field_");
+            RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
 
         CurrentRecordResult result;
         do
@@ -234,36 +234,14 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || result.State == RecordState.Comment);
 
         if (firstRow && (Fields?.Length ?? 0) == 0)
-            RegisterHeader([(string?[])Array.CreateInstance(typeof(string), result.Record.Fields!.Length)], "field_");
+            RegisterHeader([new string?[result.Record.Fields!.Length]]);
 
         SetRecord(result.Record, copyMetadataOnMaterialization: true);
         CompleteRecord();
         return true;
     }
 
-    private void RegisterHeader(string?[][] headers, string unamedPrefix)
-    {
-        var maxField = headers.Select(x => x.Length).Max();
-        var names = (string[])Array.CreateInstance(typeof(string), maxField);
-
-        foreach (var header in headers)
-        {
-            var last = string.Empty;
-            for (int i = 0; i < maxField; i++)
-            {
-                if (i < header.Length && !string.IsNullOrEmpty(header[i]))
-                    last = header[i];
-                names[i] = string.IsNullOrEmpty(names[i])
-                            ? $"{last}"
-                            : $"{names[i]}{Profile.Dialect.HeaderJoin}{last}";
-            }
-        }
-        int unnamedFieldIndex = 0;
-        var fields = (Profile.Dialect.Header
-                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
-                : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
-        SetHeaders(fields);
-    }
+    private void RegisterHeader(string?[][] headers) => SetHeaders(CsvHeaders.GetFieldNames(headers, Profile.Dialect));
 
     internal void SetHeaders(string[] headers)
     {

@@ -50,9 +50,9 @@ public partial class CsvDataReader
             if (_recordBlocks is { Count: > 0 })
             {
                 if (Profile.Dialect.Header)
-                    RegisterHeader(CsvHeaders.Read(RecordSource!), "field_");
+                    RegisterHeader(CsvHeaders.Read(RecordSource!));
                 else
-                    RegisterHeader([new string?[_indexedFieldCount]], "field_");
+                    RegisterHeader([new string?[_indexedFieldCount]]);
             }
         }
 
@@ -75,9 +75,9 @@ public partial class CsvDataReader
             if (_recordBlocks is { Count: > 0 })
             {
                 if (Profile.Dialect.Header)
-                    RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false), "field_");
+                    RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
                 else
-                    RegisterHeader([new string?[_indexedFieldCount]], "field_");
+                    RegisterHeader([new string?[_indexedFieldCount]]);
             }
         }
 

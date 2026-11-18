@@ -17,7 +17,7 @@ public static class CsvIndexLookup
 
         index = index.ResolveRuntimeParser(query.Profile.Parsers);
         var profile = CreateBuildProfile(query.Profile);
-        var configuration = GetConfiguration(profile);
+        var configuration = GetConfiguration(profile, index.Key.ColumnOrdinal is null);
         foreach (var file in query.EnumerateFiles())
         {
             if (file.Opener is not null)
@@ -51,7 +51,7 @@ public static class CsvIndexLookup
         var profile = query.Profile;
         index = index.ResolveRuntimeParser(profile.Parsers);
         var key = index.Key;
-        var configuration = GetConfiguration(profile);
+        var configuration = GetConfiguration(profile, key.ColumnOrdinal is null);
         return CsvSeekIndexLookup.WithLookup(query, CsvIndexKind.Sparse, CreateSelector, (source, _) =>
             SparseIndexSidecar.Find(source, configuration, index, requested) is { } found ? ToReadPlan(found) : null,
             index.RequiresIndex, IndexName);
@@ -105,24 +105,30 @@ public static class CsvIndexLookup
             ParserOptimizations = source.ParserOptimizations with { TrackPosition = true }
         };
 
-    internal static SourceConfiguration GetConfiguration(CsvProfile profile)
+    private static SourceConfiguration GetConfiguration(CsvProfile profile, bool usesHeaderNames)
     {
         var dialect = profile.Dialect;
-        return new("csvConfigurationId", SparseIndexSidecar.Fingerprint([
+        string?[] settings = [
             dialect.Header.ToString(), string.Join(",", dialect.HeaderRows.Select(row => row.ToString(CultureInfo.InvariantCulture))),
             dialect.HeaderJoin, dialect.HeaderRepeat.ToString(), dialect.CommentChar?.ToString(),
             dialect.Delimiter.ToString(), dialect.LineTerminator, dialect.QuoteChar?.ToString(),
             dialect.DoubleQuote.ToString(), dialect.EscapeChar?.ToString(), dialect.SkipInitialSpace.ToString()
-        ]));
+        ];
+        // A header name can resolve to a different column after empty cells are skipped.
+        if (usesHeaderNames && dialect.Header && dialect.HeaderRows.Length > 1)
+            settings = [.. settings, "skip-empty-multi-row-header-cells"];
+
+        return new("csvConfigurationId", SparseIndexSidecar.Fingerprint(settings));
     }
 
     internal static string?[] GetKeyCompatibilitySettings(CsvProfile profile, IIndexKey key)
     {
         var optimization = profile.ParserOptimizations;
         var schema = profile.Schema;
+        var configuration = GetConfiguration(profile, key.ColumnOrdinal is null || schema?.IsMatchingByName == true);
         return [
             key.ColumnName, key.ColumnOrdinal?.ToString(CultureInfo.InvariantCulture), key.CompatibilityId,
-            GetConfiguration(profile).Id, profile.Dialect.NullSequence, profile.Dialect.MissingCell,
+            configuration.Id, profile.Dialect.NullSequence, profile.Dialect.MissingCell,
             profile.Resource?.Encoding, profile.StreamInitialization.ProbeEncoding.ToString(),
             profile.StreamInitialization.InputMode.ToString(), optimization.NoTextQualifier.ToString(),
             optimization.UnescapeChars.ToString(), optimization.HandleSpecialValues.ToString(),
