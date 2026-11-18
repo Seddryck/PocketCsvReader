@@ -22,10 +22,17 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
     internal CsvDataReader(Stream stream, CsvProfile profile, bool leaveOpen)
         : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString), leaveOpen)
+        => (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+
+    internal CsvDataReader(TextReader reader, CsvProfile profile, bool leaveOpen)
+        : base(profile, new StringMapper(profile.ParserOptimizations.PoolString),
+              () => new RecordParser(reader, profile), leaveOpen ? null : reader)
+        => (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+
+    private static (RowNumberOptions? Options, RowNumberRecord? Record) CreateRowNumber(CsvProfile profile)
     {
-        _rowNumberOptions = profile.RowNumber;
-        if (_rowNumberOptions is not null)
-            _rowNumberRecord = new RowNumberRecord();
+        var options = profile.RowNumber;
+        return (options, options is null ? null : new RowNumberRecord());
     }
 
     protected override int GetSchemaOrdinal(int i) => HasRowNumber ? i - 1 : i;
@@ -56,9 +63,11 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         return true;
     }
 
-    internal T MapCurrent<T>(SpanMapper<T> mapper)
+    internal T MapCurrent<T>(SpanMapper<T> mapper, bool defaultMapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
+        if (defaultMapper && Profile.Filters.Count != 0)
+            return FilteredObjectMapper<T>.Map(this);
         // The compatibility Record getter snapshots borrowed metadata. A public
         // mapper can therefore retain its IEnumerable<FieldSpan> after advancement.
         var record = (Record ?? throw new InvalidOperationException("No current record is available.")).AsCharacters();

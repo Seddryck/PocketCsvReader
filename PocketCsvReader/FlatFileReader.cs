@@ -81,7 +81,7 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return MaterializeDynamic(() => ToDataReader(stream));
     }
 
-    private static IEnumerable<dynamic> MaterializeDynamic(Func<TDataReader> createReader)
+    private protected static IEnumerable<dynamic> MaterializeDynamic(Func<TDataReader> createReader)
     {
         using var reader = createReader();
         foreach (var row in DataReaderMaterializer.ToDynamic(reader))
@@ -104,7 +104,7 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return MaterializeDictionaries(() => ToDataReader(stream));
     }
 
-    private static IEnumerable<IReadOnlyDictionary<string, object?>> MaterializeDictionaries(Func<TDataReader> createReader)
+    private protected static IEnumerable<IReadOnlyDictionary<string, object?>> MaterializeDictionaries(Func<TDataReader> createReader)
     {
         using var reader = createReader();
         foreach (var row in DataReaderMaterializer.ToDictionaries(reader))
@@ -128,7 +128,7 @@ public abstract class FlatFileReader<TProfile, TDataReader>
         return MaterializeObjectArrays(() => ToDataReader(stream));
     }
 
-    private static IEnumerable<object?[]> MaterializeObjectArrays(Func<TDataReader> createReader)
+    private protected static IEnumerable<object?[]> MaterializeObjectArrays(Func<TDataReader> createReader)
     {
         using var reader = createReader();
         foreach (var row in DataReaderMaterializer.ToObjectArrays(reader))
@@ -147,7 +147,7 @@ public abstract class FlatFileReader<TProfile, TDataReader>
             throw new FileNotFoundException($"The file {filename} was not found.", filename);
     }
 
-    private static IEnumerable<string?[]> MaterializeStringArrays(Func<TDataReader> createReader)
+    private protected static IEnumerable<string?[]> MaterializeStringArrays(Func<TDataReader> createReader)
     {
         using var reader = createReader();
         foreach (var values in DataReaderMaterializer.ToStringArrays(reader))

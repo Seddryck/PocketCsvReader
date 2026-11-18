@@ -17,13 +17,18 @@ public class CsvStorageReuseTests
     private static CsvDataReader Reader(string text, CsvInputMode mode, int bufferSize = 4096)
         => new(new MemoryStream(Encoding.UTF8.GetBytes(text)), Profile(mode, bufferSize));
 
-    [TestCase(CsvInputMode.DecodedChars, false)]
-    [TestCase(CsvInputMode.DecodedChars, true)]
-    [TestCase(CsvInputMode.Utf8Bytes, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, true)]
-    public async Task Reader_ReusesMetadataWithoutMaterializingWrappers(CsvInputMode mode, bool asynchronous)
+    [TestCase(CsvInputMode.DecodedChars, false, false)]
+    [TestCase(CsvInputMode.DecodedChars, true, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false)]
+    [TestCase(CsvInputMode.DecodedChars, false, true)]
+    [TestCase(CsvInputMode.DecodedChars, true, true)]
+    public async Task Reader_ReusesMetadataWithoutMaterializingWrappers(CsvInputMode mode, bool asynchronous, bool textReader)
     {
-        using var reader = Reader("first,200,1024\n東京😀,404,2048\nlast,201,4096", mode, 5);
+        const string text = "first,200,1024\n東京😀,404,2048\nlast,201,4096";
+        using var reader = textReader
+            ? new CsvReader(Profile(mode, 5)).ToDataReader(new StringReader(text), leaveOpen: false)
+            : Reader(text, mode, 5);
         var fieldsProperty = typeof(BaseRawRecord<CsvProfile>).GetProperty("CurrentFieldSpans", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var wrapperField = typeof(BaseRawRecord<CsvProfile>).GetField("_record", BindingFlags.NonPublic | BindingFlags.Instance)!;
         FieldSpan[]? fields = null;
@@ -93,17 +98,22 @@ public class CsvStorageReuseTests
         Assert.That(first.ParsedFields, Is.EqualTo(snapshot));
     }
 
-    [TestCase(CsvInputMode.DecodedChars, false)]
-    [TestCase(CsvInputMode.DecodedChars, true)]
-    [TestCase(CsvInputMode.Utf8Bytes, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, true)]
-    public void RawReaderAllocation_IsBoundedBySetupNotRowCount(CsvInputMode mode, bool asynchronous)
+    [TestCase(CsvInputMode.DecodedChars, false, false)]
+    [TestCase(CsvInputMode.DecodedChars, true, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false)]
+    [TestCase(CsvInputMode.DecodedChars, false, true)]
+    [TestCase(CsvInputMode.DecodedChars, true, true)]
+    public void RawReaderAllocation_IsBoundedBySetupNotRowCount(CsvInputMode mode, bool asynchronous, bool textReader)
     {
         const int rows = 2000;
-        var data = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("host,-,user,timestamp,GET /item HTTP/1.1,200,1024\n", rows)));
+        var text = string.Concat(Enumerable.Repeat("host,-,user,timestamp,GET /item HTTP/1.1,200,1024\n", rows));
+        var data = Encoding.UTF8.GetBytes(text);
         int ReadAll()
         {
-            using var reader = new CsvDataReader(new MemoryStream(data), Profile(mode));
+            using var reader = textReader
+                ? new CsvReader(Profile(mode)).ToDataReader(new StringReader(text), leaveOpen: false)
+                : new CsvDataReader(new MemoryStream(data), Profile(mode));
             int count = 0;
             while (asynchronous ? reader.ReadAsync().GetAwaiter().GetResult() : reader.Read())
                 count++;
@@ -114,7 +124,7 @@ public class CsvStorageReuseTests
         long before = GC.GetAllocatedBytesForCurrentThread();
         int count = ReadAll();
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(Environment.CurrentManagedThreadId, Is.EqualTo(thread), "MemoryStream completes without thread hops.");
+        Assert.That(Environment.CurrentManagedThreadId, Is.EqualTo(thread), "The in-memory inputs complete without thread hops.");
         Assert.That(count, Is.EqualTo(rows));
         // Includes initialization, headers, pools and refills. A wrapper (80 B/row)
         // or seven-field snapshot (416 B/row) alone exceeds this 24 B/row budget.

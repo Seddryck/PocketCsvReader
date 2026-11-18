@@ -71,8 +71,7 @@ public class CsvObjectReader<T> : IDisposable
             while (_dataReader.Read())
             {
                 RowCount++;
-                yield return Profile.Filters.Count != 0 && _defaultMapper
-                    ? FilteredObjectMapper<T>.Map(_dataReader) : _dataReader.MapCurrent(SpanMapper);
+                yield return _dataReader.MapCurrent(SpanMapper, _defaultMapper);
             }
             yield break;
         }
