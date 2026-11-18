@@ -151,7 +151,7 @@ public class FileIndexLookupTest
     [TestCase(true)]
     public async Task CsvReadsJoinedHeadersBeforeSeekingInSingleAndPartitionedFiles(bool asynchronous)
     {
-        const string header = "Order,Order\r\nKey,Name\r\n";
+        const string header = "Order,\r\nKey,Name\r\n";
         const string remaining = "200,before\r\n300,first\r\n300,second\r\n400,after";
         var path = Write("headers.csv", header + "100,early\r\n" + remaining, bom: true);
         var single = Builder(repeat: false).Build();
@@ -160,11 +160,11 @@ public class FileIndexLookupTest
         ReplaceWithoutChangingStamp(path, header + "xxx,early\r\n" + remaining);
 
         await using (var rows = single.WithIndexedLookup(path, index, 300))
-            Assert.That(await ReadStringsAsync(rows, "Order_Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
+            Assert.That(await ReadStringsAsync(rows, "Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
 
         var partitioned = Builder(repeat: true).FromFiles(new[] { FileSource.Partitioned(path, true) }).Build();
         await using var batch = partitioned.WithIndexedLookup(index, 300).ToDbDataReader();
-        Assert.That(await ReadStringsAsync(batch, "Order_Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
+        Assert.That(await ReadStringsAsync(batch, "Name", asynchronous), Is.EqualTo(new[] { "first", "second" }));
 
         static CsvReaderBuilder Builder(bool repeat) => new CsvReaderBuilder().WithDialect(d => d.WithHeader()
             .WithHeaderRows([1, 2]).WithHeaderJoin("_").WithHeaderRepeat(repeat).WithLineTerminator("\r\n"));

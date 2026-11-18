@@ -417,6 +417,25 @@ public class CsvDataReaderTest
         Assert.That(dataReader.GetString(1), Is.EqualTo("bar"));
     }
 
+    [TestCase(CsvInputMode.DecodedChars, false)]
+    [TestCase(CsvInputMode.DecodedChars, true)]
+    [TestCase(CsvInputMode.Utf8Bytes, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, true)]
+    public async Task Read_WithBlankCellsInMultipleHeaderRows_JoinsOnlyNonEmptyCells(CsvInputMode mode, bool asynchronous)
+    {
+        using var stream = CreateStream("id,name,\r\n,first,value\r\n1,a,2");
+        var profile = new CsvProfile(new DialectDescriptor(HeaderRows: [1, 2]))
+        {
+            StreamInitialization = new(ProbeEncoding: false, InputMode: mode)
+        };
+        using var dataReader = new CsvDataReader(stream, profile);
+
+        Assert.That(asynchronous ? await dataReader.ReadAsync() : dataReader.Read(), Is.True);
+        var names = Enumerable.Range(0, dataReader.FieldCount).Select(dataReader.GetName).ToArray();
+
+        Assert.That(names, Is.EqualTo(new[] { "id", "name first", "value" }));
+    }
+
     [Test]
     [TestCase("field;field\r\n0;1\r\nfoo;bar")]
     [TestCase("field\r\n0;1\r\nfoo;bar")]

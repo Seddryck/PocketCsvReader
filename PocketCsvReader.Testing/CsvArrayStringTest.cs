@@ -23,6 +23,17 @@ namespace PocketCsvReader.Testing
         }
 
         [Test]
+        public void Read_WithBlankCellsInMultipleHeaderRows_JoinsOnlyNonEmptyCells()
+        {
+            using var stream = CreateStream("id,group,,first\r\n,\"\",,middle\r\n,leaf,,\r\n1,a,2,b");
+            var profile = new CsvProfile(new DialectDescriptor(HeaderRows: [1, 2, 3], HeaderJoin: "."));
+            using var reader = new CsvArrayString(stream, profile);
+
+            Assert.That(reader.Read().Single(), Is.EqualTo(new[] { "1", "a", "2", "b" }));
+            Assert.That(reader.Fields, Is.EqualTo(new[] { "id", "group.leaf", "field_3", "first.middle" }));
+        }
+
+        [Test]
         [TestCase("Ansi")]
         [TestCase("Utf16-BE")]
         [TestCase("Utf16-LE")]

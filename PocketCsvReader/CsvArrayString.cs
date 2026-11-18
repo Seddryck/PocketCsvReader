@@ -79,7 +79,7 @@ public class CsvArrayString : IDisposable
         while (!IsEof)
         {
             if (RowCount == 0 && Profile.Dialect.Header)
-                RegisterHeader(RecordParser!.ReadHeaders(), "field_");
+                Fields = CsvHeaders.GetFieldNames(RecordParser!.ReadHeaders(), Profile.Dialect);
 
             IsEof = RecordParser!.IsEndOfFile(out RecordSpan recordSpan, out var state);
             if (state == RecordState.Comment)
@@ -94,29 +94,6 @@ public class CsvArrayString : IDisposable
             RowCount++;
             yield return values;
         }
-    }
-
-    private void RegisterHeader(string?[][] headers, string unamedPrefix)
-    {
-        var maxField = headers.Select(x => x.Length).Max();
-        var names = (string[])Array.CreateInstance(typeof(string), maxField);
-
-        foreach (var header in headers)
-        {
-            var last = string.Empty;
-            for (int i = 0; i < maxField; i++)
-            {
-                if (i < header.Length && !string.IsNullOrEmpty(header[i]))
-                    last = header[i];
-                names[i] = string.IsNullOrEmpty(names[i])
-                            ? $"{last}"
-                            : $"{names[i]}{Profile.Dialect.HeaderJoin}{last}";
-            }
-        }
-        int unnamedFieldIndex = 0;
-        Fields = (RecordParser!.Profile.Dialect.Header
-                ? names.Select(value => { unnamedFieldIndex++; return string.IsNullOrWhiteSpace(value) ? $"{unamedPrefix}{unnamedFieldIndex}" : value; })
-                : names.Select(_ => $"{unamedPrefix}{unnamedFieldIndex++}")).ToArray();
     }
 
     public void Dispose()
