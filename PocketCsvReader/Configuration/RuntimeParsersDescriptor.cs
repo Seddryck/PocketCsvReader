@@ -49,7 +49,12 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
     }
 
     public void AddParser<T>(ParseFunction<T> parse)
-        => AddLegacyParser(typeof(T), text => parse(text)!, parse);
+    {
+        // Only the public enumerable needs an object-returning compatibility adapter.
+        // Keep the typed result intact when adapting string parsers for reader access.
+        ParseSpan<T> span = text => parse(text.ToString());
+        Parsers.Add(typeof(T), (text => parse(text)!, span, parse));
+    }
 
     public void AddParser(Type type, ParseFunction parse)
         => AddLegacyParser(type, parse, parse);
