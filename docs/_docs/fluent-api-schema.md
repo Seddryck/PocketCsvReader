@@ -11,7 +11,7 @@ tags: [configuration]
 <span id="defining-a-custom-field-with-formatting"></span>
 <span id="overview"></span>
 
-A schema controls the type and conversion settings used by the data reader. It does not select source columns or bind CSV constructor parameters by name. [Object mapping](../mapper-object-builder/) is a separate path; [JSON projection](../json-projection/) selects properties.
+A schema controls the type and conversion settings used by the data reader. `ObjectMap<T>` uses these settings to convert named CSV columns for property assignments and key lookups. `SpanObjectBuilder<T>` uses its own constructor-mapping parsers. See [object mapping](../mapper-object-builder/) for examples and [JSON projection](../json-projection/) for selecting JSON properties.
 
 ## Defining a schema
 
