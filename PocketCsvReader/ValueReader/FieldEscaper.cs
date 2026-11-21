@@ -22,42 +22,30 @@ internal class FieldEscaper
         => (QuoteChar, DoubleQuote, EscapeChar, Delimiter, Pool) = (quoteChar, doubleQuote, escapeChar, delimiter, pool);
 
     public ReadOnlySpan<char> Escape(ReadOnlySpan<char> value)
+        => EscapeMemory(value).Span;
+
+    internal ReadOnlyMemory<char> EscapeMemory(ReadOnlySpan<char> value)
     {
         if (value.Length == 0)
-            return Span<char>.Empty;
+            return ReadOnlyMemory<char>.Empty;
 
-        // The returned span escapes this method, so its backing storage must
+        // The returned memory escapes this method, so its backing storage must
         // remain owned by the caller instead of being returned to a pool.
         var array = new char[value.Length];
-        var result = new Span<char>(array);
-        int i = 0, j = 0;
+        int length = 0;
+        int i = 0;
         while (i < value.Length)
         {
-            var c = value[i];
-            if (c == EscapeChar)
-            {
-                if (i + 1 == value.Length)
-                    result[j++] = c;
-                else if (value[i + 1] == EscapeChar || value[i + 1] == Delimiter || value[i + 1] == QuoteChar)
-                    result[j++] = value[++i];
-                else
-                    result[j++] = c;
-            }
-            else if (c == QuoteChar && DoubleQuote)
-            {
-                if (value[i + 1] == QuoteChar)
-                    result[j++] = value[++i];
-                else
-                    result[j++] = c;
-            }
-            else
-            {
-                result[j++] = c;
-            }
-
-            i++;
+            if (i + 1 < value.Length && IsEscapedPair(value[i], value[i + 1]))
+                i++;
+            array[length++] = value[i++];
         }
 
-        return result.Slice(0, j);
+        return array.AsMemory(0, length);
     }
+
+    private bool IsEscapedPair(char first, char second)
+        => first == EscapeChar
+            ? second == EscapeChar || second == Delimiter || second == QuoteChar
+            : DoubleQuote && first == QuoteChar && second == QuoteChar;
 }

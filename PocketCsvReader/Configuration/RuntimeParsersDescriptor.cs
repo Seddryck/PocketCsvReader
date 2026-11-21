@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,8 +8,30 @@ using System.Threading.Tasks;
 namespace PocketCsvReader.Configuration;
 public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunction>>
 {
-    private Dictionary<Type, (ParseFunction Legacy, Delegate Span, Delegate Registration)> Parsers { get; } = [];
+    private Dictionary<Type, (ParseFunction Legacy, Delegate? Span, Delegate Registration)> Parsers { get; } = [];
     private Dictionary<Type, Func<string?, IFormatProvider?, Delegate>>? _formatParsers;
+
+    private Dictionary<Type, Func<string?, MemoryFieldParser>>? _memoryParsers;
+
+    internal bool HasMemoryParsers => _memoryParsers is not null;
+
+    internal void AddDefaultMemoryParser<T>(Func<string?, ParseMemory<T>> factory)
+        where T : notnull
+    {
+        (_memoryParsers ??= [])[typeof(T)] = pattern =>
+        {
+            var parse = factory(pattern);
+            return new MemoryFieldParser<T>(parse, memory => parse(memory));
+        };
+        if (!Parsers.ContainsKey(typeof(T)))
+        {
+            var parse = factory(null);
+            Parsers.Add(typeof(T), (text => parse(text.AsMemory()), null, parse));
+        }
+    }
+
+    internal Func<string?, MemoryFieldParser>? FindMemoryParser(Type type)
+        => _memoryParsers?.GetValueOrDefault(type);
 
     internal void AddDefaultParser<T>(ParseSpan<T> parse,
         Func<string?, IFormatProvider?, ParseSpan<T>>? formatParser)
@@ -34,11 +56,17 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
         return true;
     }
 
-    internal IEnumerable<KeyValuePair<Type, Delegate>> SpanParsers
-        => Parsers.Select(parser => new KeyValuePair<Type, Delegate>(parser.Key, parser.Value.Span));
+    internal IEnumerable<KeyValuePair<Type, Delegate>> EnumerateSpanParsers()
+    {
+        foreach (var (type, parser) in Parsers)
+        {
+            if (parser.Span is { } span)
+                yield return new(type, span);
+        }
+    }
 
     internal (Delegate Span, Delegate Registration)? FindParser(Type type)
-        => Parsers.TryGetValue(type, out var parser) ? (parser.Span, parser.Registration) : null;
+        => Parsers.TryGetValue(type, out var parser) && parser.Span is { } span ? (span, parser.Registration) : null;
 
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
     public void AddParser<T>(ParseSpan<T> parse)

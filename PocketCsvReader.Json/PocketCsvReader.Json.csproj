@@ -8,6 +8,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PocketCsvReader.Arrow.ColumnarJson" />
     <InternalsVisibleTo Include="PocketCsvReader.Ndjson" />
+    <InternalsVisibleTo Include="PocketCsvReader.NetTopologySuite" />
     <InternalsVisibleTo Include="PocketCsvReader.Json.Testing" />
   </ItemGroup>
   <ItemGroup>

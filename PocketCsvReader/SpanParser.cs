@@ -347,7 +347,7 @@ internal class SpanParser
         return false;
     }
 
-    private static bool IsConversionFailure(Exception exception)
+    internal static bool IsConversionFailure(Exception exception)
         => exception is FormatException or OverflowException or InvalidCastException
             || (exception is System.Reflection.TargetInvocationException { InnerException: { } inner } && IsConversionFailure(inner));
 
