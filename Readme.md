@@ -22,6 +22,7 @@ PocketCsvReader reads CSV and other structured text through forward-only data re
 | `PocketCsvReader.Arrow.ColumnarJson` | [Columnar JSON](https://seddryck.github.io/PocketCsvReader/docs/columnar-json/) (ClickHouse exports and Arrow fixtures) |
 | `PocketCsvReader.Arrow.NetCdf` | [Textual NetCDF CDL](https://seddryck.github.io/PocketCsvReader/docs/netcdf-cdl/) |
 | `PocketCsvReader.Chrononuensis` | Temporal period parsers |
+| `PocketCsvReader.NetTopologySuite` | WKT and GeoJSON geometry parsers |
 
 ## First example
 

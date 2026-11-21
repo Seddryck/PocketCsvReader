@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,26 +6,22 @@ using System.Threading.Tasks;
 
 namespace PocketCsvReader.FieldParsing;
 
-internal class FieldSanitizer : ISanitizer
+internal class FieldSanitizer : FieldValueSanitizer
 {
-    protected ISanitizer[] Sanitizers { get; } = [];
+    protected FieldValueSanitizer[] Sanitizers { get; } = [];
 
-    public FieldSanitizer(ISanitizer[] sanitizers)
+    public FieldSanitizer(FieldValueSanitizer[] sanitizers)
         => Sanitizers = sanitizers;
 
-    public NullableSpan Sanitize(ReadOnlySpan<char> buffer, bool isEscapedField, bool wasQuotedField)
+    internal override NullableSpan Sanitize(NullableSpan value, bool isEscapedField, bool wasQuotedField)
     {
-        if (Sanitizers.Length == 0)
-            return buffer;
-
-        var result = new NullableSpan(buffer);
         foreach (var sanitizer in Sanitizers)
         {
-            if (result.HasValue)
-                result = sanitizer.Sanitize(result.Value, isEscapedField, wasQuotedField);
+            if (value.HasValue)
+                value = sanitizer.Sanitize(value, isEscapedField, wasQuotedField);
         }
 
-        return result;
+        return value;
     }
 }
 
