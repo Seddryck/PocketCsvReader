@@ -33,11 +33,12 @@ internal class FieldEscaper
         // remain owned by the caller instead of being returned to a pool.
         var array = new char[value.Length];
         int length = 0;
-        for (int i = 0; i < value.Length; i++)
+        int i = 0;
+        while (i < value.Length)
         {
             if (i + 1 < value.Length && IsEscapedPair(value[i], value[i + 1]))
                 i++;
-            array[length++] = value[i];
+            array[length++] = value[i++];
         }
 
         return array.AsMemory(0, length);

@@ -16,11 +16,9 @@ internal class SequenceSanitizer : FieldValueSanitizer
     internal override NullableSpan Sanitize(NullableSpan value, bool isEscapedField, bool wasQuotedField)
     {
         var buffer = value.Value;
-        if (buffer.Length == 0 || (!isEscapedField && !wasQuotedField))
-        {
-            if (Sequences.TryGetValue(buffer, out var replacement))
-                return replacement;
-        }
+        if ((buffer.IsEmpty || (!isEscapedField && !wasQuotedField))
+            && Sequences.TryGetValue(buffer, out var replacement))
+            return replacement;
 
         return value;
     }
