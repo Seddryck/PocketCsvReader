@@ -28,6 +28,7 @@ public class RuntimeParsersDescriptorBuilder
     }
 
     internal RuntimeParsersDescriptorBuilder WithDefaultMemoryParser<T>(Func<string?, ParseMemory<T>> createParser)
+        where T : notnull
     {
         ArgumentNullException.ThrowIfNull(createParser);
         _defaults?.Remove(typeof(T));

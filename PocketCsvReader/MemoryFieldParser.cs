@@ -4,17 +4,14 @@ internal delegate T ParseMemory<T>(ReadOnlyMemory<char> memory);
 
 internal abstract class MemoryFieldParser
 {
-    private ParseMemory<object>? _boxed;
-    internal ParseMemory<object> Boxed => _boxed ??= ParseBoxed;
+    internal abstract ParseMemory<object> Boxed { get; }
     internal abstract Delegate Identity { get; }
-
-    protected abstract object ParseBoxed(ReadOnlyMemory<char> memory);
 
     internal bool IsValid(ReadOnlyMemory<char> memory)
     {
         try
         {
-            _ = ParseBoxed(memory);
+            _ = Boxed(memory);
             return true;
         }
         catch (Exception ex) when (SpanParser.IsConversionFailure(ex))
@@ -24,9 +21,9 @@ internal abstract class MemoryFieldParser
     }
 }
 
-internal sealed class MemoryFieldParser<T>(ParseMemory<T> parse) : MemoryFieldParser
+internal sealed class MemoryFieldParser<T>(ParseMemory<T> parse, ParseMemory<object> boxed) : MemoryFieldParser
 {
     internal ParseMemory<T> Parse { get; } = parse;
+    internal override ParseMemory<object> Boxed { get; } = boxed;
     internal override Delegate Identity => Parse;
-    protected override object ParseBoxed(ReadOnlyMemory<char> memory) => Parse(memory)!;
 }

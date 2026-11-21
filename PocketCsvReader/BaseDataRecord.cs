@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -78,7 +79,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (RowFilters.Count == 0) return parse(memory);
         var key = (i, type, parser.Identity);
-        if (_rowValues?.TryGetValue(key, out var cached) is true) return (T)cached!;
+        if (_rowValues?.TryGetValue(key, out var cached) is true && cached is T typed) return typed;
         var value = parse(memory);
         (_rowValues ??= []).Add(key, value);
         return value;
@@ -95,7 +96,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     protected BaseDataRecord(TProfile profile, StringMapper stringMapper)
         : base(profile, stringMapper)
     {
-        foreach (var parser in profile.Parsers?.SpanParsers ?? [])
+        foreach (var parser in profile.Parsers?.EnumerateSpanParsers() ?? [])
             Parser.Register(parser.Key, parser.Value);
     }
 
@@ -258,11 +259,14 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             throw new ArgumentOutOfRangeException(nameof(i), i, "Field index is out of range.");
 
         TryGetFieldDescriptor(i, out var field);
-        if (field is not null && field.RuntimeType.IsArray && !HasCustomParser(field)
-            && !Parser.TryGetEntry(field.RuntimeType, out _))
+        if (IsSchemaArray(field))
             return ArrayValidators.GetOrAdd(field.RuntimeType, CreateArrayValidator)(this, i);
         return IsValidScalar(i, field);
     }
+
+    private bool IsSchemaArray([NotNullWhen(true)] FieldDescriptor? field)
+        => field is not null && field.RuntimeType.IsArray && !HasCustomParser(field)
+            && !Parser.TryGetEntry(field.RuntimeType, out _);
 
     private bool IsValidScalar(int i, FieldDescriptor? field)
     {
@@ -345,8 +349,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (TryGetFieldDescriptor(i, out var field) && field.RuntimeType.IsArray
-            && !HasCustomParser(field) && !Parser.TryGetParser(field.RuntimeType, out _))
+        TryGetFieldDescriptor(i, out var field);
+        if (IsSchemaArray(field))
             return ArrayReaders.GetOrAdd(field.RuntimeType, CreateArrayReader)(this, i);
         if (i >= CurrentFieldSpans!.Length)
             return GetMissingField();
@@ -487,18 +491,21 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i)
     {
         if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
-        if (Profile.Parsers?.HasMemoryParsers is true && (uint)i < (uint)FieldCount
+        bool hasNullMemoryField = false;
+        if (Profile.Parsers?.HasMemoryParsers is true
             && ResolveTypedMemoryParser<T>(i, out var parsedType) is { } memoryParser)
         {
             var value = GetValueOrThrow(i);
-            if (!value.HasValue)
-                return default!;
-            var memory = BorrowParserInput(value);
-            return memoryParser is MemoryFieldParser<T> typed
-                ? ParseMemoryCached(i, parsedType, typed, typed.Parse, memory)
-                : (T)ParseMemoryCached(i, parsedType, memoryParser, memoryParser.Boxed, memory);
+            if (value.HasValue)
+            {
+                var memory = BorrowParserInput(value);
+                return memoryParser is MemoryFieldParser<T> typed
+                    ? ParseMemoryCached(i, parsedType, typed, typed.Parse, memory)
+                    : (T)ParseMemoryCached(i, parsedType, memoryParser, memoryParser.Boxed, memory);
+            }
+            hasNullMemoryField = true;
         }
-        if (IsNullFieldValue<T>(i))
+        if (hasNullMemoryField || IsNullFieldValue<T>(i))
             return default!;
         try
         {
@@ -521,9 +528,12 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private MemoryFieldParser? ResolveTypedMemoryParser<T>(int ordinal, out Type parsedType)
     {
-        TryGetFieldDescriptor(ordinal, out var field);
-        parsedType = field is not null && typeof(T).IsAssignableFrom(field.RuntimeType)
-            ? field.RuntimeType : typeof(T);
+        parsedType = typeof(T);
+        if ((uint)ordinal >= (uint)FieldCount)
+            return null;
+
+        if (TryGetFieldDescriptor(ordinal, out var field) && parsedType.IsAssignableFrom(field.RuntimeType))
+            parsedType = field.RuntimeType;
         return ResolveMemoryParser(parsedType, field);
     }
 

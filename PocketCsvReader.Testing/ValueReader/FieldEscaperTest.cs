@@ -66,6 +66,14 @@ public class FieldEscaperTest
         Assert.That(value.ToString(), Is.EqualTo(result));
     }
 
+    [TestCase("a\"\"b\"", "a\"b\"")]
+    [TestCase("a\\,b\\", "a,b\\")]
+    public void EscapePreservesTrailingCharacters(string input, string expected)
+    {
+        var escaper = new FieldEscaper('\"', true, '\\', ',');
+        Assert.That(escaper.Escape(input.AsSpan()).ToString(), Is.EqualTo(expected));
+    }
+
     [TestCase("\"ab\"", "ab")]
     [TestCase("\"abc\"", "abc")]
     [TestCase("\"a\"\"b\"", "a\"b")]

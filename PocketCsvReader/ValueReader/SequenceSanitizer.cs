@@ -13,15 +13,15 @@ internal class SequenceSanitizer : FieldValueSanitizer
     public SequenceSanitizer(ImmutableSequenceCollection sequences)
         => Sequences = sequences;
 
-    internal override NullableSpan Sanitize(NullableSpan input, bool isEscapedField, bool wasQuotedField)
+    internal override NullableSpan Sanitize(NullableSpan value, bool isEscapedField, bool wasQuotedField)
     {
-        var buffer = input.Value;
+        var buffer = value.Value;
         if (buffer.Length == 0 || (!isEscapedField && !wasQuotedField))
         {
-            if (Sequences?.TryGetValue(buffer, out var value) ?? false)
-                return value;
+            if (Sequences.TryGetValue(buffer, out var replacement))
+                return replacement;
         }
 
-        return input;
+        return value;
     }
 }

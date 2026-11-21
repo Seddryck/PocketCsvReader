@@ -32,35 +32,19 @@ internal class FieldEscaper
         // The returned memory escapes this method, so its backing storage must
         // remain owned by the caller instead of being returned to a pool.
         var array = new char[value.Length];
-        var result = new Span<char>(array);
-        int i = 0, j = 0;
-        while (i < value.Length)
+        int length = 0;
+        for (int i = 0; i < value.Length; i++)
         {
-            var c = value[i];
-            if (c == EscapeChar)
-            {
-                if (i + 1 == value.Length)
-                    result[j++] = c;
-                else if (value[i + 1] == EscapeChar || value[i + 1] == Delimiter || value[i + 1] == QuoteChar)
-                    result[j++] = value[++i];
-                else
-                    result[j++] = c;
-            }
-            else if (c == QuoteChar && DoubleQuote)
-            {
-                if (value[i + 1] == QuoteChar)
-                    result[j++] = value[++i];
-                else
-                    result[j++] = c;
-            }
-            else
-            {
-                result[j++] = c;
-            }
-
-            i++;
+            if (i + 1 < value.Length && IsEscapedPair(value[i], value[i + 1]))
+                i++;
+            array[length++] = value[i];
         }
 
-        return array.AsMemory(0, j);
+        return array.AsMemory(0, length);
     }
+
+    private bool IsEscapedPair(char first, char second)
+        => first == EscapeChar
+            ? second == EscapeChar || second == Delimiter || second == QuoteChar
+            : DoubleQuote && first == QuoteChar && second == QuoteChar;
 }

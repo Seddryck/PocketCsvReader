@@ -13,15 +13,15 @@ internal class FieldSanitizer : FieldValueSanitizer
     public FieldSanitizer(FieldValueSanitizer[] sanitizers)
         => Sanitizers = sanitizers;
 
-    internal override NullableSpan Sanitize(NullableSpan result, bool isEscapedField, bool wasQuotedField)
+    internal override NullableSpan Sanitize(NullableSpan value, bool isEscapedField, bool wasQuotedField)
     {
         foreach (var sanitizer in Sanitizers)
         {
-            if (result.HasValue)
-                result = sanitizer.Sanitize(result, isEscapedField, wasQuotedField);
+            if (value.HasValue)
+                value = sanitizer.Sanitize(value, isEscapedField, wasQuotedField);
         }
 
-        return result;
+        return value;
     }
 }
 

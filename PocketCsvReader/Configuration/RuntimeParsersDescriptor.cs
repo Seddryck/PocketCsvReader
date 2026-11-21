@@ -16,12 +16,17 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
     internal bool HasMemoryParsers => _memoryParsers is not null;
 
     internal void AddDefaultMemoryParser<T>(Func<string?, ParseMemory<T>> factory)
+        where T : notnull
     {
-        (_memoryParsers ??= [])[typeof(T)] = pattern => new MemoryFieldParser<T>(factory(pattern));
+        (_memoryParsers ??= [])[typeof(T)] = pattern =>
+        {
+            var parse = factory(pattern);
+            return new MemoryFieldParser<T>(parse, memory => parse(memory));
+        };
         if (!Parsers.ContainsKey(typeof(T)))
         {
             var parse = factory(null);
-            Parsers.Add(typeof(T), (text => parse(text.AsMemory())!, null, parse));
+            Parsers.Add(typeof(T), (text => parse(text.AsMemory()), null, parse));
         }
     }
 
@@ -51,9 +56,14 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
         return true;
     }
 
-    internal IEnumerable<KeyValuePair<Type, Delegate>> SpanParsers
-        => Parsers.Where(parser => parser.Value.Span is not null)
-            .Select(parser => new KeyValuePair<Type, Delegate>(parser.Key, parser.Value.Span!));
+    internal IEnumerable<KeyValuePair<Type, Delegate>> EnumerateSpanParsers()
+    {
+        foreach (var (type, parser) in Parsers)
+        {
+            if (parser.Span is { } span)
+                yield return new(type, span);
+        }
+    }
 
     internal (Delegate Span, Delegate Registration)? FindParser(Type type)
         => Parsers.TryGetValue(type, out var parser) && parser.Span is { } span ? (span, parser.Registration) : null;
