@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Opt-in WKT and GeoJSON geometry parsers for PocketCsvReader.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite" Version="2.6.0" />
+    <ProjectReference Include="..\PocketCsvReader.Json\PocketCsvReader.Json.csproj" />
+    <ProjectReference Include="..\PocketCsvReader\PocketCsvReader.csproj" />
+    <InternalsVisibleTo Include="PocketCsvReader.NetTopologySuite.Testing" />
+  </ItemGroup>
+</Project>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,9 +17,9 @@ internal class SanitizerFactory
     public SanitizerFactory(ParserOptimizationOptions parserOptimizations)
         => ParserOptimizations = parserOptimizations;
 
-    public ISanitizer Create(ImmutableSequenceCollection? sequences = null, FieldEscaper? fieldEscaper = null)
+    public FieldValueSanitizer Create(ImmutableSequenceCollection? sequences = null, FieldEscaper? fieldEscaper = null)
     {
-        var results = new List<ISanitizer>();
+        var results = new List<FieldValueSanitizer>();
 
         if (ParserOptimizations.HandleSpecialValues && sequences is not null && !sequences.IsEmpty)
             results.Add(new SequenceSanitizer(sequences!));

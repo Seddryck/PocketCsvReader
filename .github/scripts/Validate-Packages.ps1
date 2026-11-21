@@ -24,7 +24,8 @@ $packageIds = @(
     'PocketCsvReader.KeyValue',
     'PocketCsvReader.WebLogs',
     'PocketCsvReader.SecurityLogs',
-    'PocketCsvReader.Chrononuensis'
+    'PocketCsvReader.Chrononuensis',
+    'PocketCsvReader.NetTopologySuite'
 )
 
 $packageDirectoryPath = (Resolve-Path -LiteralPath $PackageDirectory).Path

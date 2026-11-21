@@ -132,6 +132,10 @@ jobs:
             artifact: chrononuensis
             project: PocketCsvReader.Chrononuensis.Testing/PocketCsvReader.Chrononuensis.Testing.csproj
             include: '[PocketCsvReader.Chrononuensis]*'
+          - name: PocketCsvReader.NetTopologySuite
+            artifact: nettopologysuite
+            project: PocketCsvReader.NetTopologySuite.Testing/PocketCsvReader.NetTopologySuite.Testing.csproj
+            include: '[PocketCsvReader.NetTopologySuite]*'
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -309,6 +313,9 @@ jobs:
           - name: PocketCsvReader.Chrononuensis
             artifact: chrononuensis
             project: PocketCsvReader.Chrononuensis/PocketCsvReader.Chrononuensis.csproj
+          - name: PocketCsvReader.NetTopologySuite
+            artifact: nettopologysuite
+            project: PocketCsvReader.NetTopologySuite/PocketCsvReader.NetTopologySuite.csproj
     steps:
       - name: Check out source
         uses: actions/checkout@v7

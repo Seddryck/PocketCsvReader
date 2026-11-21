@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
@@ -12,6 +12,7 @@ public class RuntimeParsersDescriptorBuilder
 {
     private Dictionary<Type, Action<RuntimeParsersDescriptor>> _types = new();
     private Dictionary<Type, Action<RuntimeParsersDescriptor>>? _defaults;
+    private Dictionary<Type, Action<RuntimeParsersDescriptor>>? _memoryDefaults;
     private RuntimeParsersDescriptor? Descriptor { get; set; }
 
     /// <summary>Registers an integration default. Explicit WithParser registrations always win.</summary>
@@ -21,7 +22,16 @@ public class RuntimeParsersDescriptorBuilder
         Func<string?, IFormatProvider?, ParseSpan<T>>? formatParser = null)
     {
         ArgumentNullException.ThrowIfNull(parse);
+        _memoryDefaults?.Remove(typeof(T));
         (_defaults ??= [])[typeof(T)] = descriptor => descriptor.AddDefaultParser(parse, formatParser);
+        return this;
+    }
+
+    internal RuntimeParsersDescriptorBuilder WithDefaultMemoryParser<T>(Func<string?, ParseMemory<T>> createParser)
+    {
+        ArgumentNullException.ThrowIfNull(createParser);
+        _defaults?.Remove(typeof(T));
+        (_memoryDefaults ??= [])[typeof(T)] = descriptor => descriptor.AddDefaultMemoryParser(createParser);
         return this;
     }
 
@@ -64,6 +74,11 @@ public class RuntimeParsersDescriptorBuilder
 
         foreach (var type in _types)
             type.Value(Descriptor);
+        if (_memoryDefaults is not null)
+        {
+            foreach (var parser in _memoryDefaults.Values)
+                parser(Descriptor);
+        }
         return Descriptor.Count > 0 ? Descriptor : null;
     }
 }

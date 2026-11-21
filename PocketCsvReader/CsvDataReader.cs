@@ -160,14 +160,14 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     protected override NullableSpan GetValueOrThrow(int i)
     {
         if (HasRowNumber && i == 0)
-            return new NullableSpan(GetCurrentFieldMemory(0).Span);
+            return GetCurrentFieldMemory(0);
         if (i < CurrentFieldSpans!.Length)
         {
-            var sanitizer = GetSanitizer(i, Profile.ParserOptimizations);
-            return sanitizer.Sanitize(GetCurrentFieldMemory(i).Span, CurrentFieldSpans[i].Value.IsEscaped, CurrentFieldSpans[i].Value.WasQuoted);
+            var sanitizer = GetFieldSanitizer(i, Profile.ParserOptimizations);
+            return sanitizer.Sanitize((NullableSpan)GetCurrentFieldMemory(i), CurrentFieldSpans[i].Value.IsEscaped, CurrentFieldSpans[i].Value.WasQuoted);
         }
         if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
-            return new NullableSpan(GetMissingField().ToString().AsSpan());
+            return GetMissingField().ToString().AsMemory();
         throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {CurrentFieldSpans.Length} defined fields.");
     }
 

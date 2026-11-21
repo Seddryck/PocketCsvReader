@@ -52,12 +52,44 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         return value;
     }
 
+    private Dictionary<(Type Type, FieldDescriptor? Field), MemoryFieldParser>? _memoryParsers;
+
+    private MemoryFieldParser? ResolveMemoryParser(Type type, FieldDescriptor? field)
+    {
+        if (Profile.Parsers is not { HasMemoryParsers: true } parsers
+            || field is { SpanParse: not null } or { Parse: not null }
+            || parsers.FindMemoryParser(type) is not { } factory
+            || parsers.FindParser(type) is not null)
+            return null;
+
+        var key = (type, field);
+        if (_memoryParsers?.TryGetValue(key, out var parser) is true)
+            return parser;
+        parser = factory((field?.Format as CustomFormatDescriptor)?.Pattern);
+        (_memoryParsers ??= []).Add(key, parser);
+        return parser;
+    }
+
+    private static ReadOnlyMemory<char> BorrowParserInput(NullableSpan value)
+        => value.BackingMemory ?? throw new NotSupportedException("This reader did not supply memory-backed field text.");
+
+    private T ParseMemoryCached<T>(int i, Type type, MemoryFieldParser parser, ParseMemory<T> parse,
+        ReadOnlyMemory<char> memory)
+    {
+        if (RowFilters.Count == 0) return parse(memory);
+        var key = (i, type, parser.Identity);
+        if (_rowValues?.TryGetValue(key, out var cached) is true) return (T)cached!;
+        var value = parse(memory);
+        (_rowValues ??= []).Add(key, value);
+        return value;
+    }
+
     private SpanParser Parser { get; } = new();
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, object>> ArrayReaders = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, bool>> ArrayValidators = new();
-    private Dictionary<int, ISanitizer>? _sanitizers;
+    private Dictionary<int, FieldValueSanitizer>? _sanitizers;
     private SanitizerFactory? _sanitizerFactory;
 
     protected BaseDataRecord(TProfile profile, StringMapper stringMapper)
@@ -68,6 +100,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     protected ISanitizer GetSanitizer(int ordinal, ParserOptimizationOptions parserOptimizations)
+        => GetFieldSanitizer(ordinal, parserOptimizations);
+
+    private protected FieldValueSanitizer GetFieldSanitizer(int ordinal, ParserOptimizationOptions parserOptimizations)
     {
         if (_sanitizers?.TryGetValue(ordinal, out var sanitizer) is true)
             return sanitizer;
@@ -244,6 +279,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             catch (InvalidCastException) { return false; }
         }
 
+        if (field is not null && Profile.Parsers?.HasMemoryParsers is true
+            && ResolveMemoryParser(field.RuntimeType, field) is { } parser)
+            return parser.IsValid(BorrowParserInput(value));
         return ResolveValidationEntry(i, field)?.IsValid(value.Value) ?? true;
     }
 
@@ -316,6 +354,10 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         var value = GetValueOrThrow(i);
         if (!value.HasValue)
             return GetNullValue(i);
+
+        if (field is not null && Profile.Parsers?.HasMemoryParsers is true
+            && ResolveMemoryParser(field.RuntimeType, field) is { } memoryParser)
+            return ParseMemoryCached(i, field.RuntimeType, memoryParser, memoryParser.Boxed, BorrowParserInput(value));
 
         var parse = ResolveValueParser(i);
         if (parse is null)
@@ -445,6 +487,17 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i)
     {
         if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (Profile.Parsers?.HasMemoryParsers is true && (uint)i < (uint)FieldCount
+            && ResolveTypedMemoryParser<T>(i, out var parsedType) is { } memoryParser)
+        {
+            var value = GetValueOrThrow(i);
+            if (!value.HasValue)
+                return default!;
+            var memory = BorrowParserInput(value);
+            return memoryParser is MemoryFieldParser<T> typed
+                ? ParseMemoryCached(i, parsedType, typed, typed.Parse, memory)
+                : (T)ParseMemoryCached(i, parsedType, memoryParser, memoryParser.Boxed, memory);
+        }
         if (IsNullFieldValue<T>(i))
             return default!;
         try
@@ -464,6 +517,14 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         }
 
         throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
+    }
+
+    private MemoryFieldParser? ResolveTypedMemoryParser<T>(int ordinal, out Type parsedType)
+    {
+        TryGetFieldDescriptor(ordinal, out var field);
+        parsedType = field is not null && typeof(T).IsAssignableFrom(field.RuntimeType)
+            ? field.RuntimeType : typeof(T);
+        return ResolveMemoryParser(parsedType, field);
     }
 
     private ParseSpan<T> ResolveTypedParser<T>(int i)
@@ -710,6 +771,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     /// <exception cref="InvalidOperationException">Thrown if the parser locator cannot be instantiated.</exception>
     private SpanParser.ParserEntry CreateParser(Type type, FieldDescriptor field)
     {
+        if (Profile.Parsers is { } parsers && parsers.FindMemoryParser(type) is not null
+            && parsers.FindParser(type) is { } explicitParser)
+            return SpanParser.CreateEntry(type, explicitParser.Span);
         if (Profile.Parsers?.TryCreateFormattedParser(type, field.Format, out var parser) is true)
             return SpanParser.CreateEntry(type, parser!);
 

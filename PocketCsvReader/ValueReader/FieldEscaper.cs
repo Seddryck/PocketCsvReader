@@ -22,11 +22,14 @@ internal class FieldEscaper
         => (QuoteChar, DoubleQuote, EscapeChar, Delimiter, Pool) = (quoteChar, doubleQuote, escapeChar, delimiter, pool);
 
     public ReadOnlySpan<char> Escape(ReadOnlySpan<char> value)
+        => EscapeMemory(value).Span;
+
+    internal ReadOnlyMemory<char> EscapeMemory(ReadOnlySpan<char> value)
     {
         if (value.Length == 0)
-            return Span<char>.Empty;
+            return ReadOnlyMemory<char>.Empty;
 
-        // The returned span escapes this method, so its backing storage must
+        // The returned memory escapes this method, so its backing storage must
         // remain owned by the caller instead of being returned to a pool.
         var array = new char[value.Length];
         var result = new Span<char>(array);
@@ -58,6 +61,6 @@ internal class FieldEscaper
             i++;
         }
 
-        return result.Slice(0, j);
+        return array.AsMemory(0, j);
     }
 }

@@ -37,6 +37,7 @@ Omitting `--version` selects the latest available package. To pin a release, app
 | `PocketCsvReader.Arrow.NetCdf` | Textual NetCDF datasets (.cdl) | [NetCDF CDL](../netcdf-cdl/) |
 | `PocketCsvReader.Arrow` | Apache Arrow output batches | [Arrow](../apache-arrow/) |
 | `PocketCsvReader.Chrononuensis` | Temporal period parsers | [Chrononuensis](../chrononuensis/) |
+| `PocketCsvReader.NetTopologySuite` | WKT and GeoJSON geometry parsers | [NetTopologySuite](../nettopologysuite/) |
 
 ## Visual Studio Package Manager Console
 

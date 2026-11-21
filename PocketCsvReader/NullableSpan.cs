@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,10 +17,16 @@ public readonly ref struct NullableSpan
         this.hasValue = true;
     }
 
+    private NullableSpan(ReadOnlyMemory<char> memory)
+        : this(memory.Span)
+        => BackingMemory = memory;
+
+    internal ReadOnlyMemory<char>? BackingMemory { get; }
+
     public bool HasValue => hasValue;
     public ReadOnlySpan<char> Value => hasValue ? span : throw new InvalidOperationException("No value present.");
 
-    public static implicit operator NullableSpan(ReadOnlyMemory<char>? memory) => memory is null ? default : new NullableSpan(memory.Value.Span);
+    public static implicit operator NullableSpan(ReadOnlyMemory<char>? memory) => memory is null ? default : new NullableSpan(memory.Value);
     public static implicit operator NullableSpan(ReadOnlySpan<char> span) => new (span);
     public static implicit operator ReadOnlySpan<char>(NullableSpan nullable) => nullable.HasValue ? nullable.Value : throw new InvalidCastException("Null value cannot be cast to the expected type. Ensure the column does not contain NULL values.");
 }

@@ -103,12 +103,24 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Markdown", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.Markdown.Testing", "PocketCsvReader.Markdown.Testing\PocketCsvReader.Markdown.Testing.csproj", "{A9527292-5844-40B6-96D7-2E94C098BC36}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.NetTopologySuite", "PocketCsvReader.NetTopologySuite\PocketCsvReader.NetTopologySuite.csproj", "{F2928978-1EEC-4E40-85BC-896DC2D44BF0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PocketCsvReader.NetTopologySuite.Testing", "PocketCsvReader.NetTopologySuite.Testing\PocketCsvReader.NetTopologySuite.Testing.csproj", "{76489E97-8726-4819-80B4-D17854908596}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		.Debug|Any CPU.Build.0 = Debug|Any CPU
+		.Release|Any CPU.ActiveCfg = Release|Any CPU
+		.Release|Any CPU.Build.0 = Release|Any CPU
+		.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		.Debug|Any CPU.Build.0 = Debug|Any CPU
+		.Release|Any CPU.ActiveCfg = Release|Any CPU
+		.Release|Any CPU.Build.0 = Release|Any CPU
 		{B62FD660-2BDF-46B8-9FE4-303AA85869BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B62FD660-2BDF-46B8-9FE4-303AA85869BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B62FD660-2BDF-46B8-9FE4-303AA85869BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
