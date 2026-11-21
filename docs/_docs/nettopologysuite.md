@@ -41,6 +41,36 @@ route,stop
 "LINESTRING (4.35 50.85, 4.36 50.86)","{""type"":""Point"",""coordinates"":[4.35,50.85]}"
 ```
 
+## Read a nested GeoJSON point from JSON
+
+A JSON record can contain a GeoJSON geometry as an object property. For example, save this record as `places.json`.
+
+```json
+{"location":{"type":"Point","coordinates":[4.35,50.85]}}
+```
+
+Use `JsonReaderBuilder` and declare `location` as a `Point` with the `geojson` format.
+
+```csharp
+using NetTopologySuite.Geometries;
+using PocketCsvReader.Json.Configuration;
+using PocketCsvReader.NetTopologySuite;
+
+var json = new JsonReaderBuilder()
+    .WithParsers(p => p.UseNetTopologySuite())
+    .WithSchema(s => s.Named()
+        .WithCustomField<Point>("location", f => f.WithFormat("geojson")))
+    .Build();
+
+using var rows = json.ToDataReader("places.json");
+if (rows.Read())
+{
+    Point location = rows.GetFieldValue<Point>("location");
+}
+```
+
+For a GeoJSON `FeatureCollection`, add `WithRecordPath("$.features[*]")` and declare `geometry` as the field name. Each selected feature becomes a row. See [JSON record paths](../json-record-paths/).
+
 ## Formats and supported types
 
 | Field format | Input | Spatial reference ID |

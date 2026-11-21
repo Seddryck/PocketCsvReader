@@ -2,6 +2,7 @@ using System.Text;
 using global::NetTopologySuite.Geometries;
 using NUnit.Framework;
 using PocketCsvReader.Configuration;
+using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.NetTopologySuite.Testing;
 
@@ -44,6 +45,28 @@ public class GeometryColumnTests
         Assert.That(left.SRID, Is.EqualTo(3857));
         Assert.That(right.SRID, Is.EqualTo(4326));
         Assert.That(right.EqualsExact(left), Is.True);
+    }
+
+    [TestCase("""{"location":{"type":"Point","coordinates":[4.35,50.85]}}""", "location", null)]
+    [TestCase("""
+        {"type":"FeatureCollection","features":[
+            {"type":"Feature","geometry":{"type":"Point","coordinates":[4.35,50.85]},"properties":{}}
+        ]}
+        """, "geometry", "$.features[*]")]
+    public void ReadsNestedGeoJsonPointFromJson(string input, string property, string? recordPath)
+    {
+        var json = new JsonReaderBuilder()
+            .WithParsers(p => p.UseNetTopologySuite())
+            .WithSchema(s => s.Named().WithCustomField<Point>(property, f => f.WithFormat("geojson")));
+        if (recordPath is not null)
+            json.WithRecordPath(recordPath);
+
+        using var rows = json.Build().ToDataReader(new MemoryStream(Encoding.UTF8.GetBytes(input)));
+        Assert.That(rows.Read(), Is.True);
+        var point = rows.GetFieldValue<Point>(property);
+        Assert.That((point.X, point.Y, point.SRID), Is.EqualTo((4.35, 50.85, 4326)));
+        Assert.That(rows.GetValue(property), Is.EqualTo(point));
+        Assert.That(rows.Read(), Is.False);
     }
 
     [TestCase(false)]
