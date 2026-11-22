@@ -11,6 +11,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     private readonly RowNumberOptions? _rowNumberOptions;
     private readonly RowNumberRecord? _rowNumberRecord;
     private static readonly FieldDescriptor RowNumberField = new(typeof(int), DataSourceTypeName: "integer");
+    private static readonly FieldDescriptor UndeclaredField = new(typeof(string));
     internal bool HasRowNumber => _rowNumberOptions is not null;
     internal int CurrentRowNumber { get; set; }
 
@@ -38,7 +39,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     protected override int GetSchemaOrdinal(int i) => HasRowNumber ? i - 1 : i;
 
     protected override FieldDescriptor GetFieldDescriptor(int i)
-        => HasRowNumber && i == 0 ? RowNumberField : base.GetFieldDescriptor(i);
+        => TryGetFieldDescriptor(i, out var field) ? field : UndeclaredField;
 
     protected override bool TryGetFieldDescriptor(int i,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out FieldDescriptor? field)
@@ -53,6 +54,12 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
     public override object GetValue(int i)
         => HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
+
+    internal Type GetDataTableColumnType(int i)
+    {
+        var type = TryGetFieldDescriptor(i, out var field) ? field.RuntimeType : typeof(string);
+        return Nullable.GetUnderlyingType(type) ?? type;
+    }
 
     /// <inheritdoc />
     public override bool IsValid(int i)

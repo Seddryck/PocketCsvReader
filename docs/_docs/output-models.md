@@ -19,7 +19,7 @@ Choose the row shape and lifetime you need before choosing an optimization. Most
 | `ToDynamic` | `ExpandoObject` with parsed members | Yes | Enumerator disposes reader and input |
 | `ToDataTable` | Complete in-memory table | No | Reads/disposes input during the call |
 
-`ToDataTable` currently stores ordinary columns as strings; a generated CSV row-number column is an integer. It is not a typed equivalent of `ToObjectArrays`. See [stream lifetimes](../stream-lifetimes/) for lazy versus eager creation and early exits.
+`ToDataTable` defaults to string columns, with an integer column for generated CSV row numbers. For CSV files and streams, pass `columnTypes: DataTableColumnTypes.Schema` to load configured types and parsed values. Undeclared columns are strings, nullable fields use their underlying CLR type, and null values are stored as `DBNull.Value`. Schema mode creates columns from the CSV header even when there are no data rows. See [stream lifetimes](../stream-lifetimes/) for lazy versus eager creation and early exits.
 
 ## Parsed rows
 
@@ -48,7 +48,7 @@ Use `ToObjectArrays` for the same parsed values by position, `ToArrayString` for
 
 Dictionaries use ordinal, case-sensitive keys. Duplicate names throw `InvalidDataException`; dynamic rows throw `DuplicateNameException`. Positional arrays preserve duplicate columns. Tables reject duplicate column names through their column collection. These distinctions avoid silently overwriting values.
 
-For labeled formats, each dictionary or array reflects that current record's field count and order. Do not cache ordinals across changing shapes. Tabular consumers require a consistent shape; `ToDataTable` establishes columns from the first record. Incomplete and extra CSV fields retain the underlying reader's width behavior; materializers do not universally pad missing values.
+For labeled formats, each dictionary or array reflects that current record's field count and order. Do not cache ordinals across changing shapes. Tabular consumers require a consistent shape. When data rows are present, `ToDataTable` establishes columns from the first record. Incomplete and extra CSV fields retain the underlying reader's width behavior; materializers do not universally pad missing values.
 
 Returned row arrays, strings, dictionaries, and dynamic objects are independently owned. Borrowed parser views expire on the next read; see [buffering](../buffering-and-benchmarks/). All materializers can throw during enumeration when conversion fails. Use `foreach` or dispose enumerators explicitly on early exit.
 
