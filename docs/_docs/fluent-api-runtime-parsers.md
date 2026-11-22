@@ -70,3 +70,34 @@ Nullable/reference typed reads skip custom parsers for null fields according to 
 For direct use of the public `SpanParser`, `TryParse` returns false for supported conversion failures; configuration errors and unexpected failures are not a general-purpose exception suppression contract. The cell-level API is [IsValid](../validation-and-errors/#validate-a-cell).
 
 The [Chrononuensis integration](../chrononuensis/) supplies temporal period parsers. Reproducible parser benchmarks are linked from [benchmark guidance](../buffering-and-benchmarks/#benchmarks).
+
+## Network values
+
+Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), CIDR networks
+(`IPNetwork`), and MAC addresses (`PhysicalAddress`) with the core package. The
+.NET parsers receive the decoded field span directly. Explicit field and runtime
+parsers take precedence over these defaults.
+
+```csharp
+using System.Net;
+using System.Net.NetworkInformation;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithoutHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Indexed()
+        .WithField<IPAddress>()
+        .WithField<IPNetwork>()
+        .WithField<PhysicalAddress>())
+    .WithParsers(p => p.UseNetworkValues())
+    .Build();
+
+using var stream = new MemoryStream("2001:db8::1,192.0.2.0/24,00:1A:2B:3C:4D:5E\n"u8.ToArray());
+using var reader = csv.ToDataReader(stream);
+if (reader.Read())
+{
+    var address = reader.GetFieldValue<IPAddress>(0);
+    var network = reader.GetFieldValue<IPNetwork>(1);
+    var mac = reader.GetFieldValue<PhysicalAddress>(2);
+}
+```
