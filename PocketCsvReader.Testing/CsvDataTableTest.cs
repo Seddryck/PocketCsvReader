@@ -1,4 +1,4 @@
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -12,6 +12,85 @@ namespace PocketCsvReader.Testing;
 [TestFixture]
 public class CsvDataTableTest
 {
+    [Test]
+    public void ToDataTable_File_DefaultMatchesTextAndSchemaUsesConfiguredType()
+    {
+        var filename = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(filename, "Amount,Customer\n0042,Ada\n");
+            var reader = new CsvReaderBuilder()
+                .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+                .WithSchema(s => s.Named().WithField<long>("Amount").WithField<string>("Customer"))
+                .Build();
+
+            using var defaultTable = reader.ToDataTable(filename);
+            using var textTable = reader.ToDataTable(filename, columnTypes: DataTableColumnTypes.Text);
+            using var schemaTable = reader.ToDataTable(filename, columnTypes: DataTableColumnTypes.Schema);
+
+            Assert.That(defaultTable.Columns["Amount"]!.DataType, Is.EqualTo(typeof(string)));
+            Assert.That(defaultTable.Rows[0]["Amount"], Is.EqualTo("0042"));
+            Assert.That(textTable.Columns["Amount"]!.DataType, Is.EqualTo(typeof(string)));
+            Assert.That(textTable.Rows[0].ItemArray, Is.EqualTo(defaultTable.Rows[0].ItemArray));
+            Assert.That(schemaTable.Columns["Amount"]!.DataType, Is.EqualTo(typeof(long)));
+            Assert.That(schemaTable.Rows[0]["Amount"], Is.EqualTo(42L));
+            Assert.That(schemaTable.Rows[0]["Customer"], Is.EqualTo("Ada"));
+        }
+        finally
+        {
+            File.Delete(filename);
+        }
+    }
+
+    [TestCase(DataTableColumnTypes.Text)]
+    [TestCase(DataTableColumnTypes.Schema)]
+    public void ToDataTable_Stream_UsesRequestedColumnTypes(DataTableColumnTypes columnTypes)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Note,Count,Amount\n001,7,one\n002,NULL,two\n"));
+        var reader = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n").WithNullSequence("NULL"))
+            .WithSchema(s =>
+            {
+                var schema = s.Named()
+                    .WithField<long>("Amount", f => f.WithParser((ReadOnlySpan<char> value) => value.SequenceEqual("one") ? 1L : 2L))
+                    .WithField<int?>("Count");
+                return columnTypes == DataTableColumnTypes.Text ? schema.WithField<string>("Note") : schema;
+            })
+            .WithRowNumber("Row")
+            .Build();
+
+        using var table = reader.ToDataTable(stream, columnTypes);
+        var useSchema = columnTypes == DataTableColumnTypes.Schema;
+
+        Assert.That(table.Columns["Row"]!.DataType, Is.EqualTo(typeof(int)));
+        Assert.That(table.Columns["Note"]!.DataType, Is.EqualTo(typeof(string)));
+        Assert.That(table.Columns["Count"]!.DataType, Is.EqualTo(useSchema ? typeof(int) : typeof(string)));
+        Assert.That(table.Columns["Amount"]!.DataType, Is.EqualTo(useSchema ? typeof(long) : typeof(string)));
+        Assert.That(table.Rows[0].ItemArray, Is.EqualTo(new object[] { 1, "001", useSchema ? (object)7 : "7", useSchema ? (object)1L : "one" }));
+        Assert.That(table.Rows[1].ItemArray, Is.EqualTo(new object[] { 2, "002", DBNull.Value, useSchema ? (object)2L : "two" }));
+    }
+
+    [TestCase("Amount,Note\n")]
+    [TestCase("Amount,Note")]
+    public void ToDataTable_HeaderOnly_CreatesSchemaColumns(string content)
+    {
+        var reader = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithSchema(s => s.Named().WithField<long?>("Amount"))
+            .WithRowNumber("Row")
+            .Build();
+        using var schemaStream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var textStream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
+        using var schemaTable = reader.ToDataTable(schemaStream, DataTableColumnTypes.Schema);
+        using var textTable = reader.ToDataTable(textStream, DataTableColumnTypes.Text);
+
+        Assert.That(schemaTable.Rows, Is.Empty);
+        Assert.That(schemaTable.Columns.Cast<DataColumn>().Select(column => (column.ColumnName, column.DataType)),
+            Is.EqualTo(new[] { ("Row", typeof(int)), ("Amount", typeof(long)), ("Note", typeof(string)) }));
+        Assert.That(textTable.Columns, Is.Empty);
+    }
+
     [Test]
     [TestCase("Ansi")]
     [TestCase("Utf16-BE")]

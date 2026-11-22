@@ -36,19 +36,44 @@ internal static class DataReaderMaterializer
         for (var index = 0; index < fieldCount; index++)
             table.Columns.Add(reader.GetName(index), hasRowNumber && index == 0 ? typeof(int) : typeof(string));
 
+        AddRows(table, reader, hasRowNumber, useSchema: false);
+        return table;
+    }
+
+    public static DataTable ToDataTable(CsvDataReader reader, DataTableColumnTypes columnTypes)
+    {
+        if (columnTypes == DataTableColumnTypes.Text)
+            return ToDataTable(reader);
+        if (columnTypes != DataTableColumnTypes.Schema)
+            throw new ArgumentOutOfRangeException(nameof(columnTypes), columnTypes, null);
+
+        reader.AllowUndeclaredFields = true;
+        var table = new DataTable();
+        var hasRow = reader.Read();
+        var fieldCount = hasRow ? reader.FieldCount : reader.Fields?.Length ?? 0;
+        for (var index = 0; index < fieldCount; index++)
+            table.Columns.Add(reader.GetName(index), reader.GetDataTableColumnType(index));
+
+        if (hasRow)
+            AddRows(table, reader, reader.HasRowNumber, useSchema: true);
+        return table;
+    }
+
+    private static void AddRows(DataTable table, IDataReader reader, bool hasRowNumber, bool useSchema)
+    {
+        var fieldCount = table.Columns.Count;
         do
         {
             var row = table.NewRow();
             for (var index = 0; index < fieldCount; index++)
             {
+                var useValue = useSchema || (hasRowNumber && index == 0);
                 row[index] = reader.IsDBNull(index) ? DBNull.Value
-                    : hasRowNumber && index == 0 ? reader.GetValue(index) : reader.GetString(index);
+                    : useValue ? reader.GetValue(index) ?? DBNull.Value : reader.GetString(index);
             }
 
             table.Rows.Add(row);
         } while (reader.Read());
-
-        return table;
     }
 
     public static IEnumerable<IReadOnlyDictionary<string, object?>> ToDictionaries(IDataReader reader)
