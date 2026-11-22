@@ -47,6 +47,7 @@ internal static class DataReaderMaterializer
         if (columnTypes != DataTableColumnTypes.Schema)
             throw new ArgumentOutOfRangeException(nameof(columnTypes), columnTypes, null);
 
+        reader.AllowUndeclaredFields = true;
         var table = new DataTable();
         var hasRow = reader.Read();
         var fieldCount = hasRow ? reader.FieldCount : reader.Fields?.Length ?? 0;

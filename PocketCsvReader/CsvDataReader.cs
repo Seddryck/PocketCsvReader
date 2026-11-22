@@ -14,6 +14,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     private static readonly FieldDescriptor UndeclaredField = new(typeof(string));
     internal bool HasRowNumber => _rowNumberOptions is not null;
     internal int CurrentRowNumber { get; set; }
+    internal bool AllowUndeclaredFields { private get; set; }
 
     protected new RecordParser RecordParser => (RecordParser)base.RecordParser!;
 
@@ -39,7 +40,11 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     protected override int GetSchemaOrdinal(int i) => HasRowNumber ? i - 1 : i;
 
     protected override FieldDescriptor GetFieldDescriptor(int i)
-        => TryGetFieldDescriptor(i, out var field) ? field : UndeclaredField;
+    {
+        if (AllowUndeclaredFields)
+            return TryGetFieldDescriptor(i, out var field) ? field : UndeclaredField;
+        return HasRowNumber && i == 0 ? RowNumberField : base.GetFieldDescriptor(i);
+    }
 
     protected override bool TryGetFieldDescriptor(int i,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out FieldDescriptor? field)

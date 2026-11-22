@@ -1,4 +1,4 @@
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -49,9 +49,13 @@ public class CsvDataTableTest
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Note,Count,Amount\n001,7,one\n002,NULL,two\n"));
         var reader = new CsvReaderBuilder()
             .WithDialect(d => d.WithHeader().WithLineTerminator("\n").WithNullSequence("NULL"))
-            .WithSchema(s => s.Named()
-                .WithField<long>("Amount", f => f.WithParser((ReadOnlySpan<char> value) => value.SequenceEqual("one") ? 1L : 2L))
-                .WithField<int?>("Count"))
+            .WithSchema(s =>
+            {
+                var schema = s.Named()
+                    .WithField<long>("Amount", f => f.WithParser((ReadOnlySpan<char> value) => value.SequenceEqual("one") ? 1L : 2L))
+                    .WithField<int?>("Count");
+                return columnTypes == DataTableColumnTypes.Text ? schema.WithField<string>("Note") : schema;
+            })
             .WithRowNumber("Row")
             .Build();
 
