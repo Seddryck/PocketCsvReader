@@ -120,6 +120,7 @@ internal class SpanParser
         Register<string>(s => s.ToString(), (ReadOnlySpan<char> s, out string value) => { value = s.ToString(); return true; });
         Register<char>(s => s[0], (ReadOnlySpan<char> s, out char value) => { value = s.IsEmpty ? default : s[0]; return !s.IsEmpty; });
         Register<Guid>(Guid.Parse, Guid.TryParse);
+        Register<Version>(Version.Parse, static (ReadOnlySpan<char> span, out Version value) => Version.TryParse(span, out value!));
         Register<bool>(bool.Parse, bool.TryParse);
         RegisterInvariant<byte>();
         RegisterInvariant<short>();

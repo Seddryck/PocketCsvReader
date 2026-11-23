@@ -71,12 +71,17 @@ For direct use of the public `SpanParser`, `TryParse` returns false for supporte
 
 The [Chrononuensis integration](../chrononuensis/) supplies temporal period parsers. Reproducible parser benchmarks are linked from [benchmark guidance](../buffering-and-benchmarks/#benchmarks).
 
-## Built-in duration parsing
+## Built-in duration and version parsing
 
 A column declared with `WithField<TimeSpan>("ts")` uses .NET's invariant-culture
 `TimeSpan` parser directly on the field span. For example, `01:30:00` represents
 90 minutes. `GetValue("ts")` returns a boxed `TimeSpan` for valid input and
 throws for malformed input. Earlier versions returned the field text.
+
+A column declared with `WithField<Version>("version")` uses .NET's
+`System.Version` parser directly on the field span. The format is
+`major.minor[.build[.revision]]`. Values such as `1.2.3` are accepted.
+Prerelease suffixes such as `1.2.3-beta` require a custom parser.
 
 ## URI values
 

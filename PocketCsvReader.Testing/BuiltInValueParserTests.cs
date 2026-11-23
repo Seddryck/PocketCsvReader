@@ -31,6 +31,32 @@ public class BuiltInValueParserTests
         Assert.That(() => reader.GetValue("ts"), Throws.TypeOf<FormatException>());
     }
 
+    [TestCase("1.2", 1, 2, -1, -1)]
+    [TestCase("1.2.3", 1, 2, 3, -1)]
+    [TestCase("1.2.3.4", 1, 2, 3, 4)]
+    public void ReadsAndValidatesVersion(string input, int major, int minor, int build, int revision)
+    {
+        using var reader = ReadRow<Version>("version", input);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid("version"), Is.True);
+        var version = reader.GetFieldValue<Version>("version");
+        Assert.That((version.Major, version.Minor, version.Build, version.Revision),
+            Is.EqualTo((major, minor, build, revision)));
+        Assert.That(reader.GetValue("version"), Is.EqualTo(version));
+    }
+
+    [TestCase("1", typeof(ArgumentException))]
+    [TestCase("1.2.3-beta", typeof(FormatException))]
+    public void RejectsMalformedVersion(string input, Type exception)
+    {
+        using var reader = ReadRow<Version>("version", input);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid("version"), Is.False);
+        Assert.That(() => reader.GetFieldValue<Version>("version"), Throws.TypeOf(exception));
+    }
+
     private static CsvDataReader ReadRow<T>(string name, string input)
     {
         var csv = new CsvReaderBuilder()

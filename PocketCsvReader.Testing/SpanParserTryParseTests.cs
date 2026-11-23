@@ -29,8 +29,9 @@ public class SpanParserTryParseTests
     public void TryParse_MissingParser_ReturnsFalseAndDefault(bool field)
     {
         var parser = new SpanParser();
-        Version? value;
-        Assert.That(field ? parser.TryParse(0, "1.2", out value) : parser.TryParse("1.2", out value), Is.False);
+        Uri? value;
+        const string uri = "https://example.com/";
+        Assert.That(field ? parser.TryParse(0, uri, out value) : parser.TryParse(uri, out value), Is.False);
         Assert.That(value, Is.Null);
         // Indexed TryParse checks field registration, not the type-level fallback.
         Assert.That(parser.TryParse<int>(0, "42", out var number), Is.False);
