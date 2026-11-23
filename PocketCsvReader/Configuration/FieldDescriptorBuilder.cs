@@ -59,6 +59,13 @@ public class FieldDescriptorBuilder
         return this;
     }
 
+    /// <summary>Supplies a format pattern and optional format provider to a parser that supports them.</summary>
+    public FieldDescriptorBuilder WithFormat(string pattern, IFormatProvider? formatProvider = null)
+    {
+        Format = new CustomFormatDescriptorBuilder(pattern, formatProvider);
+        return this;
+    }
+
     public FieldDescriptorBuilder WithParser(ParseFunction parse)
     {
         ArgumentNullException.ThrowIfNull(parse);

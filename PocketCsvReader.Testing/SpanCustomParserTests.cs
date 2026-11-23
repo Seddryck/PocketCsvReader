@@ -160,7 +160,7 @@ public class SpanCustomParserTests
         var schema = new SchemaDescriptorBuilder().Indexed()
             .WithNumberField<decimal>(f => f.WithParser((ReadOnlySpan<char> _) => 12m).WithFormat(x => x))
             .WithTemporalField<DateOnly>(f => f.WithParser((ReadOnlySpan<char> _) => new DateOnly(2026, 10, 22)).WithFormat("yyyy"))
-            .WithCustomField(typeof(Guid), f => f.WithParser((ReadOnlySpan<char> _) => Guid.Empty).WithFormat("D"))
+            .WithField(typeof(Guid), f => f.WithParser((ReadOnlySpan<char> _) => Guid.Empty).WithFormat("D"))
             .Build()!;
         var profile = new CsvProfile(new DialectDescriptorBuilder().WithoutHeader().Build(), schema);
         using var reader = new CsvDataReader(new MemoryStream("ignored,ignored,ignored"u8.ToArray()), profile);

@@ -52,7 +52,7 @@ Use schema field formats for nondefault representations:
 var csv = new CsvReaderBuilder()
     .WithDialect(d => d.WithoutHeader())
     .WithSchema(s => s.Indexed()
-        .WithCustomField(typeof(YearQuarter), f => f.WithFormat("'Q'q.yy",
+        .WithField(typeof(YearQuarter), f => f.WithFormat("'Q'q.yy",
             System.Globalization.CultureInfo.GetCultureInfo("fr-FR"))))
     .WithParsers(options => options.UseChrononuensis())
     .Build();

@@ -262,7 +262,7 @@ public class CsvDataReaderTest
                 .Build(),
             new SchemaDescriptorBuilder()
                 .Indexed()
-                .WithCustomField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
+                .WithField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
                 .Build()
             );
         using var dataReader = new CsvDataReader(buffer, profile);
@@ -341,7 +341,7 @@ public class CsvDataReaderTest
                 .Build(),
             new SchemaDescriptorBuilder()
                 .Indexed()
-                .WithCustomField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
+                .WithField(typeof(YearMonth), (f) => f.WithFormat("yyyy-MM"))
                 .Build()
             );
         using var dataReader = new CsvDataReader(buffer, profile);
@@ -938,8 +938,8 @@ public class CsvDataReaderTest
             .WithSchema(
                 (schema) => schema
                     .Named()
-                    .WithCustomField<Chrononuensis.YearMonth>("foo", (f) => f.WithFormat("yyyy-MM"))
-                    .WithCustomField<Chrononuensis.YearQuarter>("bar", (f) => f.WithFormat("'Q'q.yy"))
+                    .WithField<Chrononuensis.YearMonth>("foo", (f) => f.WithFormat("yyyy-MM"))
+                    .WithField<Chrononuensis.YearQuarter>("bar", (f) => f.WithFormat("'Q'q.yy"))
             );
         using var dataReader = builder.Build().ToDataReader(buffer);
         dataReader.Read();

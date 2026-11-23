@@ -34,7 +34,7 @@ public class ChrononuensisParsing
     private static CsvDataReader Create<T>(string value, RuntimeParsersDescriptorBuilder parsers, bool formatted = false)
     {
         var schema = new SchemaDescriptorBuilder().Indexed();
-        if (formatted) schema.WithCustomField(typeof(T), f => f.WithFormat("yyyy-MM"));
+        if (formatted) schema.WithField(typeof(T), f => f.WithFormat("yyyy-MM"));
         else schema.WithField<T>();
         var profile = new CsvProfile(new DialectDescriptorBuilder().WithoutHeader().Build(), schema.Build(), null, parsers.Build());
         var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(value)), profile);
