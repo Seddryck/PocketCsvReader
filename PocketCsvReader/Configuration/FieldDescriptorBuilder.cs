@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel.Design;
@@ -94,6 +95,11 @@ public class FieldDescriptorBuilder
     /// <exception cref="InvalidOperationException">The field type is not <c>byte[]</c>.</exception>
     public FieldDescriptorBuilder FromBase64()
         => WithBinaryParser(FieldParsing.Base64Decoder.Decode);
+
+    /// <summary>Decodes Base64url text into a byte array.</summary>
+    /// <exception cref="InvalidOperationException">The field type is not <c>byte[]</c>.</exception>
+    public FieldDescriptorBuilder FromBase64Url()
+        => WithBinaryParser(Base64Url.DecodeFromChars);
 
     /// <summary>Decodes RFC 4648 Base32 text into a byte array.</summary>
     /// <exception cref="InvalidOperationException">The field type is not <c>byte[]</c>.</exception>
