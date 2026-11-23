@@ -113,6 +113,40 @@ Each shortcut registers a field parser for the whole cell. Once on a row, use `I
 
 The decoder returns raw bytes. For a payload such as Well-Known Binary (WKB), use a WKB reader to interpret those bytes as geometry.
 
+## Base32 and Base32hex fields
+
+Use `FromBase32()` for the RFC 4648 alphabet `A–Z, 2–7` and `FromBase32Hex()` for the extended hex alphabet `0–9, A–V`. Both accept upper- and lowercase ASCII letters and require standard `=` padding for a partial eight-character group. Whitespace, misplaced padding, and nonzero unused bits are invalid. [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html#section-6)
+
+<!-- example: base32-schema-fields -->
+```csharp
+using System.Text;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithDelimiter(',').WithHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Named()
+        .WithField<byte[]>("Base32Payload", f => f.FromBase32())
+        .WithField<byte[]>("Base32HexPayload", f => f.FromBase32Hex()))
+    .Build();
+
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+    "Base32Payload,Base32HexPayload\nMZXQ====,CPNG====\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+{
+    Console.WriteLine(Encoding.ASCII.GetString((byte[])reader["Base32Payload"]));
+    Console.WriteLine(Encoding.ASCII.GetString((byte[])reader["Base32HexPayload"]));
+}
+```
+
+<!-- output: base32-schema-fields -->
+```text
+fo
+fo
+```
+
+Both shortcuts require a `byte[]` field. Use `IsValid()` on the current row to check encoded text before reading it. A malformed value throws `FormatException` when read.
+
 ## Validation and inference
 
 Use [IsValid](../validation-and-errors/#validate-a-cell) to check a cell against its current declared/inferred type. Use [inference](../schema-inference/) to discover candidate settings from a sample, then review diagnostics before applying them. [Null and missing values](../sequences/) explains the different cases that a schema alone does not normalize.
