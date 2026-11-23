@@ -102,16 +102,16 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
     public IndexedSchemaDescriptorBuilder WithCustomField(Type type, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>? func = null)
         => AddCustomField(type, func);
 
+    [Obsolete(SchemaDescriptorBuilder.CustomFieldObsoleteMessage)]
+    public IndexedSchemaDescriptorBuilder WithCustomField(Type type, string name, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>? func = null)
+        => AddCustomField(type, name, func);
+
     private IndexedSchemaDescriptorBuilder AddCustomField(Type type, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>? func)
     {
         var builder = new CustomFieldDescriptorBuilder(type);
         _fields.Add(func?.Invoke(builder) ?? builder);
         return this;
     }
-
-    [Obsolete(SchemaDescriptorBuilder.CustomFieldObsoleteMessage)]
-    public IndexedSchemaDescriptorBuilder WithCustomField(Type type, string name, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>? func = null)
-        => AddCustomField(type, name, func);
 
     private IndexedSchemaDescriptorBuilder AddCustomField(Type type, string name, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>? func)
         => AddCustomField(type, (builder) => (func?.Invoke(builder) ?? builder).WithName(name));
