@@ -71,12 +71,34 @@ For direct use of the public `SpanParser`, `TryParse` returns false for supporte
 
 The [Chrononuensis integration](../chrononuensis/) supplies temporal period parsers. Reproducible parser benchmarks are linked from [benchmark guidance](../buffering-and-benchmarks/#benchmarks).
 
+## Built-in duration and version parsing
+
+A column declared with `WithField<TimeSpan>("ts")` uses .NET's invariant-culture
+`TimeSpan` parser directly on the field span. For example, `01:30:00` represents
+90 minutes. `GetValue("ts")` returns a boxed `TimeSpan` for valid input and
+throws for malformed input. Earlier versions returned the field text.
+
+A column declared with `WithField<Version>("version")` uses .NET's
+`System.Version` parser directly on the field span. The format is
+`major.minor[.build[.revision]]`. Values such as `1.2.3` are accepted.
+Prerelease suffixes such as `1.2.3-beta` require a custom parser.
+
+## URI values
+
+Call `.WithParsers(p => p.UseUriValues())` to read a column declared with
+`WithField<Uri>("url")` as an absolute URI. Pass `UriKind.Relative` or
+`UriKind.RelativeOrAbsolute` to accept relative references. Explicit field and
+runtime parsers take precedence. PocketCsvReader converts the decoded field
+span to a string at the `System.Uri` constructor boundary.
+
 ## Network values
 
-Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), CIDR networks
-(`IPNetwork`), and MAC addresses (`PhysicalAddress`) with the core package. The
-.NET parsers receive the decoded field span directly. Explicit field and runtime
-parsers take precedence over these defaults.
+Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), IP endpoints
+(`IPEndPoint`), CIDR networks (`IPNetwork`), and MAC addresses (`PhysicalAddress`)
+with the core package. For endpoints with a port, use forms such as
+`192.0.2.10:443` or `[2001:db8::1]:443`. The .NET parsers receive the decoded
+field span directly. Explicit field and runtime parsers take precedence over
+these defaults.
 
 ```csharp
 using System.Net;
