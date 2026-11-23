@@ -85,6 +85,24 @@ public class FieldDescriptorBuilder
         return this;
     }
 
+    /// <summary>Decodes hexadecimal text into a byte array.</summary>
+    /// <exception cref="InvalidOperationException">The field type is not <c>byte[]</c>.</exception>
+    public FieldDescriptorBuilder FromHex()
+        => WithBinaryParser(Convert.FromHexString);
+
+    /// <summary>Decodes Base64 text into a byte array.</summary>
+    /// <exception cref="InvalidOperationException">The field type is not <c>byte[]</c>.</exception>
+    public FieldDescriptorBuilder FromBase64()
+        => WithBinaryParser(Convert.FromBase64String);
+
+    private FieldDescriptorBuilder WithBinaryParser(ParseFunction parse)
+    {
+        if (runtimeType != typeof(byte[]))
+            throw new InvalidOperationException("A binary decoder requires a field of type byte[].");
+
+        return WithParser(parse);
+    }
+
     private FormatDescriptorBuilder GetDefaultFormat()
     {
         if (defaultFormatBuilders.TryGetValue(runtimeType, out var builder))
