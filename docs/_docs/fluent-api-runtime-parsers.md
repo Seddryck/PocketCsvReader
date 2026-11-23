@@ -71,6 +71,14 @@ For direct use of the public `SpanParser`, `TryParse` returns false for supporte
 
 The [Chrononuensis integration](../chrononuensis/) supplies temporal period parsers. Reproducible parser benchmarks are linked from [benchmark guidance](../buffering-and-benchmarks/#benchmarks).
 
+## URI values
+
+Call `.WithParsers(p => p.UseUriValues())` to read a column declared with
+`WithField<Uri>("url")` as an absolute URI. Pass `UriKind.Relative` or
+`UriKind.RelativeOrAbsolute` to accept relative references. Explicit field and
+runtime parsers take precedence. PocketCsvReader converts the decoded field
+span to a string at the `System.Uri` constructor boundary.
+
 ## Network values
 
 Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), CIDR networks
