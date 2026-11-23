@@ -70,16 +70,48 @@ Configure array syntax in the [CSV dialect](../csv-dialect-descriptor/#arrays), 
 
 Declaring an array does not turn scalar text into an array. Enumerable types are not array declarations; multidimensional CLR arrays are unsupported. Null elements and conversion failures follow the relevant array getters. JSON arrays have their own source grammar; see [JSON](../json-and-ndjson/) and [NDJSON](../ndjson/).
 
-For a `byte[]` column stored as encoded text, choose the decoder that matches the cell format:
+## Hex and Base64 fields
 
+Choose the decoder that matches the encoding used by the CSV producer. PocketCsvReader does not guess the encoding. A plain `WithField<byte[]>("Payload")` uses the dialect’s array syntax, such as `[0|255|44]` with the array delimiter `|` and brackets configured.
+
+| Field configuration | Accepted text |
+| --- | --- |
+| `f => f.FromHex()` | Two hex digits per byte, in upper or lower case. Enter `00FF2C` as a continuous sequence without a `0x` prefix or separators. |
+| `f => f.FromBase64()` | Standard Base64 using `+` and `/`, with `=` padding when required. The decoder ignores spaces, tabs, and line breaks present in the field value. Use a custom parser for Base64url. |
+
+Both shortcuts are available on the shared builder and require a field declared as `byte[]`. Calling either shortcut for another field type throws `InvalidOperationException` during schema configuration. For an indexed schema, use `Indexed().WithField<byte[]>(f => f.FromHex())` or the corresponding `FromBase64()` form.
+
+<!-- example: binary-schema-fields -->
 ```csharp
-var schema = new SchemaDescriptorBuilder().Named()
-    .WithField<byte[]>("HexPayload", f => f.FromHex())
-    .WithField<byte[]>("Base64Payload", f => f.FromBase64())
+using System.Text;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithDelimiter(',').WithHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Named()
+        .WithField<byte[]>("HexPayload", f => f.FromHex())
+        .WithField<byte[]>("Base64Payload", f => f.FromBase64()))
     .Build();
+
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+    "HexPayload,Base64Payload\n00FF2C,AP8s\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+{
+    Console.WriteLine(Convert.ToHexString((byte[])reader["HexPayload"]));
+    Console.WriteLine(Convert.ToHexString((byte[])reader["Base64Payload"]));
+}
 ```
 
-Both hex `00FF2C` and Base64 `AP8s` decode to the bytes `00 FF 2C`.
+<!-- output: binary-schema-fields -->
+```text
+00FF2C
+00FF2C
+```
+
+Each shortcut registers a field parser for the whole cell. Once on a row, use `IsValid("HexPayload")` to check whether the cell can be decoded. Reading malformed encoded text through the indexer or `GetValue` throws `FormatException`. An empty string passed to either decoder yields an empty byte array. Values interpreted as null or missing follow the reader’s [null and missing value rules](../sequences/).
+
+The decoder returns raw bytes. For a payload such as Well-Known Binary (WKB), use a WKB reader to interpret those bytes as geometry.
 
 ## Validation and inference
 
