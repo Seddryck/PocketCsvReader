@@ -229,7 +229,7 @@ public class ArrowReaderExtensionsTests
                 .WithTemporalField<DateOnly>("date", field => field.WithFormat("yyyy-MM-dd"))
                 .WithTemporalField<DateTime>("instant", field => field.WithFormat("yyyy-MM-ddTHH:mm:ss"))
                 .WithTemporalField<TimeOnly>("time", field => field.WithFormat("HH:mm:ss"))
-                .WithCustomField<byte[]>("payload", field => field.WithParser(Convert.FromBase64String)))
+                .WithField<byte[]>("payload", field => field.WithParser(Convert.FromBase64String)))
             .Build();
 
     private static MemoryStream StreamOf(string value)

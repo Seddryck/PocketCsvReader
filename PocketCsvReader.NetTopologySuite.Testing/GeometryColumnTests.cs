@@ -32,8 +32,8 @@ public class GeometryColumnTests
             .WithDialect(d => d.WithLineTerminator("\n"))
             .WithParsers(p => p.UseNetTopologySuite(wktSrid: 3857))
             .WithSchema(s => s.Named()
-                .WithCustomField(type, "wkt")
-                .WithCustomField(type, "json", f => f.WithFormat("geojson")))
+                .WithField(type, "wkt")
+                .WithField(type, "json", f => f.WithFormat("geojson")))
             .Build();
         using var rows = Open(csv, $"wkt,json\n{Escape(wkt)},{Escape(geoJson)}\n");
         Assert.That(rows.Read(), Is.True);
@@ -57,7 +57,7 @@ public class GeometryColumnTests
     {
         var json = new JsonReaderBuilder()
             .WithParsers(p => p.UseNetTopologySuite())
-            .WithSchema(s => s.Named().WithCustomField<Point>(property, f => f.WithFormat("geojson")));
+            .WithSchema(s => s.Named().WithField<Point>(property, f => f.WithFormat("geojson")));
         if (recordPath is not null)
             json.WithRecordPath(recordPath);
 
@@ -77,8 +77,8 @@ public class GeometryColumnTests
             .WithDialect(d => d.WithLineTerminator("\n"))
             .WithParsers(p => p.UseNetTopologySuite())
             .WithSchema(s => s.Named()
-                .WithCustomField<Geometry>("wkt", f => f.WithFormat("wkt").WithSequence("origin", "POINT (0 0)"))
-                .WithCustomField<Geometry>("json", f => f.WithFormat("GeoJSON")));
+                .WithField<Geometry>("wkt", f => f.WithFormat("wkt").WithSequence("origin", "POINT (0 0)"))
+                .WithField<Geometry>("json", f => f.WithFormat("GeoJSON")));
         if (utf8)
             builder.WithStreamInitialization(StreamInitializationOptions.Utf8);
 
@@ -114,8 +114,8 @@ public class GeometryColumnTests
                 return registerIntegrationFirst ? p : p.UseNetTopologySuite();
             })
             .WithSchema(s => s.Named()
-                .WithCustomField<Point>("runtime", f => f.WithFormat("geojson"))
-                .WithCustomField<Point>("field", f => f.WithFormat("wkt")
+                .WithField<Point>("runtime", f => f.WithFormat("geojson"))
+                .WithField<Point>("field", f => f.WithFormat("wkt")
                     .WithParser<Point>((ReadOnlySpan<char> _) => field)))
             .Build();
 
@@ -141,7 +141,7 @@ public class GeometryColumnTests
         var csv = new CsvReaderBuilder()
             .WithDialect(d => d.WithLineTerminator("\n"))
             .WithParsers(p => p.UseNetTopologySuite())
-            .WithSchema(s => s.Named().WithCustomField<Point>("shape", f => f.WithFormat(format)))
+            .WithSchema(s => s.Named().WithField<Point>("shape", f => f.WithFormat(format)))
             .Build();
         using var rows = Open(csv, $"shape\n{Escape(input)}\n");
         Assert.That(rows.Read(), Is.True);
@@ -157,7 +157,7 @@ public class GeometryColumnTests
         var csv = new CsvReaderBuilder()
             .WithDialect(d => d.WithLineTerminator("\n"))
             .WithParsers(p => p.UseNetTopologySuite())
-            .WithSchema(s => s.Named().WithCustomField<Point>("shape", f => f.WithSequence("NULL", null)))
+            .WithSchema(s => s.Named().WithField<Point>("shape", f => f.WithSequence("NULL", null)))
             .Build();
         using var rows = Open(csv, "shape\nNULL\n");
         Assert.That(rows.Read(), Is.True);
@@ -172,7 +172,7 @@ public class GeometryColumnTests
         var csv = new CsvReaderBuilder()
             .WithDialect(d => d.WithLineTerminator("\n"))
             .WithParsers(p => p.UseNetTopologySuite())
-            .WithSchema(s => s.Named().WithCustomField<Geometry>("shape", f => f.WithFormat("invalid")))
+            .WithSchema(s => s.Named().WithField<Geometry>("shape", f => f.WithFormat("invalid")))
             .Build();
         using var rows = Open(csv, "shape\nPOINT (1 2)\n");
         Assert.That(rows.Read(), Is.True);

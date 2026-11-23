@@ -79,7 +79,7 @@ public class ChrononuensisParserTests
     public void ExplicitFieldParser_WinsOverFormatAndIntegration()
     {
         var schema = new SchemaDescriptorBuilder().Indexed()
-            .WithCustomField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")
+            .WithField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")
                 .WithParser((ReadOnlySpan<char> _) => new YearMonth(2000, 1))).Build();
         using var reader = Reader("ignored", typeof(YearMonth), schema: schema);
         Assert.That(reader.GetValue(0), Is.EqualTo(new YearMonth(2000, 1)));
@@ -95,7 +95,7 @@ public class ChrononuensisParserTests
         const string input = "Q4.26";
         const string pattern = "'Q'q.yy";
         var schema = new SchemaDescriptorBuilder().Indexed()
-            .WithCustomField(typeof(YearQuarter), f => f.WithFormat(pattern, culture)).Build();
+            .WithField(typeof(YearQuarter), f => f.WithFormat(pattern, culture)).Build();
         using var reader = Reader(input, typeof(YearQuarter), schema: schema);
         Assert.That(reader.GetFieldValue<YearQuarter>(0),
             Is.EqualTo(YearQuarter.Parse(input.AsSpan(), pattern, culture)));
@@ -174,7 +174,7 @@ public class ChrononuensisParserTests
     public void SpanIntegration_AddsNoAllocationBeyondUpstreamParser(bool formatted)
     {
         var schema = formatted ? new SchemaDescriptorBuilder().Indexed()
-            .WithCustomField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")).Build() : null;
+            .WithField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")).Build() : null;
         using var reader = Reader("2026-10", typeof(YearMonth), schema: schema);
         for (int i = 0; i < 1000; i++)
         {

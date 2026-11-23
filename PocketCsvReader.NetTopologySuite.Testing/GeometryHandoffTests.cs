@@ -31,7 +31,7 @@ public class GeometryHandoffTests
         var builder = new CsvReaderBuilder()
             .WithDialect(d => d.WithLineTerminator("\n").WithQuoteChar(escapeCsv ? '"' : '\''))
             .WithParsers(p => p.UseNetTopologySuite())
-            .WithSchema(s => s.Named().WithCustomField<Geometry>("shape", f => f.WithFormat(format)));
+            .WithSchema(s => s.Named().WithField<Geometry>("shape", f => f.WithFormat(format)));
         if (utf8)
             builder.WithStreamInitialization(StreamInitializationOptions.Utf8);
 

@@ -11,11 +11,8 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
     internal CustomFieldDescriptorBuilder(Type runtimeType)
         : base(runtimeType) { }
 
-    public CustomFieldDescriptorBuilder WithFormat(string pattern, IFormatProvider? formatProvider = null)
-    {
-        Format = new CustomFormatDescriptorBuilder(pattern, formatProvider);
-        return this;
-    }
+    public new CustomFieldDescriptorBuilder WithFormat(string pattern, IFormatProvider? formatProvider = null)
+        => (CustomFieldDescriptorBuilder)base.WithFormat(pattern, formatProvider);
 
     public new CustomFieldDescriptorBuilder WithName(string value)
         => (CustomFieldDescriptorBuilder)base.WithName(value);

@@ -20,8 +20,8 @@ var csv = new CsvReaderBuilder()
     .WithDialect(d => d.WithLineTerminator("\n"))
     .WithParsers(p => p.UseNetTopologySuite(wktSrid: 4326))
     .WithSchema(s => s.Named()
-        .WithCustomField<Geometry>("route", f => f.WithFormat("wkt"))
-        .WithCustomField<Point>("stop", f => f.WithFormat("geojson")))
+        .WithField<Geometry>("route", f => f.WithFormat("wkt"))
+        .WithField<Point>("stop", f => f.WithFormat("geojson")))
     .Build();
 
 using var rows = csv.ToDataReader("routes.csv");
@@ -59,7 +59,7 @@ using PocketCsvReader.NetTopologySuite;
 var json = new JsonReaderBuilder()
     .WithParsers(p => p.UseNetTopologySuite())
     .WithSchema(s => s.Named()
-        .WithCustomField<Point>("location", f => f.WithFormat("geojson")))
+        .WithField<Point>("location", f => f.WithFormat("geojson")))
     .Build();
 
 using var rows = json.ToDataReader("places.json");

@@ -46,11 +46,17 @@ For positions, use `new SchemaDescriptorBuilder().Indexed().WithField<int>().Wit
 
 ## Using field formatting and format descriptors
 
-Use `WithTemporalField<T>` for a temporal pattern, `WithNumberField<T>` for decimal/group separators, and `WithIntegerField<T>` for integer settings. The general `WithField<T>` callback does not expose every specialized formatting method. Formats use their configured provider; built-in schema builders supply invariant defaults. A fixed date format avoids relying on machine culture.
+Use `WithTemporalField<T>` for a temporal pattern, `WithNumberField<T>` for decimal/group separators, and `WithIntegerField<T>` for integer settings. Use `WithField<T>` with `WithFormat(pattern, formatProvider)` for custom parser formats. Formats use their configured provider; built-in schema builders supply invariant defaults. A fixed date format avoids relying on machine culture.
 
 ### Numeric formatting
 
 `NumberFieldDescriptorBuilder.WithFormat` receives a `NumberFormatDescriptorBuilder`. Set `WithDecimalChar`, `WithGroupChar`, or `WithoutGroupChar` inside that callback. The type is named **Number**, not Numeric.
+
+### Migrating from WithCustomField
+
+**Deprecated.** `WithCustomField` still works and now emits a compiler warning. It will be removed in PocketCsvReader 3.0. Replace it with `WithField` in named and indexed schemas. Keep the same type, column name or position, and inline configuration callback.
+
+For a named column, use `WithField<YearMonth>("Month", f => f.WithFormat("yyyy-MM"))`. For an indexed column, use `WithField<YearMonth>(f => f.WithFormat("yyyy-MM"))`. The optional second argument to `WithFormat` supplies the format provider to parsers that support it. A field callback declared separately as `Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder>` should use `Func<FieldDescriptorBuilder, FieldDescriptorBuilder>` when passed to `WithField`.
 
 ## Providing a custom parser
 

@@ -44,7 +44,7 @@ public class DefaultParserTests
                 return _ => 42;
             });
         var schema = new SchemaDescriptorBuilder().Indexed()
-            .WithCustomField(typeof(int), f => f.WithFormat("custom", culture)).Build();
+            .WithField(typeof(int), f => f.WithFormat("custom", culture)).Build();
         var profile = new CsvProfile(new DialectDescriptorBuilder().WithoutHeader().Build(), schema, null, parsers.Build());
         using var reader = new CsvDataReader(new MemoryStream("ignored"u8.ToArray()), profile);
         reader.Read();
