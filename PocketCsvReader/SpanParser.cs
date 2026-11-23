@@ -131,6 +131,7 @@ internal class SpanParser
         RegisterInvariant<DateTime>();
         RegisterInvariant<DateOnly>();
         RegisterInvariant<TimeOnly>();
+        RegisterInvariant<TimeSpan>();
         RegisterInvariant<DateTimeOffset>();
     }
 
