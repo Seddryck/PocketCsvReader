@@ -10,11 +10,11 @@ namespace PocketCsvReader.Testing;
 
 public class NetworkValueParserTests
 {
-    [TestCase("192.0.2.42", "192.0.2.0/24", "00:1A:2B:3C:4D:5E")]
-    [TestCase("2001:db8::1", "2001:db8::/32", "00-1A-2B-3C-4D-5E")]
-    public void ReadsAndValidatesNetworkColumns(string ip, string cidr, string mac)
+    [TestCase("192.0.2.42", "192.0.2.0/24", "00:1A:2B:3C:4D:5E", "192.0.2.42:443")]
+    [TestCase("2001:db8::1", "2001:db8::/32", "00-1A-2B-3C-4D-5E", "[2001:db8::1]:443")]
+    public void ReadsAndValidatesNetworkColumns(string ip, string cidr, string mac, string endpoint)
     {
-        using var reader = ReadRow($"{ip},{cidr},{mac}");
+        using var reader = ReadRow($"{ip},{cidr},{mac},{endpoint}");
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetFieldValue<IPAddress>("ip").ToString(), Is.EqualTo(ip));
@@ -24,12 +24,14 @@ public class NetworkValueParserTests
         Assert.That(reader.IsValid("ip"), Is.True);
         Assert.That(reader.IsValid("cidr"), Is.True);
         Assert.That(reader.IsValid("mac"), Is.True);
+        Assert.That(reader.GetFieldValue<IPEndPoint>("endpoint"), Is.EqualTo(new IPEndPoint(IPAddress.Parse(ip), 443)));
+        Assert.That(reader.IsValid("endpoint"), Is.True);
     }
 
     [Test]
     public void RejectsMalformedNetworkColumns()
     {
-        using var reader = ReadRow("256.0.0.1,2001:db8::/129,00:1A:2B:3C:4D:GG");
+        using var reader = ReadRow("256.0.0.1,2001:db8::/129,00:1A:2B:3C:4D:GG,192.0.2.42:65536");
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.IsValid("ip"), Is.False);
@@ -38,17 +40,20 @@ public class NetworkValueParserTests
         Assert.That(() => reader.GetFieldValue<IPAddress>("ip"), Throws.TypeOf<FormatException>());
         Assert.That(() => reader.GetFieldValue<IPNetwork>("cidr"), Throws.TypeOf<FormatException>());
         Assert.That(() => reader.GetFieldValue<PhysicalAddress>("mac"), Throws.TypeOf<FormatException>());
+        Assert.That(reader.IsValid("endpoint"), Is.False);
+        Assert.That(() => reader.GetFieldValue<IPEndPoint>("endpoint"), Throws.TypeOf<FormatException>());
     }
 
     [Test]
     public void PreservesNullHandling()
     {
-        using var reader = ReadRow("NULL,NULL,NULL");
+        using var reader = ReadRow("NULL,NULL,NULL,NULL");
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetFieldValue<IPAddress>("ip"), Is.Null);
         Assert.That(reader.GetFieldValue<IPNetwork?>("cidr"), Is.Null);
         Assert.That(reader.GetFieldValue<PhysicalAddress>("mac"), Is.Null);
+        Assert.That(reader.GetFieldValue<IPEndPoint>("endpoint"), Is.Null);
     }
 
     [TestCase(true)]
@@ -85,9 +90,10 @@ public class NetworkValueParserTests
             .WithSchema(s => s.Named()
                 .WithField<IPAddress>("ip")
                 .WithField<IPNetwork?>("cidr")
-                .WithField<PhysicalAddress>("mac"))
+                .WithField<PhysicalAddress>("mac")
+                .WithField<IPEndPoint>("endpoint"))
             .WithParsers(p => p.UseNetworkValues())
             .Build();
-        return csv.ToDataReader(new MemoryStream(Encoding.UTF8.GetBytes($"ip,cidr,mac\n{row}\n")));
+        return csv.ToDataReader(new MemoryStream(Encoding.UTF8.GetBytes($"ip,cidr,mac,endpoint\n{row}\n")));
     }
 }

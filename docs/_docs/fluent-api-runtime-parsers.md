@@ -81,10 +81,12 @@ span to a string at the `System.Uri` constructor boundary.
 
 ## Network values
 
-Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), CIDR networks
-(`IPNetwork`), and MAC addresses (`PhysicalAddress`) with the core package. The
-.NET parsers receive the decoded field span directly. Explicit field and runtime
-parsers take precedence over these defaults.
+Enable `UseNetworkValues()` to read IP addresses (`IPAddress`), IP endpoints
+(`IPEndPoint`), CIDR networks (`IPNetwork`), and MAC addresses (`PhysicalAddress`)
+with the core package. For endpoints with a port, use forms such as
+`192.0.2.10:443` or `[2001:db8::1]:443`. The .NET parsers receive the decoded
+field span directly. Explicit field and runtime parsers take precedence over
+these defaults.
 
 ```csharp
 using System.Net;
