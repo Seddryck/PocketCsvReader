@@ -71,6 +71,30 @@ public class SchemaArrayTest
         Assert.That(reader.GetValue(0), Is.EqualTo(reader.GetArray<int?>(0)));
     }
 
+    [TestCase(true, "00fF2C", "ABC")]
+    [TestCase(false, "AP8s", "bad!")]
+    public void GetValue_BinaryFieldShortcutsDecodeText(bool hex, string encoded, string malformed)
+    {
+        var schema = new SchemaDescriptorBuilder().Named()
+            .WithField<byte[]>("Payload", field => hex ? field.FromHex() : field.FromBase64())
+            .Build();
+        using var reader = Reader($"Payload;Other\n\"{encoded}\";value\n{malformed};value", schema, header: true);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetValue("Payload"), Is.TypeOf<byte[]>().And.EqualTo(new byte[] { 0, 255, 44 }));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid("Payload"), Is.False);
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void BinaryFieldShortcutsRequireByteArrayFields(bool hex)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed();
+        Assert.That(() => schema.WithField<string>(field => hex ? field.FromHex() : field.FromBase64()),
+            Throws.InvalidOperationException);
+    }
+
     [TestCase(false)]
     [TestCase(true)]
     public void GetValue_ExplicitFieldArrayParserTakesPrecedence(bool spanParser)

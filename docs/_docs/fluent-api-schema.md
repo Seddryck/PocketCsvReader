@@ -70,6 +70,17 @@ Configure array syntax in the [CSV dialect](../csv-dialect-descriptor/#arrays), 
 
 Declaring an array does not turn scalar text into an array. Enumerable types are not array declarations; multidimensional CLR arrays are unsupported. Null elements and conversion failures follow the relevant array getters. JSON arrays have their own source grammar; see [JSON](../json-and-ndjson/) and [NDJSON](../ndjson/).
 
+For a `byte[]` column stored as encoded text, choose the decoder that matches the cell format:
+
+```csharp
+var schema = new SchemaDescriptorBuilder().Named()
+    .WithField<byte[]>("HexPayload", f => f.FromHex())
+    .WithField<byte[]>("Base64Payload", f => f.FromBase64())
+    .Build();
+```
+
+Both hex `00FF2C` and Base64 `AP8s` decode to the bytes `00 FF 2C`.
+
 ## Validation and inference
 
 Use [IsValid](../validation-and-errors/#validate-a-cell) to check a cell against its current declared/inferred type. Use [inference](../schema-inference/) to discover candidate settings from a sample, then review diagnostics before applying them. [Null and missing values](../sequences/) explains the different cases that a schema alone does not normalize.
