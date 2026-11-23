@@ -77,7 +77,7 @@ Choose the decoder that matches the encoding used by the CSV producer. PocketCsv
 | Field configuration | Accepted text |
 | --- | --- |
 | `f => f.FromHex()` | Two hex digits per byte, in upper or lower case. Enter `00FF2C` as a continuous sequence without a `0x` prefix or separators. |
-| `f => f.FromBase64()` | Standard Base64 using `+` and `/`, with `=` padding when required. The decoder ignores spaces, tabs, and line breaks present in the field value. Use a custom parser for Base64url. |
+| `f => f.FromBase64()` | Standard Base64 using `+` and `/`, with `=` padding when required. The decoder ignores spaces, tabs, and line breaks present in the field value. |
 
 Both shortcuts are available on the shared builder and require a field declared as `byte[]`. Calling either shortcut for another field type throws `InvalidOperationException` during schema configuration. For an indexed schema, use `Indexed().WithField<byte[]>(f => f.FromHex())` or the corresponding `FromBase64()` form.
 
@@ -112,6 +112,66 @@ while (reader.Read())
 Each shortcut registers a field parser for the whole cell. Once on a row, use `IsValid("HexPayload")` to check whether the cell can be decoded. Reading malformed encoded text through the indexer or `GetValue` throws `FormatException`. An empty string passed to either decoder yields an empty byte array. Values interpreted as null or missing follow the reader’s [null and missing value rules](../sequences/).
 
 The decoder returns raw bytes. For a payload such as Well-Known Binary (WKB), use a WKB reader to interpret those bytes as geometry.
+
+### Base64url
+
+Use `FromBase64Url()` for the URL-safe alphabet, which uses `-` and `_`. The decoder accepts padded and unpadded input and ignores spaces, tabs, and line breaks in the cell value. Like the other binary shortcuts, it requires a `byte[]` field and reports malformed input through `IsValid()` and `FormatException`.
+
+<!-- example: base64url-schema-field -->
+```csharp
+using System.Text;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithDelimiter(',').WithHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Named()
+        .WithField<byte[]>("Payload", f => f.FromBase64Url()))
+    .Build();
+
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes("Payload\n-_8\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+    Console.WriteLine(Convert.ToHexString((byte[])reader["Payload"]));
+```
+
+<!-- output: base64url-schema-field -->
+```text
+FBFF
+```
+
+## Base32 and Base32hex fields
+
+Use `FromBase32()` for the RFC 4648 alphabet `A–Z, 2–7` and `FromBase32Hex()` for the extended hex alphabet `0–9, A–V`. Both accept upper- and lowercase ASCII letters and require standard `=` padding for a partial eight-character group. Whitespace, misplaced padding, and nonzero unused bits are invalid. [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html#section-6)
+
+<!-- example: base32-schema-fields -->
+```csharp
+using System.Text;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithDelimiter(',').WithHeader().WithLineTerminator("\n"))
+    .WithSchema(s => s.Named()
+        .WithField<byte[]>("Base32Payload", f => f.FromBase32())
+        .WithField<byte[]>("Base32HexPayload", f => f.FromBase32Hex()))
+    .Build();
+
+using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+    "Base32Payload,Base32HexPayload\nMZXQ====,CPNG====\n"));
+using var reader = csv.ToDataReader(stream);
+while (reader.Read())
+{
+    Console.WriteLine(Encoding.ASCII.GetString((byte[])reader["Base32Payload"]));
+    Console.WriteLine(Encoding.ASCII.GetString((byte[])reader["Base32HexPayload"]));
+}
+```
+
+<!-- output: base32-schema-fields -->
+```text
+fo
+fo
+```
+
+Both shortcuts require a `byte[]` field. Use `IsValid()` on the current row to check encoded text before reading it. A malformed value throws `FormatException` when read.
 
 ## Validation and inference
 

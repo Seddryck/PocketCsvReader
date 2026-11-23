@@ -13,6 +13,102 @@ public class SchemaArrayTest
                 .WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']')).Build(),
             schema, null, parsers));
 
+    [TestCase("", "", "")]
+    [TestCase("MY======", "CO======", "f")]
+    [TestCase("MZXQ====", "CPNG====", "fo")]
+    [TestCase("MZXW6===", "CPNMU===", "foo")]
+    [TestCase("MZXW6YQ=", "CPNMUOG=", "foob")]
+    [TestCase("MZXW6YTB", "CPNMUOJ1", "fooba")]
+    [TestCase("MZXW6YTBOI======", "CPNMUOJ1E8======", "foobar")]
+    [TestCase("mzxq====", "cpng====", "fo")]
+    public void GetValue_Base32ShortcutsDecodeRfcVectors(string base32, string base32Hex, string value)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed()
+            .WithField<byte[]>(field => field.FromBase32())
+            .WithField<byte[]>(field => field.FromBase32Hex())
+            .Build();
+        using var reader = Reader($"\"{base32}\";\"{base32Hex}\"", schema);
+        var expected = Encoding.ASCII.GetBytes(value);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetValue(0), Is.TypeOf<byte[]>().And.EqualTo(expected));
+        Assert.That(reader.GetValue(1), Is.TypeOf<byte[]>().And.EqualTo(expected));
+    }
+
+    [TestCase("M0======", "CZ======")]
+    [TestCase("M ======", "C ======")]
+    [TestCase("MY", "CO")]
+    [TestCase("MY=====", "CO=====")]
+    [TestCase("MY=======", "CO=======")]
+    [TestCase("M=======", "C=======")]
+    [TestCase("M=Y=====", "C=O=====")]
+    [TestCase("MZ======", "CP======")]
+    [TestCase("========", "========")]
+    public void GetValue_Base32ShortcutsRejectMalformedValues(string base32, string base32Hex)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed()
+            .WithField<byte[]>(field => field.FromBase32())
+            .WithField<byte[]>(field => field.FromBase32Hex())
+            .Build();
+        using var reader = Reader($"\"{base32}\";\"{base32Hex}\"", schema);
+
+        Assert.That(reader.Read(), Is.True);
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.That(reader.IsValid(i), Is.False);
+            Assert.That(() => reader.GetValue(i), Throws.TypeOf<FormatException>());
+        }
+    }
+
+    [Test]
+    public void Base32ShortcutsRequireByteArrayFields()
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed();
+        Assert.That(() => schema.WithField<string>(field => field.FromBase32()), Throws.InvalidOperationException);
+        Assert.That(() => schema.WithField<string>(field => field.FromBase32Hex()), Throws.InvalidOperationException);
+    }
+
+    [TestCase("-_8")]
+    [TestCase("-_8=")]
+    [TestCase("-_ 8")]
+    public void GetValue_Base64UrlShortcutDecodesValues(string encoded)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed()
+            .WithField<byte[]>(field => field.FromBase64Url())
+            .Build();
+        using var reader = Reader($"\"{encoded}\";tail", schema);
+        var expected = new byte[] { 251, 255 };
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid(0), Is.True);
+        Assert.That(reader.GetValue(0), Is.TypeOf<byte[]>().And.EqualTo(expected));
+        Assert.That(reader.GetFieldValue<byte[]>(0), Is.EqualTo(expected));
+    }
+
+    [TestCase("+/8=")]
+    [TestCase("a")]
+    [TestCase("-_8===")]
+    [TestCase("-_=8")]
+    [TestCase("-_!")]
+    public void GetValue_Base64UrlShortcutRejectsMalformedValues(string encoded)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed()
+            .WithField<byte[]>(field => field.FromBase64Url())
+            .Build();
+        using var reader = Reader($"\"{encoded}\";tail", schema);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid(0), Is.False);
+        Assert.That(() => reader.GetValue(0), Throws.TypeOf<FormatException>());
+    }
+
+    [Test]
+    public void Base64UrlShortcutRequiresByteArrayField()
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed();
+        Assert.That(() => schema.WithField<string>(field => field.FromBase64Url()), Throws.InvalidOperationException);
+    }
+
     [TestCase("[10|20|30]")]
     [TestCase("[42]")]
     public void GetValue_IntegerArrayMatchesTypedRead(string text)
@@ -69,6 +165,38 @@ public class SchemaArrayTest
         reader.Read();
         Assert.That(reader.GetValue(0), Is.TypeOf<int?[]>().And.EqualTo(new int?[] { 2, 3 }));
         Assert.That(reader.GetValue(0), Is.EqualTo(reader.GetArray<int?>(0)));
+    }
+
+    [TestCase("")]
+    [TestCase(" \t\r\n")]
+    [TestCase("AP8s")]
+    [TestCase("AQI=")]
+    [TestCase("AQ==")]
+    [TestCase("  A Q\tI\r\n = ")]
+    [TestCase("A Q= \t=")]
+    public void GetValue_Base64ShortcutMatchesRuntimeDecoder(string encoded)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed().WithField<byte[]>(field => field.FromBase64()).Build();
+        using var reader = Reader($"\"{encoded}\";tail", schema);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid(0), Is.True);
+        Assert.That(reader.GetValue(0), Is.TypeOf<byte[]>().And.EqualTo(Convert.FromBase64String(encoded)));
+    }
+
+    [TestCase("AQI")]
+    [TestCase("A=AA")]
+    [TestCase("====")]
+    [TestCase("-_8=")]
+    [TestCase("AQI=\u00a0")]
+    public void GetValue_Base64ShortcutRejectsMalformedValues(string encoded)
+    {
+        var schema = new SchemaDescriptorBuilder().Indexed().WithField<byte[]>(field => field.FromBase64()).Build();
+        using var reader = Reader($"\"{encoded}\";tail", schema);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsValid(0), Is.False);
+        Assert.That(() => reader.GetValue(0), Throws.TypeOf<FormatException>());
     }
 
     [TestCase(true, "00fF2C", "ABC")]
