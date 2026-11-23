@@ -8,7 +8,7 @@ tags: [configuration]
 <span id="overview"></span>
 <span id="registering-a-custom-parser"></span>
 
-Register a field parser when conversion differs by column, or a runtime parser when the same type should be parsed consistently across fields. Both are data-reader conversion settings; `SpanObjectBuilder.SetParser` configures the separate constructor-mapping path.
+Register a field parser when conversion differs by column, or a runtime parser when the same type should be parsed consistently across fields. Both apply to data-reader getters and `ObjectMap<T>` properties and lookup keys. `SpanObjectBuilder.SetParser` configures constructor mapping. A custom `SpanMapper<T>` controls its own raw-slice parsing. See [object mapping](../mapper-object-builder/) for the mapper comparison and examples.
 
 ## Complete custom type example
 
