@@ -3,6 +3,12 @@ title: Choose native UTF-8 CSV input
 tags: [performance]
 ---
 
+## Pooling repeated field values
+
+Set `PoolUtf8Strings = true` on `ParserOptimizationOptions` to reuse strings for repeated fields read from native UTF-8 input. Cache hits compare the field bytes and return the existing string before decoding. Each reader owns its bounded cache, and returned strings remain valid after the reader advances or is disposed.
+
+The reader uses its regular field handling for escaped fields that need unescaping, configured schemas or resource sequences, and decoded-character input. An explicit `PoolString` callback takes precedence.
+
 ## Complete native UTF-8 example
 
 The syntax here is ASCII and the input is known UTF-8. The returned customer name owns its decoded string.
