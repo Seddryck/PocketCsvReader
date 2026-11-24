@@ -1,6 +1,10 @@
 # Real workload with CSV
 
-The benchmark generates one deterministic, in-memory UTF-8 CSV with 50,000 data records and a header. Each invocation reads every record and converts university, first name, last name, and quarter to strings, score to a decimal, credits to a short, and registration date to a DateOnly. Dataset generation happens during setup, outside the measurement.
+One deterministic, in-memory UTF-8 CSV contains a header and 50,000 records. Each benchmark opens a fresh stream over the same bytes and reads every field. The university, first name, last name, and quarter are strings. The score is a decimal, the credits are a short, and the registration date is a DateOnly.
+
+The comparison uses PocketCsvReader as the baseline and also runs Sep, Sylvan.Data.Csv, CsvHelper, SoftCircuits.CsvParser, and TinyCsvParser. SoftCircuits returns strings, so the benchmark converts its score, credits, and date. TinyCsvParser maps each row to a typed object, so its measured allocations include that object.
+
+Dataset generation and verification of all seven values in every row happen during setup, outside the measured runs. BenchmarkDotNet reports elapsed time and managed allocations per pass through the data.
 
 Run from the repository root:
 
