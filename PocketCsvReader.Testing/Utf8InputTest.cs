@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 using NUnit.Framework;
 using PocketCsvReader.Configuration;
@@ -534,6 +535,71 @@ public class Utf8InputTest
         using var reader = new TransformingReader(new MemoryStream(Encoding.UTF8.GetBytes("original\r\n")), Profile(CsvInputMode.Utf8Bytes));
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetString(0), Is.EqualTo("transformed"));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CompleteRowsBorrowInputMemoryAndSpanningRowsUseSeparateStorage(bool asynchronous)
+    {
+        var longField = new string('x', 30) + "\r\né";
+        using var stream = new BufferRecordingStream(Encoding.UTF8.GetBytes($"a,é\r\nb,c\r\n\"{longField}\",d\r\nlast,row"));
+        using var parser = new Utf8RecordSource(stream, Profile(CsvInputMode.Utf8Bytes, bufferSize: 12));
+        ICurrentRecordSource source = parser;
+
+        var first = await ReadCurrent();
+        var firstField = Bytes(first, 1);
+        Assert.That(firstField.Array, Is.SameAs(stream.InputBuffer));
+        var retained = first.Record.Materialize().AsCharacters();
+        Assert.That(retained.Slice(1).ToString(), Is.EqualTo("é"));
+
+        var second = await ReadCurrent();
+        var secondField = Bytes(second, 0);
+        Assert.That(secondField.Array, Is.SameAs(firstField.Array));
+        Assert.That(secondField.Offset, Is.GreaterThan(firstField.Offset));
+        Assert.That(Encoding.UTF8.GetString(secondField.AsSpan()), Is.EqualTo("b"));
+
+        var third = await ReadCurrent();
+        var spanningField = Bytes(third, 0);
+        Assert.That(spanningField.Array, Is.Not.SameAs(stream.InputBuffer));
+        Assert.That(Encoding.UTF8.GetString(spanningField.AsSpan()), Is.EqualTo(longField));
+        Assert.That(Encoding.UTF8.GetString(Bytes(third, 1).AsSpan()), Is.EqualTo("d"));
+
+        var last = await ReadCurrent();
+        Assert.That(last.IsEndOfFile, Is.True);
+        Assert.That(Encoding.UTF8.GetString(Bytes(last, 0).AsSpan()), Is.EqualTo("last"));
+        Assert.That(Encoding.UTF8.GetString(Bytes(last, 1).AsSpan()), Is.EqualTo("row"));
+        Assert.That(retained.Slice(1).ToString(), Is.EqualTo("é"));
+
+        ValueTask<CurrentRecordResult> ReadCurrent() => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+
+        static ArraySegment<byte> Bytes(CurrentRecordResult result, int ordinal)
+        {
+            Assert.That(result.State, Is.EqualTo(RecordState.Record));
+            Assert.That(result.Record.TryGetUtf8(ordinal, out var memory, out _), Is.True);
+            Assert.That(MemoryMarshal.TryGetArray(memory, out var segment), Is.True);
+            return segment;
+        }
+    }
+
+    private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)
+    {
+        public byte[]? InputBuffer { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            InputBuffer = buffer;
+            return base.Read(buffer, offset, count);
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!MemoryMarshal.TryGetArray((ReadOnlyMemory<byte>)buffer, out var segment))
+                throw new InvalidOperationException("The UTF-8 source should refill its array-backed input buffer.");
+            InputBuffer = segment.Array;
+            return ValueTask.FromResult(base.Read(segment.Array!, segment.Offset, segment.Count));
+        }
     }
 
     private sealed class TransformingReader(Stream stream, CsvProfile profile) : CsvDataReader(stream, profile)

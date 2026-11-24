@@ -19,10 +19,10 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
     private readonly PositionTracker? _positionTracker;
-    private byte[] _record;
+    private byte[]? _spill;
     private int _position;
     private int _available;
-    private int _length;
+    private int _spilledLength;
     private bool _disposed;
     PositionTracker? IPositionSource.Tracker => _positionTracker;
     public RecordPosition? CurrentPosition => _positionTracker?.CurrentPosition;
@@ -43,7 +43,6 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_readSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(profile), "Buffer size must be positive.");
         _input = ArrayPool<byte>.Shared.Rent(_readSize);
-        _record = ArrayPool<byte>.Shared.Rent(_readSize);
     }
 
     public static bool Supports(CsvProfile profile)
@@ -110,10 +109,10 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private bool TryRead(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
         if (_positionTracker is null) return TryReadCore(eof, borrowFields, out result);
-        // Keep the grammar and IndexOfAny bulk copies identical in both modes.
+        // Keep the grammar and IndexOfAny searches identical in both modes.
         // Only enabled tracking searches the consumed spans for physical newlines.
         int start = _position;
-        if (_length == 0) _positionTracker?.BeginRecord();
+        if (_spilledLength == 0) _positionTracker.BeginRecord();
         bool complete = TryReadCore(eof, borrowFields, out result);
         if (_positionTracker is { } tracker)
         {
@@ -126,61 +125,63 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private bool TryReadCore(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
         var fields = _fields;
-        int length = _length;
+        int start = _position;
+        int offset = _spilledLength - start;
+        int position = start;
+        var input = _input.AsSpan(0, _available);
         while (true)
         {
-            if (_position == _available)
+            if (position == input.Length)
             {
+                _position = position;
                 if (!eof)
                 {
-                    _length = length;
+                    // Save this unfinished segment before the next refill overwrites it.
+                    AppendToSpill(start);
                     result = default;
                     return false;
                 }
                 else
                 {
-                    if (length == 0)
+                    if (_spilledLength == 0)
                     {
                         result = new(true, default, RecordState.Eof);
                         return true;
                     }
-                    var end = _parser.ParseEof(length);
+                    var end = _parser.ParseEof(_spilledLength);
                     if (end is ParserState.Record or ParserState.Header)
                         fields.Add(_parser.Result);
                     else if (end != ParserState.Eof)
                         throw new InvalidDataException("Invalid character End-of-File.");
-                    result = new(true, PublishRecord(length, borrowFields),
+                    result = new(true, PublishRecord(start, borrowFields),
                         end == ParserState.Eof ? RecordState.Eof : RecordState.Record);
                     _parser.Reset(true);
-                    _length = 0;
+                    _spilledLength = 0;
                     fields.Clear();
                     return true;
                 }
             }
 
-            byte value = _input[_position];
+            byte value = input[position];
             // Map payload bytes outside ASCII to one opaque symbol. No decoding
             // or UTF-16 buffer is needed to recognize CSV syntax.
-            var state = _parser.Parse(value < 128 ? (char)value : '\uffff', length);
+            var state = _parser.Parse(value < 128 ? (char)value : '\uffff', checked(position + offset));
             if (state == ParserState.Reprocess)
                 continue;
             if (state == ParserState.Error)
-                throw new InvalidDataException($"Invalid byte '{value}' at position {length}.");
-            EnsureRecordCapacity(length + 1, length);
-            _record[length++] = value;
-            _position++;
+            {
+                _position = position;
+                throw new InvalidDataException($"Invalid byte '{value}' at position {position + offset}.");
+            }
+            position++;
             if (state == ParserState.Continue && !_syntax.Contains(value))
             {
                 // The first payload byte establishes or resumes the value state.
                 // Further bytes without CSV syntax cannot change that state.
-                // Scan/copy them in bulk, including opaque multibyte UTF-8 text.
-                var remaining = _input.AsSpan(_position, _available - _position);
+                // Skip them in bulk, including opaque multibyte UTF-8 text.
+                var remaining = input[position..];
                 int run = remaining.IndexOfAny(_syntax);
-                if (run < 0) run = remaining.Length;
-                EnsureRecordCapacity(checked(length + run), length);
-                remaining[..run].CopyTo(_record.AsSpan(length));
-                length += run;
-                _position += run;
+                position += run < 0 ? remaining.Length : run;
             }
             if (state is ParserState.Field or ParserState.Record or ParserState.Header)
             {
@@ -189,32 +190,57 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
             }
             if (state is ParserState.Record or ParserState.Header or ParserState.Comment)
             {
+                _position = position;
                 result = new(false, state == ParserState.Comment ? default
-                    : PublishRecord(length, borrowFields),
+                    : PublishRecord(start, borrowFields),
                     state == ParserState.Comment ? RecordState.Comment : RecordState.Record);
                 _parser.Reset(true);
-                _length = 0;
+                _spilledLength = 0;
                 fields.Clear();
                 return true;
             }
         }
     }
 
-    private CurrentRecord PublishRecord(int length, bool borrowFields)
+    private CurrentRecord PublishRecord(int start, bool borrowFields)
     {
+        // Both views are valid until the next read. Refill may overwrite the
+        // input chunk, and another spanning record may overwrite the spill.
+        ReadOnlyMemory<byte> record = _spilledLength == 0
+            ? _input.AsMemory(start, _position - start)
+            : CompleteSpilledRecord(start);
         var scratch = CollectionsMarshal.AsSpan(_fields);
         var fields = borrowFields ? _publishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
-        _decodedFields.Reset(length, fields.Length);
-        return new CurrentRecord(_record.AsMemory(0, length), fields, _decodedFields);
+        _decodedFields.Reset(record.Length, fields.Length);
+        return new CurrentRecord(record, fields, _decodedFields);
     }
 
-    private void EnsureRecordCapacity(int capacity, int length)
+    private ReadOnlyMemory<byte> CompleteSpilledRecord(int start)
     {
-        if (capacity <= _record.Length) return;
-        var larger = ArrayPool<byte>.Shared.Rent(Math.Max(capacity, checked(_record.Length * 2)));
-        _record.AsSpan(0, length).CopyTo(larger);
-        ArrayPool<byte>.Shared.Return(_record);
-        _record = larger;
+        AppendToSpill(start);
+        return _spill.AsMemory(0, _spilledLength);
+    }
+
+    private void AppendToSpill(int start)
+    {
+        int count = _position - start;
+        if (count == 0)
+            return;
+
+        int required = checked(_spilledLength + count);
+        if (_spill is null || required > _spill.Length)
+        {
+            var larger = ArrayPool<byte>.Shared.Rent(Math.Max(required, _spill is null ? _readSize : checked(_spill.Length * 2)));
+            if (_spill is not null)
+            {
+                _spill.AsSpan(0, _spilledLength).CopyTo(larger);
+                ArrayPool<byte>.Shared.Return(_spill);
+            }
+            _spill = larger;
+        }
+
+        _input.AsSpan(start, count).CopyTo(_spill.AsSpan(_spilledLength));
+        _spilledLength = required;
     }
 
     public void Dispose()
@@ -222,7 +248,8 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_disposed) return;
         _disposed = true;
         ArrayPool<byte>.Shared.Return(_input);
-        ArrayPool<byte>.Shared.Return(_record);
+        if (_spill is not null)
+            ArrayPool<byte>.Shared.Return(_spill);
         _decodedFields.Dispose();
         _stream.Dispose();
     }
