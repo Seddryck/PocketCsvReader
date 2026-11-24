@@ -480,6 +480,22 @@ public class Utf8InputTest
     }
 
     [Test]
+    public void NativeStringPoolSharesEntriesAcrossColumnsAndOwnsTheirBytes()
+    {
+        var pool = new Utf8StringPool();
+        var buffer = "first value"u8.ToArray();
+        var first = pool.GetString(0, buffer);
+        var other = pool.GetString(40, "other value"u8);
+
+        "other value"u8.CopyTo(buffer);
+        Assert.That(pool.GetString(0, buffer), Is.SameAs(other));
+        Assert.That(pool.GetString(40, "first value"u8), Is.SameAs(first));
+        Assert.That(pool.GetString(0, "other value"u8), Is.SameAs(other));
+        Assert.That(pool.GetString(40, "first value"u8), Is.SameAs(first));
+        Assert.That(first, Is.EqualTo("first value"));
+    }
+
+    [Test]
     public void NativeStringPoolPreservesEscapesAndNullSequences()
     {
         var csv = "\"a\"\"b\",NULL,\"NULL\"\r\n";

@@ -148,7 +148,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
         if (Profile.ParserOptimizations.PoolUtf8Strings)
         {
-            value = (_utf8StringPool ??= new()).GetString(bytes.Span);
+            value = (_utf8StringPool ??= new()).GetString(i, bytes.Span);
             return true;
         }
 

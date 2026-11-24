@@ -5,7 +5,7 @@ tags: [performance]
 
 ## Pooling repeated field values
 
-Set `PoolUtf8Strings = true` on `ParserOptimizationOptions` to reuse strings for repeated fields read from native UTF-8 input. Cache hits compare the field bytes and return the existing string before decoding. Each reader owns its bounded cache, and returned strings remain valid after the reader advances or is disposed.
+Set `PoolUtf8Strings = true` on `ParserOptimizationOptions` to reuse strings for repeated fields read from native UTF-8 input. The cache checks the column's most recently pooled value before hashing. Cache hits return the existing string before decoding. Each reader owns its bounded cache, and returned strings remain valid after the reader advances or is disposed.
 
 The reader uses its regular field handling for escaped fields that need unescaping, configured schemas or resource sequences, and decoded-character input. An explicit `PoolString` callback takes precedence.
 
