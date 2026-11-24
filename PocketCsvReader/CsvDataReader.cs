@@ -12,6 +12,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 {
     private readonly RowNumberOptions? _rowNumberOptions;
     private readonly RowNumberRecord? _rowNumberRecord;
+    private readonly bool _hasNoSpecialSequences;
     private Utf8StringPool? _utf8StringPool;
     private static readonly FieldDescriptor RowNumberField = new(typeof(int), DataSourceTypeName: "integer");
     private static readonly FieldDescriptor UndeclaredField = new(typeof(string));
@@ -27,12 +28,18 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
     internal CsvDataReader(Stream stream, CsvProfile profile, bool leaveOpen)
         : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString), leaveOpen)
-        => (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+    {
+        (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+        _hasNoSpecialSequences = profile.Schema is null && profile.Resource?.Sequences is not { IsEmpty: false };
+    }
 
     internal CsvDataReader(TextReader reader, CsvProfile profile, bool leaveOpen)
         : base(profile, new StringMapper(profile.ParserOptimizations.PoolString),
               () => new RecordParser(reader, profile), leaveOpen ? null : reader)
-        => (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+    {
+        (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
+        _hasNoSpecialSequences = profile.Schema is null && profile.Resource?.Sequences is not { IsEmpty: false };
+    }
 
     private static (RowNumberOptions? Options, RowNumberRecord? Record) CreateRowNumber(CsvProfile profile)
     {
@@ -223,6 +230,12 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     {
         if (HasRowNumber && i == 0)
             return GetCsvFieldMemory(0);
+        // Plain fields can keep their backing memory without running the sanitizer.
+        if (_hasNoSpecialSequences && !HasRowNumber && _projectedOrdinals is null
+            && CurrentFieldSpans is { } fields && (uint)i < (uint)fields.Length
+            && !fields[i].Value.IsEscaped)
+            return GetCurrentFieldMemory(i);
+
         if (GetRecordField(i) is { } field)
         {
             var sanitizer = GetFieldSanitizer(i, Profile.ParserOptimizations);
