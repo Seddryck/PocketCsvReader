@@ -428,6 +428,43 @@ public class Utf8InputTest
         Assert.That(() => Read(bytes, Profile(CsvInputMode.DecodedChars)), Throws.TypeOf<InvalidDataException>());
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task NativeStringPoolOwnsItsKeysAndReusesStringsAcrossRows(bool async)
+    {
+        var profile = Profile(CsvInputMode.Utf8Bytes);
+        profile.ParserOptimizations = profile.ParserOptimizations with { PoolUtf8Strings = true };
+        using var reader = new CsvDataReader(new ShortStream(Encoding.UTF8.GetBytes(
+            "first repeated value,東京駅\r\nsecond value,大阪駅\r\nfirst repeated value,東京駅\r\n"), async), profile);
+
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
+        var first = reader.GetString(0);
+        var tokyo = reader.GetDecodedString(1);
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("second value"));
+        Assert.That(reader.GetString(1), Is.EqualTo("大阪駅"));
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.SameAs(first));
+        Assert.That(reader.GetDecodedString(1), Is.SameAs(tokyo));
+    }
+
+    [Test]
+    public void NativeStringPoolPreservesEscapesAndNullSequences()
+    {
+        var csv = "\"a\"\"b\",NULL,\"NULL\"\r\n";
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: "\r\n", NullSequence: "NULL");
+        var profile = Profile(CsvInputMode.Utf8Bytes, dialect);
+        profile.ParserOptimizations = profile.ParserOptimizations with { PoolUtf8Strings = true };
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        Assert.That(Read(bytes, profile), Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars, dialect))));
+
+        profile = Profile(CsvInputMode.Utf8Bytes);
+        profile.ParserOptimizations = profile.ParserOptimizations with { PoolUtf8Strings = true };
+        using var reader = new CsvDataReader(new MemoryStream(bytes), profile);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("a\"b"));
+    }
+
     [Test]
     public void DirectStringDecodingHonorsCustomPoolsAndUnescaping()
     {
@@ -435,13 +472,15 @@ public class Utf8InputTest
         var profile = Profile(CsvInputMode.Utf8Bytes);
         profile.ParserOptimizations = profile.ParserOptimizations with
         {
+            PoolUtf8Strings = true,
             PoolString = text => { calls++; return text.ToString().ToUpperInvariant(); }
         };
-        using var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes("é,\"a\"\"b\"\r\n")), profile);
+        using var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes("plain,é,\"a\"\"b\"\r\n")), profile);
         Assert.That(reader.Read(), Is.True);
-        Assert.That(reader.GetString(0), Is.EqualTo("É"));
-        Assert.That(reader.GetString(1), Is.EqualTo("A\"B"));
-        Assert.That(calls, Is.EqualTo(2));
+        Assert.That(reader.GetString(0), Is.EqualTo("PLAIN"));
+        Assert.That(reader.GetString(1), Is.EqualTo("É"));
+        Assert.That(reader.GetString(2), Is.EqualTo("A\"B"));
+        Assert.That(calls, Is.EqualTo(3));
     }
 
     [Test]
