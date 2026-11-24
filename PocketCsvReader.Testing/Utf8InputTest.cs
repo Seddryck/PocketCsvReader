@@ -265,6 +265,95 @@ public class Utf8InputTest
         Assert.That(() => reader.GetInt32(0), Throws.TypeOf(exception));
     }
 
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void DecimalGettersPreserveNumberSyntaxAndExceptions(CsvInputMode mode)
+    {
+        var bytes = Encoding.UTF8.GetBytes("9.33,\"1,234.50\",1e2,79228162514264337593543950336");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), Profile(mode));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDecimal(0), Is.EqualTo(9.33m));
+        Assert.That(reader.GetFieldValue<decimal>(1), Is.EqualTo(1234.50m));
+        Assert.That(() => reader.GetDecimal(2), Throws.TypeOf<FormatException>());
+        Assert.That(() => reader.GetFieldValue<decimal>(2), Throws.TypeOf<FormatException>());
+        Assert.That(() => reader.GetDecimal(3), Throws.TypeOf<OverflowException>());
+    }
+
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void DateOnlyGettersPreserveCalendarValidationAndFallback(CsvInputMode mode)
+    {
+        var bytes = Encoding.UTF8.GetBytes("2024-02-29,7/27/2012,0001-01-01,9999-12-31,1900-02-29,2024-13-01,2024-01-00,0000-01-01,2024-02-29x");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), Profile(mode));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDate(0), Is.EqualTo(new DateOnly(2024, 2, 29)));
+        Assert.That(reader.GetFieldValue<DateOnly>(0), Is.EqualTo(new DateOnly(2024, 2, 29)));
+        Assert.That(reader.GetDate(1), Is.EqualTo(new DateOnly(2012, 7, 27)));
+        Assert.That(reader.GetFieldValue<DateOnly>(1), Is.EqualTo(new DateOnly(2012, 7, 27)));
+        Assert.That(reader.GetDate(2), Is.EqualTo(DateOnly.MinValue));
+        Assert.That(reader.GetDate(3), Is.EqualTo(DateOnly.MaxValue));
+        for (var ordinal = 4; ordinal < reader.FieldCount; ordinal++)
+        {
+            Assert.That(() => reader.GetDate(ordinal), Throws.TypeOf<FormatException>());
+            Assert.That(() => reader.GetFieldValue<DateOnly>(ordinal), Throws.TypeOf<FormatException>());
+        }
+    }
+
+    [Test]
+    public void DateOnlyFastPathRespectsConfiguredParser()
+    {
+        var expected = new DateOnly(2000, 1, 1);
+        var csv = new CsvReaderBuilder()
+            .WithDialect(dialect => dialect.WithoutHeader())
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .WithParsers(parsers => parsers.WithParser<DateOnly>((ReadOnlySpan<char> _) => expected))
+            .Build();
+
+        using var reader = csv.ToDataReader(new MemoryStream("2024-02-29"u8.ToArray()));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDate(0), Is.EqualTo(expected));
+        Assert.That(reader.GetFieldValue<DateOnly>(0), Is.EqualTo(expected));
+    }
+
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void DateTimeGettersPreserveMidnightAndFallback(CsvInputMode mode)
+    {
+        const string timestamp = "2024-02-29T01:02:03+02:00";
+        var bytes = Encoding.UTF8.GetBytes($"2024-02-29,7/27/2012,{timestamp},1900-02-29");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), Profile(mode));
+        Assert.That(reader.Read(), Is.True);
+
+        var midnight = new DateTime(2024, 2, 29, 0, 0, 0, DateTimeKind.Unspecified);
+        Assert.That(reader.GetDateTime(0), Is.EqualTo(midnight));
+        Assert.That(reader.GetDateTime(0).Kind, Is.EqualTo(DateTimeKind.Unspecified));
+        Assert.That(reader.GetFieldValue<DateTime>(0), Is.EqualTo(midnight));
+        Assert.That(reader.GetFieldValue<DateTime>(0).Kind, Is.EqualTo(DateTimeKind.Unspecified));
+
+        Assert.That(reader.GetDateTime(1), Is.EqualTo(new DateTime(2012, 7, 27)));
+        var expectedTimestamp = DateTime.Parse(timestamp, System.Globalization.CultureInfo.InvariantCulture);
+        var actualTimestamp = reader.GetDateTime(2);
+        Assert.That(actualTimestamp, Is.EqualTo(expectedTimestamp));
+        Assert.That(actualTimestamp.Kind, Is.EqualTo(expectedTimestamp.Kind));
+        Assert.That(() => reader.GetDateTime(3), Throws.TypeOf<FormatException>());
+    }
+
+    [Test]
+    public void DateTimeFastPathRespectsConfiguredParser()
+    {
+        var expected = new DateTime(2000, 1, 1, 14, 15, 16, DateTimeKind.Utc);
+        var csv = new CsvReaderBuilder()
+            .WithDialect(dialect => dialect.WithoutHeader())
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .WithParsers(parsers => parsers.WithParser<DateTime>((ReadOnlySpan<char> _) => expected))
+            .Build();
+
+        using var reader = csv.ToDataReader(new MemoryStream("2024-02-29"u8.ToArray()));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDateTime(0), Is.EqualTo(expected));
+        Assert.That(reader.GetDateTime(0).Kind, Is.EqualTo(DateTimeKind.Utc));
+    }
+
     [Test]
     public async Task PooledFieldDecodingResetsAcrossRecordsAndPreservesReturnedStrings()
     {
