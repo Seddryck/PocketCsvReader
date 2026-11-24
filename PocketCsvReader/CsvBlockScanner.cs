@@ -25,7 +25,6 @@ internal sealed class CsvBlockScanner<T> : IDisposable
     private int[]? _rows;
     private int _rowCount;
     private int _rowIndex;
-    private int _firstField;
     // Store the remaining length so callers can pass either a full buffer or a suffix.
     private int _fallbackRemaining = -1;
 
@@ -54,24 +53,47 @@ internal sealed class CsvBlockScanner<T> : IDisposable
 
     public void Reset()
     {
-        _rowCount = _rowIndex = _firstField = 0;
+        _rowCount = _rowIndex = 0;
         _fallbackRemaining = -1;
     }
 
     public bool TryRead(ReadOnlySpan<T> input, int position, out CsvRowOffsets row)
     {
-        if (_rowIndex == _rowCount && !ScanBatch(input, position))
-        {
-            row = default;
-            return false;
-        }
-
-        var ends = _ends!;
-        var lastField = _rows![_rowIndex++];
-        row = new(ends, _firstField, lastField - _firstField, (ends[lastField - 1] & CsvFieldOffset.OffsetMask) + _terminatorLength);
-        _firstField = lastField;
-        return true;
+        var count = Advance(input, ref position);
+        row = count == 0 ? default : GetCurrentOffsets();
+        return count != 0;
     }
+
+    public int Advance(ReadOnlySpan<T> input, ref int position)
+        => _rowIndex != _rowCount || ScanBatch(input, position) ? AdvanceBuffered(ref position) : 0;
+
+    public int AdvanceBuffered(ref int position)
+    {
+        var index = _rowIndex;
+        if (index == _rowCount)
+            return 0;
+
+        var rows = _rows!;
+        var lastField = rows[index];
+        position += GetRowLength(_ends!, lastField);
+        _rowIndex = index + 1;
+        return lastField - FirstField(rows, index);
+    }
+
+    public CsvRowOffsets GetCurrentOffsets()
+    {
+        var index = _rowIndex - 1;
+        var rows = _rows!;
+        var firstField = FirstField(rows, index);
+        var lastField = rows[index];
+        var ends = _ends!;
+        return new(ends, firstField, lastField - firstField, GetRowLength(ends, lastField));
+    }
+
+    private static int FirstField(int[] rows, int index) => index == 0 ? 0 : rows[index - 1];
+
+    private int GetRowLength(int[] ends, int lastField)
+        => (ends[lastField - 1] & CsvFieldOffset.OffsetMask) + _terminatorLength;
 
     private bool ScanBatch(ReadOnlySpan<T> input, int position)
     {
@@ -102,7 +124,7 @@ internal sealed class CsvBlockScanner<T> : IDisposable
             }
         }
 
-        _firstField = _rowIndex = 0;
+        _rowIndex = 0;
         _rowCount = index.RowCount;
         return _rowCount != 0;
     }

@@ -67,22 +67,62 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadResult(borrowFields: true);
 
+    // The cursor and its bytes remain valid until the source advances again.
+    internal bool CanDeferRecord => _blockScanner is not null && _positionTracker is null;
+
+    internal int AdvanceBuffered() => _blockScanner!.AdvanceBuffered(ref _position);
+
+    internal CurrentRecord GetIndexedRecord()
+    {
+        var row = _blockScanner!.GetCurrentOffsets();
+        return CreateIndexedRecord(row, _position - row.Length);
+    }
+
+    private CurrentRecord CreateIndexedRecord(CsvRowOffsets row, int start)
+    {
+        _decodedFields.Reset(row.Length, row.FieldCount);
+        return new CurrentRecord(_input.AsMemory(start, row.Length), row.Ends, row.FirstField, row.FieldCount, _decodedFields);
+    }
+
+    internal CurrentRecordResult ReadForDataReader(out int indexedFieldCount)
+        => ReadResult(borrowFields: true, deferIndexedRecord: true, out indexedFieldCount);
+
     private CurrentRecordResult ReadResult(bool borrowFields)
+        => ReadResult(borrowFields, deferIndexedRecord: false, out _);
+
+    private CurrentRecordResult ReadResult(bool borrowFields, bool deferIndexedRecord, out int indexedFieldCount)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        CurrentRecordResult result;
-        while (!TryRead(false, borrowFields, out result))
+        indexedFieldCount = 0;
+        while (true)
         {
+            CurrentRecordResult result;
+            var complete = deferIndexedRecord
+                ? TryReadDeferredRecord(borrowFields, out result, out indexedFieldCount)
+                : TryRead(false, borrowFields, out result);
+            if (complete)
+                return result;
+
             _available = _stream.Read(_input, 0, _readSize);
             _position = 0;
             _blockScanner?.Reset();
             if (_available == 0)
             {
                 TryRead(true, borrowFields, out result);
-                break;
+                return result;
             }
         }
-        return result;
+    }
+
+    private bool TryReadDeferredRecord(bool borrowFields, out CurrentRecordResult result, out int fieldCount)
+    {
+        // Only used with a scanner and without position tracking.
+        fieldCount = _spilledLength == 0 ? _blockScanner!.Advance(_input.AsSpan(0, _available), ref _position) : 0;
+        if (fieldCount == 0)
+            return TryReadCore(false, borrowFields, out result);
+
+        result = new(false, default, RecordState.Record);
+        return true;
     }
 
     public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
@@ -132,11 +172,9 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_spilledLength == 0 && _blockScanner is { } scanner
             && scanner.TryRead(_input.AsSpan(0, _available), _position, out var row))
         {
-            var memory = _input.AsMemory(_position, row.Length);
+            var record = CreateIndexedRecord(row, _position);
             _position += row.Length;
-            _decodedFields.Reset(row.Length, row.FieldCount);
-            result = new(false, new CurrentRecord(memory, row.Ends, row.FirstField, row.FieldCount, _decodedFields),
-                RecordState.Record);
+            result = new(false, record, RecordState.Record);
             return true;
         }
 

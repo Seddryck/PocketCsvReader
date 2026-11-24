@@ -269,8 +269,48 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
             RegisterHeader(CsvHeaders.Read(RecordSource!));
 
+        if (IsEof)
+            return false;
+
+        return IndexedRecordSource is { } indexed && Profile.Dialect.CommentRows is not { Length: > 0 }
+            ? ReadIndexedRow(indexed, firstRow)
+            : ReadOrdinaryRow(firstRow);
+    }
+
+    private bool ReadIndexedRow(Utf8RecordSource source, bool firstRow)
+    {
+        var fieldCount = source.AdvanceBuffered();
+        if (fieldCount != 0)
+            return PublishIndexedRow(source, firstRow, fieldCount);
+
+        InvalidateDeferredRecord();
+        var result = source.ReadForDataReader(out fieldCount);
+        IsEof = result.IsEndOfFile;
+        if (fieldCount != 0)
+            return PublishIndexedRow(source, firstRow, fieldCount);
+        if (IsEof && result.Record.FieldCount == 0)
+        {
+            Record = RecordMemory.Empty;
+            return false;
+        }
+
+        RowCount++;
+        return PublishOrdinaryRow(result.Record, firstRow);
+    }
+
+    private bool PublishIndexedRow(Utf8RecordSource source, bool firstRow, int fieldCount)
+    {
+        RowCount++;
+        RegisterHeaderlessFields(firstRow, fieldCount);
+        SetDeferredRecord(source, fieldCount);
+        CompleteRecord(fieldCount);
+        return true;
+    }
+
+    private bool ReadOrdinaryRow(bool firstRow)
+    {
+        InvalidateDeferredRecord();
         CurrentRecordResult result;
-        RecordState state;
         do
         {
             if (IsEof)
@@ -278,7 +318,6 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
             result = ReadSource();
             IsEof = result.IsEndOfFile;
-            state = result.State;
             if (IsEof && result.Record.FieldCount == 0)
             {
                 Record = RecordMemory.Empty;
@@ -287,18 +326,28 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             RowCount++;
             if (Profile.Dialect.CommentRows?.Contains(RowCount) == true)
                 PositionTracker.ExcludeRecord(RecordSource!);
-        } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || state == RecordState.Comment);
+        } while ((Profile.Dialect.CommentRows?.Contains(RowCount) ?? false) || result.State == RecordState.Comment);
 
-        if (firstRow && (Fields?.Length ?? 0) == 0)
-            RegisterHeader([new string?[result.Record.FieldCount]]);
+        return PublishOrdinaryRow(result.Record, firstRow);
+    }
 
-        SetRecord(result.Record, copyMetadataOnMaterialization: true);
-        CompleteRecord();
+    private bool PublishOrdinaryRow(CurrentRecord record, bool firstRow)
+    {
+        RegisterHeaderlessFields(firstRow, record.FieldCount);
+        SetRecord(record, copyMetadataOnMaterialization: true);
+        CompleteRecord(record.FieldCount);
         return true;
+    }
+
+    private void RegisterHeaderlessFields(bool firstRow, int fieldCount)
+    {
+        if (firstRow && (Fields?.Length ?? 0) == 0)
+            RegisterHeader([new string?[fieldCount]]);
     }
 
     protected virtual async ValueTask<bool> ReadRowAsync(CancellationToken cancellationToken)
     {
+        InvalidateDeferredRecord();
         var firstRow = RowCount == 0;
         if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
             RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
@@ -325,7 +374,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             RegisterHeader([new string?[result.Record.FieldCount]]);
 
         SetRecord(result.Record, copyMetadataOnMaterialization: true);
-        CompleteRecord();
+        CompleteRecord(result.Record.FieldCount);
         return true;
     }
 
@@ -361,9 +410,9 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     private string[] AddRowNumberHeader(string[] headers)
         => _rowNumberOptions is { } options ? [options.ColumnName, .. headers] : headers;
 
-    private void CompleteRecord()
+    private void CompleteRecord(int fieldCount)
     {
-        HandleUnexpectedFields(_projectedOrdinals is not null ? _sourceHeaders!.Length : Fields!.Length - RowNumberWidth);
+        HandleUnexpectedFields(fieldCount, _projectedOrdinals is not null ? _sourceHeaders!.Length : Fields!.Length - RowNumberWidth);
         if (HasRowNumber)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);
@@ -376,13 +425,13 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     /// <summary>
     /// Throws an exception if the current record contains more fields than the expected count.
     /// </summary>
+    /// <param name="length">The number of fields in the current record.</param>
     /// <param name="expectedLength">The expected number of fields for the current record.</param>
     /// <exception cref="InvalidDataException">
     /// Thrown when the record has more fields than expected, indicating the row number and the number of extra fields.
     /// </exception>
-    private void HandleUnexpectedFields(int expectedLength)
+    private void HandleUnexpectedFields(int length, int expectedLength)
     {
-        var length = CurrentFieldSpanCount;
         if (expectedLength < length)
         {
             var rowNumber = RowCount + (
