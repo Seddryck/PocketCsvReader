@@ -279,6 +279,42 @@ public class Utf8InputTest
         Assert.That(() => reader.GetDecimal(3), Throws.TypeOf<OverflowException>());
     }
 
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void DateOnlyGettersPreserveCalendarValidationAndFallback(CsvInputMode mode)
+    {
+        var bytes = Encoding.UTF8.GetBytes("2024-02-29,7/27/2012,0001-01-01,9999-12-31,1900-02-29,2024-13-01,2024-01-00,0000-01-01,2024-02-29x");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), Profile(mode));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDate(0), Is.EqualTo(new DateOnly(2024, 2, 29)));
+        Assert.That(reader.GetFieldValue<DateOnly>(0), Is.EqualTo(new DateOnly(2024, 2, 29)));
+        Assert.That(reader.GetDate(1), Is.EqualTo(new DateOnly(2012, 7, 27)));
+        Assert.That(reader.GetFieldValue<DateOnly>(1), Is.EqualTo(new DateOnly(2012, 7, 27)));
+        Assert.That(reader.GetDate(2), Is.EqualTo(DateOnly.MinValue));
+        Assert.That(reader.GetDate(3), Is.EqualTo(DateOnly.MaxValue));
+        for (var ordinal = 4; ordinal < reader.FieldCount; ordinal++)
+        {
+            Assert.That(() => reader.GetDate(ordinal), Throws.TypeOf<FormatException>());
+            Assert.That(() => reader.GetFieldValue<DateOnly>(ordinal), Throws.TypeOf<FormatException>());
+        }
+    }
+
+    [Test]
+    public void DateOnlyFastPathRespectsConfiguredParser()
+    {
+        var expected = new DateOnly(2000, 1, 1);
+        var csv = new CsvReaderBuilder()
+            .WithDialect(dialect => dialect.WithoutHeader())
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .WithParsers(parsers => parsers.WithParser<DateOnly>((ReadOnlySpan<char> _) => expected))
+            .Build();
+
+        using var reader = csv.ToDataReader(new MemoryStream("2024-02-29"u8.ToArray()));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDate(0), Is.EqualTo(expected));
+        Assert.That(reader.GetFieldValue<DateOnly>(0), Is.EqualTo(expected));
+    }
+
     [Test]
     public async Task PooledFieldDecodingResetsAcrossRecordsAndPreservesReturnedStrings()
     {

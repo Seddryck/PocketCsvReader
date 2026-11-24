@@ -158,6 +158,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetTemporal<T>(int i)
     {
+        if (typeof(T) == typeof(DateOnly) && RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
+            return direct;
+
         try
         {
             if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))

@@ -164,10 +164,41 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             value = (T)(object)shortInteger;
         else if (typeof(T) == typeof(decimal) && decimal.TryParse(bytes, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
             value = (T)(object)amount;
+        else if (typeof(T) == typeof(DateOnly) && GetType() == typeof(CsvDataReader) && TryParseIsoDate(bytes, out var date))
+            value = (T)(object)date;
         else if (typeof(T) == typeof(bool) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out bool boolean, out consumed) && consumed == bytes.Length)
             value = (T)(object)boolean;
         else
             return false;
+        return true;
+    }
+
+    private static bool TryParseIsoDate(ReadOnlySpan<byte> bytes, out DateOnly date)
+    {
+        date = default;
+        if (bytes.Length != 10 || bytes[4] != (byte)'-' || bytes[7] != (byte)'-'
+            || !TryParseDateDigits(bytes[..4], out var year)
+            || !TryParseDateDigits(bytes.Slice(5, 2), out var month)
+            || !TryParseDateDigits(bytes.Slice(8, 2), out var day)
+            || year == 0 || month is < 1 or > 12
+            || day < 1 || day > DateTime.DaysInMonth(year, month))
+            return false;
+
+        date = new DateOnly(year, month, day);
+        return true;
+    }
+
+    private static bool TryParseDateDigits(ReadOnlySpan<byte> bytes, out int value)
+    {
+        value = 0;
+        foreach (var b in bytes)
+        {
+            var digit = b - '0';
+            if ((uint)digit > 9)
+                return false;
+
+            value = (value * 10) + digit;
+        }
         return true;
     }
 
