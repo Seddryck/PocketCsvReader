@@ -10,8 +10,15 @@ public sealed class JsonTableDataReader : BaseDataReader<JsonProfile>
     private JsonFieldBuffer? _decodingBuffer;
 
     public JsonTableDataReader(Stream stream, JsonProfile profile)
-        : base(stream, ValidateProfile(profile), new StringMapper(profile.ParserOptimizations.PoolString))
+        : this(stream, profile, null)
     { }
+
+    internal JsonTableDataReader(Stream stream, JsonProfile profile, string[]? columnNames)
+        : base(stream, ValidateProfile(profile), new StringMapper(profile.ParserOptimizations.PoolString))
+    {
+        // Fields exposes an array, so each reader owns its copy of the supplied names.
+        Fields = columnNames?.ToArray();
+    }
 
     internal static JsonProfile ValidateProfile(JsonProfile profile)
     {
@@ -25,7 +32,7 @@ public sealed class JsonTableDataReader : BaseDataReader<JsonProfile>
         => Fields?.Length ?? throw new InvalidOperationException("The JSON table header has not been read.");
 
     protected override IRecordSource<JsonProfile> CreateRecordSource(StreamReader reader, JsonProfile profile)
-        => new JsonRecordSource(reader, profile, table: true);
+        => new JsonRecordSource(reader, profile, table: true, tableWidth: Fields?.Length);
 
     protected override bool ReadCore()
     {

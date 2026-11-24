@@ -93,6 +93,20 @@ while (await reader.ReadAsync())
 
 The reader consumes the header on the first read and streams the data rows. Header names must be JSON strings and are compared ordinally for duplicates after decoding escapes. Every data row must match the header width. A header-only document has zero rows, and its column names remain available on the data reader after the first read. The table reader accepts `JsonProfile` settings such as JSONC, schemas, and row filters.
 
+### JSON tables without a header row
+
+When column names come from a schema or another source, pass them in row order. For a file containing `[[1, "Ada"], [2, "Lin"]]`, the following reader exposes both rows:
+
+```csharp
+using PocketCsvReader.Json;
+using PocketCsvReader.Json.Configuration;
+
+using var reader = new JsonTableReader(JsonProfile.Default, ["id", "name"])
+    .ToDataReader("people.json");
+```
+
+Column metadata is available before the first read, including for an empty array. Every row must match the supplied column count.
+
 ## JSON with comments (JSONC)
 
 Opt in to JSONC using the existing `PocketCsvReader.Json` package:

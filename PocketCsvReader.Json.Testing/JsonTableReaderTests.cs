@@ -185,6 +185,92 @@ public class JsonTableReaderTests
         }
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task ReadsEveryHeaderlessRowWithSuppliedColumns(bool async)
+    {
+        using var stream = new ChunkedStream("""[[1,"apple"],[2,"pear"]]""", async);
+        using var reader = new JsonTableReader(JsonProfile.Default, ["id", "name"]).ToDataReader(stream);
+
+        Assert.That(reader.FieldCount, Is.EqualTo(2));
+        Assert.That(reader.GetName(0), Is.EqualTo("id"));
+        var name = reader.GetOrdinal("name");
+        Assert.That(name, Is.EqualTo(1));
+        Assert.That(stream.BytesRead, Is.Zero);
+
+        Assert.That(await Read(), Is.True);
+        Assert.That(reader.RowCount, Is.EqualTo(1));
+        Assert.That(reader.GetInt32(0), Is.EqualTo(1));
+        Assert.That(reader.GetString(name), Is.EqualTo("apple"));
+
+        Assert.That(await Read(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(2));
+        Assert.That(reader.GetString(name), Is.EqualTo("pear"));
+        Assert.That(await Read(), Is.False);
+
+        Task<bool> Read() => async ? reader.ReadAsync() : Task.FromResult(reader.Read());
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task EmptyHeaderlessTableKeepsSuppliedColumns(bool async)
+    {
+        using var stream = new ChunkedStream("[]", async);
+        using var reader = new JsonTableReader(JsonProfile.Default, ["id", "name"]).ToDataReader(stream);
+
+        Assert.That(async ? await reader.ReadAsync() : reader.Read(), Is.False);
+        Assert.That(reader.RowCount, Is.Zero);
+        Assert.That(reader.FieldCount, Is.EqualTo(2));
+        Assert.That(reader.GetName(1), Is.EqualTo("name"));
+    }
+
+    [TestCase("[[1]]", 1, false)]
+    [TestCase("[[1,2,3]]", 3, false)]
+    [TestCase("[[1,2],[3]]", 1, true)]
+    [TestCase("[[1,2],[3,4,5]]", 3, true)]
+    public async Task RejectsWrongHeaderlessRowWidths(string content, int width, bool startsWithValidRow)
+    {
+        var format = new JsonTableReader(JsonProfile.Default, ["id", "name"]);
+        using var syncReader = format.ToDataReader(new ChunkedStream(content, asyncOnly: false));
+        using var asyncReader = format.ToDataReader(new ChunkedStream(content, asyncOnly: true));
+        if (startsWithValidRow)
+        {
+            Assert.That(syncReader.Read(), Is.True);
+            Assert.That(await asyncReader.ReadAsync(), Is.True);
+        }
+
+        var syncError = Assert.Throws<InvalidDataException>(() => syncReader.Read());
+        var asyncError = await Assert.ThrowsAsync<InvalidDataException>(async () => await asyncReader.ReadAsync());
+        Assert.That(syncError!.Message, Does.Contain($"Expected 2 values but found {width}."));
+        Assert.That(asyncError!.Message, Is.EqualTo(syncError.Message));
+    }
+
+    [Test]
+    public void RejectsInvalidSuppliedColumnNames()
+    {
+        Assert.That(() => new JsonTableReader(JsonProfile.Default, null!),
+            Throws.ArgumentNullException);
+        Assert.That(() => new JsonTableReader(JsonProfile.Default, ["id", null!]),
+            Throws.ArgumentException.With.Property("ParamName").EqualTo("columnNames"));
+        Assert.That(() => new JsonTableReader(JsonProfile.Default, ["id", "id"]),
+            Throws.ArgumentException.With.Message.Contains("Duplicate column name 'id'"));
+    }
+
+    [Test]
+    public void SnapshotsSuppliedColumnNamesAndKeepsReaderMetadataIndependent()
+    {
+        string[] names = ["id", "ID"];
+        var format = new JsonTableReader(JsonProfile.Default, names);
+        names[0] = "changed";
+        using var first = format.ToDataReader(Input("[]"));
+        using var second = format.ToDataReader(Input("[]"));
+
+        Assert.That(first.GetName(0), Is.EqualTo("id"));
+        first.Fields![0] = "changed";
+        Assert.That(second.GetName(0), Is.EqualTo("id"));
+        Assert.That(second.GetOrdinal("ID"), Is.EqualTo(1));
+    }
+
     private static JsonTableReader SmallReader()
         => new(new JsonProfile(parserOptimizations: JsonProfile.DefaultParserOptimizations with { BufferSize = 8 }));
 

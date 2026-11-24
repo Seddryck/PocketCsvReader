@@ -19,6 +19,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
     private readonly FieldSpan[]? _projectedFields;
     private readonly JsonFieldBuffer _fieldBuffer = new();
     private IEnumerator<ReadOnlyMemory<char>>? _matches;
+    private int? _tableWidth;
     private DocumentState _state;
     private bool _needsArrayElement;
     private JsonCommentScanner _trivia;
@@ -26,10 +27,11 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
     public JsonProfile Profile { get; }
     internal string[]? TableHeader { get; private set; }
 
-    public JsonRecordSource(StreamReader reader, JsonProfile profile, bool table = false)
+    public JsonRecordSource(StreamReader reader, JsonProfile profile, bool table = false, int? tableWidth = null)
     {
         Profile = profile;
         _table = table;
+        _tableWidth = tableWidth;
         if (profile.TrackPosition) _position = new();
         _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         if (profile.StableFieldLayout)
@@ -262,10 +264,15 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         try
         {
             var fields = JsonRecordParser.ParseTableRow(json.Span, Profile.AllowComments, Profile.AllowTrailingCommas, _fieldBuffer);
-            if (TableHeader is null)
+            if (_tableWidth is null)
+            {
                 TableHeader = ReadTableHeader(json, fields);
-            else if (fields.Length != TableHeader.Length)
-                throw new InvalidDataException($"Expected {TableHeader.Length} values but found {fields.Length}.");
+                _tableWidth = TableHeader.Length;
+            }
+            else if (fields.Length != _tableWidth.Value)
+            {
+                throw new InvalidDataException($"Expected {_tableWidth.Value} values but found {fields.Length}.");
+            }
             return fields;
         }
         catch (InvalidDataException exception)
@@ -298,7 +305,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
     {
         if (_table && first != '[')
         {
-            throw Error(TableHeader is null
+            throw Error(_tableWidth is null
                 ? "A JSON table header must be an array"
                 : "A JSON table data row must be an array");
         }
@@ -325,7 +332,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
-        if (_table)
+        if (_table && _tableWidth is null)
             throw Error("A JSON table requires a header row");
 
         _cursor.Read();
@@ -374,7 +381,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
-        if (_table)
+        if (_table && _tableWidth is null)
             throw Error("A JSON table requires a header row");
 
         await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
