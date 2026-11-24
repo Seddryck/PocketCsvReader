@@ -63,17 +63,18 @@ public partial class CsvDataReader
             ? (_rowNumberText ??= CurrentRowNumber.ToString(CultureInfo.InvariantCulture)).AsMemory()
             : GetCurrentFieldMemory(GetPhysicalOrdinal(i));
 
-    private bool TryGetCsvUtf8(int i, out ReadOnlyMemory<byte> bytes, out FieldSpan field)
+    private bool TryGetCsvUtf8(int i, out ReadOnlyMemory<byte> bytes, out bool isEscaped)
     {
+        // Derived readers can override the visible field count.
+        if (_projectedOrdinals is null && !HasRowNumber && GetType() == typeof(CsvDataReader))
+            return TryGetCurrentUtf8(i, out bytes, out isEscaped);
+
+        if (CurrentFieldSpans is not null && (uint)i < (uint)FieldCount)
+            return TryGetCurrentUtf8(GetPhysicalOrdinal(i), out bytes, out isEscaped);
+
         bytes = default;
-        field = default;
-        if (CurrentFieldSpans is not { } fields || (uint)i >= (uint)FieldCount)
-            return false;
-        var ordinal = GetPhysicalOrdinal(i);
-        if ((uint)ordinal >= (uint)fields.Length)
-            return false;
-        field = fields[ordinal];
-        return TryGetCurrentUtf8(ordinal, out bytes);
+        isEscaped = false;
+        return false;
     }
 
     private T MapProjectedRecord<T>(SpanMapper<T> mapper)

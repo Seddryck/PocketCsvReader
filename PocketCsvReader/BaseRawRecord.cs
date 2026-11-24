@@ -33,8 +33,8 @@ public abstract class BaseRawRecord<TProfile>
     /// <summary>Reads a field without constructing a public record wrapper.</summary>
     protected ReadOnlyMemory<char> GetCurrentFieldMemory(int ordinal) => _current.Slice(ordinal);
 
-    private protected bool TryGetCurrentUtf8(int ordinal, out ReadOnlyMemory<byte> value)
-        => _current.TryGetUtf8(ordinal, out value);
+    private protected bool TryGetCurrentUtf8(int ordinal, out ReadOnlyMemory<byte> value, out bool isEscaped)
+        => _current.TryGetUtf8(ordinal, out value, out isEscaped);
 
     private protected void SetRecord(CurrentRecord record, bool copyMetadataOnMaterialization = false)
     {

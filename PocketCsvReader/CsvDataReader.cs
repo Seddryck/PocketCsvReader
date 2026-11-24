@@ -135,8 +135,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         // character-count pass, and to reuse decoding for repeated access.
         if (Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var field)
-            || (Profile.ParserOptimizations.UnescapeChars && field.Value.IsEscaped))
+            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var isEscaped)
+            || (Profile.ParserOptimizations.UnescapeChars && isEscaped))
             return false;
 
         if (Profile.ParserOptimizations.PoolUtf8Strings)
@@ -154,31 +154,49 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     private protected override bool TryGetDirectValue<T>(int i, out T value)
     {
         value = default!;
-        if (HasRowNumber && i == 0 && typeof(T) == typeof(int))
+        if (HasRowNumber && i == 0)
         {
+            if (typeof(T) != typeof(int))
+                return false;
+
             value = (T)(object)CurrentRowNumber;
             return true;
         }
 
+        var parser = ResolveUtf8Parser<T>(out var isConfigured);
+        return parser is not null
+            && TryGetDirectUtf8(i, out var memory)
+            && CanParseUtf8Field<T>(i)
+            && (!isConfigured || IsValidUtf8(memory.Span))
+            && parser(memory.Span, out value);
+    }
+
+    private TryParseUtf8<T>? ResolveUtf8Parser<T>(out bool isConfigured)
+    {
         var registrations = Profile.Parsers;
         var configured = registrations?.FindUtf8Parser<T>();
-        var parser = configured ?? (registrations?.HasParser(typeof(T)) is true ? null : DefaultUtf8Parsers.For<T>.Parser);
-        if (parser is null || GetType() != typeof(CsvDataReader)
-            || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var field)
-            || field.Value.IsEscaped || field.Children is not null)
-            return false;
+        isConfigured = configured is not null;
+        return configured ?? (registrations?.HasParser(typeof(T)) is true ? null : DefaultUtf8Parsers.For<T>.Parser);
+    }
 
-        // A present, unescaped field without sequences has a non-null logical value.
-        // Schema conversions and derived readers can change that value or its parser.
-        if (Profile.Schema is not null && (!TryGetFieldDescriptor(i, out var descriptor)
-            || descriptor.RuntimeType != typeof(T) || descriptor.SpanParse is not null || descriptor.Parse is not null
-            || (descriptor.Format is not null && descriptor.Format is not NoneFormatDescriptor)
-            || descriptor.Sequences is { IsEmpty: false }))
-            return false;
+    private bool TryGetDirectUtf8(int i, out ReadOnlyMemory<byte> memory)
+    {
+        memory = default;
+        return GetType() == typeof(CsvDataReader)
+            && Profile.Resource?.Sequences is not { IsEmpty: false }
+            && TryGetCsvUtf8(i, out memory, out var isEscaped)
+            && !isEscaped;
+    }
 
-        var utf8 = memory.Span;
-        return (configured is null || IsValidUtf8(utf8)) && parser(utf8, out value);
+    private bool CanParseUtf8Field<T>(int i)
+    {
+        if (Profile.Schema is null)
+            return true;
+
+        return TryGetFieldDescriptor(i, out var descriptor)
+            && descriptor.RuntimeType == typeof(T)
+            && !HasCustomParser(descriptor)
+            && descriptor.Sequences is not { IsEmpty: false };
     }
 
     private static bool IsValidUtf8(ReadOnlySpan<byte> utf8)

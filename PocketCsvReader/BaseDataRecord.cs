@@ -435,7 +435,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         return parse;
     }
 
-    private static bool HasCustomParser(FieldDescriptor field)
+    private protected static bool HasCustomParser(FieldDescriptor field)
         => field.SpanParse is not null || field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
     private SpanParser.ParserEntry RegisterFieldParser(int i, FieldDescriptor field)

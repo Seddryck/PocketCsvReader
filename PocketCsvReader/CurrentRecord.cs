@@ -16,12 +16,19 @@ internal readonly struct CurrentRecord
     public CurrentRecord(ReadOnlyMemory<byte> utf8, FieldSpan[] fields, Utf8FieldBuffer decodedFields)
         => (_utf8, Fields, _decodedFields) = (utf8, fields, decodedFields);
 
-    public bool TryGetUtf8(int ordinal, out ReadOnlyMemory<byte> value)
+    public bool TryGetUtf8(int ordinal, out ReadOnlyMemory<byte> value, out bool isEscaped)
     {
-        if (!IsUtf8) { value = default; return false; }
-        var field = Fields![ordinal].Value;
-        value = _utf8.Slice(field.Start, field.Length);
-        return true;
+        if (IsUtf8 && Fields is { } fields && (uint)ordinal < (uint)fields.Length)
+        {
+            var field = fields[ordinal].Value;
+            value = _utf8.Slice(field.Start, field.Length);
+            isEscaped = field.IsEscaped;
+            return true;
+        }
+
+        value = default;
+        isEscaped = false;
+        return false;
     }
 
     public ReadOnlyMemory<char> Slice(int ordinal)
