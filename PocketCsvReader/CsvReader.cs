@@ -87,6 +87,7 @@ namespace PocketCsvReader
                 Filters = profile.Filters,
                 Skip = profile.Skip,
                 Take = profile.Take,
+                Projection = profile.Projection,
                 RowNumber = profile.RowNumber
             };
         }

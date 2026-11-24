@@ -12,6 +12,22 @@ namespace PocketCsvReader.Arrow.Testing;
 public class ArrowReaderExtensionsTests
 {
     [Test]
+    public void ToArrowBatches_WithCsvProjection_UsesProjectedSchema()
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithDelimiter(',').WithLineTerminator("\n").WithHeader())
+            .WithSchema(s => s.Indexed().WithField<int>().WithField<int>().WithField<string>())
+            .WithProjection("Name", "Id")
+            .Build();
+        using var stream = StreamOf("Id,Unused,Name\n7,not-an-int,Ada");
+        using var batch = csv.ToArrowBatches(stream).Single();
+
+        Assert.That(batch.Schema.FieldsList.Select(field => field.Name), Is.EqualTo(new[] { "Name", "Id" }));
+        Assert.That(((StringArray)batch.Column(0)).GetString(0), Is.EqualTo("Ada"));
+        Assert.That(((Int32Array)batch.Column(1)).GetValue(0), Is.EqualTo(7));
+    }
+
+    [Test]
     public void ToArrowBatches_WithNumericPrimitives_PreservesWidthsAndValues()
     {
         using var stream = StreamOf(

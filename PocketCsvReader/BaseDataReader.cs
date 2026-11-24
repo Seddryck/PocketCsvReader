@@ -267,7 +267,21 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private bool AcceptCurrentRow()
     {
         if (_trackFileBytes) return true;
-        if (_selectFileRecord is not null && !AcceptSelectedRecord()) return false;
+        if (_selectFileRecord is null && RowFilters.Count == 0) return true;
+
+        EnterSourceFields();
+        try
+        {
+            return (_selectFileRecord is null || AcceptSelectedRecord()) && AcceptFilters();
+        }
+        finally { ExitSourceFields(); }
+    }
+
+    private protected virtual void EnterSourceFields() { }
+    private protected virtual void ExitSourceFields() { }
+
+    private bool AcceptFilters()
+    {
         var filters = RowFilters;
         if (filters.Count == 0) return true;
         var view = _filterView ??= new RowView(this);
@@ -276,23 +290,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
         {
             for (var index = 0; index < filters.Count; index++)
             {
-                var filter = filters[index];
-                if (filter.RowPredicate is { } row)
-                {
-                    if (!row(view)) return false;
-                    continue;
-                }
-                var ordinal = filter.Column is { } column ? view.GetOrdinal(column) : filter.Ordinal;
-                view.Validate(ordinal);
-                if (filter.SpanPredicate is { } span)
-                {
-                    var value = GetValueOrThrow(ordinal);
-                    if (!value.HasValue || !span(value.Value)) return false;
-                }
-                else if (!filter.ValuePredicate!(view, ordinal))
-                {
-                    return false;
-                }
+                if (!AcceptFilter(filters[index], view)) return false;
             }
             return true;
         }
@@ -302,6 +300,20 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             throw;
         }
         finally { view.Active = false; }
+    }
+
+    private bool AcceptFilter(ReaderFilter filter, RowView view)
+    {
+        if (filter.RowPredicate is { } row)
+            return row(view);
+
+        var ordinal = filter.Column is { } column ? view.GetOrdinal(column) : filter.Ordinal;
+        view.Validate(ordinal);
+        if (filter.SpanPredicate is not { } span)
+            return filter.ValuePredicate!(view, ordinal);
+
+        var value = GetValueOrThrow(ordinal);
+        return value.HasValue && span(value.Value);
     }
 
     private bool AcceptSelectedRecord()

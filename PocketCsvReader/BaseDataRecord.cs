@@ -22,12 +22,15 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     // Allocate lazily: span-only filtering and unfiltered readers never create a value cache.
     // Values of struct types are boxed once per cached conversion.
     private Dictionary<(int Ordinal, Type Type, Delegate Parser), object?>? _rowValues;
+    // A reader can expose multiple ordinal views of the same source field.
+    private protected virtual int GetFieldCacheOrdinal(int i) => i;
+
     protected void ResetRowValues() => _rowValues?.Clear();
 
     private T ParseCached<T>(int i, ParseSpan<T> parse, ReadOnlySpan<char> span)
     {
         if (RowFilters.Count == 0) return parse(span);
-        var key = (i, typeof(T), (Delegate)parse);
+        var key = (GetFieldCacheOrdinal(i), typeof(T), (Delegate)parse);
         if (_rowValues?.TryGetValue(key, out var cached) is true) return (T)cached!;
         var value = parse(span);
         (_rowValues ??= []).Add(key, value);
@@ -38,7 +41,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (RowFilters.Count == 0) return parse(span);
         // Boxed and typed getters share the original typed delegate as their identity.
-        var entry = Parser.TryGetEntry(i, out var fieldEntry) ? fieldEntry : null;
+        var entry = Parser.TryGetEntry(GetFieldCacheOrdinal(i), out var fieldEntry) ? fieldEntry : null;
         if (entry is null && TryGetFieldDescriptor(i, out var field))
         {
             Parser.TryGetEntry(field.RuntimeType, out entry);
@@ -46,7 +49,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
                 Parser.TryGetEntry(underlying, out entry);
         }
         if (entry is null) return ParseCached(i, parse, span);
-        var key = (i, entry.Typed.GetType().GenericTypeArguments[0], entry.Typed);
+        var key = (GetFieldCacheOrdinal(i), entry.Typed.GetType().GenericTypeArguments[0], entry.Typed);
         if (_rowValues?.TryGetValue(key, out var cached) is true) return cached!;
         var value = parse(span);
         (_rowValues ??= []).Add(key, value);
@@ -78,7 +81,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         ReadOnlyMemory<char> memory)
     {
         if (RowFilters.Count == 0) return parse(memory);
-        var key = (i, type, parser.Identity);
+        var key = (GetFieldCacheOrdinal(i), type, parser.Identity);
         if (_rowValues?.TryGetValue(key, out var cached) is true && cached is T typed) return typed;
         var value = parse(memory);
         (_rowValues ??= []).Add(key, value);
@@ -105,7 +108,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private protected FieldValueSanitizer GetFieldSanitizer(int ordinal, ParserOptimizationOptions parserOptimizations)
     {
-        if (_sanitizers?.TryGetValue(ordinal, out var sanitizer) is true)
+        var cacheOrdinal = GetFieldCacheOrdinal(ordinal);
+        if (_sanitizers?.TryGetValue(cacheOrdinal, out var sanitizer) is true)
             return sanitizer;
 
         _sanitizerFactory ??= new SanitizerFactory(parserOptimizations);
@@ -114,7 +118,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
                 Profile.Resource?.Sequences,
                 (Profile.Schema is null ? null : GetFieldDescriptor(ordinal))?.Sequences),
             CreateFieldEscaper());
-        (_sanitizers ??= []).Add(ordinal, sanitizer);
+        (_sanitizers ??= []).Add(cacheOrdinal, sanitizer);
         return sanitizer;
     }
 
@@ -156,7 +160,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         try
         {
-            if (Parser.TryGetParser<T>(i, out var parse))
+            if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
                 return ParseCached(i, parse, GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is TemporalFormatDescriptor))
@@ -180,7 +184,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         try
         {
-            if (Parser.TryGetParser<Guid>(i, out var parse))
+            if (Parser.TryGetParser<Guid>(GetFieldCacheOrdinal(i), out var parse))
                 return ParseCached(i, parse, GetValueOrThrow(i));
 
             return ParseAndOptionallyCache<Guid>(i);
@@ -214,7 +218,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
         try
         {
-            if (Parser.TryGetParser<T>(i, out var parse))
+            if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
                 return ParseCached(i, parse, GetValueOrThrow(i));
 
             if (TryGetFieldDescriptor(i, out var field) && (field.SpanParse is not null || field.Parse is not null || field.Format is NumericFormatDescriptor))
@@ -270,7 +274,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private bool IsValidScalar(int i, FieldDescriptor? field)
     {
-        if (i >= CurrentFieldSpans!.Length)
+        if (GetRecordField(i) is null)
         {
             _ = GetMissingField();
             return true;
@@ -293,7 +297,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         SpanParser.ParserEntry? entry;
         if (field is null)
-            Parser.TryGetEntry(i, out entry);
+            Parser.TryGetEntry(GetFieldCacheOrdinal(i), out entry);
         else if (HasCustomParser(field))
             entry = GetSchemaParser(i, field);
         else if (!Parser.TryGetEntry(field.RuntimeType, out entry)
@@ -333,7 +337,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         var field = GetArrayField(i);
         if (!field.HasValue)
             return true;
-        if (!Parser.TryGetTryParser<T>(i, out var validate) && !Parser.TryGetTryParser(out validate))
+        if (!Parser.TryGetTryParser<T>(GetFieldCacheOrdinal(i), out var validate) && !Parser.TryGetTryParser(out validate))
             throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
         var children = field.Value.Children!;
         for (int j = 0; j < children.Length; j++)
@@ -352,7 +356,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         TryGetFieldDescriptor(i, out var field);
         if (IsSchemaArray(field))
             return ArrayReaders.GetOrAdd(field.RuntimeType, CreateArrayReader)(this, i);
-        if (i >= CurrentFieldSpans!.Length)
+        if (GetRecordField(i) is null)
             return GetMissingField();
 
         var value = GetValueOrThrow(i);
@@ -408,7 +412,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private ParseSpan<object>? ResolveValueParser(int i)
     {
-        if (Parser.TryGetParser(i, out var parse))
+        if (Parser.TryGetParser(GetFieldCacheOrdinal(i), out var parse))
             return parse;
         if (!TryGetFieldDescriptor(i, out var field))
             return null;
@@ -431,7 +435,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     private SpanParser.ParserEntry RegisterFieldParser(int i, FieldDescriptor field)
     {
         var entry = GetSchemaParser(i, field);
-        Parser.BindFieldParser(i, entry);
+        Parser.BindFieldParser(GetFieldCacheOrdinal(i), entry);
         return entry;
     }
 
@@ -472,7 +476,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             entry = CreateParser(type, field);
             _schemaParsers.Add(key, entry);
         }
-        Parser.BindFieldParser(i, entry);
+        Parser.BindFieldParser(GetFieldCacheOrdinal(i), entry);
     }
 
     public object GetValue(string name)
@@ -509,7 +513,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             return default!;
         try
         {
-            if (Parser.TryGetParser<T>(i, out var parse))
+            if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
                 return ParseCached(i, parse, GetValueOrThrow(i));
             if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
             {
@@ -539,7 +543,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private ParseSpan<T> ResolveTypedParser<T>(int i)
     {
-        if (Parser.TryGetParser<T>(i, out var fieldParse)) return fieldParse;
+        if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var fieldParse)) return fieldParse;
         if (Parser.TryGetParser<T>(out var typeParse)) return typeParse;
         throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
     }
@@ -553,7 +557,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             return ParseCached(i, parse, GetValueOrThrow(i));
         }
 
-        Parser.CacheTypeParser<T>(i);
+        Parser.CacheTypeParser<T>(GetFieldCacheOrdinal(i));
         return ParseCached(i, ResolveTypedParser<T>(i), GetValueOrThrow(i));
     }
 
@@ -725,10 +729,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (i >= FieldCount)
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
-        if (i >= CurrentFieldSpans!.Length)
+        if (GetRecordField(i) is not { } field)
             return null;
-
-        var field = CurrentFieldSpans[i];
         if (field.Children is null)
             throw new NotImplementedException();
         return field;
@@ -736,12 +738,12 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private ParseSpan<T> ResolveArrayParser<T>(int i)
     {
-        if (Parser.TryGetParser<T>(i, out var parse))
+        if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
             return parse;
         if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
         {
             RegisterFieldParser(i, field);
-            return Parser.GetParser<T>(i);
+            return Parser.GetParser<T>(GetFieldCacheOrdinal(i));
         }
         if (Parser.TryGetParser(out parse))
             return parse;
@@ -750,12 +752,12 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private ParseSpan<object> ResolveArrayParser(int i)
     {
-        if (Parser.TryGetParser(i, out var parse))
+        if (Parser.TryGetParser(GetFieldCacheOrdinal(i), out var parse))
             return parse;
         if (TryGetFieldDescriptor(i, out var field) && HasCustomParser(field))
         {
             RegisterFieldParser(i, field);
-            if (Parser.TryGetParser(i, out parse))
+            if (Parser.TryGetParser(GetFieldCacheOrdinal(i), out parse))
                 return parse;
         }
         if (field is not null && Parser.TryGetParser(field.RuntimeType, out parse))

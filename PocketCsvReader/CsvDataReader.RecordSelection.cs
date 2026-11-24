@@ -32,35 +32,33 @@ public partial class CsvDataReader
 
     internal NullableSpan GetDecodedField(int ordinal)
     {
+        var sourceOrdinal = ordinal - (HasVirtualRowNumber ? 1 : 0);
         var fields = CurrentFieldSpans!;
-        if ((uint)ordinal >= (uint)fields.Length)
+        if ((uint)sourceOrdinal >= (uint)fields.Length)
             return default;
-        var text = GetCurrentFieldMemory(ordinal).Span;
-        return fields[ordinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
+        var text = GetCurrentFieldMemory(sourceOrdinal).Span;
+        return fields[sourceOrdinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
     }
 
     internal NullableSpan GetIndexField(int ordinal)
-        => CurrentFieldSpans is { } fields && (uint)ordinal < (uint)fields.Length ? GetValueOrThrow(ordinal) : default;
+    {
+        if (SourceFieldCount is not int count || (uint)ordinal >= (uint)count)
+            return default;
+        if (_projectedOrdinals is null || _usingSourceFields)
+            return GetValueOrThrow(ordinal);
+        EnterSourceFields();
+        try { return GetValueOrThrow(ordinal); }
+        finally { ExitSourceFields(); }
+    }
 
     private bool ReadSelectedRow()
     {
-        if (_fileStartRow is null)
-        {
-            _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is { Count: > 0 })
-            {
-                if (Profile.Dialect.Header)
-                    RegisterHeader(CsvHeaders.Read(RecordSource!));
-                else
-                    RegisterHeader([new string?[_indexedFieldCount]]);
-            }
-        }
+        if (BeginSelectedRead())
+            RegisterHeader(CsvHeaders.Read(RecordSource!));
 
         while (PrepareSelectedRow() && ReadRow())
         {
-            if (_recordBlocks is not null)
-                _remainingBlockRows--;
-            var decision = _selectRecord!(this);
+            var decision = SelectCurrentRow();
             if (decision != RecordSelection.Skip)
                 return decision == RecordSelection.Include;
         }
@@ -69,27 +67,38 @@ public partial class CsvDataReader
 
     private async ValueTask<bool> ReadSelectedRowAsync(CancellationToken cancellationToken)
     {
-        if (_fileStartRow is null)
-        {
-            _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is { Count: > 0 })
-            {
-                if (Profile.Dialect.Header)
-                    RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
-                else
-                    RegisterHeader([new string?[_indexedFieldCount]]);
-            }
-        }
+        if (BeginSelectedRead())
+            RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
 
         while (PrepareSelectedRow() && await ReadRowAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (_recordBlocks is not null)
-                _remainingBlockRows--;
-            var decision = _selectRecord!(this);
+            var decision = SelectCurrentRow();
             if (decision != RecordSelection.Skip)
                 return decision == RecordSelection.Include;
         }
         return false;
+    }
+
+    private bool BeginSelectedRead()
+    {
+        if (_fileStartRow.HasValue)
+            return false;
+
+        _fileStartRow = CurrentRowNumber;
+        if (_recordBlocks is null || (_recordBlocks.Count == 0 && Profile.Projection is null))
+            return false;
+        if (Profile.Dialect.Header)
+            return true;
+
+        RegisterHeader([new string?[_indexedFieldCount]]);
+        return false;
+    }
+
+    private RecordSelection SelectCurrentRow()
+    {
+        if (_recordBlocks is not null)
+            _remainingBlockRows--;
+        return _selectRecord!(this);
     }
 
     private bool PrepareSelectedRow()

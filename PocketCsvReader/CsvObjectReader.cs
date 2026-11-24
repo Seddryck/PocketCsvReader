@@ -19,7 +19,7 @@ public class CsvObjectReader<T> : IDisposable
     private bool _disposed;
     private CsvDataReader? _dataReader;
     private bool UseDataReader => Profile.Filters.Count != 0 || Profile.StreamInitialization.InputMode != CsvInputMode.DecodedChars
-        || Profile.RowNumber is not null
+        || Profile.RowNumber is not null || Profile.Projection is not null
         || Profile.Skip != 0 || Profile.Take.HasValue
         || !string.IsNullOrEmpty(Profile.Resource?.Encoding);
     protected Memory<char> buffer;

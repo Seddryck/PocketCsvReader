@@ -103,6 +103,9 @@ public abstract class BaseRawRecord<TProfile>
 
     protected virtual int GetSchemaOrdinal(int i) => i;
 
+    private protected virtual FieldSpan? GetRecordField(int i)
+        => i >= CurrentFieldSpans!.Length ? null : CurrentFieldSpans[i];
+
     protected virtual FieldDescriptor GetFieldDescriptor(int i)
     {
         if (Profile.Schema is null)
@@ -162,7 +165,7 @@ public abstract class BaseRawRecord<TProfile>
         /// <param name="i">The zero-based index of the field.</param>
         /// <returns>True if the field was quoted; otherwise, false.</returns>
     public bool IsQuotedField(int i)
-        => CurrentFieldSpans![i].Value.WasQuoted;
+        => GetRecordField(i)!.Value.Value.WasQuoted;
 
     /// <summary>
         /// Determines whether the field at the specified index contains escaped characters in the raw record.
@@ -170,7 +173,7 @@ public abstract class BaseRawRecord<TProfile>
         /// <param name="i">The zero-based index of the field.</param>
         /// <returns>True if the field contains escaped characters; otherwise, false.</returns>
     public bool IsEscapedField(int i)
-        => CurrentFieldSpans![i].Value.IsEscaped;
+        => GetRecordField(i)!.Value.Value.IsEscaped;
 #endif
 
     /// <summary>

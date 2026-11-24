@@ -9,6 +9,21 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 {
     private DialectDescriptorBuilder _dialectBuilder = new();
     private RowNumberOptions? _rowNumber;
+    private CsvColumnProjection? _projection;
+
+    /// <summary>Selects source columns by exact header name in the requested output order.</summary>
+    public CsvReaderBuilder WithProjection(params string[] columns)
+    {
+        _projection = new CsvColumnProjection(columns);
+        return this;
+    }
+
+    /// <summary>Selects source columns by zero-based ordinal in the requested output order.</summary>
+    public CsvReaderBuilder WithProjection(params int[] ordinals)
+    {
+        _projection = new CsvColumnProjection(ordinals);
+        return this;
+    }
     private ICsvDirectoryResolver? _directoryResolver;
 
     /// <summary>Selects paths whose partition metadata will be configured with WithPartitions.</summary>
@@ -116,8 +131,12 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
 
     public CsvReader Build()
     {
+        var dialect = _dialect ?? _dialectBuilder.Build();
+        if (!dialect.Header && _projection?.UsesNames == true)
+            throw new InvalidOperationException("Name-based CSV projection requires a header. Use source ordinals for a headerless input.");
+
         var profile = new CsvProfile(
-            _dialect ?? _dialectBuilder.Build(),
+            dialect,
             BuildSchema(),
             BuildResource(),
             BuildParsers())
@@ -127,6 +146,7 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
             Filters = BuildFilters(),
             Skip = Skip,
             Take = Take,
+            Projection = _projection,
             RowNumber = _rowNumber
         };
         return new CsvReader(profile);
