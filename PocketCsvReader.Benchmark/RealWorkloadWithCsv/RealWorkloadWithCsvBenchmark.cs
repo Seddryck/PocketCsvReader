@@ -14,11 +14,12 @@ public class RealWorkloadWithCsvBenchmark
 {
     private const int RecordCount = 50_000;
     private const string DateFormat = "yyyy-MM-dd";
+    private const string BerkeleyUniversity = "University of California, Berkeley";
 
     private static readonly string[] Universities =
     [
         "KU Leuven", "Ghent University", "Université libre de Bruxelles", "Université de Liège",
-        "University of California, Berkeley", "Universiteit Antwerpen",
+        BerkeleyUniversity, "Universiteit Antwerpen",
     ];
 
     private static readonly string[] FirstNames = ["Amira", "Chloé", "Liam", "Nora", "Sofía", "Youssef"];
@@ -51,8 +52,8 @@ public class RealWorkloadWithCsvBenchmark
     private CsvProfile _profile = null!;
     private IEnumerator<Enrollment>? _expectedRecords;
 
-    [Params(CsvEncoding.Utf8, CsvEncoding.Utf16)]
-    public CsvEncoding InputEncoding { get; set; }
+    [Params(CsvScenario.Utf8, CsvScenario.Utf16, CsvScenario.Utf8WithQuotedUniversity)]
+    public CsvScenario Scenario { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -61,12 +62,14 @@ public class RealWorkloadWithCsvBenchmark
 
         foreach (var record in GenerateRecords())
         {
-            var university = record.University.Contains(',') ? $"\"{record.University}\"" : record.University;
+            var university = record.University.AsSpan().IndexOfAny(',', '"') >= 0
+                ? "\"" + record.University.Replace("\"", "\"\"") + "\""
+                : record.University;
             csv.Append(Culture,
                 $"{university},{record.FirstName},{record.LastName},{record.Quarter},{record.Score:F1},{record.Credits},{record.RegistrationDate.ToString(DateFormat, Culture)}\r\n");
         }
 
-        var isUtf16 = InputEncoding == CsvEncoding.Utf16;
+        var isUtf16 = Scenario == CsvScenario.Utf16;
         var encoding = isUtf16 ? Encoding.Unicode : new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         var csvText = csv.ToString();
         var preamble = encoding.Preamble;
@@ -161,7 +164,7 @@ public class RealWorkloadWithCsvBenchmark
     {
         using var stream = OpenCsv();
         using var reader = new global::SoftCircuits.CsvParser.CsvReader(stream,
-            detectEncodingFromByteOrderMarks: InputEncoding == CsvEncoding.Utf16);
+            detectEncodingFromByteOrderMarks: Scenario == CsvScenario.Utf16);
         reader.Read();
 
         var recordsRead = 0;
@@ -196,7 +199,7 @@ public class RealWorkloadWithCsvBenchmark
         VerifyRecordCount(recordsRead);
     }
 
-    private static IEnumerable<Enrollment> GenerateRecords()
+    private IEnumerable<Enrollment> GenerateRecords()
     {
         var random = new Random(42);
         var firstRegistration = new DateOnly(2022, 1, 1);
@@ -214,7 +217,9 @@ public class RealWorkloadWithCsvBenchmark
 
             yield return new()
             {
-                University = university,
+                University = Scenario == CsvScenario.Utf8WithQuotedUniversity && university == BerkeleyUniversity
+                    ? "University of California, \"Berkeley\""
+                    : university,
                 FirstName = firstName,
                 LastName = lastName,
                 Quarter = string.Create(Culture, $"{year}-Q{quarter}"),
@@ -275,10 +280,11 @@ public class RealWorkloadWithCsvBenchmark
         _consumer.Consume(registrationDate.DayNumber);
     }
 
-    public enum CsvEncoding
+    public enum CsvScenario
     {
         Utf8,
         Utf16,
+        Utf8WithQuotedUniversity,
     }
 
     private sealed class Enrollment
@@ -296,13 +302,19 @@ public class RealWorkloadWithCsvBenchmark
     {
         public EnrollmentMapping()
         {
-            MapProperty(0, record => record.University);
             MapProperty(1, record => record.FirstName);
             MapProperty(2, record => record.LastName);
             MapProperty(3, record => record.Quarter);
             MapProperty(4, record => record.Score);
             MapProperty(5, record => record.Credits);
             MapProperty(6, record => record.RegistrationDate, new RegistrationDateConverter());
+
+            // The property mapper uses GetSpan, which leaves doubled quotes in the value.
+            MapUsing(static (Enrollment record, ref CsvRow row) =>
+            {
+                record.University = row.GetString(0);
+                return MapUsingResult.Success();
+            });
         }
     }
 
