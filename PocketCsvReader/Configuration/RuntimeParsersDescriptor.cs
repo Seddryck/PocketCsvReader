@@ -12,8 +12,18 @@ public class RuntimeParsersDescriptor : IEnumerable<KeyValuePair<Type, ParseFunc
     private Dictionary<Type, Func<string?, IFormatProvider?, Delegate>>? _formatParsers;
 
     private Dictionary<Type, Func<string?, MemoryFieldParser>>? _memoryParsers;
+    private Dictionary<Type, Delegate>? _utf8Parsers;
 
     internal bool HasMemoryParsers => _memoryParsers is not null;
+    internal bool HasUtf8Parsers => _utf8Parsers is not null;
+
+    internal bool HasParser(Type type) => Parsers.ContainsKey(type);
+
+    internal void AddUtf8Parser<T>(TryParseUtf8<T> parser)
+        => (_utf8Parsers ??= [])[typeof(T)] = parser;
+
+    internal TryParseUtf8<T>? FindUtf8Parser<T>()
+        => (TryParseUtf8<T>?)_utf8Parsers?.GetValueOrDefault(typeof(T));
 
     internal void AddDefaultMemoryParser<T>(Func<string?, ParseMemory<T>> factory)
         where T : notnull

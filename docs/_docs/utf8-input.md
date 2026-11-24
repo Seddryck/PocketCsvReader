@@ -57,7 +57,48 @@ An explicit resource encoding takes precedence over BOM detection. Otherwise, pr
 
 The byte parser supports ASCII delimiters, quotes, escapes, comments, and record terminators, with arbitrary UTF-8 field text. It handles quoted multiline records, escaped quotes, short reads, and fields larger than the configured buffer. Array dialects, non-ASCII syntax characters, and bad-data policies use the character parser in `Auto` and throw `NotSupportedException` in `Utf8Bytes`. Selection happens after decompression. Both synchronous and asynchronous readers honor these policies.
 
-Records remain in pooled byte buffers, with ordinary text scanned in bulk between CSV syntax bytes. Eligible ASCII string getters decode directly into the returned string. Other field access uses a reusable pooled character cache when sanitization, custom parsing, or multibyte text requires it, avoiding intermediate per-field strings. Compatible integer and Boolean getters can parse bytes directly when no custom parsers or sequence substitutions apply. Character-based object mappers materialize a complete character record with matching character offsets. Parser-owned record memory is valid only until the next read or disposal; returned strings and mapped objects remain valid.
+Records remain in pooled byte buffers, with ordinary text scanned in bulk between CSV syntax bytes. Eligible ASCII string getters decode directly into the returned string. Other field access uses a reusable pooled character cache when sanitization, custom parsing, or multibyte text requires it, avoiding intermediate per-field strings. Eligible typed getters can parse field bytes directly. See the value parser configuration below. Character-based object mappers materialize a complete character record with matching character offsets. Parser-owned record memory is valid only until the next read or disposal; returned strings and mapped objects remain valid.
+
+## UTF-8 value parsers
+
+Native UTF-8 input automatically uses byte parsers for eligible `short`, `int`, `long`, `bool`, and invariant `decimal` reads. It also handles `DateOnly` in `yyyy-MM-dd` form and `TimeOnly` in 24-hour `HH:mm:ss` form. For example, `GetTime(0)` parses `23:59:59` directly. The character parser handles other supported forms, such as fractional seconds.
+
+Opt in to reading ISO dates as `DateTime` with `UseIsoDateAsDateTime()`:
+
+<!-- example: utf8-date-as-datetime -->
+```csharp
+using System.Globalization;
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithoutHeader())
+    .WithStreamInitialization(StreamInitializationOptions.Utf8)
+    .WithParsers(p => p.UseIsoDateAsDateTime())
+    .Build();
+
+using var stream = new MemoryStream("2024-02-29,23:59:59"u8.ToArray());
+using var reader = csv.ToDataReader(stream);
+if (reader.Read())
+{
+    var date = reader.GetDateTime(0);
+    var time = reader.GetTime(1);
+    Console.WriteLine(date.ToString("O", CultureInfo.InvariantCulture));
+    Console.WriteLine(time.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+}
+```
+
+<!-- output: utf8-date-as-datetime -->
+```text
+2024-02-29T00:00:00.0000000
+23:59:59
+```
+
+The opt-in returns midnight with `DateTimeKind.Unspecified` for ISO dates. Full timestamps and other supported inputs use regular `DateTime` parsing. Explicit runtime parsers and schema field parsers or formats take precedence.
+
+See [runtime parsers](../fluent-api-runtime-parsers/#utf-8-parsers) to pair your own byte parser with a character fallback.
+
+## Performance
 
 Byte parsing is opt-in because throughput and allocations depend on the workload, especially how many strings are materialized. The `Utf8Input` benchmarks compare ASCII and Unicode input, narrow and wide records, multiline fields, numeric getters, and skipped columns. See the [measured comparison](https://github.com/Seddryck/PocketCsvReader/blob/main/PocketCsvReader.Benchmark/Utf8Input.md). Run them with:
 

@@ -158,8 +158,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetTemporal<T>(int i)
     {
-        if ((typeof(T) == typeof(DateOnly) || typeof(T) == typeof(DateTime))
-            && RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
+        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
             return direct;
 
         try
@@ -186,6 +185,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public Guid GetGuid(int i)
     {
+        if (RowFilters.Count == 0 && TryGetDirectValue<Guid>(i, out var direct))
+            return direct;
+
         try
         {
             if (Parser.TryGetParser<Guid>(GetFieldCacheOrdinal(i), out var parse))
@@ -433,7 +435,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         return parse;
     }
 
-    private static bool HasCustomParser(FieldDescriptor field)
+    private protected static bool HasCustomParser(FieldDescriptor field)
         => field.SpanParse is not null || field.Parse is not null || (field.Format is not null && field.Format is not NoneFormatDescriptor);
 
     private SpanParser.ParserEntry RegisterFieldParser(int i, FieldDescriptor field)
