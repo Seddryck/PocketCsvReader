@@ -2,7 +2,10 @@ using System.Globalization;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Engines;
+using Chrononuensis;
 using nietras.SeparatedValues;
+using PocketCsvReader.Chrononuensis;
+using PocketCsvReader.Configuration;
 using TinyCsvParser;
 using TinyCsvParser.Models;
 using TinyCsvParser.TypeConverters;
@@ -44,16 +47,17 @@ public class RealWorkloadWithCsvBenchmark
         FormatProvider = Culture,
     };
 
-    private readonly TinyCsvParser.CsvParser<Enrollment> _tinyCsvParser =
-        new(CsvOptions.Rfc4180 with { Delimiter = ',', SkipHeader = true }, new EnrollmentMapping());
-
     private readonly Consumer _consumer = new();
     private byte[] _csv = [];
     private CsvProfile _profile = null!;
+    private TinyCsvParser.CsvParser<Enrollment> _tinyCsvParser = null!;
     private IEnumerator<Enrollment>? _expectedRecords;
 
-    [Params(CsvScenario.Utf8, CsvScenario.Utf16, CsvScenario.Utf8WithQuotedUniversity, CsvScenario.Utf8WithFullName)]
+    [Params(CsvScenario.Utf8, CsvScenario.Utf16, CsvScenario.Utf8WithQuotedUniversity,
+        CsvScenario.Utf8WithFullName, CsvScenario.Utf8WithYearQuarter)]
     public CsvScenario Scenario { get; set; }
+
+    private bool ReadsYearQuarter => Scenario == CsvScenario.Utf8WithYearQuarter;
 
     [GlobalSetup]
     public void Setup()
@@ -76,10 +80,14 @@ public class RealWorkloadWithCsvBenchmark
         _csv = new byte[preamble.Length + encoding.GetByteCount(csvText)];
         preamble.CopyTo(_csv);
         encoding.GetBytes(csvText, _csv.AsSpan(preamble.Length));
-        _profile = new(new(Header: true))
+        var parsers = ReadsYearQuarter ? new RuntimeParsersDescriptorBuilder().UseChrononuensis(Culture).Build() : null;
+        _profile = new(new(Header: true), parsers: parsers)
         {
             StreamInitialization = isUtf16 ? new() : StreamInitializationOptions.Utf8,
         };
+
+        _tinyCsvParser = new(CsvOptions.Rfc4180 with { Delimiter = ',', SkipHeader = true },
+            new EnrollmentMapping(ReadsYearQuarter));
 
         VerifyRecords(PocketCsvReader);
         VerifyRecords(Sep);
@@ -98,8 +106,10 @@ public class RealWorkloadWithCsvBenchmark
         var recordsRead = 0;
         while (reader.Read())
         {
-            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetDecimal(4), reader.GetInt16(5), reader.GetDate(6));
+            var quarter = ReadsYearQuarter ? null : reader.GetString(3);
+            YearQuarter? yearQuarter = ReadsYearQuarter ? reader.GetFieldValue<YearQuarter>(3) : null;
+            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), quarter,
+                reader.GetDecimal(4), reader.GetInt16(5), reader.GetDate(6), yearQuarter);
             recordsRead++;
         }
 
@@ -115,8 +125,10 @@ public class RealWorkloadWithCsvBenchmark
         var recordsRead = 0;
         foreach (var row in reader)
         {
-            Consume(row[0].ToString(), row[1].ToString(), row[2].ToString(), row[3].ToString(),
-                row[4].Parse<decimal>(), row[5].Parse<short>(), row[6].Parse<DateOnly>());
+            var quarter = ReadsYearQuarter ? null : row[3].ToString();
+            YearQuarter? yearQuarter = ReadsYearQuarter ? YearQuarter.Parse(row[3].Span, Culture) : null;
+            Consume(row[0].ToString(), row[1].ToString(), row[2].ToString(), quarter,
+                row[4].Parse<decimal>(), row[5].Parse<short>(), row[6].Parse<DateOnly>(), yearQuarter);
             recordsRead++;
         }
 
@@ -133,8 +145,10 @@ public class RealWorkloadWithCsvBenchmark
         var recordsRead = 0;
         while (reader.Read())
         {
-            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetDecimal(4), reader.GetInt16(5), reader.GetDate(6));
+            var quarter = ReadsYearQuarter ? null : reader.GetString(3);
+            YearQuarter? yearQuarter = ReadsYearQuarter ? YearQuarter.Parse(reader.GetFieldSpan(3), Culture) : null;
+            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), quarter,
+                reader.GetDecimal(4), reader.GetInt16(5), reader.GetDate(6), yearQuarter);
             recordsRead++;
         }
 
@@ -151,8 +165,10 @@ public class RealWorkloadWithCsvBenchmark
         var recordsRead = 0;
         while (reader.Read())
         {
-            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.Parse<decimal>(4), reader.Parse<short>(5), reader.ParseExact<DateOnly>(6, DateFormat));
+            var quarter = reader.GetString(3);
+            YearQuarter? yearQuarter = ReadsYearQuarter ? YearQuarter.Parse(quarter.AsSpan(), Culture) : null;
+            Consume(reader.GetString(0), reader.GetString(1), reader.GetString(2), quarter,
+                reader.Parse<decimal>(4), reader.Parse<short>(5), reader.ParseExact<DateOnly>(6, DateFormat), yearQuarter);
             recordsRead++;
         }
 
@@ -171,8 +187,10 @@ public class RealWorkloadWithCsvBenchmark
         string[]? row = null;
         while (reader.ReadRow(ref row))
         {
-            Consume(row![0], row[1], row[2], row[3], decimal.Parse(row[4], Culture), short.Parse(row[5], Culture),
-                DateOnly.ParseExact(row[6], DateFormat, Culture));
+            var quarter = row![3];
+            YearQuarter? yearQuarter = ReadsYearQuarter ? YearQuarter.Parse(quarter.AsSpan(), Culture) : null;
+            Consume(row[0], row[1], row[2], quarter, decimal.Parse(row[4], Culture), short.Parse(row[5], Culture),
+                DateOnly.ParseExact(row[6], DateFormat, Culture), yearQuarter);
             recordsRead++;
         }
 
@@ -192,7 +210,7 @@ public class RealWorkloadWithCsvBenchmark
 
             var record = result.Result;
             Consume(record.University, record.FirstName, record.LastName, record.Quarter,
-                record.Score, record.Credits, record.RegistrationDate);
+                record.Score, record.Credits, record.RegistrationDate, record.ParsedQuarter);
             recordsRead++;
         }
 
@@ -223,6 +241,7 @@ public class RealWorkloadWithCsvBenchmark
                 FirstName = firstName,
                 LastName = lastName,
                 Quarter = string.Create(Culture, $"{year}-Q{quarter}"),
+                ParsedQuarter = ReadsYearQuarter ? new YearQuarter(year, quarter) : null,
                 Score = score,
                 Credits = credits,
                 RegistrationDate = registrationDate,
@@ -256,8 +275,8 @@ public class RealWorkloadWithCsvBenchmark
         }
     }
 
-    private void Consume(string university, string firstName, string lastName, string quarter,
-        decimal score, short credits, DateOnly registrationDate)
+    private void Consume(string university, string firstName, string lastName, string? quarter,
+        decimal score, short credits, DateOnly registrationDate, YearQuarter? yearQuarter)
     {
         var joinNames = Scenario == CsvScenario.Utf8WithFullName;
         var fullName = joinNames ? string.Concat(firstName, " ", lastName) : null;
@@ -268,8 +287,9 @@ public class RealWorkloadWithCsvBenchmark
                 throw new InvalidOperationException("Found an unexpected extra record.");
 
             var expected = records.Current;
+            var quarterMatches = ReadsYearQuarter ? Nullable.Equals(yearQuarter, expected.ParsedQuarter) : quarter == expected.Quarter;
             if (university != expected.University || firstName != expected.FirstName ||
-                lastName != expected.LastName || quarter != expected.Quarter || score != expected.Score ||
+                lastName != expected.LastName || !quarterMatches || score != expected.Score ||
                 credits != expected.Credits || registrationDate != expected.RegistrationDate)
                 throw new InvalidOperationException($"Parsed record does not match the expected record for {expected.FirstName} {expected.LastName}.");
 
@@ -280,7 +300,10 @@ public class RealWorkloadWithCsvBenchmark
         _consumer.Consume(university);
         _consumer.Consume(fullName ?? firstName);
         _consumer.Consume(lastName);
-        _consumer.Consume(quarter);
+        if (yearQuarter is { } parsedQuarter)
+            _consumer.Consume(parsedQuarter);
+        else
+            _consumer.Consume(quarter ?? throw new InvalidOperationException("No quarter value was read."));
         _consumer.Consume(score);
         _consumer.Consume(credits);
         _consumer.Consume(registrationDate.DayNumber);
@@ -292,6 +315,7 @@ public class RealWorkloadWithCsvBenchmark
         Utf16,
         Utf8WithQuotedUniversity,
         Utf8WithFullName,
+        Utf8WithYearQuarter,
     }
 
     private sealed class Enrollment
@@ -300,6 +324,7 @@ public class RealWorkloadWithCsvBenchmark
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Quarter { get; set; } = string.Empty;
+        public YearQuarter? ParsedQuarter { get; set; }
         public decimal Score { get; set; }
         public short Credits { get; set; }
         public DateOnly RegistrationDate { get; set; }
@@ -307,19 +332,22 @@ public class RealWorkloadWithCsvBenchmark
 
     private sealed class EnrollmentMapping : CsvMapping<Enrollment>
     {
-        public EnrollmentMapping()
+        public EnrollmentMapping(bool readYearQuarter)
         {
             MapProperty(1, record => record.FirstName);
             MapProperty(2, record => record.LastName);
-            MapProperty(3, record => record.Quarter);
+            if (!readYearQuarter)
+                MapProperty(3, record => record.Quarter);
             MapProperty(4, record => record.Score);
             MapProperty(5, record => record.Credits);
             MapProperty(6, record => record.RegistrationDate, new RegistrationDateConverter());
 
             // The property mapper uses GetSpan, which leaves doubled quotes in the value.
-            MapUsing(static (Enrollment record, ref CsvRow row) =>
+            MapUsing((Enrollment record, ref CsvRow row) =>
             {
                 record.University = row.GetString(0);
+                if (readYearQuarter)
+                    record.ParsedQuarter = YearQuarter.Parse(row.GetSpan(3), Culture);
                 return MapUsingResult.Success();
             });
         }
