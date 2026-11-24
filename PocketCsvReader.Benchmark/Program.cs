@@ -35,7 +35,23 @@ public class Program
 
         if (args.Length > 0)
         {
-            BenchmarkSwitcher.FromTypes([typeof(LazyJsonDecodingComparison), typeof(JsonAllocationComparison), typeof(CustomParsing), typeof(CustomParserBoxing), typeof(ChrononuensisParsing), typeof(Utf8Input), typeof(PositionTracking), typeof(CharacterRecordParsing), typeof(CommonLogComparison), typeof(WebLogBuffering), typeof(FixedWidthBuffering)]).Run(args,
+            BenchmarkSwitcher.FromTypes(
+            [
+                typeof(LazyJsonDecodingComparison),
+                typeof(JsonAllocationComparison),
+                typeof(CustomParsing),
+                typeof(CustomParserBoxing),
+                typeof(ChrononuensisParsing),
+                typeof(Utf8Input),
+                typeof(PositionTracking),
+                typeof(CharacterRecordParsing),
+                typeof(CommonLogComparison),
+                typeof(WebLogBuffering),
+                typeof(FixedWidthBuffering),
+#if NET10_0
+                typeof(RealWorkloadWithCsv.RealWorkloadWithCsvBenchmark),
+#endif
+            ]).Run(args,
                 ManualConfig.Create(DefaultConfig.Instance).AddJob(Job.Default.DontEnforcePowerPlan().AsDefault()));
         }
         else
