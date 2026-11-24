@@ -582,6 +582,57 @@ public class Utf8InputTest
         }
     }
 
+    [TestCase(33, "\r\n", false)]
+    [TestCase(65, "\r\n", true)]
+    [TestCase(128, "\n", false)]
+    [TestCase(257, "\n", true)]
+    [TestCase(1057, "\n", true)]
+    [TestCase(2048, "\r\n", false)]
+    public async Task SimdScanningMatchesScalarMetadataAcrossRowsAndRefills(int bufferSize, string newline, bool asynchronous)
+    {
+        string[] rows =
+        [
+            new string('x', bufferSize - 1),
+            ",é,,東京,",
+            "one,two,three",
+            "four,,six",
+            string.Empty,
+            "\"" + "quoted," + newline + "field\"\"value\",tail",
+            string.Join(',', Enumerable.Repeat("wide", 33)),
+            new string('y', bufferSize + 11) + ",long",
+            "abc\rpartial,def",
+            "another,unquoted,row",
+            "last,row,",
+        ];
+        var bytes = Encoding.UTF8.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: newline);
+        using var slow = new Utf8RecordSource(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes, dialect, 7));
+        using var fast = new Utf8RecordSource(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes, dialect, bufferSize));
+        int count = 0;
+        while (true)
+        {
+            var expected = await ReadCurrent(slow);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(actual.State, Is.EqualTo(expected.State));
+            Assert.That(actual.Record.Fields, Is.EqualTo(expected.Record.Fields));
+            if (expected.Record.Fields is { } fields)
+            {
+                count++;
+                for (int i = 0; i < fields.Length; i++)
+                    Assert.That(actual.Record.Slice(i).ToString(), Is.EqualTo(expected.Record.Slice(i).ToString()));
+            }
+
+            if (actual.IsEndOfFile)
+                break;
+        }
+
+        Assert.That(count, Is.EqualTo(rows.Length));
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
     private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)
     {
         public byte[]? InputBuffer { get; private set; }

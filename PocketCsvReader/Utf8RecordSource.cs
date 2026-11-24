@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PocketCsvReader.CharParsing;
 
@@ -18,6 +19,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     bool ICurrentRecordSource.SupportsCurrentRecord => true;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
+    private readonly Utf8BlockScanner? _blockScanner;
     private readonly PositionTracker? _positionTracker;
     private byte[]? _spill;
     private int _position;
@@ -43,6 +45,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_readSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(profile), "Buffer size must be positive.");
         _input = ArrayPool<byte>.Shared.Rent(_readSize);
+        _blockScanner = Utf8BlockScanner.Create(dialect, _readSize);
     }
 
     public static bool Supports(CsvProfile profile)
@@ -73,6 +76,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         {
             _available = _stream.Read(_input, 0, _readSize);
             _position = 0;
+            _blockScanner?.Reset();
             if (_available == 0)
             {
                 TryRead(true, borrowFields, out result);
@@ -97,6 +101,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         {
             _available = await _stream.ReadAsync(_input.AsMemory(0, _readSize), cancellationToken).ConfigureAwait(false);
             _position = 0;
+            _blockScanner?.Reset();
             if (_available == 0)
             {
                 TryRead(true, borrowFields, out result);
@@ -108,17 +113,48 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     private bool TryRead(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
-        if (_positionTracker is null) return TryReadCore(eof, borrowFields, out result);
-        // Keep the grammar and IndexOfAny searches identical in both modes.
+        if (_positionTracker is null) return TryReadRecord(eof, borrowFields, out result);
+        // Tracking observes the bytes consumed by either scanner.
         // Only enabled tracking searches the consumed spans for physical newlines.
         int start = _position;
         if (_spilledLength == 0) _positionTracker.BeginRecord();
-        bool complete = TryReadCore(eof, borrowFields, out result);
+        bool complete = TryReadRecord(eof, borrowFields, out result);
         if (_positionTracker is { } tracker)
         {
             tracker.Advance(_input.AsSpan(start, _position - start));
             if (complete && result.State == RecordState.Record) tracker.CompleteRecord();
         }
+        return complete;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryReadRecord(bool eof, bool borrowFields, out CurrentRecordResult result)
+        => _blockScanner is { } scanner
+            ? TryReadWithBlocks(scanner, eof, borrowFields, out result)
+            : TryReadCore(eof, borrowFields, out result);
+
+    private bool TryReadWithBlocks(Utf8BlockScanner scanner, bool eof, bool borrowFields, out CurrentRecordResult result)
+    {
+        int start = _position;
+        int carried = _spilledLength;
+        if (carried == 0 && scanner.CanScan(_available - start))
+        {
+            var count = scanner.Scan(_input.AsSpan(0, _available), start, out var nextRow);
+            if (count != 0)
+            {
+                _position = nextRow;
+                var fields = borrowFields ? _publishedFields.GetBorrowedStorage(count) : new FieldSpan[count];
+                scanner.WriteFields(fields);
+                var record = _input.AsMemory(start, nextRow - start);
+                _decodedFields.Reset(record.Length, fields.Length);
+                result = new(false, new CurrentRecord(record, fields, _decodedFields), RecordState.Record);
+                return true;
+            }
+        }
+
+        bool complete = TryReadCore(eof, borrowFields, out result);
+        if (complete && result.State == RecordState.Record)
+            scanner.ObserveFallback(carried + (_position - start));
         return complete;
     }
 
