@@ -32,22 +32,31 @@ public partial class CsvDataReader
 
     internal NullableSpan GetDecodedField(int ordinal)
     {
+        var sourceOrdinal = ordinal - (HasVirtualRowNumber ? 1 : 0);
         var fields = CurrentFieldSpans!;
-        if ((uint)ordinal >= (uint)fields.Length)
+        if ((uint)sourceOrdinal >= (uint)fields.Length)
             return default;
-        var text = GetCurrentFieldMemory(ordinal).Span;
-        return fields[ordinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
+        var text = GetCurrentFieldMemory(sourceOrdinal).Span;
+        return fields[sourceOrdinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
     }
 
     internal NullableSpan GetIndexField(int ordinal)
-        => CurrentFieldSpans is { } fields && (uint)ordinal < (uint)fields.Length ? GetValueOrThrow(ordinal) : default;
+    {
+        if (SourceFieldCount is not int count || (uint)ordinal >= (uint)count)
+            return default;
+        if (_projectedOrdinals is null || _usingSourceFields)
+            return GetValueOrThrow(ordinal);
+        EnterSourceFields();
+        try { return GetValueOrThrow(ordinal); }
+        finally { ExitSourceFields(); }
+    }
 
     private bool ReadSelectedRow()
     {
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is { Count: > 0 })
+            if (_recordBlocks is not null && (_recordBlocks.Count != 0 || Profile.Projection is not null))
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(CsvHeaders.Read(RecordSource!));
@@ -72,7 +81,7 @@ public partial class CsvDataReader
         if (_fileStartRow is null)
         {
             _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is { Count: > 0 })
+            if (_recordBlocks is not null && (_recordBlocks.Count != 0 || Profile.Projection is not null))
             {
                 if (Profile.Dialect.Header)
                     RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));

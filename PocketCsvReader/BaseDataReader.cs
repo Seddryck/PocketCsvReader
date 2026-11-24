@@ -267,7 +267,21 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private bool AcceptCurrentRow()
     {
         if (_trackFileBytes) return true;
-        if (_selectFileRecord is not null && !AcceptSelectedRecord()) return false;
+        if (_selectFileRecord is null && RowFilters.Count == 0) return true;
+
+        EnterSourceFields();
+        try
+        {
+            return (_selectFileRecord is null || AcceptSelectedRecord()) && AcceptFilters();
+        }
+        finally { ExitSourceFields(); }
+    }
+
+    private protected virtual void EnterSourceFields() { }
+    private protected virtual void ExitSourceFields() { }
+
+    private bool AcceptFilters()
+    {
         var filters = RowFilters;
         if (filters.Count == 0) return true;
         var view = _filterView ??= new RowView(this);

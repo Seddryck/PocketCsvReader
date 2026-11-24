@@ -37,7 +37,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         return (options, options is null ? null : new RowNumberRecord());
     }
 
-    protected override int GetSchemaOrdinal(int i) => HasRowNumber ? i - 1 : i;
+    protected override int GetSchemaOrdinal(int i) => GetFieldCacheOrdinal(i) - RowNumberWidth;
 
     protected override FieldDescriptor GetFieldDescriptor(int i)
     {
@@ -78,8 +78,10 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     internal T MapCurrent<T>(SpanMapper<T> mapper, bool defaultMapper)
     {
         ArgumentNullException.ThrowIfNull(mapper);
-        if (defaultMapper && Profile.Filters.Count != 0)
+        if (defaultMapper && (Profile.Filters.Count != 0 || _projectedOrdinals is not null))
             return FilteredObjectMapper<T>.Map(this);
+        if (_projectedOrdinals is not null)
+            return MapProjectedRecord(mapper);
         // The compatibility Record getter snapshots borrowed metadata. A public
         // mapper can therefore retain its IEnumerable<FieldSpan> after advancement.
         var record = (Record ?? throw new InvalidOperationException("No current record is available.")).AsCharacters();
@@ -96,7 +98,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         => CsvStreamSource.CreateAsync(stream, profile, cancellationToken);
 
     public override int FieldCount =>
-        CurrentFieldSpans?.Length ?? throw new InvalidOperationException("Fields are not defined yet.");
+        (_projectedOrdinals is not null && !_usingSourceFields ? Fields!.Length : SourceFieldCount)
+        ?? throw new InvalidOperationException("Fields are not defined yet.");
 
     /// <summary>
         /// Returns the default value for a missing CSV field, using the profile's configured missing cell value if special value handling is enabled; otherwise, returns an empty string.
@@ -110,9 +113,12 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             /// <param name="i">The zero-based index of the field.</param>
             /// <returns>The raw field string, wrapped in quote characters if originally quoted; otherwise, the field value as a string.</returns>
     public override string GetRawString(int i)
-        => CurrentFieldSpans![i].Value.WasQuoted
-            ? $"{Profile.Dialect.QuoteChar}{GetCurrentFieldMemory(i)}{Profile.Dialect.QuoteChar}"
-            : GetCurrentFieldMemory(i).ToString();
+    {
+        if (GetRecordField(i) is not { } field)
+            throw new ArgumentOutOfRangeException(nameof(i));
+        var text = GetCsvFieldMemory(i);
+        return field.Value.WasQuoted ? $"{Profile.Dialect.QuoteChar}{text}{Profile.Dialect.QuoteChar}" : text.ToString();
+    }
 
     private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
 
@@ -124,11 +130,10 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         // ASCII can decode directly into the returned string. Multibyte text
         // uses the pooled char cache to avoid GetString's separate UTF-8
         // character-count pass, and to reuse decoding for repeated access.
-        var fields = CurrentFieldSpans;
-        if (fields is null || i < 0 || i >= fields.Length || !TryGetCurrentUtf8(i, out var bytes)
-            || Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
+        if (Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (Profile.ParserOptimizations.UnescapeChars && fields[i].Value.IsEscaped)
+            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var field)
+            || (Profile.ParserOptimizations.UnescapeChars && field.Value.IsEscaped)
             || !Ascii.IsValid(bytes.Span))
             return false;
         value = Encoding.UTF8.GetString(bytes.Span);
@@ -146,8 +151,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         // Custom parsers, formats, and sanitizers retain their existing char path.
         if (Profile.Schema is not null || Profile.Parsers is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || CurrentFieldSpans is null || i < 0 || i >= CurrentFieldSpans.Length
-            || CurrentFieldSpans[i].Value.IsEscaped || !TryGetCurrentUtf8(i, out var memory))
+            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var field)
+            || field.Value.IsEscaped)
             return false;
         var bytes = memory.Span;
         if (typeof(T) == typeof(int) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out int integer, out int consumed) && consumed == bytes.Length)
@@ -172,15 +177,15 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     protected override NullableSpan GetValueOrThrow(int i)
     {
         if (HasRowNumber && i == 0)
-            return GetCurrentFieldMemory(0);
-        if (i < CurrentFieldSpans!.Length)
+            return GetCsvFieldMemory(0);
+        if (GetRecordField(i) is { } field)
         {
             var sanitizer = GetFieldSanitizer(i, Profile.ParserOptimizations);
-            return sanitizer.Sanitize((NullableSpan)GetCurrentFieldMemory(i), CurrentFieldSpans[i].Value.IsEscaped, CurrentFieldSpans[i].Value.WasQuoted);
+            return sanitizer.Sanitize((NullableSpan)GetCsvFieldMemory(i), field.Value.IsEscaped, field.Value.WasQuoted);
         }
-        if (i < Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
+        if ((uint)i < (uint)Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
             return GetMissingField().ToString().AsMemory();
-        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {CurrentFieldSpans.Length} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {CurrentFieldSpans!.Length} defined fields.");
     }
 
     /// <summary>
@@ -266,25 +271,43 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
     internal void SetHeaders(string[] headers)
     {
-        if (_rowNumberOptions is null)
+        if (_rowNumberOptions is { } rowNumber && headers.Contains(rowNumber.ColumnName, StringComparer.Ordinal))
+            throw new InvalidDataException($"The generated row-number column '{rowNumber.ColumnName}' conflicts with a source column. Choose another name using WithRowNumber(columnName) or RowNumberOptions.");
+
+        _sourceHeaders = headers;
+        Fields = AddRowNumberHeader(headers);
+        if (Profile.Projection is { } projection)
         {
-            Fields = headers;
-            return;
+            try
+            {
+                _projectedOrdinals = projection.Bind(headers);
+            }
+            catch (InvalidDataException)
+            {
+                IsEof = true;
+                throw;
+            }
+
+            _sourceFields = Fields;
+            Fields = _projectedFields = AddRowNumberHeader(Array.ConvertAll(_projectedOrdinals, ordinal => headers[ordinal]));
         }
-        if (headers.Contains(_rowNumberOptions.ColumnName, StringComparer.Ordinal))
-            throw new InvalidDataException($"The generated row-number column '{_rowNumberOptions.ColumnName}' conflicts with a source column. Choose another name using WithRowNumber(columnName) or RowNumberOptions.");
-        Fields = [_rowNumberOptions.ColumnName, .. headers];
     }
 
-    internal string[]? SourceHeaders => HasRowNumber ? Fields?[1..] : Fields;
+    internal string[]? SourceHeaders => Profile.Projection is not null
+        ? _sourceHeaders : HasRowNumber ? Fields?[1..] : Fields;
+
+    private string[] AddRowNumberHeader(string[] headers)
+        => _rowNumberOptions is { } options ? [options.ColumnName, .. headers] : headers;
 
     private void CompleteRecord()
     {
-        HandleUnexpectedFields(Fields!.Length - (HasRowNumber ? 1 : 0));
-        if (_rowNumberRecord is not null)
+        HandleUnexpectedFields(_projectedOrdinals is not null ? _sourceHeaders!.Length : Fields!.Length - RowNumberWidth);
+        if (HasRowNumber)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);
-            Record = _rowNumberRecord.Prepend(Record!, CurrentRowNumber, Profile.Dialect.Delimiter);
+            _rowNumberText = null;
+            if (_projectedOrdinals is null)
+                Record = _rowNumberRecord!.Prepend(Record!, CurrentRowNumber, Profile.Dialect.Delimiter);
         }
     }
 

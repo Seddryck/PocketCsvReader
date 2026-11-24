@@ -41,6 +41,14 @@ foreach (var row in csv.ToDictionaries(stream))
 
 Builder overloads accept configuration callbacks and descriptors. CSV uses `WithDialect`; other builders expose their own format settings. Configure profiles before constructing/initializing a reader. Supplying a shared options record does not imply every format supports every option.
 
+## CSV column projection
+
+Use `WithProjection("CustomerId", "Country", "Amount")` to select columns by exact header name and set their output order. Use zero-based source ordinals, such as `WithProjection(3, 2, 0)`, for headerless files or when a source name occurs more than once.
+
+The reader resolves the projection against each file’s effective header, including files that contain only headers. A batch configured with a shared header uses that header for each file. Missing or ambiguous names and ordinals outside the source width raise `InvalidDataException`.
+
+Schema definitions and filters still refer to source columns. Output getters and metadata use projected ordinals. A generated row number remains at the front of the output, and projection ordinals count only CSV source columns.
+
 ## Generated row-number column
 
 `WithRowNumber()` prepends an `int` column named `rowNumber`; `WithRowNumber("recordId")` selects another name, and `WithoutRowNumber()` disables it. Direct profiles use `RowNumber = new RowNumberOptions()` or null. See [batch reading and row numbering](../batch-reading/#generated-row-numbers) for numbering, headers, collisions, and object mapping.

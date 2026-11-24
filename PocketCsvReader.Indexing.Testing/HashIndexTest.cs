@@ -53,6 +53,23 @@ public class HashIndexTest
     }
 
     [Test]
+    public void IndexedLookupCanUseAnOmittedSourceColumn()
+    {
+        var path = Write("projection.csv", "Id,Key,Country\n1,other,BE\n2,wanted,FR");
+        var csv = Builder().WithRowNumber().WithProjection("Country", "Id").Build();
+        var index = new HashIndex(new IndexKey<string>("Key"));
+        csv.BuildIndexes(path, index);
+
+        using var row = csv.WithIndexedLookup(path, index, "wanted");
+        Assert.That(row.Read(), Is.True);
+        Assert.That(row.GetName(1), Is.EqualTo("Country"));
+        Assert.That(row.GetInt32(0), Is.EqualTo(2));
+        Assert.That(row.GetString(1), Is.EqualTo("FR"));
+        Assert.That(row.GetInt32(2), Is.EqualTo(2));
+        Assert.That(row.Read(), Is.False);
+    }
+
+    [Test]
     public void ExactEqualityResolvesForcedHashCollisions()
     {
         var path = Write("collisions.csv", "Id,Key\n1,Bob\n2,Alice\n3,BOB\n4,Eve\n");
