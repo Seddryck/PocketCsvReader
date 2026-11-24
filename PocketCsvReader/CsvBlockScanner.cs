@@ -7,7 +7,7 @@ using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 
-// Indexes complete plain rows within one input buffer. The source owns the input
+// Indexes complete rows within one input buffer. The source owns the input
 // and advances the index once per row. Both views expire on the next read.
 internal sealed class CsvBlockScanner<T> : IDisposable
     where T : unmanaged, IBinaryInteger<T>
@@ -20,6 +20,7 @@ internal sealed class CsvBlockScanner<T> : IDisposable
     private readonly T _terminator;
     private readonly T _quote;
     private readonly int _terminatorLength;
+    private readonly bool _doubleQuote;
     private int[]? _ends;
     private int[]? _rows;
     private int _rowCount;
@@ -34,10 +35,11 @@ internal sealed class CsvBlockScanner<T> : IDisposable
         _terminator = T.CreateChecked((ushort)dialect.LineTerminator[0]);
         _quote = T.CreateChecked((ushort)(dialect.QuoteChar ?? dialect.LineTerminator[0]));
         _terminatorLength = dialect.LineTerminator.Length;
+        _doubleQuote = dialect.DoubleQuote;
     }
 
     public static CsvBlockScanner<T>? Create(DialectDescriptor dialect, int bufferSize)
-        => bufferSize >= MinimumBufferSize
+        => bufferSize is >= MinimumBufferSize and <= CsvFieldOffset.OffsetMask
             && Vector128.IsHardwareAccelerated
             && dialect.LineTerminator is "\r\n" or "\n"
             && dialect.Delimiter is not ('\r' or '\n')
@@ -66,7 +68,7 @@ internal sealed class CsvBlockScanner<T> : IDisposable
 
         var ends = _ends!;
         var lastField = _rows![_rowIndex++];
-        row = new(ends, _firstField, lastField - _firstField, ends[lastField - 1] + _terminatorLength);
+        row = new(ends, _firstField, lastField - _firstField, (ends[lastField - 1] & CsvFieldOffset.OffsetMask) + _terminatorLength);
         _firstField = lastField;
         return true;
     }
@@ -82,7 +84,7 @@ internal sealed class CsvBlockScanner<T> : IDisposable
         var index = new BatchIndex { RowStart = position };
         var block = position & -blockSize;
         var remaining = uint.MaxValue << (position - block);
-        for (; block <= input.Length - blockSize; block += blockSize)
+        while (block <= input.Length - blockSize)
         {
             // One block can contribute at most blockSize offsets and rows.
             if (index.FieldCount > FieldCapacity - blockSize || index.RowCount > RowCapacity - blockSize)
@@ -92,13 +94,12 @@ internal sealed class CsvBlockScanner<T> : IDisposable
                 break;
             }
 
-            if (!TryIndexBlock(input, block, remaining, ends, rows, ref index))
+            if (!TryIndexBlock(input, block, remaining, ends, rows, ref index, out var opening)
+                || !TryAdvance(input, blockSize, ends, rows, ref index, opening, ref block, ref remaining))
             {
                 _fallbackRemaining = input.Length - index.RowStart;
                 break;
             }
-
-            remaining = uint.MaxValue;
         }
 
         _firstField = _rowIndex = 0;
@@ -107,12 +108,17 @@ internal sealed class CsvBlockScanner<T> : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryIndexBlock(ReadOnlySpan<T> input, int block, uint remaining, int[] ends, int[] rows, ref BatchIndex index)
+    private bool TryIndexBlock(ReadOnlySpan<T> input, int block, uint remaining, int[] ends, int[] rows, ref BatchIndex index, out int opening)
     {
         LoadMasks(input, block, out var delimiters, out var terminators, out var quotes);
         quotes &= remaining;
+        opening = -1;
         if (quotes != 0)
-            remaining &= (1u << BitOperations.TrailingZeroCount(quotes)) - 1;
+        {
+            var bit = BitOperations.TrailingZeroCount(quotes);
+            opening = block + bit;
+            remaining &= (1u << bit) - 1;
+        }
 
         var boundaries = (delimiters | terminators) & remaining;
         while (boundaries != 0)
@@ -122,7 +128,7 @@ internal sealed class CsvBlockScanner<T> : IDisposable
             ends[index.FieldCount++] = end - index.RowStart;
             if ((terminators & (1u << bit)) != 0)
             {
-                if (_terminatorLength == 2 && (end + 1 == input.Length || input[end + 1] != T.CreateChecked((ushort)'\n')))
+                if (!HasRecordTerminator(input, end))
                     return false;
 
                 rows[index.RowCount++] = index.FieldCount;
@@ -132,8 +138,79 @@ internal sealed class CsvBlockScanner<T> : IDisposable
             boundaries &= boundaries - 1;
         }
 
-        return quotes == 0;
+        return true;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryAdvance(ReadOnlySpan<T> input, int blockSize, int[] ends, int[] rows,
+        ref BatchIndex index, int opening, ref int block, ref uint remaining)
+    {
+        if (opening < 0)
+        {
+            block += blockSize;
+            remaining = uint.MaxValue;
+            return true;
+        }
+
+        // The decoded-character scanner continues to use its scalar quote parser.
+        if (typeof(T) != typeof(byte) || !TryIndexQuotedField(input, opening, ends, rows, ref index, out var next))
+            return false;
+
+        block = next & -blockSize;
+        remaining = uint.MaxValue << (next - block);
+        return true;
+    }
+
+    private bool TryIndexQuotedField(ReadOnlySpan<T> input, int opening, int[] ends, int[] rows,
+        ref BatchIndex index, out int next)
+    {
+        next = 0;
+        var firstField = index.RowCount == 0 ? 0 : rows[index.RowCount - 1];
+        var fieldStart = index.FieldCount == firstField ? index.RowStart
+            : index.RowStart + (ends[index.FieldCount - 1] & CsvFieldOffset.OffsetMask) + 1;
+        // Incomplete, malformed or ambiguous rows are reparsed from their start.
+        if (opening != fieldStart || !TryFindQuoteBoundary(input, opening, out var end, out var flags))
+            return false;
+
+        ends[index.FieldCount++] = (end - index.RowStart) | flags;
+        next = end + 1;
+        if (input[end] == _terminator)
+        {
+            rows[index.RowCount++] = index.FieldCount;
+            index.RowStart = next = end + _terminatorLength;
+        }
+
+        return true;
+    }
+
+    private bool TryFindQuoteBoundary(ReadOnlySpan<T> input, int opening, out int end, out int flags)
+    {
+        flags = CsvFieldOffset.Quoted;
+        end = opening + 1;
+        while (end < input.Length)
+        {
+            // Ignore delimiters and newlines inside the quoted field.
+            var quote = input[end..].IndexOf(_quote);
+            if (quote < 0)
+                break;
+
+            end += quote + 1;
+            if (end == input.Length)
+                break;
+
+            var following = input[end];
+            if (following != _quote || !_doubleQuote)
+                return following == _delimiter || (following == _terminator && HasRecordTerminator(input, end));
+
+            flags |= CsvFieldOffset.Escaped;
+            end++;
+        }
+
+        return false;
+    }
+
+    private bool HasRecordTerminator(ReadOnlySpan<T> input, int end)
+        => _terminatorLength == 1 || (end + 1 < input.Length && input[end + 1] == T.CreateChecked((ushort)'\n'));
 
     private struct BatchIndex
     {
@@ -169,3 +246,11 @@ internal sealed class CsvBlockScanner<T> : IDisposable
 }
 
 internal readonly record struct CsvRowOffsets(int[] Ends, int FirstField, int FieldCount, int Length);
+
+internal static class CsvFieldOffset
+{
+    // The high bits preserve quote metadata alongside the raw field boundary.
+    public const int OffsetMask = (1 << 30) - 1;
+    public const int Quoted = 1 << 30;
+    public const int Escaped = int.MinValue;
+}

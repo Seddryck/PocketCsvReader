@@ -35,7 +35,8 @@ internal readonly struct CurrentRecord
         {
             if (_compactCount != 0)
             {
-                GetCompactRange(ordinal, out int start, out int length);
+                var flags = GetCompactRange(ordinal, out int start, out int length);
+                isEscaped = (flags & CsvFieldOffset.Escaped) != 0;
                 value = _utf8.Slice(start, length);
             }
             else
@@ -52,21 +53,29 @@ internal readonly struct CurrentRecord
         return false;
     }
 
-    private void GetCompactRange(int ordinal, out int start, out int length)
+    private int GetCompactRange(int ordinal, out int start, out int length)
     {
         var ends = (int[])_metadata!;
         var index = _offsetIndex + ordinal;
-        start = ordinal == 0 ? 0 : ends[index - 1] + 1;
-        length = ends[index] - start;
+        var end = ends[index];
+        var trim = (end & CsvFieldOffset.Quoted) >> 30;
+        start = (ordinal == 0 ? 0 : (ends[index - 1] & CsvFieldOffset.OffsetMask) + 1) + trim;
+        length = (end & CsvFieldOffset.OffsetMask) - start - trim;
+        return end;
     }
 
     private SpanInfo GetCompactValue(int ordinal)
     {
-        GetCompactRange(ordinal, out int start, out int length);
-        return new(length == 0 ? 0 : start, length, IsStarted: length != 0, IsComplete: true);
+        var flags = GetCompactRange(ordinal, out int start, out int length);
+        var wasQuoted = (flags & CsvFieldOffset.Quoted) != 0;
+        var isStarted = wasQuoted || length != 0;
+        return new(isStarted ? start : 0, length, wasQuoted,
+            IsEscaped: (flags & CsvFieldOffset.Escaped) != 0, IsStarted: isStarted, IsComplete: true);
     }
 
-    public bool IsEscaped(int ordinal) => _compactCount == 0 && ((FieldSpan[])_metadata!)[ordinal].Value.IsEscaped;
+    public bool IsEscaped(int ordinal) => _compactCount != 0
+        ? (((int[])_metadata!)[_offsetIndex + ordinal] & CsvFieldOffset.Escaped) != 0
+        : ((FieldSpan[])_metadata!)[ordinal].Value.IsEscaped;
 
     public FieldSpan GetField(int ordinal) => _compactCount != 0
         ? new(GetCompactValue(ordinal), default)
