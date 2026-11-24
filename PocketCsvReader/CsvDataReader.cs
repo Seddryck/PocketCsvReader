@@ -1,10 +1,11 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
-using System.Globalization;
 using System.Text;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
+using PocketCsvReader.ValueReader;
 
 namespace PocketCsvReader;
 public partial class CsvDataReader : BaseDataReader<CsvProfile>
@@ -158,56 +159,38 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             value = (T)(object)CurrentRowNumber;
             return true;
         }
-        // Custom parsers, formats, and sanitizers retain their existing char path.
-        if (Profile.Schema is not null || Profile.Parsers is not null
+
+        var registrations = Profile.Parsers;
+        var configured = registrations?.FindUtf8Parser<T>();
+        var parser = configured ?? (registrations?.HasParser(typeof(T)) is true ? null : DefaultUtf8Parsers.For<T>.Parser);
+        if (parser is null || GetType() != typeof(CsvDataReader)
             || Profile.Resource?.Sequences is { IsEmpty: false }
             || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var field)
-            || field.Value.IsEscaped)
+            || field.Value.IsEscaped || field.Children is not null)
             return false;
-        var bytes = memory.Span;
-        if (typeof(T) == typeof(int) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out int integer, out int consumed) && consumed == bytes.Length)
-            value = (T)(object)integer;
-        else if (typeof(T) == typeof(long) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out long longInteger, out consumed) && consumed == bytes.Length)
-            value = (T)(object)longInteger;
-        else if (typeof(T) == typeof(short) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out short shortInteger, out consumed) && consumed == bytes.Length)
-            value = (T)(object)shortInteger;
-        else if (typeof(T) == typeof(decimal) && decimal.TryParse(bytes, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
-            value = (T)(object)amount;
-        else if ((typeof(T) == typeof(DateOnly) || typeof(T) == typeof(DateTime))
-            && GetType() == typeof(CsvDataReader) && TryParseIsoDate(bytes, out var date))
-            value = typeof(T) == typeof(DateOnly) ? (T)(object)date : (T)(object)date.ToDateTime(TimeOnly.MinValue);
-        else if (typeof(T) == typeof(bool) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out bool boolean, out consumed) && consumed == bytes.Length)
-            value = (T)(object)boolean;
-        else
+
+        // A present, unescaped field without sequences has a non-null logical value.
+        // Schema conversions and derived readers can change that value or its parser.
+        if (Profile.Schema is not null && (!TryGetFieldDescriptor(i, out var descriptor)
+            || descriptor.RuntimeType != typeof(T) || descriptor.SpanParse is not null || descriptor.Parse is not null
+            || (descriptor.Format is not null && descriptor.Format is not NoneFormatDescriptor)
+            || descriptor.Sequences is { IsEmpty: false }))
             return false;
-        return true;
+
+        var utf8 = memory.Span;
+        return (configured is null || IsValidUtf8(utf8)) && parser(utf8, out value);
     }
 
-    private static bool TryParseIsoDate(ReadOnlySpan<byte> bytes, out DateOnly date)
+    private static bool IsValidUtf8(ReadOnlySpan<byte> utf8)
     {
-        date = default;
-        if (bytes.Length != 10 || bytes[4] != (byte)'-' || bytes[7] != (byte)'-'
-            || !TryParseDateDigits(bytes[..4], out var year)
-            || !TryParseDateDigits(bytes.Slice(5, 2), out var month)
-            || !TryParseDateDigits(bytes.Slice(8, 2), out var day)
-            || year == 0 || month is < 1 or > 12
-            || day < 1 || day > DateTime.DaysInMonth(year, month))
-            return false;
+        if (Ascii.IsValid(utf8))
+            return true;
 
-        date = new DateOnly(year, month, day);
-        return true;
-    }
-
-    private static bool TryParseDateDigits(ReadOnlySpan<byte> bytes, out int value)
-    {
-        value = 0;
-        foreach (var b in bytes)
+        while (!utf8.IsEmpty)
         {
-            var digit = b - '0';
-            if ((uint)digit > 9)
+            if (Rune.DecodeFromUtf8(utf8, out _, out var consumed) != OperationStatus.Done)
                 return false;
-
-            value = (value * 10) + digit;
+            utf8 = utf8[consumed..];
         }
         return true;
     }
