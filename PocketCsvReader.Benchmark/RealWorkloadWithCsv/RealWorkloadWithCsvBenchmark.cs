@@ -52,7 +52,7 @@ public class RealWorkloadWithCsvBenchmark
     private CsvProfile _profile = null!;
     private IEnumerator<Enrollment>? _expectedRecords;
 
-    [Params(CsvScenario.Utf8, CsvScenario.Utf16, CsvScenario.Utf8WithQuotedUniversity)]
+    [Params(CsvScenario.Utf8, CsvScenario.Utf16, CsvScenario.Utf8WithQuotedUniversity, CsvScenario.Utf8WithFullName)]
     public CsvScenario Scenario { get; set; }
 
     [GlobalSetup]
@@ -259,6 +259,9 @@ public class RealWorkloadWithCsvBenchmark
     private void Consume(string university, string firstName, string lastName, string quarter,
         decimal score, short credits, DateOnly registrationDate)
     {
+        var joinNames = Scenario == CsvScenario.Utf8WithFullName;
+        var fullName = joinNames ? string.Concat(firstName, " ", lastName) : null;
+
         if (_expectedRecords is { } records)
         {
             if (!records.MoveNext())
@@ -269,10 +272,13 @@ public class RealWorkloadWithCsvBenchmark
                 lastName != expected.LastName || quarter != expected.Quarter || score != expected.Score ||
                 credits != expected.Credits || registrationDate != expected.RegistrationDate)
                 throw new InvalidOperationException($"Parsed record does not match the expected record for {expected.FirstName} {expected.LastName}.");
+
+            if (joinNames && fullName != $"{expected.FirstName} {expected.LastName}")
+                throw new InvalidOperationException($"Joined name does not match {expected.FirstName} {expected.LastName}.");
         }
 
         _consumer.Consume(university);
-        _consumer.Consume(firstName);
+        _consumer.Consume(fullName ?? firstName);
         _consumer.Consume(lastName);
         _consumer.Consume(quarter);
         _consumer.Consume(score);
@@ -285,6 +291,7 @@ public class RealWorkloadWithCsvBenchmark
         Utf8,
         Utf16,
         Utf8WithQuotedUniversity,
+        Utf8WithFullName,
     }
 
     private sealed class Enrollment
