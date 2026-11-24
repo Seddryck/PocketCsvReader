@@ -6,6 +6,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
+    private readonly bool _table;
     private readonly PositionTracker? _position;
     private ReadOnlyMemory<char> _selectionInput;
     private RecordPosition _selectionStart;
@@ -23,10 +24,12 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
     private JsonCommentScanner _trivia;
 
     public JsonProfile Profile { get; }
+    internal string[]? TableHeader { get; private set; }
 
-    public JsonRecordSource(StreamReader reader, JsonProfile profile)
+    public JsonRecordSource(StreamReader reader, JsonProfile profile, bool table = false)
     {
         Profile = profile;
+        _table = table;
         if (profile.TrackPosition) _position = new();
         _cursor = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         if (profile.StableFieldLayout)
@@ -65,6 +68,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         if (first < 0)
             return EndOfFile(out record, out recordState);
 
+        ValidateTableRow(first);
         _position?.BeginRecord();
         var recordStart = _cursor.Position;
         var (capture, delimiter) = ReadValue((char)first);
@@ -97,6 +101,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         if (first < 0)
             return new(true, default, RecordState.Eof);
 
+        ValidateTableRow(first);
         _position?.BeginRecord();
         var recordStart = _cursor.Position;
         var (capture, delimiter) = await ReadValueAsync((char)first, cancellationToken).ConfigureAwait(false);
@@ -219,6 +224,8 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
 
     private FieldSpan[] GetFields(ReadOnlyMemory<char> json, long recordStart)
     {
+        if (_table)
+            return ParseTableRow(json, recordStart);
         if (_stableLayout is not null)
         {
             try
@@ -250,6 +257,53 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         return _projectedFields!;
     }
 
+    private FieldSpan[] ParseTableRow(ReadOnlyMemory<char> json, long recordStart)
+    {
+        try
+        {
+            var fields = JsonRecordParser.ParseTableRow(json.Span, Profile.AllowComments, Profile.AllowTrailingCommas, _fieldBuffer);
+            if (TableHeader is null)
+                TableHeader = ReadTableHeader(json, fields);
+            else if (fields.Length != TableHeader.Length)
+                throw new InvalidDataException($"Expected {TableHeader.Length} values but found {fields.Length}.");
+            return fields;
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new InvalidDataException($"Invalid JSON table row starting at position {recordStart}: {exception.Message}", exception);
+        }
+    }
+
+    private string[] ReadTableHeader(ReadOnlyMemory<char> json, FieldSpan[] fields)
+    {
+        var names = new string[fields.Length];
+        var uniqueNames = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < fields.Length; i++)
+        {
+            var value = fields[i].Value;
+            if (!value.WasQuoted)
+                throw new InvalidDataException($"Column name at ordinal {i} must be a JSON string.");
+
+            var name = value.IsEscaped
+                ? JsonRecordParser.DecodeString(json.Span.Slice(value.Start - 1, value.Length + 2), _fieldBuffer)
+                : json.Span.Slice(value.Start, value.Length).ToString();
+            if (!uniqueNames.Add(name))
+                throw new InvalidDataException($"Duplicate column name '{name}'.");
+            names[i] = name;
+        }
+        return names;
+    }
+
+    private void ValidateTableRow(int first)
+    {
+        if (_table && first != '[')
+        {
+            throw Error(TableHeader is null
+                ? "A JSON table header must be an array"
+                : "A JSON table data row must be an array");
+        }
+    }
+
     private int PeekFirstRootCharacter()
     {
         var first = PeekNonWhitespace();
@@ -258,6 +312,8 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
 
         if (first != '[')
         {
+            if (_table)
+                throw Error("A JSON table must be a top-level array");
             _state = DocumentState.SingleRoot;
             return first;
         }
@@ -269,6 +325,8 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
+        if (_table)
+            throw Error("A JSON table requires a header row");
 
         _cursor.Read();
         CompleteDocument();
@@ -303,6 +361,8 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
 
         if (first != '[')
         {
+            if (_table)
+                throw Error("A JSON table must be a top-level array");
             _state = DocumentState.SingleRoot;
             return first;
         }
@@ -314,6 +374,8 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             throw Error("The top-level array is incomplete");
         if (arrayFirst != ']')
             return arrayFirst;
+        if (_table)
+            throw Error("A JSON table requires a header row");
 
         await _cursor.ReadAsync(cancellationToken).ConfigureAwait(false);
         await CompleteDocumentAsync(cancellationToken).ConfigureAwait(false);

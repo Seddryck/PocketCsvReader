@@ -67,6 +67,32 @@ Projection avoids building field metadata and nested field trees for properties 
 
 Use `JsonReaderBuilder.WithStableFieldLayout()` for trusted object records with the same recursive structure and property order. This works with standalone objects, objects streamed from arrays, and objects selected by a record path. You can combine it with either projection mode. See [Stable field layout](../json-projection/#stable-field-layout).
 
+## JSON tables with a header row
+
+Use `JsonTableReader` from `PocketCsvReader.Json` to read a top-level array whose first row lists the column names. Each subsequent row is an array of cells in the same order.
+
+```json
+[
+  ["id", "name"],
+  [1, "Ada"],
+  [2, "Lin"]
+]
+```
+
+```csharp
+using PocketCsvReader.Json;
+
+using var reader = new JsonTableReader().ToDataReader("people.json");
+while (await reader.ReadAsync())
+{
+    var id = reader.GetInt32(reader.GetOrdinal("id"));
+    var name = reader.GetString(reader.GetOrdinal("name"));
+    Console.WriteLine($"{id}: {name}");
+}
+```
+
+The reader consumes the header on the first read and streams the data rows. Header names must be JSON strings and are compared ordinally for duplicates after decoding escapes. Every data row must match the header width. A header-only document has zero rows, and its column names remain available on the data reader after the first read. The table reader accepts `JsonProfile` settings such as JSONC, schemas, and row filters.
+
 ## JSON with comments (JSONC)
 
 Opt in to JSONC using the existing `PocketCsvReader.Json` package:
