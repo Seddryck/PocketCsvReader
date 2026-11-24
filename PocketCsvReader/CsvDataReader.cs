@@ -10,6 +10,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 {
     private readonly RowNumberOptions? _rowNumberOptions;
     private readonly RowNumberRecord? _rowNumberRecord;
+    private Utf8StringPool? _utf8StringPool;
     private static readonly FieldDescriptor RowNumberField = new(typeof(int), DataSourceTypeName: "integer");
     private static readonly FieldDescriptor UndeclaredField = new(typeof(string));
     internal bool HasRowNumber => _rowNumberOptions is not null;
@@ -133,8 +134,16 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         if (Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
             || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var field)
-            || (Profile.ParserOptimizations.UnescapeChars && field.Value.IsEscaped)
-            || !Ascii.IsValid(bytes.Span))
+            || (Profile.ParserOptimizations.UnescapeChars && field.Value.IsEscaped))
+            return false;
+
+        if (Profile.ParserOptimizations.PoolUtf8Strings)
+        {
+            value = (_utf8StringPool ??= new()).GetString(bytes.Span);
+            return true;
+        }
+
+        if (!Ascii.IsValid(bytes.Span))
             return false;
         value = Encoding.UTF8.GetString(bytes.Span);
         return true;
