@@ -94,6 +94,49 @@ The latest explicit registration for the same field/type replaces its previous p
 
 Sparse indexes also use the reader's registered runtime parser for a key without an explicit format or culture. [Use the reader's runtime parser with a sparse index](../sparse-indexes/#use-the-readers-runtime-parser)
 
+## UTF-8 parsers
+
+Use `WithUtf8Parser<T>(utf8Parser, fallback)` inside `WithParsers(...)` to supply a typed byte parser and an equivalent character parser. Here a CSV column uses `on` and `off` for Boolean values.
+
+<!-- example: custom-utf8-parser -->
+```csharp
+using PocketCsvReader;
+using PocketCsvReader.Configuration;
+
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithoutHeader())
+    .WithStreamInitialization(StreamInitializationOptions.Utf8)
+    .WithParsers(p => p.WithUtf8Parser<bool>(TryParseSwitch, ParseSwitch))
+    .Build();
+
+using var stream = new MemoryStream("on,off"u8.ToArray());
+using var reader = csv.ToDataReader(stream);
+if (reader.Read())
+    Console.WriteLine($"{reader.GetBoolean(0)} {reader.GetBoolean(1)}");
+
+static bool TryParseSwitch(ReadOnlySpan<byte> text, out bool value)
+{
+    value = text.SequenceEqual("on"u8);
+    return value || text.SequenceEqual("off"u8);
+}
+
+static bool ParseSwitch(ReadOnlySpan<char> text)
+{
+    if (text.SequenceEqual("on")) return true;
+    if (text.SequenceEqual("off")) return false;
+    throw new FormatException("Expected on or off.");
+}
+```
+
+<!-- output: custom-utf8-parser -->
+```text
+True False
+```
+
+A byte parser returns `true` only for a complete field match. It receives borrowed, valid UTF-8 for the duration of the call. The fallback runs when the byte parser returns `false` or the reader needs its character path, such as on `TextReader` input or for an escaped field. Schema parsers and formats, sequence substitutions, and row filters continue through their existing paths.
+
+An explicit runtime parser takes precedence over a built-in for the same type. Registrations for other types leave eligible built-ins available. Native UTF-8 mode enables the built-ins automatically. See [UTF-8 input](../utf8-input/#utf-8-value-parsers) for the built-in types and `UseIsoDateAsDateTime()`.
+
 ## Parsing spans without intermediate strings
 
 `ParseSpan<T>` consumes `ReadOnlySpan<char>` synchronously. Select the overload using an explicitly typed span lambda or a `ParseSpan<T>` variable. For an overloaded method group, assign it to that delegate first. With C# 13+, overload priorities retain legacy string behavior for untyped lambdas; on older compilers, type the parameter explicitly when ambiguous.

@@ -1,10 +1,11 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Data;
-using System.Globalization;
 using System.Text;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
+using PocketCsvReader.ValueReader;
 
 namespace PocketCsvReader;
 public partial class CsvDataReader : BaseDataReader<CsvProfile>
@@ -153,61 +154,61 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     private protected override bool TryGetDirectValue<T>(int i, out T value)
     {
         value = default!;
-        if (HasRowNumber && i == 0 && typeof(T) == typeof(int))
+        if (HasRowNumber && i == 0)
         {
+            if (typeof(T) != typeof(int))
+                return false;
+
             value = (T)(object)CurrentRowNumber;
             return true;
         }
-        // Custom parsers, formats, and sanitizers retain their existing char path.
-        if (Profile.Schema is not null || Profile.Parsers is not null
-            || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var isEscaped)
-            || isEscaped)
-            return false;
-        var bytes = memory.Span;
-        if (typeof(T) == typeof(int) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out int integer, out int consumed) && consumed == bytes.Length)
-            value = (T)(object)integer;
-        else if (typeof(T) == typeof(long) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out long longInteger, out consumed) && consumed == bytes.Length)
-            value = (T)(object)longInteger;
-        else if (typeof(T) == typeof(short) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out short shortInteger, out consumed) && consumed == bytes.Length)
-            value = (T)(object)shortInteger;
-        else if (typeof(T) == typeof(decimal) && decimal.TryParse(bytes, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
-            value = (T)(object)amount;
-        else if ((typeof(T) == typeof(DateOnly) || typeof(T) == typeof(DateTime))
-            && GetType() == typeof(CsvDataReader) && TryParseIsoDate(bytes, out var date))
-            value = typeof(T) == typeof(DateOnly) ? (T)(object)date : (T)(object)date.ToDateTime(TimeOnly.MinValue);
-        else if (typeof(T) == typeof(bool) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out bool boolean, out consumed) && consumed == bytes.Length)
-            value = (T)(object)boolean;
-        else
-            return false;
-        return true;
+
+        var parser = ResolveUtf8Parser<T>(out var isConfigured);
+        return parser is not null
+            && TryGetDirectUtf8(i, out var memory)
+            && CanParseUtf8Field<T>(i)
+            && (!isConfigured || IsValidUtf8(memory.Span))
+            && parser(memory.Span, out value);
     }
 
-    private static bool TryParseIsoDate(ReadOnlySpan<byte> bytes, out DateOnly date)
+    private TryParseUtf8<T>? ResolveUtf8Parser<T>(out bool isConfigured)
     {
-        date = default;
-        if (bytes.Length != 10 || bytes[4] != (byte)'-' || bytes[7] != (byte)'-'
-            || !TryParseDateDigits(bytes[..4], out var year)
-            || !TryParseDateDigits(bytes.Slice(5, 2), out var month)
-            || !TryParseDateDigits(bytes.Slice(8, 2), out var day)
-            || year == 0 || month is < 1 or > 12
-            || day < 1 || day > DateTime.DaysInMonth(year, month))
-            return false;
-
-        date = new DateOnly(year, month, day);
-        return true;
+        var registrations = Profile.Parsers;
+        var configured = registrations?.FindUtf8Parser<T>();
+        isConfigured = configured is not null;
+        return configured ?? (registrations?.HasParser(typeof(T)) is true ? null : DefaultUtf8Parsers.For<T>.Parser);
     }
 
-    private static bool TryParseDateDigits(ReadOnlySpan<byte> bytes, out int value)
+    private bool TryGetDirectUtf8(int i, out ReadOnlyMemory<byte> memory)
     {
-        value = 0;
-        foreach (var b in bytes)
+        memory = default;
+        return GetType() == typeof(CsvDataReader)
+            && Profile.Resource?.Sequences is not { IsEmpty: false }
+            && TryGetCsvUtf8(i, out memory, out var isEscaped)
+            && !isEscaped;
+    }
+
+    private bool CanParseUtf8Field<T>(int i)
+    {
+        if (Profile.Schema is null)
+            return true;
+
+        return TryGetFieldDescriptor(i, out var descriptor)
+            && descriptor.RuntimeType == typeof(T)
+            && !HasCustomParser(descriptor)
+            && descriptor.Sequences is not { IsEmpty: false };
+    }
+
+    private static bool IsValidUtf8(ReadOnlySpan<byte> utf8)
+    {
+        if (Ascii.IsValid(utf8))
+            return true;
+
+        while (!utf8.IsEmpty)
         {
-            var digit = b - '0';
-            if ((uint)digit > 9)
+            if (Rune.DecodeFromUtf8(utf8, out _, out var consumed) != OperationStatus.Done)
                 return false;
-
-            value = (value * 10) + digit;
+            utf8 = utf8[consumed..];
         }
         return true;
     }
