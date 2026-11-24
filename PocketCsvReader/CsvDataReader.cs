@@ -42,7 +42,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     }
 
     private static StringMapper CreateStringMapper(CsvProfile profile)
-        => new(profile.ParserOptimizations.PoolString, profile.ParserOptimizations.PoolStringLastValueHint);
+        => new(profile.ParserOptimizations.PoolString, profile.ParserOptimizations.PoolStringLastValueHint,
+            profile.ParserOptimizations.PoolDecodedStrings);
 
     private static (RowNumberOptions? Options, RowNumberRecord? Record) CreateRowNumber(CsvProfile profile)
     {

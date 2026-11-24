@@ -33,4 +33,9 @@ public record ParserOptimizationOptions
     /// </remarks>
     /// <value>True to enable the hint. The default is false.</value>
     public bool PoolStringLastValueHint { get; init; }
+
+    /// <summary>Reuses strings for eligible decoded CSV fields in a bounded per-reader pool.</summary>
+    /// <remarks>Includes a per-column last-value hint. A configured <see cref="PoolString"/> takes precedence.</remarks>
+    /// <value>True to enable the pool. The default is false.</value>
+    public bool PoolDecodedStrings { get; init; }
 }

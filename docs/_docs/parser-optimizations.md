@@ -28,6 +28,10 @@ Default `null`. Optional string-pooling delegate used by the value mapper. Pooli
 
 Opt in to a bounded, per-reader last-value check for each CSV column when using `PoolString`. Matching short fields reuse the previous string without invoking the pool. Enable this only when the pool returns stable text for identical input and can be skipped on a cache hit.
 
+### `PoolDecodedStrings`
+
+Default `false`. Enable the built-in pool for decoded CSV fields, including UTF-16, forced decoded UTF-8, and `TextReader` input. The bounded pool belongs to one reader and includes a per-column last-value hint. A configured `PoolString` takes precedence. Fields longer than 128 UTF-16 code units bypass the pool.
+
 ### `LookupTableChar`
 Default `true`. Legacy CSV flag; do not infer that switching it changes every current scanner. Delimiter/quote settings belong to the dialect, and JSON/key-value scanners use their own implementation.
 
