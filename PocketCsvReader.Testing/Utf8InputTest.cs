@@ -265,6 +265,20 @@ public class Utf8InputTest
         Assert.That(() => reader.GetInt32(0), Throws.TypeOf(exception));
     }
 
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void DecimalGettersPreserveNumberSyntaxAndExceptions(CsvInputMode mode)
+    {
+        var bytes = Encoding.UTF8.GetBytes("9.33,\"1,234.50\",1e2,79228162514264337593543950336");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), Profile(mode));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetDecimal(0), Is.EqualTo(9.33m));
+        Assert.That(reader.GetFieldValue<decimal>(1), Is.EqualTo(1234.50m));
+        Assert.That(() => reader.GetDecimal(2), Throws.TypeOf<FormatException>());
+        Assert.That(() => reader.GetFieldValue<decimal>(2), Throws.TypeOf<FormatException>());
+        Assert.That(() => reader.GetDecimal(3), Throws.TypeOf<OverflowException>());
+    }
+
     [Test]
     public async Task PooledFieldDecodingResetsAcrossRecordsAndPreservesReturnedStrings()
     {

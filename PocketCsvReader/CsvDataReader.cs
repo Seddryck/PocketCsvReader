@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Text;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
@@ -161,6 +162,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             value = (T)(object)longInteger;
         else if (typeof(T) == typeof(short) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out short shortInteger, out consumed) && consumed == bytes.Length)
             value = (T)(object)shortInteger;
+        else if (typeof(T) == typeof(decimal) && decimal.TryParse(bytes, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
+            value = (T)(object)amount;
         else if (typeof(T) == typeof(bool) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out bool boolean, out consumed) && consumed == bytes.Length)
             value = (T)(object)boolean;
         else
