@@ -211,7 +211,7 @@ public abstract class BaseRawRecord<TProfile>
             ? value : GetStringValue(ordinal);
 
     protected virtual string GetStringValue(int i)
-        => StringMapper.Map(GetValueOrThrow(i))!;
+        => StringMapper.Map(i, GetValueOrThrow(i))!;
 
     /// <summary>Returns a field's logical text, allowing formats to decode and cache it on demand.</summary>
     protected virtual ReadOnlyMemory<char> GetFieldMemory(ref FieldSpan field)

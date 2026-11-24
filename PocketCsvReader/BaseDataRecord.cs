@@ -375,7 +375,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
         var parse = ResolveValueParser(i);
         if (parse is null)
-            return StringMapper.Map(value.Value);
+            return StringMapper.Map(i, value.Value);
 
         try
         {

@@ -24,6 +24,10 @@ Default `true`. CSV selects its double-buffer read-ahead path. Other formats can
 Default `4096` characters in the shared record. The NDJSON/key-value builders use 64 KB defaults. Positive sizes are required by those profiles. A larger chunk can reduce refills; it does not cap record length.
 ### `PoolString`
 Default `null`. Optional string-pooling delegate used by the value mapper. Pooling can reduce repeated strings but retained pools have a memory cost.
+### `PoolStringLastValueHint`
+
+Opt in to a bounded, per-reader last-value check for each CSV column when using `PoolString`. Matching short fields reuse the previous string without invoking the pool. Enable this only when the pool returns stable text for identical input and can be skipped on a cache hit.
+
 ### `LookupTableChar`
 Default `true`. Legacy CSV flag; do not infer that switching it changes every current scanner. Delimiter/quote settings belong to the dialect, and JSON/key-value scanners use their own implementation.
 

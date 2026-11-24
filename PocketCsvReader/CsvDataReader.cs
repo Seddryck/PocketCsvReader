@@ -27,19 +27,22 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     { }
 
     internal CsvDataReader(Stream stream, CsvProfile profile, bool leaveOpen)
-        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString), leaveOpen)
+        : base(stream, profile, CreateStringMapper(profile), leaveOpen)
     {
         (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
         _hasNoSpecialSequences = profile.Schema is null && profile.Resource?.Sequences is not { IsEmpty: false };
     }
 
     internal CsvDataReader(TextReader reader, CsvProfile profile, bool leaveOpen)
-        : base(profile, new StringMapper(profile.ParserOptimizations.PoolString),
+        : base(profile, CreateStringMapper(profile),
               () => new RecordParser(reader, profile), leaveOpen ? null : reader)
     {
         (_rowNumberOptions, _rowNumberRecord) = CreateRowNumber(profile);
         _hasNoSpecialSequences = profile.Schema is null && profile.Resource?.Sequences is not { IsEmpty: false };
     }
+
+    private static StringMapper CreateStringMapper(CsvProfile profile)
+        => new(profile.ParserOptimizations.PoolString, profile.ParserOptimizations.PoolStringLastValueHint);
 
     private static (RowNumberOptions? Options, RowNumberRecord? Record) CreateRowNumber(CsvProfile profile)
     {
