@@ -84,7 +84,11 @@ internal static class CsvStreamSource
         public OwnedCharacterSource(Stream stream, Encoding encoding, CsvProfile profile)
             : this(new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false), profile) { }
         private OwnedCharacterSource(StreamReader reader, CsvProfile profile)
-            : base(reader, profile) => _reader = reader;
+            : base(reader, profile)
+        {
+            _reader = reader;
+            EnableCharBatch(profile);
+        }
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

@@ -9,8 +9,9 @@ internal readonly struct CurrentRecord
     private readonly Array? _metadata;
     private readonly int _offsetIndex;
     private readonly int _compactCount;
-    private readonly Utf8FieldBuffer? _decodedFields;
-    public bool IsUtf8 => _decodedFields is not null;
+    // Compact character rows carry publication storage here. UTF-8 rows carry the decoder.
+    private readonly object? _storage;
+    public bool IsUtf8 => _storage is Utf8FieldBuffer;
     public bool HasFields => _metadata is not null;
     public int FieldCount => _compactCount != 0 ? _compactCount : ((FieldSpan[]?)_metadata)?.Length ?? 0;
 
@@ -18,28 +19,32 @@ internal readonly struct CurrentRecord
         => (Characters, _metadata) = (characters, fields);
 
     public CurrentRecord(ReadOnlyMemory<byte> utf8, FieldSpan[] fields, Utf8FieldBuffer decodedFields)
-        => (_utf8, _metadata, _decodedFields) = (utf8, fields, decodedFields);
+        => (_utf8, _metadata, _storage) = (utf8, fields, decodedFields);
 
     public CurrentRecord(ReadOnlyMemory<byte> utf8, int[] ends, int offsetIndex, int count, Utf8FieldBuffer decodedFields)
-        => (_utf8, _metadata, _offsetIndex, _compactCount, _decodedFields) = (utf8, ends, offsetIndex, count, decodedFields);
+        => (_utf8, _metadata, _offsetIndex, _compactCount, _storage) = (utf8, ends, offsetIndex, count, decodedFields);
+
+    public CurrentRecord(ReadOnlyMemory<char> characters, CsvRowOffsets row, FieldMetadataBuffer publishedFields)
+        => (Characters, _metadata, _offsetIndex, _compactCount, _storage) =
+            (characters, row.Ends, row.FirstField, row.FieldCount, publishedFields);
 
     public bool TryGetUtf8(int ordinal, out ReadOnlyMemory<byte> value, out bool isEscaped)
     {
         isEscaped = false;
-        if (_compactCount != 0)
+        if (IsUtf8 && (uint)ordinal < (uint)FieldCount)
         {
-            if ((uint)ordinal < (uint)_compactCount)
+            if (_compactCount != 0)
             {
                 GetCompactRange(ordinal, out int start, out int length);
                 value = _utf8.Slice(start, length);
-                return true;
             }
-        }
-        else if (IsUtf8 && _metadata is FieldSpan[] fields && (uint)ordinal < (uint)fields.Length)
-        {
-            var field = fields[ordinal].Value;
-            value = _utf8.Slice(field.Start, field.Length);
-            isEscaped = field.IsEscaped;
+            else
+            {
+                var field = ((FieldSpan[])_metadata!)[ordinal].Value;
+                value = _utf8.Slice(field.Start, field.Length);
+                isEscaped = field.IsEscaped;
+            }
+
             return true;
         }
 
@@ -72,9 +77,15 @@ internal readonly struct CurrentRecord
         if ((uint)ordinal >= (uint)FieldCount)
             throw new IndexOutOfRangeException();
 
+        if (_storage is FieldMetadataBuffer)
+        {
+            GetCompactRange(ordinal, out int start, out int length);
+            return Characters.Slice(start, length);
+        }
+
         var field = _compactCount != 0 ? GetCompactValue(ordinal) : ((FieldSpan[])_metadata!)[ordinal].Value;
-        return IsUtf8
-            ? _decodedFields!.Decode(_utf8.Span, field, ordinal)
+        return _storage is Utf8FieldBuffer decoded
+            ? decoded.Decode(_utf8.Span, field, ordinal)
             : Characters.Slice(field.Start, field.Length);
     }
 
@@ -96,7 +107,8 @@ internal readonly struct CurrentRecord
         if (_compactCount == 0)
             return (FieldSpan[]?)_metadata;
 
-        var fields = _decodedFields!.PublishedFields.GetBorrowedStorage(_compactCount);
+        var storage = _storage is Utf8FieldBuffer decoded ? decoded.PublishedFields : (FieldMetadataBuffer)_storage!;
+        var fields = storage.GetBorrowedStorage(_compactCount);
         WriteFields(fields);
         return fields;
     }
@@ -108,14 +120,15 @@ internal readonly struct CurrentRecord
     }
 
     public CurrentRecord WithExpandedFields(FieldSpan[] fields)
-        => _compactCount == 0 ? this : new(_utf8, fields, _decodedFields!);
+        => _compactCount == 0 ? this
+            : _storage is Utf8FieldBuffer decoded ? new(_utf8, fields, decoded) : new(Characters, fields);
 
     // This allocation belongs only to callers requiring the public wrapper API.
     public RecordMemory Materialize(bool copyMetadata = false)
     {
         if (Fields is not { } fields) return RecordMemory.Empty;
         if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwned(fields);
-        return IsUtf8 ? new RecordMemory(_utf8, fields, _decodedFields!) : new RecordMemory(Characters, fields);
+        return _storage is Utf8FieldBuffer decoded ? new RecordMemory(_utf8, fields, decoded) : new RecordMemory(Characters, fields);
     }
 }
 

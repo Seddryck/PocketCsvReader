@@ -694,6 +694,58 @@ public class Utf8InputTest
             ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
     }
 
+    [TestCase("\n", false)]
+    [TestCase("\r\n", true)]
+    public async Task DecodedCharacterBatchMatchesScalarAcrossRefillsAndFallbacks(string newline, bool asynchronous)
+    {
+        var rows = Enumerable.Range(0, 1200).Select(i => $"{i}；東京😀；；tail；")
+            .Concat([new string('x', 17000) + "；long", new string('；', 4200),
+                "\"quoted；" + newline + "value\"\"x\"；end", "；last；", "no；terminator；"]);
+        var bytes = Encoding.Unicode.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, Delimiter: '；', LineTerminator: newline);
+        using var fast = CreateParser(16384);
+        using var scalar = CreateParser(257);
+
+        FieldSpan[]? retained = null;
+        FieldSpan[]? snapshot = null;
+        for (var i = 0; ; i++)
+        {
+            var expected = await ReadCurrent(scalar);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.State, Is.EqualTo(expected.State));
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(fast.CurrentPosition, Is.EqualTo(scalar.CurrentPosition));
+            Assert.That(actual.Record.Fields, Is.EqualTo(expected.Record.Fields));
+            if (actual.State == RecordState.Record)
+            {
+                for (var column = 0; column < expected.Record.FieldCount; column++)
+                    Assert.That(actual.Record.Slice(column).Span.SequenceEqual(expected.Record.Slice(column).Span), Is.True);
+
+                if (i == 0)
+                {
+                    retained = actual.Record.Materialize(copyMetadata: true).FieldSpans;
+                    snapshot = retained.ToArray();
+                }
+            }
+
+            if (actual.IsEndOfFile)
+                break;
+        }
+
+        Assert.That(retained, Is.Not.Null);
+        Assert.That(retained, Is.EqualTo(snapshot));
+
+        RecordParser CreateParser(int bufferSize)
+        {
+            var profile = Profile(CsvInputMode.DecodedChars, dialect, bufferSize);
+            profile.ParserOptimizations = profile.ParserOptimizations with { TrackPosition = true };
+            return new RecordParser(new StreamReader(new MemoryStream(bytes), Encoding.Unicode), profile);
+        }
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
     private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)
     {
         public byte[]? InputBuffer { get; private set; }

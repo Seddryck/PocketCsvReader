@@ -6,34 +6,36 @@ using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader;
 
-// Indexes complete plain rows within one input buffer. The source owns the bytes
+// Indexes complete plain rows within one input buffer. The source owns the input
 // and advances the index once per row. Both views expire on the next read.
-internal sealed class Utf8BlockScanner : IDisposable
+internal sealed class CsvBlockScanner<T> : IDisposable
+    where T : unmanaged, IBinaryInteger<T>
 {
     private const int MinimumBufferSize = 1024;
     private const int FieldCapacity = 4096;
     private const int RowCapacity = 512;
     private readonly bool _useVector256 = Vector256.IsHardwareAccelerated;
-    private readonly byte _delimiter;
-    private readonly byte _terminator;
-    private readonly byte _quote;
+    private readonly T _delimiter;
+    private readonly T _terminator;
+    private readonly T _quote;
     private readonly int _terminatorLength;
     private int[]? _ends;
     private int[]? _rows;
     private int _rowCount;
     private int _rowIndex;
     private int _firstField;
-    private int _fallbackAt = -1;
+    // Store the remaining length so callers can pass either a full buffer or a suffix.
+    private int _fallbackRemaining = -1;
 
-    private Utf8BlockScanner(DialectDescriptor dialect)
+    private CsvBlockScanner(DialectDescriptor dialect)
     {
-        _delimiter = (byte)dialect.Delimiter;
-        _terminator = (byte)dialect.LineTerminator[0];
-        _quote = (byte)(dialect.QuoteChar ?? (char)_terminator);
+        _delimiter = T.CreateChecked((ushort)dialect.Delimiter);
+        _terminator = T.CreateChecked((ushort)dialect.LineTerminator[0]);
+        _quote = T.CreateChecked((ushort)(dialect.QuoteChar ?? dialect.LineTerminator[0]));
         _terminatorLength = dialect.LineTerminator.Length;
     }
 
-    public static Utf8BlockScanner? Create(DialectDescriptor dialect, int bufferSize)
+    public static CsvBlockScanner<T>? Create(DialectDescriptor dialect, int bufferSize)
         => bufferSize >= MinimumBufferSize
             && Vector128.IsHardwareAccelerated
             && dialect.LineTerminator is "\r\n" or "\n"
@@ -41,37 +43,34 @@ internal sealed class Utf8BlockScanner : IDisposable
             && dialect.QuoteChar is not ('\r' or '\n')
             && dialect.Delimiter != dialect.QuoteChar
             && dialect.EscapeChar is null && dialect.CommentChar is null && !dialect.SkipInitialSpace
+            && dialect.ArrayDelimiter is null && dialect.ArrayPrefix is null && dialect.ArraySuffix is null
             ? new(dialect) : null;
 
     public void Reset()
     {
         _rowCount = _rowIndex = _firstField = 0;
-        _fallbackAt = -1;
+        _fallbackRemaining = -1;
     }
 
-    public bool TryRead(ReadOnlyMemory<byte> input, ref int position, Utf8FieldBuffer decodedFields, out CurrentRecord record)
+    public bool TryRead(ReadOnlySpan<T> input, int position, out CsvRowOffsets row)
     {
-        if (_rowIndex == _rowCount && !ScanBatch(input.Span, position))
+        if (_rowIndex == _rowCount && !ScanBatch(input, position))
         {
-            record = default;
+            row = default;
             return false;
         }
 
         var ends = _ends!;
         var lastField = _rows![_rowIndex++];
-        var count = lastField - _firstField;
-        var length = ends[lastField - 1] + _terminatorLength;
-        decodedFields.Reset(length, count);
-        record = new(input.Slice(position, length), ends, _firstField, count, decodedFields);
+        row = new(ends, _firstField, lastField - _firstField, ends[lastField - 1] + _terminatorLength);
         _firstField = lastField;
-        position += length;
         return true;
     }
 
-    private bool ScanBatch(ReadOnlySpan<byte> input, int position)
+    private bool ScanBatch(ReadOnlySpan<T> input, int position)
     {
-        var blockSize = _useVector256 ? Vector256<byte>.Count : Vector128<byte>.Count;
-        if (position == _fallbackAt || input.Length - position < blockSize)
+        var blockSize = _useVector256 ? Vector256<T>.Count : Vector128<T>.Count;
+        if (input.Length - position == _fallbackRemaining || input.Length - position < blockSize)
             return false;
 
         var ends = _ends ??= ArrayPool<int>.Shared.Rent(FieldCapacity);
@@ -87,7 +86,7 @@ internal sealed class Utf8BlockScanner : IDisposable
             if (fieldCount > FieldCapacity - blockSize || rowCount > RowCapacity - blockSize)
             {
                 if (rowCount == 0)
-                    _fallbackAt = rowStart;
+                    _fallbackRemaining = input.Length - rowStart;
                 break;
             }
 
@@ -104,9 +103,9 @@ internal sealed class Utf8BlockScanner : IDisposable
                 ends[fieldCount++] = end - rowStart;
                 if ((terminators & (1u << bit)) != 0)
                 {
-                    if (_terminatorLength == 2 && (end + 1 == input.Length || input[end + 1] != (byte)'\n'))
+                    if (_terminatorLength == 2 && (end + 1 == input.Length || input[end + 1] != T.CreateChecked((ushort)'\n')))
                     {
-                        _fallbackAt = rowStart;
+                        _fallbackRemaining = input.Length - rowStart;
                         goto Publish;
                     }
                     rows[rowCount++] = fieldCount;
@@ -118,7 +117,7 @@ internal sealed class Utf8BlockScanner : IDisposable
 
             if (quotes != 0)
             {
-                _fallbackAt = rowStart;
+                _fallbackRemaining = input.Length - rowStart;
                 break;
             }
 
@@ -132,22 +131,22 @@ internal sealed class Utf8BlockScanner : IDisposable
         return rowCount != 0;
     }
 
-    private void LoadMasks(ReadOnlySpan<byte> input, int block, out uint delimiters, out uint terminators, out uint quotes)
+    private void LoadMasks(ReadOnlySpan<T> input, int block, out uint delimiters, out uint terminators, out uint quotes)
     {
         ref var start = ref MemoryMarshal.GetReference(input);
         if (_useVector256)
         {
-            var bytes = Vector256.LoadUnsafe(ref start, (nuint)block);
-            delimiters = Vector256.Equals(bytes, Vector256.Create(_delimiter)).ExtractMostSignificantBits();
-            terminators = Vector256.Equals(bytes, Vector256.Create(_terminator)).ExtractMostSignificantBits();
-            quotes = _quote == _terminator ? 0 : Vector256.Equals(bytes, Vector256.Create(_quote)).ExtractMostSignificantBits();
+            var values = Vector256.LoadUnsafe(ref start, (nuint)block);
+            delimiters = Vector256.Equals(values, Vector256.Create(_delimiter)).ExtractMostSignificantBits();
+            terminators = Vector256.Equals(values, Vector256.Create(_terminator)).ExtractMostSignificantBits();
+            quotes = _quote == _terminator ? 0 : Vector256.Equals(values, Vector256.Create(_quote)).ExtractMostSignificantBits();
         }
         else
         {
-            var bytes = Vector128.LoadUnsafe(ref start, (nuint)block);
-            delimiters = Vector128.Equals(bytes, Vector128.Create(_delimiter)).ExtractMostSignificantBits();
-            terminators = Vector128.Equals(bytes, Vector128.Create(_terminator)).ExtractMostSignificantBits();
-            quotes = _quote == _terminator ? 0 : Vector128.Equals(bytes, Vector128.Create(_quote)).ExtractMostSignificantBits();
+            var values = Vector128.LoadUnsafe(ref start, (nuint)block);
+            delimiters = Vector128.Equals(values, Vector128.Create(_delimiter)).ExtractMostSignificantBits();
+            terminators = Vector128.Equals(values, Vector128.Create(_terminator)).ExtractMostSignificantBits();
+            quotes = _quote == _terminator ? 0 : Vector128.Equals(values, Vector128.Create(_quote)).ExtractMostSignificantBits();
         }
     }
 
@@ -157,3 +156,5 @@ internal sealed class Utf8BlockScanner : IDisposable
         if (_rows is not null) ArrayPool<int>.Shared.Return(_rows);
     }
 }
+
+internal readonly record struct CsvRowOffsets(int[] Ends, int FirstField, int FieldCount, int Length);

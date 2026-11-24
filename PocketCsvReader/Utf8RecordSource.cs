@@ -18,7 +18,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     bool ICurrentRecordSource.SupportsCurrentRecord => true;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
-    private readonly Utf8BlockScanner? _blockScanner;
+    private readonly CsvBlockScanner<byte>? _blockScanner;
     private readonly PositionTracker? _positionTracker;
     private byte[]? _spill;
     private int _position;
@@ -44,7 +44,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_readSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(profile), "Buffer size must be positive.");
         _input = ArrayPool<byte>.Shared.Rent(_readSize);
-        _blockScanner = Utf8BlockScanner.Create(dialect, _readSize);
+        _blockScanner = CsvBlockScanner<byte>.Create(dialect, _readSize);
     }
 
     public static bool Supports(CsvProfile profile)
@@ -130,9 +130,13 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private bool TryReadRecord(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
         if (_spilledLength == 0 && _blockScanner is { } scanner
-            && scanner.TryRead(_input.AsMemory(0, _available), ref _position, _decodedFields, out var record))
+            && scanner.TryRead(_input.AsSpan(0, _available), _position, out var row))
         {
-            result = new(false, record, RecordState.Record);
+            var memory = _input.AsMemory(_position, row.Length);
+            _position += row.Length;
+            _decodedFields.Reset(row.Length, row.FieldCount);
+            result = new(false, new CurrentRecord(memory, row.Ends, row.FirstField, row.FieldCount, _decodedFields),
+                RecordState.Record);
             return true;
         }
 
