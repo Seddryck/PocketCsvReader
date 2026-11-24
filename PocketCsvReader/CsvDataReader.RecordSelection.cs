@@ -33,11 +33,10 @@ public partial class CsvDataReader
     internal NullableSpan GetDecodedField(int ordinal)
     {
         var sourceOrdinal = ordinal - (HasVirtualRowNumber ? 1 : 0);
-        var fields = CurrentFieldSpans!;
-        if ((uint)sourceOrdinal >= (uint)fields.Length)
+        if ((uint)sourceOrdinal >= (uint)CurrentFieldSpanCount)
             return default;
         var text = GetCurrentFieldMemory(sourceOrdinal).Span;
-        return fields[sourceOrdinal].Value.IsEscaped ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
+        return IsCurrentFieldEscaped(sourceOrdinal) ? (_fieldEscaper ??= new(Profile)).Escape(text) : text;
     }
 
     internal NullableSpan GetIndexField(int ordinal)

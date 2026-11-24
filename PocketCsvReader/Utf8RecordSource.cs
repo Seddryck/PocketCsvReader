@@ -15,7 +15,6 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly byte[] _input;
     private readonly int _readSize;
     private readonly List<FieldSpan> _fields = new();
-    private readonly FieldMetadataBuffer _publishedFields = new();
     bool ICurrentRecordSource.SupportsCurrentRecord => true;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
@@ -129,33 +128,15 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryReadRecord(bool eof, bool borrowFields, out CurrentRecordResult result)
-        => _blockScanner is { } scanner
-            ? TryReadWithBlocks(scanner, eof, borrowFields, out result)
-            : TryReadCore(eof, borrowFields, out result);
-
-    private bool TryReadWithBlocks(Utf8BlockScanner scanner, bool eof, bool borrowFields, out CurrentRecordResult result)
     {
-        int start = _position;
-        int carried = _spilledLength;
-        if (carried == 0 && scanner.CanScan(_available - start))
+        if (_spilledLength == 0 && _blockScanner is { } scanner
+            && scanner.TryRead(_input.AsMemory(0, _available), ref _position, _decodedFields, out var record))
         {
-            var count = scanner.Scan(_input.AsSpan(0, _available), start, out var nextRow);
-            if (count != 0)
-            {
-                _position = nextRow;
-                var fields = borrowFields ? _publishedFields.GetBorrowedStorage(count) : new FieldSpan[count];
-                scanner.WriteFields(fields);
-                var record = _input.AsMemory(start, nextRow - start);
-                _decodedFields.Reset(record.Length, fields.Length);
-                result = new(false, new CurrentRecord(record, fields, _decodedFields), RecordState.Record);
-                return true;
-            }
+            result = new(false, record, RecordState.Record);
+            return true;
         }
 
-        bool complete = TryReadCore(eof, borrowFields, out result);
-        if (complete && result.State == RecordState.Record)
-            scanner.ObserveFallback(carried + (_position - start));
-        return complete;
+        return TryReadCore(eof, borrowFields, out result);
     }
 
     private bool TryReadCore(bool eof, bool borrowFields, out CurrentRecordResult result)
@@ -246,7 +227,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
             ? _input.AsMemory(start, _position - start)
             : CompleteSpilledRecord(start);
         var scratch = CollectionsMarshal.AsSpan(_fields);
-        var fields = borrowFields ? _publishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
+        var fields = borrowFields ? _decodedFields.PublishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
         _decodedFields.Reset(record.Length, fields.Length);
         return new CurrentRecord(record, fields, _decodedFields);
     }
@@ -286,6 +267,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         ArrayPool<byte>.Shared.Return(_input);
         if (_spill is not null)
             ArrayPool<byte>.Shared.Return(_spill);
+        _blockScanner?.Dispose();
         _decodedFields.Dispose();
         _stream.Dispose();
     }

@@ -325,7 +325,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected virtual void EnsureValidationRecord()
     {
-        if (CurrentFieldSpans is null)
+        if (!HasCurrentFields)
             throw new InvalidOperationException("No current record is available.");
     }
 
@@ -775,7 +775,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     private ReadOnlySpan<char> GetFieldSpan(ref FieldSpan field)
     {
-        if (CurrentFieldSpans is null)
+        if (!HasCurrentFields)
             throw new InvalidOperationException("Current record is not set.");
         return GetFieldMemory(ref field).Span;
     }

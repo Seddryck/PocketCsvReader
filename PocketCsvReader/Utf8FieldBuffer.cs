@@ -7,6 +7,7 @@ namespace PocketCsvReader;
 // these views remain valid only until the next read or disposal.
 internal sealed class Utf8FieldBuffer : IDisposable
 {
+    public FieldMetadataBuffer PublishedFields { get; } = new();
     private char[]? _characters;
     private int[]? _lengths;
     private int _byteLength;

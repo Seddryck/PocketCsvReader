@@ -649,6 +649,51 @@ public class Utf8InputTest
             ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
     }
 
+    [TestCase("\n", false)]
+    [TestCase("\r\n", true)]
+    public async Task BatchOffsetsMatchScalarAcrossCapacityFallbackAndRefill(string newline, bool asynchronous)
+    {
+        var plainRows = Enumerable.Range(0, 1200).Select(i => $"{i},東京,,tail,");
+        var wideRow = new string(',', 4200);
+        var quotedRow = "\"left," + newline + "right\"\"edge\",end";
+        var rows = plainRows.Concat([wideRow, quotedRow, "again,,", "without,terminator,"]).ToArray();
+        var bytes = Encoding.UTF8.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: newline);
+
+        CsvProfile CreateProfile(int size)
+        {
+            var profile = Profile(CsvInputMode.Utf8Bytes, dialect, size);
+            profile.ParserOptimizations = profile.ParserOptimizations with { TrackPosition = true };
+            return profile;
+        }
+
+        using var fast = new Utf8RecordSource(new MemoryStream(bytes), CreateProfile(16384));
+        using var slow = new Utf8RecordSource(new MemoryStream(bytes), CreateProfile(257));
+
+        for (var row = 0; row < rows.Length; row++)
+        {
+            var expected = await ReadCurrent(slow);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.State, Is.EqualTo(RecordState.Record));
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(fast.CurrentPosition, Is.EqualTo(slow.CurrentPosition));
+            Assert.That(actual.Record.FieldCount, Is.EqualTo(expected.Record.FieldCount));
+            for (var column = 0; column < expected.Record.FieldCount; column++)
+            {
+                Assert.That(actual.Record.GetField(column), Is.EqualTo(expected.Record.GetField(column)));
+                Assert.That(actual.Record.TryGetUtf8(column, out var bytesRead, out var escaped), Is.True);
+                Assert.That(expected.Record.TryGetUtf8(column, out var expectedBytes, out var expectedEscaped), Is.True);
+                Assert.That(bytesRead.Span.SequenceEqual(expectedBytes.Span), Is.True);
+                Assert.That(escaped, Is.EqualTo(expectedEscaped));
+            }
+        }
+
+        Assert.That((await ReadCurrent(fast)).State, Is.EqualTo(RecordState.Eof));
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
     private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)
     {
         public byte[]? InputBuffer { get; private set; }
