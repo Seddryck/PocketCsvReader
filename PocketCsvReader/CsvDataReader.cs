@@ -164,8 +164,9 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             value = (T)(object)shortInteger;
         else if (typeof(T) == typeof(decimal) && decimal.TryParse(bytes, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
             value = (T)(object)amount;
-        else if (typeof(T) == typeof(DateOnly) && GetType() == typeof(CsvDataReader) && TryParseIsoDate(bytes, out var date))
-            value = (T)(object)date;
+        else if ((typeof(T) == typeof(DateOnly) || typeof(T) == typeof(DateTime))
+            && GetType() == typeof(CsvDataReader) && TryParseIsoDate(bytes, out var date))
+            value = typeof(T) == typeof(DateOnly) ? (T)(object)date : (T)(object)date.ToDateTime(TimeOnly.MinValue);
         else if (typeof(T) == typeof(bool) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out bool boolean, out consumed) && consumed == bytes.Length)
             value = (T)(object)boolean;
         else

@@ -158,7 +158,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetTemporal<T>(int i)
     {
-        if (typeof(T) == typeof(DateOnly) && RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
+        if ((typeof(T) == typeof(DateOnly) || typeof(T) == typeof(DateTime))
+            && RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
             return direct;
 
         try
