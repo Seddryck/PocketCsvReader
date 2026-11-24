@@ -8,9 +8,16 @@ internal sealed class FieldMetadataBuffer
     // Only reader-internal consumers may retain this until the next publication.
     public FieldSpan[] PublishBorrowed(ReadOnlySpan<FieldSpan> fields)
     {
-        if (_fields.Length != fields.Length)
-            _fields = new FieldSpan[fields.Length];
-        fields.CopyTo(_fields);
+        var storage = GetBorrowedStorage(fields.Length);
+        fields.CopyTo(storage);
+        return storage;
+    }
+
+    // Callers writing directly must populate every field before returning it.
+    public FieldSpan[] GetBorrowedStorage(int length)
+    {
+        if (_fields.Length != length)
+            _fields = new FieldSpan[length];
         return _fields;
     }
 

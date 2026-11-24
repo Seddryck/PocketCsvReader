@@ -17,18 +17,20 @@ public class CsvStorageReuseTests
     private static CsvDataReader Reader(string text, CsvInputMode mode, int bufferSize = 4096)
         => new(new MemoryStream(Encoding.UTF8.GetBytes(text)), Profile(mode, bufferSize));
 
-    [TestCase(CsvInputMode.DecodedChars, false, false)]
-    [TestCase(CsvInputMode.DecodedChars, true, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, false, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, true, false)]
-    [TestCase(CsvInputMode.DecodedChars, false, true)]
-    [TestCase(CsvInputMode.DecodedChars, true, true)]
-    public async Task Reader_ReusesMetadataWithoutMaterializingWrappers(CsvInputMode mode, bool asynchronous, bool textReader)
+    [TestCase(CsvInputMode.DecodedChars, false, false, 5)]
+    [TestCase(CsvInputMode.DecodedChars, true, false, 5)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false, 5)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false, 5)]
+    [TestCase(CsvInputMode.DecodedChars, false, true, 5)]
+    [TestCase(CsvInputMode.DecodedChars, true, true, 5)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false, 4096)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false, 4096)]
+    public async Task Reader_ReusesMetadataWithoutMaterializingWrappers(CsvInputMode mode, bool asynchronous, bool textReader, int bufferSize)
     {
         const string text = "first,200,1024\n東京😀,404,2048\nlast,201,4096";
         using var reader = textReader
-            ? new CsvReader(Profile(mode, 5)).ToDataReader(new StringReader(text), leaveOpen: false)
-            : Reader(text, mode, 5);
+            ? new CsvReader(Profile(mode, bufferSize)).ToDataReader(new StringReader(text), leaveOpen: false)
+            : Reader(text, mode, bufferSize);
         var fieldsProperty = typeof(BaseRawRecord<CsvProfile>).GetProperty("CurrentFieldSpans", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var wrapperField = typeof(BaseRawRecord<CsvProfile>).GetField("_record", BindingFlags.NonPublic | BindingFlags.Instance)!;
         FieldSpan[]? fields = null;
@@ -69,7 +71,7 @@ public class CsvStorageReuseTests
     [TestCase(CsvInputMode.Utf8Bytes)]
     public void PublicSourceSync_PreservesOwnedMetadata(CsvInputMode mode)
     {
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,bb,ccc\nlonger,b,c\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,bb,ccc\nlonger,b,c\npad-the-input-so-both-rows-fit-in-a-vector-block,bb,ccc\n"));
         using var source = CsvStreamSource.Create(stream, Profile(mode))!;
         var first = ReadFields(source);
         var snapshot = first.ToArray();
@@ -89,7 +91,7 @@ public class CsvStorageReuseTests
     [TestCase(CsvInputMode.Utf8Bytes)]
     public async Task PublicSourceAsync_PreservesOwnedMetadata(CsvInputMode mode)
     {
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,bb,ccc\nlonger,b,c\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,bb,ccc\nlonger,b,c\npad-the-input-so-both-rows-fit-in-a-vector-block,bb,ccc\n"));
         using var source = CsvStreamSource.Create(stream, Profile(mode))!;
         var first = (await source.ReadAsync()).Record;
         var snapshot = first.ParsedFields.ToArray();
