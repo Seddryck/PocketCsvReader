@@ -67,22 +67,22 @@ Projection avoids building field metadata and nested field trees for properties 
 
 Use `JsonReaderBuilder.WithStableFieldLayout()` for trusted object records with the same recursive structure and property order. This works with standalone objects, objects streamed from arrays, and objects selected by a record path. You can combine it with either projection mode. See [Stable field layout](../json-projection/#stable-field-layout).
 
-## JSON tables with a header row
+## JSON tables
 
-Use `JsonTableReader` from `PocketCsvReader.Json` to read a top-level array whose first row lists the column names. Each subsequent row is an array of cells in the same order.
+Use `JsonTableReaderBuilder` from `PocketCsvReader.Json.Configuration` for a top-level array of row arrays. Choose where the column names come from.
 
-```json
-[
-  ["id", "name"],
-  [1, "Ada"],
-  [2, "Lin"]
-]
-```
+### JSON tables with a header row
+
+For a file containing `[["id", "name"], [1, "Ada"], [2, "Lin"]]`, select `WithHeaderRow()`. You can omit this call because it is the default.
 
 ```csharp
-using PocketCsvReader.Json;
+using PocketCsvReader.Json.Configuration;
 
-using var reader = new JsonTableReader().ToDataReader("people.json");
+using var reader = new JsonTableReaderBuilder()
+    .WithHeaderRow()
+    .Build()
+    .ToDataReader("people.json");
+
 while (await reader.ReadAsync())
 {
     var id = reader.GetInt32(reader.GetOrdinal("id"));
@@ -91,21 +91,26 @@ while (await reader.ReadAsync())
 }
 ```
 
-The reader consumes the header on the first read and streams the data rows. Header names must be JSON strings and are compared ordinally for duplicates after decoding escapes. Every data row must match the header width. A header-only document has zero rows, and its column names remain available on the data reader after the first read. The table reader accepts `JsonProfile` settings such as JSONC, schemas, and row filters.
+The reader consumes the header on the first read. Header cells must be JSON strings, and names must be unique under ordinal comparison after escapes are decoded. A header-only document has zero data rows and exposes its column names after the first read.
 
 ### JSON tables without a header row
 
-When column names come from a schema or another source, pass them in row order. For a file containing `[[1, "Ada"], [2, "Lin"]]`, the following reader exposes both rows:
+For a file containing `[[1, "Ada"], [2, "Lin"]]`, pass the names in the same order as the cells. Both arrays are data rows.
 
 ```csharp
-using PocketCsvReader.Json;
 using PocketCsvReader.Json.Configuration;
 
-using var reader = new JsonTableReader(JsonProfile.Default, ["id", "name"])
+using var reader = new JsonTableReaderBuilder()
+    .WithoutHeaderRow(["id", "name"])
+    .Build()
     .ToDataReader("people.json");
+
+var nameColumn = reader.GetOrdinal("name");
 ```
 
-Column metadata is available before the first read, including for an empty array. Every row must match the supplied column count.
+Column metadata is available before the first read, including for an empty array. Supply unique, non-null column names. Each data row must match the column count in either mode. Calling both `WithHeaderRow()` and `WithoutHeaderRow(...)` causes `Build()` to throw an `InvalidOperationException`.
+
+You can combine either mode with `WithSchema(...)`, `WithParsers(...)`, or row filters. Use `WithJsonc()` to allow both comments and trailing commas, or enable them individually with `WithComments()` and `WithTrailingCommas()`. To supply an existing `JsonProfile` directly, use a `JsonTableReader` constructor.
 
 ## JSON with comments (JSONC)
 

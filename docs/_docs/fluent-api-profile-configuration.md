@@ -49,6 +49,10 @@ The reader resolves the projection against each file’s effective header, inclu
 
 Schema definitions and filters still refer to source columns. Output getters and metadata use projected ordinals. A generated row number remains at the front of the output, and projection ordinals count only CSV source columns.
 
+## JSON table builder
+
+Use `JsonTableReaderBuilder` for arrays of row arrays. Choose `WithHeaderRow()` to read names from the first array, or `WithoutHeaderRow(columnNames)` to supply them. The default uses the first array as the header. [JSON table examples](../json-and-ndjson/#json-tables)
+
 ## Generated row-number column
 
 `WithRowNumber()` prepends an `int` column named `rowNumber`; `WithRowNumber("recordId")` selects another name, and `WithoutRowNumber()` disables it. Direct profiles use `RowNumber = new RowNumberOptions()` or null. See [batch reading and row numbering](../batch-reading/#generated-row-numbers) for numbering, headers, collisions, and object mapping.
