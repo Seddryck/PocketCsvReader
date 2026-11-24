@@ -134,8 +134,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         // character-count pass, and to reuse decoding for repeated access.
         if (Profile.ParserOptimizations.PoolString is not null || Profile.Schema is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var field)
-            || (Profile.ParserOptimizations.UnescapeChars && field.Value.IsEscaped))
+            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var bytes, out var isEscaped)
+            || (Profile.ParserOptimizations.UnescapeChars && isEscaped))
             return false;
 
         if (Profile.ParserOptimizations.PoolUtf8Strings)
@@ -161,8 +161,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         // Custom parsers, formats, and sanitizers retain their existing char path.
         if (Profile.Schema is not null || Profile.Parsers is not null
             || Profile.Resource?.Sequences is { IsEmpty: false }
-            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var field)
-            || field.Value.IsEscaped)
+            || (HasRowNumber && i == 0) || !TryGetCsvUtf8(i, out var memory, out var isEscaped)
+            || isEscaped)
             return false;
         var bytes = memory.Span;
         if (typeof(T) == typeof(int) && System.Buffers.Text.Utf8Parser.TryParse(bytes, out int integer, out int consumed) && consumed == bytes.Length)
