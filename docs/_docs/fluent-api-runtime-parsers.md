@@ -10,6 +10,41 @@ tags: [configuration]
 
 Register a field parser when conversion differs by column, or a runtime parser when the same type should be parsed consistently across fields. Both are data-reader conversion settings; `SpanObjectBuilder.SetParser` configures the separate constructor-mapping path.
 
+## Built-in parsers
+
+The data reader registers these types automatically. Declare a column with `WithField<T>()` or
+`WithField<T>("name")` and read it with `GetFieldValue<T>()`.
+
+| Group | Types |
+| --- | --- |
+| Text | `string`, `char` |
+| Boolean and identifier | `bool`, `Guid` |
+| Integers | `byte`, `short`, `int`, `long` |
+| Other numbers | `decimal`, `float`, `double` |
+| Dates and times | `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` |
+
+The default numeric and temporal parsers use invariant culture. A field's configured format or parser can control
+how that field is read.
+
+## Opt-in parsers
+
+| Registration inside `WithParsers(...)` | Package | Types |
+| --- | --- | --- |
+| `p => p.UseNetworkValues()` | `PocketCsvReader` | `IPAddress`, `IPNetwork`, `PhysicalAddress` |
+| `p => p.UseChrononuensis()` | [`PocketCsvReader.Chrononuensis`](../chrononuensis/) | `MonthDay`, `YearDay`, `YearWeek`, `YearMonth`, `YearQuarter`, `YearSemester`, `Year`, `Olympiad`, `Decade`, `Century` |
+| `p => p.UseNetTopologySuite()` | [`PocketCsvReader.NetTopologySuite`](../nettopologysuite/) | `Geometry`, `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, `MultiPolygon`, `GeometryCollection` |
+
+For types without a registration helper, use `WithParsers(p => p.WithParser(...))` to register a delegate for the
+reader. Use `WithField<T>(f => f.WithParser(...))` when parsing rules apply to a single column.
+
+| Example type | Delegate input | Delegate |
+| --- | --- | --- |
+| `TimeSpan` | `ReadOnlySpan<char>` | `(ReadOnlySpan<char> text) => TimeSpan.Parse(text, CultureInfo.InvariantCulture)` |
+| `Version` | `ReadOnlySpan<char>` | `(ReadOnlySpan<char> text) => Version.Parse(text)` |
+| `IPEndPoint` | `ReadOnlySpan<char>` | `(ReadOnlySpan<char> text) => IPEndPoint.Parse(text)` |
+| `Uri` | `string` | `(string text) => new Uri(text, UriKind.Absolute)` |
+| `MailAddress` | `string` | `(string text) => new MailAddress(text)` |
+
 ## Complete custom type example
 
 <!-- example: custom-parser -->
@@ -53,7 +88,7 @@ public record Coordinate(int X, int Y);
 | Field | `WithField<T>(f => f.WithParser(...))` | Parser for one schema field |
 | Field format | Specialized schema field builder | Formatted conversion, ahead of runtime type defaults |
 | Runtime type | `WithParsers(p => p.WithParser(...))` | Shared type parser when no field override wins |
-| Integration defaults | `UseChrononuensis()` | Fallback registrations; explicit runtime parsers win in either registration order |
+| Opt-in defaults | `UseNetworkValues()`, `UseChrononuensis()`, `UseNetTopologySuite()` | Fallback registrations; explicit runtime parsers win in either registration order |
 
 The latest explicit registration for the same field/type replaces its previous parser. Schema builders can supply default numeric/temporal formats; use a field parser to override that field's format deliberately. Preserve underlying parse exceptions rather than silently substituting zero or an empty value.
 
