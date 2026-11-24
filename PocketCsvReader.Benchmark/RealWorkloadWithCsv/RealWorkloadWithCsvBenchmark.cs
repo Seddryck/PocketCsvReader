@@ -3,6 +3,7 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Engines;
 using Chrononuensis;
+using CommunityToolkit.HighPerformance.Buffers;
 using nietras.SeparatedValues;
 using PocketCsvReader.Chrononuensis;
 using PocketCsvReader.Configuration;
@@ -84,6 +85,13 @@ public class RealWorkloadWithCsvBenchmark
         _profile = new(new(Header: true), parsers: parsers)
         {
             StreamInitialization = isUtf16 ? new() : StreamInitializationOptions.Utf8,
+            ParserOptimizations = new(
+                UnescapeChars: Scenario == CsvScenario.Utf8WithQuotedUniversity,
+                ReadAhead: false,
+                BufferSize: 65 * 1024)
+            {
+                PoolUtf8Strings = !isUtf16,
+            },
         };
 
         _tinyCsvParser = new(CsvOptions.Rfc4180 with { Delimiter = ',', SkipHeader = true },
@@ -100,6 +108,15 @@ public class RealWorkloadWithCsvBenchmark
     [Benchmark(Baseline = true)]
     public void PocketCsvReader()
     {
+        if (Scenario == CsvScenario.Utf16)
+        {
+            // Give each reader its own pool, as on the native UTF-8 path.
+            _profile.ParserOptimizations = _profile.ParserOptimizations with
+            {
+                PoolString = new StringPool().GetOrAdd,
+            };
+        }
+
         using var stream = OpenCsv();
         using var reader = new CsvDataReader(stream, _profile);
 
