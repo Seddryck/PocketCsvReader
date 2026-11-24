@@ -43,17 +43,16 @@ public class RealWorkloadWithCsvBenchmark
         FormatProvider = Culture,
     };
 
-    private readonly CsvProfile _profile = new(new(Header: true))
-    {
-        StreamInitialization = StreamInitializationOptions.Utf8,
-    };
-
     private readonly TinyCsvParser.CsvParser<Enrollment> _tinyCsvParser =
         new(CsvOptions.Rfc4180 with { Delimiter = ',', SkipHeader = true }, new EnrollmentMapping());
 
     private readonly Consumer _consumer = new();
     private byte[] _csv = [];
+    private CsvProfile _profile = null!;
     private IEnumerator<Enrollment>? _expectedRecords;
+
+    [Params(CsvEncoding.Utf8, CsvEncoding.Utf16)]
+    public CsvEncoding InputEncoding { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -67,7 +66,17 @@ public class RealWorkloadWithCsvBenchmark
                 $"{university},{record.FirstName},{record.LastName},{record.Quarter},{record.Score:F1},{record.Credits},{record.RegistrationDate.ToString(DateFormat, Culture)}\r\n");
         }
 
-        _csv = Encoding.UTF8.GetBytes(csv.ToString());
+        var isUtf16 = InputEncoding == CsvEncoding.Utf16;
+        var encoding = isUtf16 ? Encoding.Unicode : new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        var csvText = csv.ToString();
+        var preamble = encoding.Preamble;
+        _csv = new byte[preamble.Length + encoding.GetByteCount(csvText)];
+        preamble.CopyTo(_csv);
+        encoding.GetBytes(csvText, _csv.AsSpan(preamble.Length));
+        _profile = new(new(Header: true))
+        {
+            StreamInitialization = isUtf16 ? new() : StreamInitializationOptions.Utf8,
+        };
 
         VerifyRecords(PocketCsvReader);
         VerifyRecords(Sep);
@@ -151,7 +160,8 @@ public class RealWorkloadWithCsvBenchmark
     public void SoftCircuits()
     {
         using var stream = OpenCsv();
-        using var reader = new global::SoftCircuits.CsvParser.CsvReader(stream);
+        using var reader = new global::SoftCircuits.CsvParser.CsvReader(stream,
+            detectEncodingFromByteOrderMarks: InputEncoding == CsvEncoding.Utf16);
         reader.Read();
 
         var recordsRead = 0;
@@ -263,6 +273,12 @@ public class RealWorkloadWithCsvBenchmark
         _consumer.Consume(score);
         _consumer.Consume(credits);
         _consumer.Consume(registrationDate.DayNumber);
+    }
+
+    public enum CsvEncoding
+    {
+        Utf8,
+        Utf16,
     }
 
     private sealed class Enrollment
