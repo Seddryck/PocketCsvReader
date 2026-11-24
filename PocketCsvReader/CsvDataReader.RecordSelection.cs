@@ -53,23 +53,12 @@ public partial class CsvDataReader
 
     private bool ReadSelectedRow()
     {
-        if (_fileStartRow is null)
-        {
-            _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is not null && (_recordBlocks.Count != 0 || Profile.Projection is not null))
-            {
-                if (Profile.Dialect.Header)
-                    RegisterHeader(CsvHeaders.Read(RecordSource!));
-                else
-                    RegisterHeader([new string?[_indexedFieldCount]]);
-            }
-        }
+        if (BeginSelectedRead())
+            RegisterHeader(CsvHeaders.Read(RecordSource!));
 
         while (PrepareSelectedRow() && ReadRow())
         {
-            if (_recordBlocks is not null)
-                _remainingBlockRows--;
-            var decision = _selectRecord!(this);
+            var decision = SelectCurrentRow();
             if (decision != RecordSelection.Skip)
                 return decision == RecordSelection.Include;
         }
@@ -78,27 +67,38 @@ public partial class CsvDataReader
 
     private async ValueTask<bool> ReadSelectedRowAsync(CancellationToken cancellationToken)
     {
-        if (_fileStartRow is null)
-        {
-            _fileStartRow = CurrentRowNumber;
-            if (_recordBlocks is not null && (_recordBlocks.Count != 0 || Profile.Projection is not null))
-            {
-                if (Profile.Dialect.Header)
-                    RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
-                else
-                    RegisterHeader([new string?[_indexedFieldCount]]);
-            }
-        }
+        if (BeginSelectedRead())
+            RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
 
         while (PrepareSelectedRow() && await ReadRowAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (_recordBlocks is not null)
-                _remainingBlockRows--;
-            var decision = _selectRecord!(this);
+            var decision = SelectCurrentRow();
             if (decision != RecordSelection.Skip)
                 return decision == RecordSelection.Include;
         }
         return false;
+    }
+
+    private bool BeginSelectedRead()
+    {
+        if (_fileStartRow.HasValue)
+            return false;
+
+        _fileStartRow = CurrentRowNumber;
+        if (_recordBlocks is null || (_recordBlocks.Count == 0 && Profile.Projection is null))
+            return false;
+        if (Profile.Dialect.Header)
+            return true;
+
+        RegisterHeader([new string?[_indexedFieldCount]]);
+        return false;
+    }
+
+    private RecordSelection SelectCurrentRow()
+    {
+        if (_recordBlocks is not null)
+            _remainingBlockRows--;
+        return _selectRecord!(this);
     }
 
     private bool PrepareSelectedRow()
