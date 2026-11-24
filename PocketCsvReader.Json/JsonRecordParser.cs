@@ -46,6 +46,25 @@ internal ref struct JsonRecordParser
         return parser.ParseRoot(buffer);
     }
 
+    internal static FieldSpan[] ParseTableRow(
+        ReadOnlySpan<char> json, bool allowComments, bool allowTrailingCommas, JsonFieldBuffer buffer)
+    {
+        var parser = new JsonRecordParser(json, StandardWhitespace, allowComments, allowTrailingCommas, buffer);
+        var scratch = buffer.Scratch;
+        try
+        {
+            parser.Expect('[');
+            var started = false;
+            while (parser.MoveNextContainerItem(']', ref started))
+                scratch.Add(parser.ParseValue(allowObject: true, allowCompositeArrayItems: true, depth: 1));
+            return buffer.Complete();
+        }
+        finally
+        {
+            scratch.Clear();
+        }
+    }
+
     internal static string DecodeString(ReadOnlySpan<char> quotedValue, JsonFieldBuffer buffer)
     {
         var parser = new JsonRecordParser(quotedValue, [], fieldBuffer: buffer);
