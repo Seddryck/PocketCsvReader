@@ -46,6 +46,7 @@ public class RealWorkloadWithCsvBenchmark
     {
         Separator = ',',
         FormatProvider = Culture,
+        PoolStrings = true,
     };
 
     private readonly Consumer _consumer = new();
