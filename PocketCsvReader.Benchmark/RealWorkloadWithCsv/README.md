@@ -6,7 +6,7 @@ The comparison uses PocketCsvReader as the baseline and also runs Sep, Sylvan.Da
 
 Dataset generation and verification of all seven values in every row happen during setup, outside the measured runs. BenchmarkDotNet reports elapsed time and managed allocations per pass through the data.
 
-Run from the repository root:
+This comparison targets .NET 10. Run it from the repository root:
 
 ```powershell
 dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --filter '*RealWorkloadWithCsvBenchmark*'
