@@ -19,7 +19,7 @@ public abstract class BaseRawRecord<TProfile>
     private bool _copyMetadataOnMaterialization;
     protected RecordMemory? Record
     {
-        get => _record ?? (CurrentFieldSpans is null ? null : _record = _current.Materialize(_copyMetadataOnMaterialization));
+        get => _record ?? (!_current.HasFields ? null : _record = _current.Materialize(_copyMetadataOnMaterialization));
         set
         {
             _record = value;
@@ -28,7 +28,21 @@ public abstract class BaseRawRecord<TProfile>
         }
     }
     protected ReadOnlyMemory<char> CurrentRecordMemory => _current.IsUtf8 ? Record!.Span : _current.Characters;
-    protected FieldSpan[]? CurrentFieldSpans => _current.Fields;
+    protected FieldSpan[]? CurrentFieldSpans
+    {
+        get
+        {
+            var fields = _current.BorrowFields();
+            if (fields is not null)
+                _current = _current.WithExpandedFields(fields);
+            return fields;
+        }
+    }
+
+    private protected bool HasCurrentFields => _current.HasFields;
+    private protected int CurrentFieldSpanCount => _current.FieldCount;
+    private protected bool IsCurrentFieldEscaped(int ordinal) => _current.IsEscaped(ordinal);
+    private protected FieldSpan GetCurrentField(int ordinal) => _current.GetField(ordinal);
 
     /// <summary>Reads a field without constructing a public record wrapper.</summary>
     protected ReadOnlyMemory<char> GetCurrentFieldMemory(int ordinal) => _current.Slice(ordinal);
@@ -104,7 +118,7 @@ public abstract class BaseRawRecord<TProfile>
     protected virtual int GetSchemaOrdinal(int i) => i;
 
     private protected virtual FieldSpan? GetRecordField(int i)
-        => i >= CurrentFieldSpans!.Length ? null : CurrentFieldSpans[i];
+        => i >= CurrentFieldSpanCount ? null : GetCurrentField(i);
 
     protected virtual FieldDescriptor GetFieldDescriptor(int i)
     {
@@ -197,7 +211,7 @@ public abstract class BaseRawRecord<TProfile>
             ? value : GetStringValue(ordinal);
 
     protected virtual string GetStringValue(int i)
-        => StringMapper.Map(GetValueOrThrow(i))!;
+        => StringMapper.Map(i, GetValueOrThrow(i))!;
 
     /// <summary>Returns a field's logical text, allowing formats to decode and cache it on demand.</summary>
     protected virtual ReadOnlyMemory<char> GetFieldMemory(ref FieldSpan field)

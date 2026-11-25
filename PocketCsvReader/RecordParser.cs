@@ -42,7 +42,10 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     /// <param name="pool">An optional character array pool for buffer management.</param>
     protected RecordParser(CsvProfile profile, IBufferReader buffer, ArrayPool<char>? pool)
         : base(profile, buffer, pool, (p) => FieldParserFactory.Create(p.Dialect))
-    { }
+    {
+        if (GetType() == typeof(RecordParser))
+            EnableCharBatch(profile);
+    }
 
     /// <summary>
     /// Reads and returns the CSV header rows as a jagged array of strings based on the profile's dialect settings.
@@ -68,6 +71,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
 
         FieldParser.Reset();
         Reader.Reset();
+        ResetCharBatch();
         return count;
     }
 
@@ -77,6 +81,7 @@ public class RecordParser : BaseRecordParser<CsvProfile>
     /// <returns>The first record from the CSV input as a string, or an empty string if no record is found.</returns>
     public virtual string GetFirstRecord()
     {
+        ResetCharBatch();
         var longSpan = Span<char>.Empty;
         var span = ReadOnlySpan<char>.Empty;
         var index = 0;

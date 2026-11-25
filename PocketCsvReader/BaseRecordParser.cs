@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Data;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using PocketCsvReader.CharParsing;
 
@@ -17,6 +18,17 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
     private int? FieldsCount { get; set; }
     private readonly FieldMetadataBuffer _publishedFields = new();
     private bool _borrowFields;
+    private CsvBlockScanner<ushort>? _charScanner;
+
+    // Enabled only by built-in CSV sources with the standard field parser.
+    private protected void EnableCharBatch(CsvProfile profile)
+    {
+        if (profile.BadDataPolicy is null)
+            _charScanner = CsvBlockScanner<ushort>.Create(profile.Dialect, profile.ParserOptimizations.BufferSize);
+    }
+
+    private protected void ResetCharBatch() => _charScanner?.Reset();
+
     // Unknown subclasses may override public reads or retain their results.
     protected virtual bool SupportsBorrowedRecords => false;
     bool ICurrentRecordSource.SupportsCurrentRecord => SupportsBorrowedRecords;
@@ -26,6 +38,9 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
         _borrowFields = true;
         try
         {
+            if (_charScanner is not null)
+                return ReadBorrowedResult();
+
             var eof = IsEndOfFile(out var record, out var state);
             return new(eof, record.Current, state);
         }
@@ -72,12 +87,61 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
         var context = default(ReadContext);
         EnsureFieldCapacity(FieldsCount ?? 20);
         bool eof;
-        while (!TryParseRecord(ref context, Reader.IsEof, out record, out recordState, out eof))
+        while (true)
         {
+            if (TryReadBatch(context, out var row))
+            {
+                record = RecordSpan.FromMemory(row.Characters, row.Fields!);
+                recordState = RecordState.Record;
+                return false;
+            }
+
+            if (TryParseRecord(ref context, Reader.IsEof, out record, out recordState, out eof))
+                return eof;
+
             Buffer = Reader.Read();
+            ResetCharBatch();
             _trackedInBuffer = 0;
         }
-        return eof;
+    }
+
+    private CurrentRecordResult ReadBorrowedResult()
+    {
+        _position?.BeginRecord();
+        _trackedInBuffer = 0;
+        var context = default(ReadContext);
+        CurrentRecordResult result;
+        while (!TryReadResult(ref context, Reader.IsEof, out result))
+        {
+            Buffer = Reader.Read();
+            ResetCharBatch();
+            _trackedInBuffer = 0;
+        }
+        return result;
+    }
+
+    private bool TryReadBatch(in ReadContext context, out CurrentRecord record)
+    {
+        var buffer = Buffer;
+        if (_charScanner is not { } scanner || context.HasInput
+            || !scanner.TryRead(MemoryMarshal.Cast<char, ushort>(buffer.Span), 0, out var row))
+        {
+            record = default;
+            return false;
+        }
+
+        var memory = buffer[..row.Length];
+        Buffer = buffer[row.Length..];
+        FieldsCount ??= row.FieldCount;
+        _recordNumber++;
+        if (_position is { } tracker)
+        {
+            tracker.Advance(memory.Span);
+            tracker.CompleteRecord();
+        }
+
+        record = new(memory, row, _publishedFields);
+        return true;
     }
 
     /// <summary>Reads asynchronously only when the shared character parser needs another buffer.</summary>
@@ -98,6 +162,7 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
             while (!TryReadResult(ref context, Reader.IsEof, out result))
             {
                 Buffer = await Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                ResetCharBatch();
                 _trackedInBuffer = 0;
             }
             return result;
@@ -107,6 +172,12 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
 
     private bool TryReadResult(ref ReadContext context, bool endOfInput, out CurrentRecordResult result)
     {
+        if (TryReadBatch(context, out var row))
+        {
+            result = new(false, row, RecordState.Record);
+            return true;
+        }
+
         if (!TryParseRecord(ref context, endOfInput, out var record, out var state, out var eof))
         {
             result = default;
@@ -430,6 +501,7 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
 
         if (disposing)
         {
+            _charScanner?.Dispose();
             Reader.Dispose();
             if (_continuation is not null) Pool?.Return(_continuation);
         }

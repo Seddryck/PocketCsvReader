@@ -25,4 +25,17 @@ public record ParserOptimizationOptions
     /// <remarks>The cache is bounded and belongs to one reader. A configured <see cref="PoolString"/> takes precedence.</remarks>
     /// <value><see langword="true"/> to enable the cache. The default is <see langword="false"/>.</value>
     public bool PoolUtf8Strings { get; init; }
+
+    /// <summary>Checks the last eligible string in each CSV column before invoking a configured character pool.</summary>
+    /// <remarks>
+    /// Disabled by default. Enable only when <see cref="PoolString"/> returns stable text for a given input
+    /// and can be skipped on a cache hit. The bounded cache belongs to one CSV reader.
+    /// </remarks>
+    /// <value>True to enable the hint. The default is false.</value>
+    public bool PoolStringLastValueHint { get; init; }
+
+    /// <summary>Reuses strings for eligible decoded CSV fields in a bounded per-reader pool.</summary>
+    /// <remarks>Includes a per-column last-value hint. A configured <see cref="PoolString"/> takes precedence.</remarks>
+    /// <value>True to enable the pool. The default is false.</value>
+    public bool PoolDecodedStrings { get; init; }
 }

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PocketCsvReader.CharParsing;
 
@@ -14,10 +15,10 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly byte[] _input;
     private readonly int _readSize;
     private readonly List<FieldSpan> _fields = new();
-    private readonly FieldMetadataBuffer _publishedFields = new();
     bool ICurrentRecordSource.SupportsCurrentRecord => true;
     private readonly Utf8FieldBuffer _decodedFields = new();
     private readonly SearchValues<byte> _syntax;
+    private readonly CsvBlockScanner<byte>? _blockScanner;
     private readonly PositionTracker? _positionTracker;
     private byte[]? _spill;
     private int _position;
@@ -43,6 +44,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         if (_readSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(profile), "Buffer size must be positive.");
         _input = ArrayPool<byte>.Shared.Rent(_readSize);
+        _blockScanner = CsvBlockScanner<byte>.Create(dialect, _readSize);
     }
 
     public static bool Supports(CsvProfile profile)
@@ -73,6 +75,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         {
             _available = _stream.Read(_input, 0, _readSize);
             _position = 0;
+            _blockScanner?.Reset();
             if (_available == 0)
             {
                 TryRead(true, borrowFields, out result);
@@ -97,6 +100,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         {
             _available = await _stream.ReadAsync(_input.AsMemory(0, _readSize), cancellationToken).ConfigureAwait(false);
             _position = 0;
+            _blockScanner?.Reset();
             if (_available == 0)
             {
                 TryRead(true, borrowFields, out result);
@@ -108,18 +112,35 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     private bool TryRead(bool eof, bool borrowFields, out CurrentRecordResult result)
     {
-        if (_positionTracker is null) return TryReadCore(eof, borrowFields, out result);
-        // Keep the grammar and IndexOfAny searches identical in both modes.
+        if (_positionTracker is null) return TryReadRecord(eof, borrowFields, out result);
+        // Tracking observes the bytes consumed by either scanner.
         // Only enabled tracking searches the consumed spans for physical newlines.
         int start = _position;
         if (_spilledLength == 0) _positionTracker.BeginRecord();
-        bool complete = TryReadCore(eof, borrowFields, out result);
+        bool complete = TryReadRecord(eof, borrowFields, out result);
         if (_positionTracker is { } tracker)
         {
             tracker.Advance(_input.AsSpan(start, _position - start));
             if (complete && result.State == RecordState.Record) tracker.CompleteRecord();
         }
         return complete;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryReadRecord(bool eof, bool borrowFields, out CurrentRecordResult result)
+    {
+        if (_spilledLength == 0 && _blockScanner is { } scanner
+            && scanner.TryRead(_input.AsSpan(0, _available), _position, out var row))
+        {
+            var memory = _input.AsMemory(_position, row.Length);
+            _position += row.Length;
+            _decodedFields.Reset(row.Length, row.FieldCount);
+            result = new(false, new CurrentRecord(memory, row.Ends, row.FirstField, row.FieldCount, _decodedFields),
+                RecordState.Record);
+            return true;
+        }
+
+        return TryReadCore(eof, borrowFields, out result);
     }
 
     private bool TryReadCore(bool eof, bool borrowFields, out CurrentRecordResult result)
@@ -210,7 +231,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
             ? _input.AsMemory(start, _position - start)
             : CompleteSpilledRecord(start);
         var scratch = CollectionsMarshal.AsSpan(_fields);
-        var fields = borrowFields ? _publishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
+        var fields = borrowFields ? _decodedFields.PublishedFields.PublishBorrowed(scratch) : FieldMetadataBuffer.CopyOwned(scratch);
         _decodedFields.Reset(record.Length, fields.Length);
         return new CurrentRecord(record, fields, _decodedFields);
     }
@@ -250,6 +271,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
         ArrayPool<byte>.Shared.Return(_input);
         if (_spill is not null)
             ArrayPool<byte>.Shared.Return(_spill);
+        _blockScanner?.Dispose();
         _decodedFields.Dispose();
         _stream.Dispose();
     }

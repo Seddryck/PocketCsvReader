@@ -14,7 +14,7 @@ public partial class CsvDataReader
 
     private int RowNumberWidth => HasRowNumber ? 1 : 0;
     private bool HasVirtualRowNumber => HasRowNumber && _projectedOrdinals is not null;
-    private int? SourceFieldCount => CurrentFieldSpans?.Length + (HasVirtualRowNumber ? 1 : 0);
+    private int? SourceFieldCount => HasCurrentFields ? CurrentFieldSpanCount + (HasVirtualRowNumber ? 1 : 0) : null;
 
     // Filters and index lookups use source ordinals (including the generated row number,
     // if configured). The physical field spans remain in source order for all readers.
@@ -52,10 +52,10 @@ public partial class CsvDataReader
     {
         if (_projectedOrdinals is null)
             return base.GetRecordField(i);
-        if (HasRowNumber && i == 0 && CurrentFieldSpans is { Length: > 0 })
+        if (HasRowNumber && i == 0 && CurrentFieldSpanCount > 0)
             return default(FieldSpan);
         var ordinal = GetPhysicalOrdinal(i);
-        return CurrentFieldSpans is { } fields && (uint)ordinal < (uint)fields.Length ? fields[ordinal] : null;
+        return (uint)ordinal < (uint)CurrentFieldSpanCount ? GetCurrentField(ordinal) : null;
     }
 
     private ReadOnlyMemory<char> GetCsvFieldMemory(int i)
@@ -69,7 +69,7 @@ public partial class CsvDataReader
         if (_projectedOrdinals is null && !HasRowNumber && GetType() == typeof(CsvDataReader))
             return TryGetCurrentUtf8(i, out bytes, out isEscaped);
 
-        if (CurrentFieldSpans is not null && (uint)i < (uint)FieldCount)
+        if (HasCurrentFields && (uint)i < (uint)FieldCount)
             return TryGetCurrentUtf8(GetPhysicalOrdinal(i), out bytes, out isEscaped);
 
         bytes = default;

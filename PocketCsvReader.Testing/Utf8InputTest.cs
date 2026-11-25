@@ -480,6 +480,22 @@ public class Utf8InputTest
     }
 
     [Test]
+    public void NativeStringPoolSharesEntriesAcrossColumnsAndOwnsTheirBytes()
+    {
+        var pool = new Utf8StringPool();
+        var buffer = "first value"u8.ToArray();
+        var first = pool.GetString(0, buffer);
+        var other = pool.GetString(40, "other value"u8);
+
+        "other value"u8.CopyTo(buffer);
+        Assert.That(pool.GetString(0, buffer), Is.SameAs(other));
+        Assert.That(pool.GetString(40, "first value"u8), Is.SameAs(first));
+        Assert.That(pool.GetString(0, "other value"u8), Is.SameAs(other));
+        Assert.That(pool.GetString(40, "first value"u8), Is.SameAs(first));
+        Assert.That(first, Is.EqualTo("first value"));
+    }
+
+    [Test]
     public void NativeStringPoolPreservesEscapesAndNullSequences()
     {
         var csv = "\"a\"\"b\",NULL,\"NULL\"\r\n";
@@ -580,6 +596,154 @@ public class Utf8InputTest
             Assert.That(MemoryMarshal.TryGetArray(memory, out var segment), Is.True);
             return segment;
         }
+    }
+
+    [TestCase(33, "\r\n", false)]
+    [TestCase(65, "\r\n", true)]
+    [TestCase(128, "\n", false)]
+    [TestCase(257, "\n", true)]
+    [TestCase(1057, "\n", true)]
+    [TestCase(2048, "\r\n", false)]
+    public async Task SimdScanningMatchesScalarMetadataAcrossRowsAndRefills(int bufferSize, string newline, bool asynchronous)
+    {
+        string[] rows =
+        [
+            new string('x', bufferSize - 1),
+            ",é,,東京,",
+            "one,two,three",
+            "four,,six",
+            string.Empty,
+            "\"" + "quoted," + newline + "field\"\"value\",tail",
+            string.Join(',', Enumerable.Repeat("wide", 33)),
+            new string('y', bufferSize + 11) + ",long",
+            "abc\rpartial,def",
+            "another,unquoted,row",
+            "last,row,",
+        ];
+        var bytes = Encoding.UTF8.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: newline);
+        using var slow = new Utf8RecordSource(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes, dialect, 7));
+        using var fast = new Utf8RecordSource(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes, dialect, bufferSize));
+        int count = 0;
+        while (true)
+        {
+            var expected = await ReadCurrent(slow);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(actual.State, Is.EqualTo(expected.State));
+            Assert.That(actual.Record.Fields, Is.EqualTo(expected.Record.Fields));
+            if (expected.Record.Fields is { } fields)
+            {
+                count++;
+                for (int i = 0; i < fields.Length; i++)
+                    Assert.That(actual.Record.Slice(i).ToString(), Is.EqualTo(expected.Record.Slice(i).ToString()));
+            }
+
+            if (actual.IsEndOfFile)
+                break;
+        }
+
+        Assert.That(count, Is.EqualTo(rows.Length));
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
+    [TestCase("\n", false)]
+    [TestCase("\r\n", true)]
+    public async Task BatchOffsetsMatchScalarAcrossCapacityFallbackAndRefill(string newline, bool asynchronous)
+    {
+        var plainRows = Enumerable.Range(0, 1200).Select(i => $"{i},東京,,tail,");
+        var wideRow = new string(',', 4200);
+        var quotedRow = "\"left," + newline + "right\"\"edge\",end";
+        var rows = plainRows.Concat([wideRow, quotedRow, "again,,", "without,terminator,"]).ToArray();
+        var bytes = Encoding.UTF8.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: newline);
+
+        CsvProfile CreateProfile(int size)
+        {
+            var profile = Profile(CsvInputMode.Utf8Bytes, dialect, size);
+            profile.ParserOptimizations = profile.ParserOptimizations with { TrackPosition = true };
+            return profile;
+        }
+
+        using var fast = new Utf8RecordSource(new MemoryStream(bytes), CreateProfile(16384));
+        using var slow = new Utf8RecordSource(new MemoryStream(bytes), CreateProfile(257));
+
+        for (var row = 0; row < rows.Length; row++)
+        {
+            var expected = await ReadCurrent(slow);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.State, Is.EqualTo(RecordState.Record));
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(fast.CurrentPosition, Is.EqualTo(slow.CurrentPosition));
+            Assert.That(actual.Record.FieldCount, Is.EqualTo(expected.Record.FieldCount));
+            for (var column = 0; column < expected.Record.FieldCount; column++)
+            {
+                Assert.That(actual.Record.GetField(column), Is.EqualTo(expected.Record.GetField(column)));
+                Assert.That(actual.Record.TryGetUtf8(column, out var bytesRead, out var escaped), Is.True);
+                Assert.That(expected.Record.TryGetUtf8(column, out var expectedBytes, out var expectedEscaped), Is.True);
+                Assert.That(bytesRead.Span.SequenceEqual(expectedBytes.Span), Is.True);
+                Assert.That(escaped, Is.EqualTo(expectedEscaped));
+            }
+        }
+
+        Assert.That((await ReadCurrent(fast)).State, Is.EqualTo(RecordState.Eof));
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
+    [TestCase("\n", false)]
+    [TestCase("\r\n", true)]
+    public async Task DecodedCharacterBatchMatchesScalarAcrossRefillsAndFallbacks(string newline, bool asynchronous)
+    {
+        var rows = Enumerable.Range(0, 1200).Select(i => $"{i}；東京😀；；tail；")
+            .Concat([new string('x', 17000) + "；long", new string('；', 4200),
+                "\"quoted；" + newline + "value\"\"x\"；end", "；last；", "no；terminator；"]);
+        var bytes = Encoding.Unicode.GetBytes(string.Join(newline, rows));
+        var dialect = new DialectDescriptor(Header: false, Delimiter: '；', LineTerminator: newline);
+        using var fast = CreateParser(16384);
+        using var scalar = CreateParser(257);
+
+        FieldSpan[]? retained = null;
+        FieldSpan[]? snapshot = null;
+        for (var i = 0; ; i++)
+        {
+            var expected = await ReadCurrent(scalar);
+            var actual = await ReadCurrent(fast);
+            Assert.That(actual.State, Is.EqualTo(expected.State));
+            Assert.That(actual.IsEndOfFile, Is.EqualTo(expected.IsEndOfFile));
+            Assert.That(fast.CurrentPosition, Is.EqualTo(scalar.CurrentPosition));
+            Assert.That(actual.Record.Fields, Is.EqualTo(expected.Record.Fields));
+            if (actual.State == RecordState.Record)
+            {
+                for (var column = 0; column < expected.Record.FieldCount; column++)
+                    Assert.That(actual.Record.Slice(column).Span.SequenceEqual(expected.Record.Slice(column).Span), Is.True);
+
+                if (i == 0)
+                {
+                    retained = actual.Record.Materialize(copyMetadata: true).FieldSpans;
+                    snapshot = retained.ToArray();
+                }
+            }
+
+            if (actual.IsEndOfFile)
+                break;
+        }
+
+        Assert.That(retained, Is.Not.Null);
+        Assert.That(retained, Is.EqualTo(snapshot));
+
+        RecordParser CreateParser(int bufferSize)
+        {
+            var profile = Profile(CsvInputMode.DecodedChars, dialect, bufferSize);
+            profile.ParserOptimizations = profile.ParserOptimizations with { TrackPosition = true };
+            return new RecordParser(new StreamReader(new MemoryStream(bytes), Encoding.Unicode), profile);
+        }
+
+        ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
+            ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
     }
 
     private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)

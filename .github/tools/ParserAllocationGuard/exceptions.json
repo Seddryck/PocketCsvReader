@@ -65,7 +65,7 @@
   {
     "Path": "PocketCsvReader/CurrentRecord.cs",
     "Rule": "PA002",
-    "Code": "newRecordMemory(_utf8,fields,_decodedFields!)",
+    "Code": "newRecordMemory(_utf8,fields,decoded)",
     "Count": 1,
     "Reason": "Reviewed explicit public/compatibility materialization boundary. Public RecordReadResult.Record and protected legacy Record access require a RecordMemory object; internal reader sync/async transport uses CurrentRecord without calling Materialize. Character/byte memory is borrowed without copying. Public source exports already own their top-level metadata; CSV legacy-wrapper access explicitly snapshots it through FieldMetadataBuffer.CopyOwned. Tests cover retained parser/mapper/wrapper metadata, borrowed array identity, wrapper absence and raw allocation budgets."
   },
