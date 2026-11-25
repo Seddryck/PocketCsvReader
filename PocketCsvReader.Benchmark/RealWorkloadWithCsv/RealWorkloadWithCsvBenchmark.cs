@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Engines;
+using Bogus;
 using Chrononuensis;
 using CommunityToolkit.HighPerformance.Buffers;
 using nietras.SeparatedValues;
@@ -17,6 +18,7 @@ namespace PocketCsvReader.Benchmark.RealWorkloadWithCsv;
 public class RealWorkloadWithCsvBenchmark
 {
     private const int RecordCount = 50_000;
+    private const int DistinctNameCount = 3_500;
     private const string DateFormat = "yyyy-MM-dd";
     private const string BerkeleyUniversity = "University of California, Berkeley";
 
@@ -26,8 +28,7 @@ public class RealWorkloadWithCsvBenchmark
         BerkeleyUniversity, "Universiteit Antwerpen",
     ];
 
-    private static readonly string[] FirstNames = ["Amira", "Chloé", "Liam", "Nora", "Sofía", "Youssef"];
-    private static readonly string[] LastNames = ["Benali", "De Smet", "García", "Janssens", "Nguyen", "O'Connor"];
+    private static readonly (string FirstName, string LastName)[] Names = CreateNames();
 
     private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
     private static readonly SepReaderOptions SepOptions = new(nietras.SeparatedValues.Sep.New(','))
@@ -235,19 +236,49 @@ public class RealWorkloadWithCsvBenchmark
         VerifyRecordCount(recordsRead);
     }
 
+    private static (string FirstName, string LastName)[] CreateNames()
+    {
+        var faker = new Faker { Random = new Randomizer(42) };
+        var names = new (string FirstName, string LastName)[DistinctNameCount];
+        var seen = new HashSet<(string FirstName, string LastName)>();
+        for (var i = 0; i < names.Length;)
+        {
+            var name = (FirstName: faker.Name.FirstName(), LastName: faker.Name.LastName());
+            if (IsPlainName(name.FirstName) && IsPlainName(name.LastName) && seen.Add(name))
+                names[i++] = name;
+        }
+
+        return names;
+    }
+
+    // Keep CSV punctuation in the university fields used by the quoting scenarios.
+    private static bool IsPlainName(string name)
+        => name.Length != 0 && name.AsSpan().IndexOfAny(",\"\r\n") < 0;
+
+    private static int[] AssignNames(Random random)
+    {
+        var indices = new int[RecordCount];
+        // Use every name at least once, then scatter the guaranteed entries and repeats.
+        for (var i = 0; i < indices.Length; i++)
+            indices[i] = i < Names.Length ? i : random.Next(Names.Length);
+
+        random.Shuffle(indices.AsSpan());
+        return indices;
+    }
+
     private IEnumerable<Enrollment> GenerateRecords()
     {
         // The seed keeps this synthetic benchmark fixture reproducible.
 #pragma warning disable S2245
         var random = new Random(42);
 #pragma warning restore S2245
+        var nameIndices = AssignNames(random);
         var firstRegistration = new DateOnly(2022, 1, 1);
 
         for (var i = 0; i < RecordCount; i++)
         {
             var university = Universities[random.Next(Universities.Length)];
-            var firstName = FirstNames[random.Next(FirstNames.Length)];
-            var lastName = LastNames[random.Next(LastNames.Length)];
+            var (firstName, lastName) = Names[nameIndices[i]];
             var year = random.Next(2024, 2027);
             var quarter = random.Next(1, 5);
             var score = random.Next(201) / 10m;
