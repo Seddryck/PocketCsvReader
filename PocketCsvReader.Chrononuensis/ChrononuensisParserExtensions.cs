@@ -4,7 +4,7 @@ using PocketCsvReader.Configuration;
 
 namespace PocketCsvReader.Chrononuensis;
 
-/// <summary>Registers the public Chrononuensis span parsers as overridable defaults.</summary>
+/// <summary>Registers the public Chrononuensis character and UTF-8 span parsers as overridable defaults.</summary>
 public static class ChrononuensisParserExtensions
 {
     /// <summary>Enables all ten supported temporal types, honoring field formats and cultures.</summary>
@@ -33,8 +33,10 @@ public static class ChrononuensisParserExtensions
 
     private static void Register<T>(RuntimeParsersDescriptorBuilder options, ParseTemporal<T> parse,
         ParseFormattedTemporal<T> formatted, IFormatProvider provider)
+        where T : struct, IUtf8SpanParsable<T>
         => options.WithDefaultParser<T>(input => parse(input, provider),
             (pattern, culture) => pattern is null
                 ? input => parse(input, culture ?? provider)
-                : input => formatted(input, pattern, culture ?? provider));
+                : input => formatted(input, pattern, culture ?? provider),
+            (ReadOnlySpan<byte> input, out T value) => T.TryParse(input, provider, out value));
 }
