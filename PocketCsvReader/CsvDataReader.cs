@@ -55,7 +55,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
 
     protected override FieldDescriptor GetFieldDescriptor(int i)
     {
-        if (AllowUndeclaredFields)
+        if (AllowUndeclaredFields || HasComputedFields)
             return TryGetFieldDescriptor(i, out var field) ? field : UndeclaredField;
         return HasRowNumber && i == 0 ? RowNumberField : base.GetFieldDescriptor(i);
     }
@@ -68,11 +68,20 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             field = RowNumberField;
             return true;
         }
+        if (GetComputedField(i) is { } computed)
+        {
+            field = computed.Field;
+            return true;
+        }
         return base.TryGetFieldDescriptor(i, out field);
     }
 
     public override object GetValue(int i)
-        => HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
+    {
+        if (TryGetComputedValue<object>(i, out var value))
+            return value ?? DBNull.Value;
+        return HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
+    }
 
     internal Type GetDataTableColumnType(int i)
     {
@@ -83,6 +92,13 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     /// <inheritdoc />
     public override bool IsValid(int i)
     {
+        if (GetComputedField(i) is { } field)
+        {
+            EnsureValidationRecord();
+            try { _ = field.IsNull(this); return true; }
+            catch (FormatException) { return false; }
+            catch (OverflowException) { return false; }
+        }
         if (!HasRowNumber || i != 0)
             return base.IsValid(i);
         EnsureValidationRecord();
@@ -112,7 +128,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
         => CsvStreamSource.CreateAsync(stream, profile, cancellationToken);
 
     public override int FieldCount =>
-        (_projectedOrdinals is not null && !_usingSourceFields ? Fields!.Length : SourceFieldCount)
+        ((!_usingSourceFields && (_projectedOrdinals is not null || HasComputedFields)) ? Fields!.Length : SourceFieldCount)
         ?? throw new InvalidOperationException("Fields are not defined yet.");
 
     /// <summary>
@@ -128,6 +144,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             /// <returns>The raw field string, wrapped in quote characters if originally quoted; otherwise, the field value as a string.</returns>
     public override string GetRawString(int i)
     {
+        if (GetComputedField(i) is not null)
+            throw new NotSupportedException("Computed fields have no raw CSV text.");
         if (GetRecordField(i) is not { } field)
             throw new ArgumentOutOfRangeException(nameof(i));
         var text = GetCsvFieldMemory(i);
@@ -232,6 +250,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the field index is outside the range of available and expected fields.</exception>
     protected override NullableSpan GetValueOrThrow(int i)
     {
+        if (GetComputedField(i) is not null)
+            throw new NotSupportedException("Computed fields have no source text to parse.");
         if (HasRowNumber && i == 0)
             return GetCsvFieldMemory(0);
         // Plain fields can keep their backing memory without running the sanitizer.
@@ -386,7 +406,8 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
             throw new InvalidDataException($"The generated row-number column '{rowNumber.ColumnName}' conflicts with a source column. Choose another name using WithRowNumber(columnName) or RowNumberOptions.");
 
         _sourceHeaders = headers;
-        Fields = AddRowNumberHeader(headers);
+        var sourceFields = AddRowNumberHeader(headers);
+        Fields = sourceFields;
         if (Profile.Projection is { } projection)
         {
             try
@@ -399,20 +420,30 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
                 throw;
             }
 
-            _sourceFields = Fields;
-            Fields = _projectedFields = AddRowNumberHeader(Array.ConvertAll(_projectedOrdinals, ordinal => headers[ordinal]));
+            _sourceFields = sourceFields;
+            Fields = _outputFields = AddRowNumberHeader(Array.ConvertAll(_projectedOrdinals, ordinal => headers[ordinal]));
+        }
+
+        try { BindComputedFields(sourceFields); }
+        catch (InvalidDataException)
+        {
+            IsEof = true;
+            throw;
         }
     }
 
-    internal string[]? SourceHeaders => Profile.Projection is not null
-        ? _sourceHeaders : HasRowNumber ? Fields?[1..] : Fields;
+    internal string[]? SourceHeaders => _sourceHeaders;
 
     private string[] AddRowNumberHeader(string[] headers)
         => _rowNumberOptions is { } options ? [options.ColumnName, .. headers] : headers;
 
     private void CompleteRecord(int fieldCount)
     {
-        HandleUnexpectedFields(fieldCount, _projectedOrdinals is not null ? _sourceHeaders!.Length : Fields!.Length - RowNumberWidth);
+        var expectedFieldCount = _projectedOrdinals is not null || HasComputedFields
+            ? _sourceHeaders!.Length
+            : Fields!.Length - RowNumberWidth;
+        HandleUnexpectedFields(fieldCount, expectedFieldCount);
+        ResetComputedFields();
         if (HasRowNumber)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);

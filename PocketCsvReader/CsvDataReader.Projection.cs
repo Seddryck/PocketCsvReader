@@ -7,7 +7,7 @@ public partial class CsvDataReader
 {
     private string[]? _sourceHeaders;
     private string[]? _sourceFields;
-    private string[]? _projectedFields;
+    private string[]? _outputFields;
     private int[]? _projectedOrdinals;
     private bool _usingSourceFields;
     private string? _rowNumberText;
@@ -39,9 +39,9 @@ public partial class CsvDataReader
 
     private protected override void ExitSourceFields()
     {
-        if (_projectedFields is null)
+        if (_outputFields is null)
             return;
-        Fields = _projectedFields;
+        Fields = _outputFields;
         _usingSourceFields = false;
     }
 
@@ -82,7 +82,7 @@ public partial class CsvDataReader
         // A public span mapper gets independently retainable metadata and one
         // character span. Assemble that span from the selected slices only.
         var buffer = new ArrayBufferWriter<char>();
-        var fields = new FieldSpan[FieldCount];
+        var fields = new FieldSpan[_projectedOrdinals!.Length + RowNumberWidth];
         for (var i = 0; i < fields.Length; i++)
         {
             var field = GetRecordField(i);

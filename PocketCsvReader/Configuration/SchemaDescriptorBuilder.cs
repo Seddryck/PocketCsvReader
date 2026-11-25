@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
@@ -149,9 +149,27 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
 public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 {
-    private List<FieldDescriptorBuilder> _fields = new();
+    private readonly List<FieldDescriptorBuilder> _fields = [];
+    private readonly List<ComputedFieldDescriptor> _computedFields = [];
 
-    private SchemaDescriptor Descriptor { get; set; } = new SchemaDescriptor.NamedSchemaDescriptor();
+    /// <summary>Appends a typed computed column to a CSV data reader.</summary>
+    /// <param name="name">The name of the output column.</param>
+    /// <param name="sources">Source CSV column names, in callback index order.</param>
+    /// <param name="compute">A synchronous callback over the sanitized source text for the current row.</param>
+    /// <remarks>Source names refer to the input header, including columns excluded by a projection.
+    /// The output is evaluated on demand and the result is reused for the current row.</remarks>
+    public NamedSchemaDescriptorBuilder WithComputedField<T>(string name, IReadOnlyList<string> sources, ComputeField<T> compute)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(compute);
+        var sourceNames = sources.ToArray();
+        foreach (var source in sourceNames)
+            ArgumentException.ThrowIfNullOrWhiteSpace(source, nameof(sources));
+
+        _computedFields.Add(new ComputedFieldDescriptor<T>(name, sourceNames, compute));
+        return this;
+    }
 
     public NamedSchemaDescriptorBuilder WithField<T>(string name)
         => WithField<T>(name, x => x);
@@ -236,8 +254,12 @@ public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
     public SchemaDescriptor? Build()
     {
+        if (_fields.Count == 0 && _computedFields.Count == 0)
+            return null;
+
+        var descriptor = new SchemaDescriptor.NamedSchemaDescriptor { ComputedFields = [.. _computedFields] };
         foreach (var field in _fields)
-            Descriptor.Fields.Add(field.Build());
-        return (Descriptor.Fields?.Length ?? 0) > 0 ? Descriptor : null;
+            descriptor.Fields.Add(field.Build());
+        return descriptor;
     }
 }
