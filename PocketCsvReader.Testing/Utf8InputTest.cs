@@ -411,10 +411,12 @@ public class Utf8InputTest
         Assert.That(first, Is.EqualTo("é"));
     }
 
-    [TestCase(17)]
-    [TestCase(128)]
-    [TestCase(4096)]
-    public void BulkScanningMatchesCharactersForGeneratedQuotedRecords(int bufferSize)
+    [TestCase(17, true)]
+    [TestCase(128, true)]
+    [TestCase(4096, true)]
+    [TestCase(1057, false)]
+    [TestCase(4096, false)]
+    public void BulkScanningMatchesCharactersForGeneratedQuotedRecords(int bufferSize, bool explicitEscape)
     {
         var random = new Random(326);
         string[] fragments = ["abc", "é", "東京", "😀", "\"", "\\", ",", "\r\n", "#", "  "];
@@ -425,12 +427,13 @@ public class Utf8InputTest
             {
                 if (column > 0) csv.Append(',');
                 var value = string.Concat(Enumerable.Range(0, random.Next(30)).Select(_ => fragments[random.Next(fragments.Length)]));
-                csv.Append('"').Append(value.Replace("\\", "\\\\").Replace("\"", "\"\"")).Append('"');
+                if (explicitEscape) value = value.Replace("\\", "\\\\");
+                csv.Append('"').Append(value.Replace("\"", "\"\"")).Append('"');
             }
             csv.Append("\r\n");
         }
         var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-        var dialect = new DialectDescriptor(Header: false, EscapeChar: '\\');
+        var dialect = new DialectDescriptor(Header: false, EscapeChar: explicitEscape ? '\\' : null);
         Assert.That(Read(bytes, Profile(CsvInputMode.Utf8Bytes, dialect, bufferSize)),
             Is.EqualTo(Read(bytes, Profile(CsvInputMode.DecodedChars, dialect, bufferSize))));
     }
@@ -454,8 +457,9 @@ public class Utf8InputTest
     [TestCase("\"unterminated")]
     public void BulkScanningDoesNotHideMalformedQuotes(string csv)
     {
-        var bytes = Encoding.UTF8.GetBytes(csv);
-        Assert.That(() => Read(bytes, Profile(CsvInputMode.Utf8Bytes)), Throws.TypeOf<InvalidDataException>());
+        var bytes = Encoding.UTF8.GetBytes(new string('p', 64) + ",ok\r\n" + csv + new string('x', 64));
+        foreach (var size in new[] { 3, 4096 })
+            Assert.That(() => Read(bytes, Profile(CsvInputMode.Utf8Bytes, bufferSize: size)), Throws.TypeOf<InvalidDataException>());
         Assert.That(() => Read(bytes, Profile(CsvInputMode.DecodedChars)), Throws.TypeOf<InvalidDataException>());
     }
 
@@ -744,6 +748,43 @@ public class Utf8InputTest
 
         ValueTask<CurrentRecordResult> ReadCurrent(ICurrentRecordSource source) => asynchronous
             ? source.ReadCurrentAsync(CancellationToken.None) : ValueTask.FromResult(source.ReadCurrent());
+    }
+
+    [TestCase('"', true, "\r\n")]
+    [TestCase('\'', false, "\n")]
+    public void BatchScannerIndexesQuotedRowsWithCompactMetadata(char quote, bool doubling, string newline)
+    {
+        var quoted = doubling ? $"東京,{newline}a{quote}{quote}b" : $"東京,{newline}ab";
+        var prefix = new string('x', 30);
+        var rows = $"{prefix},{quote}{quoted}{quote},tail{newline}{quote}{quote},z,{quote}last{quote}{newline}";
+        var bytes = Encoding.UTF8.GetBytes(rows + new string('p', 64) + newline);
+        var dialect = new DialectDescriptor(Header: false, LineTerminator: newline, QuoteChar: quote, DoubleQuote: doubling);
+        using var scanner = CsvBlockScanner<byte>.Create(dialect, 4096);
+        if (scanner is null) Assert.Ignore("SIMD is unavailable.");
+        using var decoded = new Utf8FieldBuffer();
+        using var source = new Utf8RecordSource(new MemoryStream(bytes), Profile(CsvInputMode.Utf8Bytes, dialect, 7));
+
+        int position = 0;
+        for (int row = 0; row < 2; row++)
+        {
+            var expected = ((ICurrentRecordSource)source).ReadCurrent().Record;
+            Assert.That(scanner!.TryRead(bytes, position, out var offsets), Is.True);
+            decoded.Reset(offsets.Length, offsets.FieldCount);
+            var actual = new CurrentRecord(bytes.AsMemory(position, offsets.Length), offsets.Ends,
+                offsets.FirstField, offsets.FieldCount, decoded);
+            position += offsets.Length;
+            Assert.That(actual.Fields, Is.EqualTo(expected.Fields));
+            for (int column = 0; column < expected.FieldCount; column++)
+            {
+                Assert.That(actual.TryGetUtf8(column, out var raw, out var escaped), Is.True);
+                Assert.That(expected.TryGetUtf8(column, out var expectedRaw, out var expectedEscaped), Is.True);
+                Assert.That(raw.Span.SequenceEqual(expectedRaw.Span), Is.True);
+                Assert.That(escaped, Is.EqualTo(expectedEscaped));
+                Assert.That(actual.IsEscaped(column), Is.EqualTo(expected.IsEscaped(column)));
+            }
+        }
+
+        Assert.That(position, Is.EqualTo(Encoding.UTF8.GetByteCount(rows)));
     }
 
     private sealed class BufferRecordingStream(byte[] data) : MemoryStream(data)

@@ -100,16 +100,20 @@ public class CsvStorageReuseTests
         Assert.That(first.ParsedFields, Is.EqualTo(snapshot));
     }
 
-    [TestCase(CsvInputMode.DecodedChars, false, false)]
-    [TestCase(CsvInputMode.DecodedChars, true, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, false, false)]
-    [TestCase(CsvInputMode.Utf8Bytes, true, false)]
-    [TestCase(CsvInputMode.DecodedChars, false, true)]
-    [TestCase(CsvInputMode.DecodedChars, true, true)]
-    public void RawReaderAllocation_IsBoundedBySetupNotRowCount(CsvInputMode mode, bool asynchronous, bool textReader)
+    [TestCase(CsvInputMode.DecodedChars, false, false, false)]
+    [TestCase(CsvInputMode.DecodedChars, true, false, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false, false)]
+    [TestCase(CsvInputMode.DecodedChars, false, true, false)]
+    [TestCase(CsvInputMode.DecodedChars, true, true, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, false, false, true)]
+    [TestCase(CsvInputMode.Utf8Bytes, true, false, true)]
+    public void RawReaderAllocation_IsBoundedBySetupNotRowCount(CsvInputMode mode, bool asynchronous, bool textReader, bool quoted)
     {
         const int rows = 2000;
-        var text = string.Concat(Enumerable.Repeat("host,-,user,timestamp,GET /item HTTP/1.1,200,1024\n", rows));
+        var line = quoted ? "\"host,with\"\"quotes\",-,user,timestamp,GET /item HTTP/1.1,200,1024\n"
+            : "host,-,user,timestamp,GET /item HTTP/1.1,200,1024\n";
+        var text = string.Concat(Enumerable.Repeat(line, rows));
         var data = Encoding.UTF8.GetBytes(text);
         int ReadAll()
         {
