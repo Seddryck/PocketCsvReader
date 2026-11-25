@@ -21,10 +21,19 @@ public class RuntimeParsersDescriptorBuilder
     /// <param name="formatParser">Optional factory receiving the field's pattern and culture.</param>
     public RuntimeParsersDescriptorBuilder WithDefaultParser<T>(ParseSpan<T> parse,
         Func<string?, IFormatProvider?, ParseSpan<T>>? formatParser = null)
+        => WithDefaultParser(parse, formatParser, null);
+
+    internal RuntimeParsersDescriptorBuilder WithDefaultParser<T>(ParseSpan<T> parse,
+        Func<string?, IFormatProvider?, ParseSpan<T>>? formatParser, TryParseUtf8<T>? utf8Parser)
     {
         ArgumentNullException.ThrowIfNull(parse);
         _memoryDefaults?.Remove(typeof(T));
-        (_defaults ??= [])[typeof(T)] = descriptor => descriptor.AddDefaultParser(parse, formatParser);
+        (_defaults ??= [])[typeof(T)] = descriptor =>
+        {
+            descriptor.AddDefaultParser(parse, formatParser);
+            if (utf8Parser is not null)
+                descriptor.AddUtf8Parser(utf8Parser);
+        };
         return this;
     }
 

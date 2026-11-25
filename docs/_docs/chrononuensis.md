@@ -59,6 +59,8 @@ var csv = new CsvReaderBuilder()
 // Parses Q4.26 as YearQuarter(2026, 4).
 ```
 
+Typed reads of unformatted CSV fields use the Chrononuensis UTF-8 parser when the reader can pass the field bytes directly. Character parsers handle field formats and serve as the fallback.
+
 Custom and temporal field patterns and their culture providers are passed to Chrononuensis's public span `Parse` overloads. Fields without a format use Chrononuensis's default pattern and the provider supplied to `UseChrononuensis(provider)`, or invariant culture when omitted. Field descriptors supply their own culture (invariant by default), taking precedence over the integration provider. Pattern tokens, localized labels, validation, and how providers are interpreted follow Chrononuensis, rather than .NET `DateTime` formatting rules. The integration does not translate tokens or localize text independently.
 
 Explicit field parsers take precedence over field formats and integration defaults. Explicit runtime `WithParser` registrations override integration defaults whether called before or after `UseChrononuensis()`. Existing schema format precedence over runtime type parsers is preserved. Repeated `UseChrononuensis()` calls are safe; the latest integration provider applies to defaults without replacing explicit registrations.

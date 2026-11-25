@@ -23,13 +23,21 @@ public class ChrononuensisParserTests
     }
 
     private static CsvDataReader Reader(string input, Type type,
-        RuntimeParsersDescriptorBuilder? parsers = null, SchemaDescriptor? schema = null)
+        RuntimeParsersDescriptorBuilder? parsers = null, SchemaDescriptor? schema = null, bool withNullSequence = false)
     {
         schema ??= new SchemaDescriptorBuilder().Indexed().WithField(type).Build();
-        var profile = new CsvProfile(new DialectDescriptorBuilder().WithoutHeader()
-            .WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']')).Build(),
-            schema, new ResourceDescriptorBuilder().WithSequence("NULL", null).Build(),
-            (parsers ?? new RuntimeParsersDescriptorBuilder().UseChrononuensis()).Build());
+        var dialect = new DialectDescriptorBuilder().WithoutHeader();
+        ResourceDescriptor? resource = null;
+        if (withNullSequence)
+        {
+            dialect.WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']'));
+            resource = new ResourceDescriptorBuilder().WithSequence("NULL", null).Build();
+        }
+        var profile = new CsvProfile(dialect.Build(),
+            schema, resource, (parsers ?? new RuntimeParsersDescriptorBuilder().UseChrononuensis()).Build())
+        {
+            StreamInitialization = withNullSequence ? StreamInitializationOptions.Default : StreamInitializationOptions.Utf8
+        };
         var reader = new CsvDataReader(new MemoryStream(Encoding.UTF8.GetBytes(input)), profile);
         Assert.That(reader.Read(), Is.True);
         return reader;
@@ -58,7 +66,7 @@ public class ChrononuensisParserTests
         if (integrationFirst) parsers.UseChrononuensis();
         parsers.WithParser((ReadOnlySpan<char> _) => new YearMonth(2000, 1));
         if (!integrationFirst) parsers.UseChrononuensis();
-        using var reader = Reader("ignored", typeof(YearMonth), parsers);
+        using var reader = Reader("2026-10", typeof(YearMonth), parsers);
         Assert.That(reader.GetFieldValue<YearMonth>(0), Is.EqualTo(new YearMonth(2000, 1)));
         Assert.That(reader.GetValue(0), Is.EqualTo(new YearMonth(2000, 1)));
     }
@@ -71,7 +79,7 @@ public class ChrononuensisParserTests
         if (integrationFirst) parsers.UseChrononuensis();
         parsers.WithParser((string _) => new YearMonth(2000, 1));
         if (!integrationFirst) parsers.UseChrononuensis();
-        using var reader = Reader("ignored", typeof(YearMonth), parsers);
+        using var reader = Reader("2026-10", typeof(YearMonth), parsers);
         Assert.That(reader.GetFieldValue<YearMonth>(0), Is.EqualTo(new YearMonth(2000, 1)));
     }
 
@@ -81,8 +89,33 @@ public class ChrononuensisParserTests
         var schema = new SchemaDescriptorBuilder().Indexed()
             .WithField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")
                 .WithParser((ReadOnlySpan<char> _) => new YearMonth(2000, 1))).Build();
-        using var reader = Reader("ignored", typeof(YearMonth), schema: schema);
+        using var reader = Reader("2026-10", typeof(YearMonth), schema: schema);
         Assert.That(reader.GetValue(0), Is.EqualTo(new YearMonth(2000, 1)));
+        Assert.That(reader.GetFieldValue<YearMonth>(0), Is.EqualTo(new YearMonth(2000, 1)));
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void ExplicitUtf8Parser_WinsInEitherOrder(bool integrationFirst)
+    {
+        var parsers = new RuntimeParsersDescriptorBuilder();
+        if (integrationFirst) parsers.UseChrononuensis();
+        parsers.WithUtf8Parser<YearMonth>(
+            (ReadOnlySpan<byte> _, out YearMonth value) =>
+            {
+                value = new YearMonth(2000, 1);
+                return true;
+            },
+            _ => new YearMonth(2000, 2));
+        if (!integrationFirst) parsers.UseChrononuensis();
+
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithoutHeader())
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .WithSchema(s => s.Indexed().WithField<YearMonth>())
+            .WithParsers(parsers).Build();
+        using var reader = csv.ToDataReader(new MemoryStream("2026-10"u8.ToArray()));
+        Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetFieldValue<YearMonth>(0), Is.EqualTo(new YearMonth(2000, 1)));
     }
 
@@ -114,7 +147,7 @@ public class ChrononuensisParserTests
     [Test]
     public void NullsAndArrays_UseExistingReaderSemantics()
     {
-        using var reader = Reader("NULL\r\n[2026-10|2026-11]", typeof(YearMonth));
+        using var reader = Reader("NULL\r\n[2026-10|2026-11]", typeof(YearMonth), withNullSequence: true);
         Assert.That(reader.IsDBNull(0), Is.True);
         Assert.That(() => reader.GetValue(0), Throws.TypeOf<InvalidCastException>());
         Assert.That(() => reader.GetFieldValue<YearMonth>(0), Throws.TypeOf<InvalidCastException>());
@@ -150,6 +183,7 @@ public class ChrononuensisParserTests
         var culture = CultureInfo.GetCultureInfo("fr-FR");
         var csv = new CsvReaderBuilder()
             .WithDialect(d => d.WithoutHeader())
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
             .WithSchema(s => s.Indexed().WithField<YearMonth>())
             .WithParsers(options => options.UseChrononuensis(culture)).Build();
         using var stream = new MemoryStream("2026-10"u8.ToArray());
@@ -171,7 +205,7 @@ public class ChrononuensisParserTests
 
     [TestCase(false)]
     [TestCase(true)]
-    public void SpanIntegration_AddsNoAllocationBeyondUpstreamParser(bool formatted)
+    public void ReaderIntegration_AddsNoAllocationBeyondUpstreamParser(bool formatted)
     {
         var schema = formatted ? new SchemaDescriptorBuilder().Indexed()
             .WithField(typeof(YearMonth), f => f.WithFormat("yyyy-MM")).Build() : null;
