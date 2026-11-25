@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,6 +17,8 @@ public abstract class SchemaDescriptor
     public class NamedSchemaDescriptor
         : SchemaDescriptor
     {
+        internal ComputedFieldDescriptor[] ComputedFields { get; init; } = [];
+
         public NamedSchemaDescriptor()
             : base(new FieldCollectionDescriptor.NamedFieldCollectionDescriptor())
         { }

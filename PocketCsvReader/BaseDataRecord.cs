@@ -138,9 +138,9 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         => GetValue(GetOrdinal(name));
     public bool GetBoolean(int i)
         => GetNumeric<bool>(i);
-    public byte GetByte(int i) => throw new NotImplementedException();
+    public byte GetByte(int i) => TryGetComputedValue<byte>(i, out var value) ? value : throw new NotImplementedException();
     public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
-    public char GetChar(int i) => throw new NotImplementedException();
+    public char GetChar(int i) => TryGetComputedValue<char>(i, out var value) ? value : throw new NotImplementedException();
     public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotImplementedException();
     public IDataReader GetData(int i) => throw new NotImplementedException();
 
@@ -158,7 +158,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetTemporal<T>(int i)
     {
-        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct))
+        if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct)))
             return direct;
 
         try
@@ -185,7 +185,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public Guid GetGuid(int i)
     {
-        if (RowFilters.Count == 0 && TryGetDirectValue<Guid>(i, out var direct))
+        if (TryGetComputedValue<Guid>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<Guid>(i, out direct)))
             return direct;
 
         try
@@ -221,7 +221,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     protected T GetNumeric<T>(int i)
     {
-        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct))) return direct;
         try
         {
             if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
@@ -242,6 +242,12 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         {
             throw ex.InnerException!;
         }
+    }
+
+    private protected virtual bool TryGetComputedValue<T>(int i, out T value)
+    {
+        value = default!;
+        return false;
     }
 
     private protected virtual bool TryGetDirectValue<T>(int i, out T value)
@@ -500,7 +506,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public T GetFieldValue<T>(int i)
     {
-        if (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out var direct)) return direct;
+        if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct))) return direct;
         bool hasNullMemoryField = false;
         if (Profile.Parsers?.HasMemoryParsers is true
             && ResolveTypedMemoryParser<T>(i, out var parsedType) is { } memoryParser)
@@ -517,6 +523,11 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         }
         if (hasNullMemoryField || IsNullFieldValue<T>(i))
             return default!;
+        return ParseFieldValue<T>(i);
+    }
+
+    private T ParseFieldValue<T>(int i)
+    {
         try
         {
             if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
@@ -532,8 +543,6 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         {
             throw ex.InnerException!;
         }
-
-        throw new InvalidOperationException($"No parser registered for type {typeof(T).Name}");
     }
 
     private MemoryFieldParser? ResolveTypedMemoryParser<T>(int ordinal, out Type parsedType)
