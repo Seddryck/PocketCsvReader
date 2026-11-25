@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using PocketCsvReader.Configuration;
@@ -42,9 +43,12 @@ internal sealed class CsvBlockScanner<T> : IDisposable
             && dialect.Delimiter is not ('\r' or '\n')
             && dialect.QuoteChar is not ('\r' or '\n')
             && dialect.Delimiter != dialect.QuoteChar
-            && dialect.EscapeChar is null && dialect.CommentChar is null && !dialect.SkipInitialSpace
-            && dialect.ArrayDelimiter is null && dialect.ArrayPrefix is null && dialect.ArraySuffix is null
+            && UsesPlainFields(dialect)
             ? new(dialect) : null;
+
+    private static bool UsesPlainFields(DialectDescriptor dialect)
+        => dialect.EscapeChar is null && dialect.CommentChar is null && !dialect.SkipInitialSpace
+            && dialect.ArrayDelimiter is null && dialect.ArrayPrefix is null && dialect.ArraySuffix is null;
 
     public void Reset()
     {
@@ -75,60 +79,67 @@ internal sealed class CsvBlockScanner<T> : IDisposable
 
         var ends = _ends ??= ArrayPool<int>.Shared.Rent(FieldCapacity);
         var rows = _rows ??= ArrayPool<int>.Shared.Rent(RowCapacity);
-        var rowStart = position;
-        var fieldCount = 0;
-        var rowCount = 0;
+        var index = new BatchIndex { RowStart = position };
         var block = position & -blockSize;
         var remaining = uint.MaxValue << (position - block);
-        while (block <= input.Length - blockSize)
+        for (; block <= input.Length - blockSize; block += blockSize)
         {
             // One block can contribute at most blockSize offsets and rows.
-            if (fieldCount > FieldCapacity - blockSize || rowCount > RowCapacity - blockSize)
+            if (index.FieldCount > FieldCapacity - blockSize || index.RowCount > RowCapacity - blockSize)
             {
-                if (rowCount == 0)
-                    _fallbackRemaining = input.Length - rowStart;
+                if (index.RowCount == 0)
+                    _fallbackRemaining = input.Length - index.RowStart;
                 break;
             }
 
-            LoadMasks(input, block, out var delimiters, out var terminators, out var quotes);
-            quotes &= remaining;
-            if (quotes != 0)
-                remaining &= (1u << BitOperations.TrailingZeroCount(quotes)) - 1;
-
-            var boundaries = (delimiters | terminators) & remaining;
-            while (boundaries != 0)
+            if (!TryIndexBlock(input, block, remaining, ends, rows, ref index))
             {
-                var bit = BitOperations.TrailingZeroCount(boundaries);
-                var end = block + bit;
-                ends[fieldCount++] = end - rowStart;
-                if ((terminators & (1u << bit)) != 0)
-                {
-                    if (_terminatorLength == 2 && (end + 1 == input.Length || input[end + 1] != T.CreateChecked((ushort)'\n')))
-                    {
-                        _fallbackRemaining = input.Length - rowStart;
-                        goto Publish;
-                    }
-                    rows[rowCount++] = fieldCount;
-                    rowStart = end + _terminatorLength;
-                }
-
-                boundaries &= boundaries - 1;
-            }
-
-            if (quotes != 0)
-            {
-                _fallbackRemaining = input.Length - rowStart;
+                _fallbackRemaining = input.Length - index.RowStart;
                 break;
             }
 
-            block += blockSize;
             remaining = uint.MaxValue;
         }
 
-    Publish:
         _firstField = _rowIndex = 0;
-        _rowCount = rowCount;
-        return rowCount != 0;
+        _rowCount = index.RowCount;
+        return _rowCount != 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryIndexBlock(ReadOnlySpan<T> input, int block, uint remaining, int[] ends, int[] rows, ref BatchIndex index)
+    {
+        LoadMasks(input, block, out var delimiters, out var terminators, out var quotes);
+        quotes &= remaining;
+        if (quotes != 0)
+            remaining &= (1u << BitOperations.TrailingZeroCount(quotes)) - 1;
+
+        var boundaries = (delimiters | terminators) & remaining;
+        while (boundaries != 0)
+        {
+            var bit = BitOperations.TrailingZeroCount(boundaries);
+            var end = block + bit;
+            ends[index.FieldCount++] = end - index.RowStart;
+            if ((terminators & (1u << bit)) != 0)
+            {
+                if (_terminatorLength == 2 && (end + 1 == input.Length || input[end + 1] != T.CreateChecked((ushort)'\n')))
+                    return false;
+
+                rows[index.RowCount++] = index.FieldCount;
+                index.RowStart = end + _terminatorLength;
+            }
+
+            boundaries &= boundaries - 1;
+        }
+
+        return quotes == 0;
+    }
+
+    private struct BatchIndex
+    {
+        public int RowStart;
+        public int FieldCount;
+        public int RowCount;
     }
 
     private void LoadMasks(ReadOnlySpan<T> input, int block, out uint delimiters, out uint terminators, out uint quotes)

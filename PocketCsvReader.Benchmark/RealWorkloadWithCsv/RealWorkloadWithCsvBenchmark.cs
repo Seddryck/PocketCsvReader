@@ -237,7 +237,10 @@ public class RealWorkloadWithCsvBenchmark
 
     private IEnumerable<Enrollment> GenerateRecords()
     {
+        // The seed keeps this synthetic benchmark fixture reproducible.
+#pragma warning disable S2245
         var random = new Random(42);
+#pragma warning restore S2245
         var firstRegistration = new DateOnly(2022, 1, 1);
 
         for (var i = 0; i < RecordCount; i++)
@@ -301,18 +304,17 @@ public class RealWorkloadWithCsvBenchmark
 
         if (_expectedRecords is { } records)
         {
-            if (!records.MoveNext())
-                throw new InvalidOperationException("Found an unexpected extra record.");
-
-            var expected = records.Current;
-            var quarterMatches = ReadsYearQuarter ? Nullable.Equals(yearQuarter, expected.ParsedQuarter) : quarter == expected.Quarter;
-            if (university != expected.University || firstName != expected.FirstName ||
-                lastName != expected.LastName || !quarterMatches || score != expected.Score ||
-                credits != expected.Credits || registrationDate != expected.RegistrationDate)
-                throw new InvalidOperationException($"Parsed record does not match the expected record for {expected.FirstName} {expected.LastName}.");
-
-            if (joinNames && fullName != $"{expected.FirstName} {expected.LastName}")
-                throw new InvalidOperationException($"Joined name does not match {expected.FirstName} {expected.LastName}.");
+            VerifyEnrollment(records, new Enrollment
+            {
+                University = university,
+                FirstName = firstName,
+                LastName = lastName,
+                Quarter = quarter ?? string.Empty,
+                Score = score,
+                Credits = credits,
+                RegistrationDate = registrationDate,
+                ParsedQuarter = yearQuarter,
+            }, fullName);
         }
 
         _consumer.Consume(university);
@@ -325,6 +327,24 @@ public class RealWorkloadWithCsvBenchmark
         _consumer.Consume(score);
         _consumer.Consume(credits);
         _consumer.Consume(registrationDate.DayNumber);
+    }
+
+    private void VerifyEnrollment(IEnumerator<Enrollment> records, Enrollment actual, string? fullName)
+    {
+        if (!records.MoveNext())
+            throw new InvalidOperationException("Found an unexpected extra record.");
+
+        var expected = records.Current;
+        var quarterMatches = ReadsYearQuarter
+            ? Nullable.Equals(actual.ParsedQuarter, expected.ParsedQuarter)
+            : actual.Quarter == expected.Quarter;
+        if (actual.University != expected.University || actual.FirstName != expected.FirstName ||
+            actual.LastName != expected.LastName || !quarterMatches || actual.Score != expected.Score ||
+            actual.Credits != expected.Credits || actual.RegistrationDate != expected.RegistrationDate)
+            throw new InvalidOperationException($"Parsed record does not match the expected record for {expected.FirstName} {expected.LastName}.");
+
+        if (fullName is not null && fullName != $"{expected.FirstName} {expected.LastName}")
+            throw new InvalidOperationException($"Joined name does not match {expected.FirstName} {expected.LastName}.");
     }
 
     public enum CsvScenario
