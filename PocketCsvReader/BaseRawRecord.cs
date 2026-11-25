@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using PocketCsvReader.Configuration;
 using PocketCsvReader.FieldParsing;
@@ -17,21 +18,36 @@ public abstract class BaseRawRecord<TProfile>
     private RecordMemory? _record;
     private CurrentRecord _current;
     private bool _copyMetadataOnMaterialization;
+    private Utf8RecordSource? _deferredRecord;
+    private int _deferredFieldCount;
     protected RecordMemory? Record
     {
-        get => _record ?? (!_current.HasFields ? null : _record = _current.Materialize(_copyMetadataOnMaterialization));
+        get
+        {
+            EnsureCurrentRecord();
+            return _record ?? (!_current.HasFields ? null : _record = _current.Materialize(_copyMetadataOnMaterialization));
+        }
         set
         {
             _record = value;
             _current = value?.Current ?? default;
+            _deferredRecord = null;
             _copyMetadataOnMaterialization = false;
         }
     }
-    protected ReadOnlyMemory<char> CurrentRecordMemory => _current.IsUtf8 ? Record!.Span : _current.Characters;
+    protected ReadOnlyMemory<char> CurrentRecordMemory
+    {
+        get
+        {
+            EnsureCurrentRecord();
+            return _current.IsUtf8 ? Record!.Span : _current.Characters;
+        }
+    }
     protected FieldSpan[]? CurrentFieldSpans
     {
         get
         {
+            EnsureCurrentRecord();
             var fields = _current.BorrowFields();
             if (fields is not null)
                 _current = _current.WithExpandedFields(fields);
@@ -39,21 +55,70 @@ public abstract class BaseRawRecord<TProfile>
         }
     }
 
-    private protected bool HasCurrentFields => _current.HasFields;
-    private protected int CurrentFieldSpanCount => _current.FieldCount;
-    private protected bool IsCurrentFieldEscaped(int ordinal) => _current.IsEscaped(ordinal);
-    private protected FieldSpan GetCurrentField(int ordinal) => _current.GetField(ordinal);
+    private protected bool HasCurrentFields => _deferredRecord is not null || _current.HasFields;
+    private protected int CurrentFieldSpanCount => _deferredRecord is not null ? _deferredFieldCount : _current.FieldCount;
+
+    private protected bool IsCurrentFieldEscaped(int ordinal)
+    {
+        EnsureCurrentRecord();
+        return _current.IsEscaped(ordinal);
+    }
+
+    private protected FieldSpan GetCurrentField(int ordinal)
+    {
+        EnsureCurrentRecord();
+        return _current.GetField(ordinal);
+    }
 
     /// <summary>Reads a field without constructing a public record wrapper.</summary>
-    protected ReadOnlyMemory<char> GetCurrentFieldMemory(int ordinal) => _current.Slice(ordinal);
+    protected ReadOnlyMemory<char> GetCurrentFieldMemory(int ordinal)
+    {
+        EnsureCurrentRecord();
+        return _current.Slice(ordinal);
+    }
 
     private protected bool TryGetCurrentUtf8(int ordinal, out ReadOnlyMemory<byte> value, out bool isEscaped)
-        => _current.TryGetUtf8(ordinal, out value, out isEscaped);
+    {
+        EnsureCurrentRecord();
+        return _current.TryGetUtf8(ordinal, out value, out isEscaped);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void EnsureCurrentRecord()
+    {
+        if (_deferredRecord is { } source)
+            MaterializeCurrentRecord(source);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void MaterializeCurrentRecord(Utf8RecordSource source)
+    {
+        _current = source.GetIndexedRecord();
+        _deferredRecord = null;
+    }
+
+    private protected void SetDeferredRecord(Utf8RecordSource source, int fieldCount)
+    {
+        _record = null;
+        _deferredFieldCount = fieldCount;
+        _deferredRecord = source;
+        _copyMetadataOnMaterialization = true;
+    }
+
+    private protected void InvalidateDeferredRecord()
+    {
+        if (_deferredRecord is null)
+            return;
+
+        _deferredRecord = null;
+        _current = default;
+    }
 
     private protected void SetRecord(CurrentRecord record, bool copyMetadataOnMaterialization = false)
     {
         _record = null;
         _current = record;
+        _deferredRecord = null;
         _copyMetadataOnMaterialization = copyMetadataOnMaterialization;
     }
 
@@ -207,8 +272,11 @@ public abstract class BaseRawRecord<TProfile>
     /// <returns>The decoded field text.</returns>
     /// <exception cref="InvalidCastException">The field is null.</exception>
     public string GetDecodedString(int ordinal)
-        => _current.IsUtf8 && TryGetDirectString(ordinal, out var value)
+    {
+        EnsureCurrentRecord();
+        return _current.IsUtf8 && TryGetDirectString(ordinal, out var value)
             ? value : GetStringValue(ordinal);
+    }
 
     protected virtual string GetStringValue(int i)
         => StringMapper.Map(i, GetValueOrThrow(i))!;

@@ -165,6 +165,69 @@ public class CsvStorageReuseTests
         Assert.That(reader.Parser.CapabilityChecks, Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task IndexedRead_DefersUntilFieldAccessAcrossSkippedRowsAndMixedReads()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+            Assert.Ignore("SIMD is unavailable.");
+
+        var deferred = typeof(BaseRawRecord<CsvProfile>).GetField("_deferredRecord", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var current = typeof(BaseRawRecord<CsvProfile>).GetField("_current", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var longValue = new string('x', 4200);
+        var padding = new string('p', 64);
+        var text = $"skip,1\n\"東京,駅\",2\nasync,3\n{longValue},4\nnext,5\n{padding},6\nlast,7";
+        using var reader = Reader(text, CsvInputMode.Utf8Bytes);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.FieldCount, Is.EqualTo(2));
+        Assert.That(deferred.GetValue(reader), Is.Not.Null);
+        Assert.That(((CurrentRecord)current.GetValue(reader)!).HasFields, Is.False);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(deferred.GetValue(reader), Is.Not.Null);
+        var retained = reader.GetString(0);
+        Assert.That(retained, Is.EqualTo("東京,駅"));
+        Assert.That(reader.GetInt32(1), Is.EqualTo(2));
+        Assert.That(deferred.GetValue(reader), Is.Null);
+
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("async"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo(longValue));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(deferred.GetValue(reader), Is.Not.Null);
+        Assert.That(reader.GetString(0), Is.EqualTo("next"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("last"));
+        Assert.That(reader.Read(), Is.False);
+        Assert.That(deferred.GetValue(reader), Is.Null);
+        Assert.That(retained, Is.EqualTo("東京,駅"));
+    }
+
+    [Test]
+    public void IndexedRead_FirstStringAccessUsesNativePooling()
+    {
+        var profile = Profile(CsvInputMode.Utf8Bytes);
+        profile.ParserOptimizations = profile.ParserOptimizations with { PoolUtf8Strings = true };
+        var bytes = Encoding.UTF8.GetBytes($"東京,1\n東京,2\n{new string('p', 64)},3\n");
+        using var reader = new CsvDataReader(new MemoryStream(bytes), profile);
+
+        Assert.That(reader.Read(), Is.True);
+        var first = reader.GetString(0);
+        Assert.That(first, Is.EqualTo("東京"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.SameAs(first));
+    }
+
+    [Test]
+    public void IndexedRead_RejectsExtraFieldsBeforeAnyFieldIsAccessed()
+    {
+        using var reader = Reader($"first,1\nextra,2,unexpected\n{new string('p', 64)},3\n", CsvInputMode.Utf8Bytes);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.Read(), Throws.TypeOf<InvalidDataException>());
+    }
+
     private sealed class CountingReader(Stream stream) : CsvDataReader(stream,
         new CsvProfile(new(Header: false, LineTerminator: "\n"))
         { StreamInitialization = StreamInitializationOptions.ForwardOnly })
