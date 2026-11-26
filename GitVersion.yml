@@ -1,30 +1,26 @@
-mode: ContinuousDeployment
-tag-prefix: 'v'
-continuous-delivery-fallback-label: ''
-
-major-version-bump-message: "^(feat|fix|perf|revert)(\\([\\w\\s-]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
-minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:|\\+semver:\\s?(feature|minor)"
-patch-version-bump-message: "^(chore|fix|perf|refactor|revert|build|ci|style)(\\([\\w\\s-]*\\))?:"
-no-bump-message: "\\+semver:\\s?(none|skip)"
-commit-message-incrementing: Enabled
-
-branches:
-  feat:
-    label: beta.{BranchName}
-    regex: ^(feat(ure)?s?)[/-](?<BranchName>.+)
-    increment: Minor
-    source-branches:
-      - main
-      - feat
-
-  main:
-    regex: ^main$
-    label: ''
-    is-main-branch: true
-    increment: Patch
-    mode: ContinuousDeployment
-
-ignore:
-  sha: []
-
-merge-message-formats: {}
+calculation:
+  branches:
+    feat:
+      increment: Minor
+      label: "beta.{BranchName}"
+      regex: "^(feat(ure)?s?)[/-](?<BranchName>.+)"
+      source-branches:
+        - main
+        - feat
+    main:
+      increment: Patch
+      is-main-branch: true
+      label: ''
+      mode: ContinuousDeployment
+      regex: ^main$
+  commit-message-incrementing: Enabled
+  ignore:
+    sha: []
+  major-version-bump-message: "^(feat|fix|perf|revert)(\\([\\w\\s-]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
+  merge-message-formats: {}
+  minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:|\\+semver:\\s?(feature|minor)"
+  mode: ContinuousDeployment
+  no-bump-message: "\\+semver:\\s?(none|skip)"
+  patch-version-bump-message: "^(chore|fix|perf|refactor|revert|build|ci|style)(\\([\\w\\s-]*\\))?:"
+  tag-prefix: v
+output: {}
