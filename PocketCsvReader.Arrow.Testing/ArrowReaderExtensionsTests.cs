@@ -65,6 +65,34 @@ public class ArrowReaderExtensionsTests
     }
 
     [Test]
+    public void ToArrowBatches_WithUtf8FloatingPoint_PreservesFloatingPointBits()
+    {
+        var schema = new SchemaDescriptor.NamedSchemaDescriptor();
+        schema.Fields.Add(new FieldDescriptor(typeof(float), "f32"));
+        schema.Fields.Add(new FieldDescriptor(typeof(double), "f64"));
+        var reader = new CsvReaderBuilder()
+            .WithDialect(d => d.WithLineTerminator("\n").WithHeader())
+            .WithSchema(schema)
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .Build();
+        using var stream = StreamOf("f32,f64\n\"1,234.5\",1.25e-5\n-0,-0\nNaN,-Infinity");
+        using var batch = reader.ToArrowBatches(stream).Single();
+
+        Assert.That(batch.Schema.GetFieldByIndex(0).DataType, Is.TypeOf<FloatType>());
+        Assert.That(batch.Schema.GetFieldByIndex(1).DataType, Is.TypeOf<DoubleType>());
+        var singles = (FloatArray)batch.Column(0);
+        var doubles = (DoubleArray)batch.Column(1);
+        Assert.That(singles.GetValue(0), Is.EqualTo(1234.5f));
+        Assert.That(doubles.GetValue(0), Is.EqualTo(1.25e-5));
+        Assert.That(singles.GetValue(1), Is.Not.Null);
+        Assert.That(doubles.GetValue(1), Is.Not.Null);
+        Assert.That(BitConverter.SingleToInt32Bits(singles.GetValue(1)!.Value), Is.EqualTo(int.MinValue));
+        Assert.That(BitConverter.DoubleToInt64Bits(doubles.GetValue(1)!.Value), Is.EqualTo(long.MinValue));
+        Assert.That(singles.GetValue(2), Is.EqualTo(float.NaN));
+        Assert.That(doubles.GetValue(2), Is.EqualTo(double.NegativeInfinity));
+    }
+
+    [Test]
     public void ToArrowBatches_WithTypedSchema_ProducesTypedBoundedBatches()
     {
         const string content = "id,active,name,amount,date,instant,time,payload\n" +

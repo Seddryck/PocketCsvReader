@@ -43,6 +43,7 @@ public class Program
                 typeof(CustomParserBoxing),
                 typeof(ChrononuensisParsing),
                 typeof(Utf8Input),
+                typeof(Utf8FloatingPoint),
                 typeof(PositionTracking),
                 typeof(CharacterRecordParsing),
                 typeof(CommonLogComparison),
