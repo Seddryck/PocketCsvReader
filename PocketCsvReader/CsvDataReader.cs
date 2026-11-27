@@ -175,12 +175,15 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
     }
 
     private bool CanBorrowUtf8Text(int ordinal)
-    {
-        // Subclasses can override the logical value.
-        if (!HasActiveRecord || GetType() != typeof(CsvDataReader) || (uint)ordinal >= (uint)FieldCount
-            || (HasRowNumber && ordinal == 0) || GetComputedField(ordinal) is not null)
-            return false;
+        => IsSourceTextColumn(ordinal) && HasUntransformedText(ordinal);
 
+    // Subclasses can override the logical value.
+    private bool IsSourceTextColumn(int ordinal)
+        => HasActiveRecord && GetType() == typeof(CsvDataReader) && (uint)ordinal < (uint)FieldCount
+            && !(HasRowNumber && ordinal == 0) && GetComputedField(ordinal) is null;
+
+    private bool HasUntransformedText(int ordinal)
+    {
         var options = Profile.ParserOptimizations;
         if (options.HandleSpecialValues && Profile.Resource?.Sequences is { IsEmpty: false })
             return false;

@@ -184,11 +184,11 @@ internal sealed class ArrowBatchLayout
 internal sealed class ArrowBatchBuilder
 {
     private Schema Schema { get; }
-    private IReadOnlyList<ArrowColumnWriter> Columns { get; }
+    private ArrowColumnWriter[] Columns { get; }
     private bool HasUtf8Columns { get; }
     public int Length { get; private set; }
 
-    public ArrowBatchBuilder(Schema schema, IReadOnlyList<ArrowColumnWriter> columns)
+    public ArrowBatchBuilder(Schema schema, ArrowColumnWriter[] columns)
     {
         Schema = schema;
         Columns = columns;
@@ -272,7 +272,15 @@ internal sealed class ArrowColumnDefinition
     public static ArrowColumnDefinition Create(string name, Type runtimeType, int ordinal, IUtf8DataRecord? utf8)
     {
         var type = Nullable.GetUnderlyingType(runtimeType) ?? runtimeType;
+        return CreateNumeric(name, type, ordinal)
+            ?? CreateTextOrTemporal(name, type, ordinal, utf8)
+            ?? throw new NotSupportedException(
+                $"Field '{name}' uses runtime type '{runtimeType.FullName}', which has no Apache Arrow mapping. " +
+                "Configure the PocketCsvReader schema with a supported runtime type before enumeration.");
+    }
 
+    private static ArrowColumnDefinition? CreateNumeric(string name, Type type, int ordinal)
+    {
         if (type == typeof(bool))
         {
             return Define(name, BooleanType.Default, ordinal, () =>
@@ -346,6 +354,12 @@ internal sealed class ArrowColumnDefinition
                 return Writer(ordinal, (record, index) => builder.Append(record.GetDecimal(index)), () => builder.AppendNull(), () => builder.Build());
             });
         }
+
+        return null;
+    }
+
+    private static ArrowColumnDefinition? CreateTextOrTemporal(string name, Type type, int ordinal, IUtf8DataRecord? utf8)
+    {
         if (type == typeof(string) || type == typeof(char) || type == typeof(Guid))
         {
             bool canBorrowUtf8 = type == typeof(string) && utf8?.CanGetUtf8Span(ordinal) is true;
@@ -354,10 +368,16 @@ internal sealed class ArrowColumnDefinition
                 var builder = new StringArray.Builder();
                 return new ArrowColumnWriter(
                     ordinal,
-                    (record, index) => builder.Append(Convert.ToString(record.GetValue(index), System.Globalization.CultureInfo.InvariantCulture)!),
+                    AppendString,
                     () => builder.AppendNull(),
                     () => builder.Build(),
                     canBorrowUtf8 ? TryAppend : null);
+
+                void AppendString(IDataRecord record, int index)
+                {
+                    var value = record.GetValue(index);
+                    builder.Append(value as string ?? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!);
+                }
 
                 bool TryAppend(int index)
                 {
@@ -419,9 +439,7 @@ internal sealed class ArrowColumnDefinition
             });
         }
 
-        throw new NotSupportedException(
-            $"Field '{name}' uses runtime type '{runtimeType.FullName}', which has no Apache Arrow mapping. " +
-            "Configure the PocketCsvReader schema with a supported runtime type before enumeration.");
+        return null;
     }
 
     private static ArrowColumnDefinition Define(
