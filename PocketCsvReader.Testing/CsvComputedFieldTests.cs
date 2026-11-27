@@ -21,7 +21,7 @@ public class CsvComputedFieldTests
             .WithSchema(schema => schema.Named()
                 .WithField<string>("FirstName", field => field.WithSequence("alias", "Augusta"))
                 .WithComputedField<string>("FullName", ["FirstName", "LastName"],
-                    static fields => string.Concat(fields[0], " ".AsSpan(), fields[1]))
+                    static fields => string.Concat(fields.GetSpan(3).Value, " ".AsSpan(), fields.GetSpan(0).Value))
                 .WithComputedField<decimal>("Net", ["Quantity", "Price", "Discount", "Fee"], fields =>
                 {
                     calls++;
@@ -64,11 +64,17 @@ public class CsvComputedFieldTests
     [Test]
     public void DistinguishesNullFromEmptyAndKeepsOutputOrdinalForIncompleteRows()
     {
+        var calls = 0;
         var csv = Builder()
             .WithResource(resource => resource.WithSequence("NULL", null))
             .WithSchema(schema => schema.Named()
                 .WithComputedField<int?>("Length", ["Name", "Suffix"],
-                    static fields => fields.IsNull(0) ? null : fields[0].Length + fields[1].Length))
+                    fields =>
+                    {
+                        calls++;
+                        Assert.That(fields.GetSpan(0).HasValue, Is.True);
+                        return fields[0].Length + fields[1].Length;
+                    }))
             .Build();
         using var reader = csv.ToDataReader(new StringReader("Name,Suffix\nNULL,x\n\"\",x\nAda\n"));
 
@@ -86,19 +92,19 @@ public class CsvComputedFieldTests
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.FieldCount, Is.EqualTo(3));
         Assert.That(reader.GetOrdinal("Length"), Is.EqualTo(2));
-        Assert.That(reader.GetInt32(2), Is.EqualTo(3));
+        Assert.That(reader.GetValue(2), Is.SameAs(DBNull.Value));
+        Assert.That(calls, Is.EqualTo(1));
     }
 
-    [TestCase("A", "Missing", "was not found")]
-    [TestCase("A,A", "A", "is ambiguous")]
-    public void RejectsInvalidSourceNamesEvenOnHeaderOnlyInput(string header, string source, string message)
+    [Test]
+    public void RejectsAmbiguousSourceNamesEvenOnHeaderOnlyInput()
     {
         var csv = Builder()
             .WithSchema(schema => schema.Named()
-                .WithComputedField<int>("Output", [source], static fields => fields[0].Length))
+                .WithComputedField<int>("Output", ["A"], static fields => fields[0].Length))
             .Build();
-        using var reader = csv.ToDataReader(new StringReader(header));
-        Assert.That(Assert.Throws<InvalidDataException>(() => reader.Read())!.Message, Does.Contain(message));
+        using var reader = csv.ToDataReader(new StringReader("A,A"));
+        Assert.That(Assert.Throws<InvalidDataException>(() => reader.Read())!.Message, Does.Contain("is ambiguous"));
     }
 
     [TestCase("Output")]
@@ -149,6 +155,63 @@ public class CsvComputedFieldTests
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetInt32(reader.GetOrdinal("Length")), Is.EqualTo(5));
         Assert.That(reader.Read(), Is.False);
+    }
+
+    [Test]
+    public void IndexedSchemaSupportsTypedOverloadsAndSourceOrdinals()
+    {
+        var csv = Builder()
+            .WithRowNumber()
+            .WithSchema(schema => schema.Indexed()
+                .WithField<DateOnly>(f => f.WithFormat("dd-MM-yyyy"))
+                .WithField<int>(f => f.WithParser((ReadOnlySpan<char> text) => int.Parse(text) * 2))
+                .WithComputedField<int, DateOnly, int>("Sum", 0, 1, (date, units) => date.Day + units)
+                .WithComputedField<string, DateOnly, int, string>("Label", 0, 1, 2,
+                    (date, units, label) => $"{date.Day}-{units}-{label}")
+                .WithComputedField<int>("Length", [2, 1], fields =>
+                {
+                    var raw = fields.GetSpan(2);
+                    Assert.That(raw.HasValue, Is.True);
+                    Assert.That(raw.Value.ToString(), Is.EqualTo("item"));
+                    Assert.That(fields[1].ToString(), Is.EqualTo("4"));
+                    return raw.Value.Length + fields.GetFieldValue<int>(1);
+                }))
+            .Build();
+        using var reader = csv.ToDataReader(new StringReader("Day,Units,Name\n07-01-2026,4,item"));
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.Fields, Is.EqualTo(new[] { "rowNumber", "Day", "Units", "Name", "Sum", "Label", "Length" }));
+        Assert.That(reader.GetFieldValue<int>("Sum"), Is.EqualTo(15));
+        Assert.That(reader.GetFieldValue<string>("Label"), Is.EqualTo("7-8-item"));
+        Assert.That(reader.GetFieldValue<int>("Length"), Is.EqualTo(12));
+    }
+
+    [Test]
+    public void RejectsAccessToUndeclaredOrdinals()
+    {
+        var csv = Builder()
+            .WithSchema(schema => schema.Indexed()
+                .WithComputedField<int>("Output", [1], static fields => fields.GetSpan(0).Value.Length))
+            .Build();
+        using var reader = csv.ToDataReader(new StringReader("A,B\na,b"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.GetValue("Output"), Throws.TypeOf<ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void MissingSourceSkipsCallbackAndMalformedInputUsesNormalConversionErrors()
+    {
+        var csv = Builder()
+            .WithSchema(schema => schema.Named()
+                .WithComputedField<int>("Missing", ["Unknown"], _ => throw new AssertionException("Callback ran."))
+                .WithComputedField<int, int, int>("Sum", "A", "B", (a, b) => a + b))
+            .Build();
+        using var reader = csv.ToDataReader(new StringReader("A,B\n1,2\n1,bad"));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetValue("Missing"), Is.SameAs(DBNull.Value));
+        Assert.That(reader.GetFieldValue<int>("Sum"), Is.EqualTo(3));
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(() => reader.GetFieldValue<int>("Sum"), Throws.TypeOf<FormatException>());
     }
 
     private static CsvReaderBuilder Builder() => new CsvReaderBuilder()

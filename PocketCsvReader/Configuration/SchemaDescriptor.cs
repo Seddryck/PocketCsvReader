@@ -8,6 +8,7 @@ namespace PocketCsvReader.Configuration;
 public abstract class SchemaDescriptor
 {
     public FieldCollectionDescriptor Fields { get; internal set; }
+    internal ComputedFieldDescriptor[] ComputedFields { get; init; } = [];
     public abstract bool IsMatchingByName { get; }
     public abstract bool IsMatchingByIndex { get; }
 
@@ -17,8 +18,6 @@ public abstract class SchemaDescriptor
     public class NamedSchemaDescriptor
         : SchemaDescriptor
     {
-        internal ComputedFieldDescriptor[] ComputedFields { get; init; } = [];
-
         public NamedSchemaDescriptor()
             : base(new FieldCollectionDescriptor.NamedFieldCollectionDescriptor())
         { }

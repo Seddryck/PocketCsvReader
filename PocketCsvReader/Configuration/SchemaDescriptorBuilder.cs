@@ -38,8 +38,33 @@ public interface ISchemaDescriptorBuilder
 
 public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 {
-    private List<FieldDescriptorBuilder> _fields = new();
-    private SchemaDescriptor Descriptor { get; set; } = new SchemaDescriptor.IndexedSchemaDescriptor();
+    private readonly List<FieldDescriptorBuilder> _fields = [];
+    private readonly List<ComputedFieldDescriptor> _computedFields = [];
+
+    /// <summary>Appends a computed column from a list of zero-based source ordinals.</summary>
+    public IndexedSchemaDescriptorBuilder WithComputedField<T>(string name, IReadOnlyList<int> sources, ComputeField<T> compute)
+    {
+        _computedFields.Add(ComputedFieldDescriptor.Create(name, sources, compute));
+        return this;
+    }
+
+    /// <summary>Appends a computed column from two typed source fields.</summary>
+    public IndexedSchemaDescriptorBuilder WithComputedField<TResult, T1, T2>(
+        string name, int first, int second, Func<T1, T2, TResult> compute)
+    {
+        ArgumentNullException.ThrowIfNull(compute);
+        return WithComputedField<TResult>(name, [first, second],
+            fields => compute(fields.GetInputValue<T1>(0), fields.GetInputValue<T2>(1)));
+    }
+
+    /// <summary>Appends a computed column from three typed source fields.</summary>
+    public IndexedSchemaDescriptorBuilder WithComputedField<TResult, T1, T2, T3>(
+        string name, int first, int second, int third, Func<T1, T2, T3, TResult> compute)
+    {
+        ArgumentNullException.ThrowIfNull(compute);
+        return WithComputedField<TResult>(name, [first, second, third],
+            fields => compute(fields.GetInputValue<T1>(0), fields.GetInputValue<T2>(1), fields.GetInputValue<T3>(2)));
+    }
 
     public IndexedSchemaDescriptorBuilder WithField<T>()
         => WithField<T>(x => x);
@@ -141,9 +166,13 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
 
     public SchemaDescriptor? Build()
     {
+        if (_fields.Count == 0 && _computedFields.Count == 0)
+            return null;
+
+        var descriptor = new SchemaDescriptor.IndexedSchemaDescriptor { ComputedFields = [.. _computedFields] };
         foreach (var field in _fields)
-            Descriptor.Fields.Add(field.Build());
-        return (Descriptor.Fields?.Length ?? 0) > 0 ? Descriptor : null;
+            descriptor.Fields.Add(field.Build());
+        return descriptor;
     }
 }
 
@@ -152,23 +181,30 @@ public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
     private readonly List<FieldDescriptorBuilder> _fields = [];
     private readonly List<ComputedFieldDescriptor> _computedFields = [];
 
-    /// <summary>Appends a typed computed column to a CSV data reader.</summary>
-    /// <param name="name">The name of the output column.</param>
-    /// <param name="sources">Source CSV column names, in callback index order.</param>
-    /// <param name="compute">A synchronous callback over the sanitized source text for the current row.</param>
-    /// <remarks>Source names refer to the input header, including columns excluded by a projection.
-    /// The output is evaluated on demand and the result is reused for the current row.</remarks>
+    /// <summary>Appends a computed column from a list of source column names.</summary>
+    /// <remarks>Only rows with present, non-null inputs are evaluated. The result is cached for the current row.</remarks>
     public NamedSchemaDescriptorBuilder WithComputedField<T>(string name, IReadOnlyList<string> sources, ComputeField<T> compute)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(sources);
-        ArgumentNullException.ThrowIfNull(compute);
-        var sourceNames = sources.ToArray();
-        foreach (var source in sourceNames)
-            ArgumentException.ThrowIfNullOrWhiteSpace(source, nameof(sources));
-
-        _computedFields.Add(new ComputedFieldDescriptor<T>(name, sourceNames, compute));
+        _computedFields.Add(ComputedFieldDescriptor.Create(name, sources, compute));
         return this;
+    }
+
+    /// <summary>Appends a computed column from two typed source fields.</summary>
+    public NamedSchemaDescriptorBuilder WithComputedField<TResult, T1, T2>(
+        string name, string first, string second, Func<T1, T2, TResult> compute)
+    {
+        ArgumentNullException.ThrowIfNull(compute);
+        return WithComputedField<TResult>(name, [first, second],
+            fields => compute(fields.GetInputValue<T1>(0), fields.GetInputValue<T2>(1)));
+    }
+
+    /// <summary>Appends a computed column from three typed source fields.</summary>
+    public NamedSchemaDescriptorBuilder WithComputedField<TResult, T1, T2, T3>(
+        string name, string first, string second, string third, Func<T1, T2, T3, TResult> compute)
+    {
+        ArgumentNullException.ThrowIfNull(compute);
+        return WithComputedField<TResult>(name, [first, second, third],
+            fields => compute(fields.GetInputValue<T1>(0), fields.GetInputValue<T2>(1), fields.GetInputValue<T3>(2)));
     }
 
     public NamedSchemaDescriptorBuilder WithField<T>(string name)

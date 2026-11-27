@@ -12,6 +12,7 @@ public sealed class MarkdownDataReader(Stream stream, MarkdownProfile profile)
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         _ = GetFields(i);
         return GetCurrentFieldMemory(i).ToString();
     }
