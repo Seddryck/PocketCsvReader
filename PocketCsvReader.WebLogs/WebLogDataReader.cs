@@ -26,6 +26,7 @@ public sealed class WebLogDataReader : BaseDataReader<WebLogProfile>
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         ValidateOrdinal(i);
         var field = CurrentFieldSpans![i].Value;
         return CurrentRecordMemory.Span.Slice(field.Start, field.Length).ToString();

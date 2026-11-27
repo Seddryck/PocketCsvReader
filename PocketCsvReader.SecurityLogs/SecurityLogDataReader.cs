@@ -24,6 +24,7 @@ public sealed class SecurityLogDataReader : BaseDataReader<SecurityLogProfile>
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         ValidateOrdinal(i);
         var value = CurrentFieldSpans![i].Value;
         return CurrentRecordMemory.Span.Slice(value.Start, value.Length).ToString();

@@ -644,7 +644,13 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     public bool IsDBNull(int i)
-        => IsNull(i);
+        => TryGetComputedNull(i, out var isNull) ? isNull : IsNull(i);
+
+    private protected virtual bool TryGetComputedNull(int i, out bool isNull)
+    {
+        isNull = false;
+        return false;
+    }
 
     /// <summary>
     /// Determines whether the field with the specified name contains a null value.

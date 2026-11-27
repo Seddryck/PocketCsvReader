@@ -67,6 +67,7 @@ public sealed class JsonTableDataReader : BaseDataReader<JsonProfile>
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         var value = CurrentField(i).Value;
         var quoteLength = value.WasQuoted ? 1 : 0;
         return CurrentRecordMemory.Slice(value.Start - quoteLength, value.Length + (2 * quoteLength)).ToString();

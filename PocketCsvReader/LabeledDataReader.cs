@@ -19,7 +19,9 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     protected virtual bool HasStableLabelShape => false;
 
     public override int FieldCount =>
-        CurrentFieldSpans?.Length ?? throw new InvalidOperationException("Current record is not set.");
+        CurrentFieldSpans is { } fields
+            ? fields.Length + ComputedColumnCount
+            : throw new InvalidOperationException("Current record is not set.");
 
     public override string GetName(int i)
     {
@@ -30,6 +32,8 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     public override int GetOrdinal(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
+        if (ComputedColumnCount > 0)
+            return base.GetOrdinal(name);
         if (Fields is null)
             throw new InvalidOperationException("Fields are not defined yet.");
         if (_rowShape.TryGetOrdinal(name, out var index))
@@ -39,6 +43,9 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
     public override bool TryGetOrdinal(string name, out int? ordinal)
     {
+        if (ComputedColumnCount > 0)
+            return base.TryGetOrdinal(name, out ordinal);
+
         if (Fields is not null && _rowShape.TryGetOrdinal(name, out var matchingOrdinal))
         {
             ordinal = matchingOrdinal;
@@ -51,6 +58,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         ValidateOrdinal(i);
 
         var fields = CurrentFieldSpans ?? throw new InvalidOperationException("Current record is not set.");

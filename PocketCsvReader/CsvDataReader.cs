@@ -68,18 +68,11 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             field = RowNumberField;
             return true;
         }
-        if (GetComputedField(i) is { } computed)
-        {
-            field = computed.Field;
-            return true;
-        }
         return base.TryGetFieldDescriptor(i, out field);
     }
 
     public override object GetValue(int i)
     {
-        if (TryGetComputedValue<object>(i, out var value))
-            return value ?? DBNull.Value;
         return HasRowNumber && i == 0 ? CurrentRowNumber : base.GetValue(i);
     }
 
@@ -92,13 +85,6 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
     /// <inheritdoc />
     public override bool IsValid(int i)
     {
-        if (GetComputedField(i) is { } field)
-        {
-            EnsureValidationRecord();
-            try { _ = field.IsNull(this); return true; }
-            catch (FormatException) { return false; }
-            catch (OverflowException) { return false; }
-        }
         if (!HasRowNumber || i != 0)
             return base.IsValid(i);
         EnsureValidationRecord();
@@ -470,7 +456,15 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             Fields = _outputFields = AddRowNumberHeader(Array.ConvertAll(_projectedOrdinals, ordinal => headers[ordinal]));
         }
 
-        try { BindComputedFields(sourceFields); }
+        try
+        {
+            BindComputedFields(sourceFields);
+            if (HasComputedFields)
+            {
+                _sourceFields = sourceFields;
+                _outputFields = Fields;
+            }
+        }
         catch (InvalidDataException)
         {
             IsEof = true;
@@ -489,7 +483,6 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             ? _sourceHeaders!.Length
             : Fields!.Length - RowNumberWidth;
         HandleUnexpectedFields(fieldCount, expectedFieldCount);
-        ResetComputedFields();
         if (HasRowNumber)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);
