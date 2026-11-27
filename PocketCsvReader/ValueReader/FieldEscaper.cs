@@ -44,6 +44,20 @@ internal class FieldEscaper
         return array.AsMemory(0, length);
     }
 
+    internal int UnescapeUtf8(ReadOnlySpan<byte> value, Span<byte> destination)
+    {
+        // Native CSV syntax is ASCII, so bytes of multibyte code points never match.
+        int length = 0;
+        int i = 0;
+        while (i < value.Length)
+        {
+            if (i + 1 < value.Length && IsEscapedPair((char)value[i], (char)value[i + 1]))
+                i++;
+            destination[length++] = value[i++];
+        }
+        return length;
+    }
+
     private bool IsEscapedPair(char first, char second)
         => first == EscapeChar
             ? second == EscapeChar || second == Delimiter || second == QuoteChar

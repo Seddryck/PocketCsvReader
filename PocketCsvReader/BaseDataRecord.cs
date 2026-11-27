@@ -89,6 +89,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     private SpanParser Parser { get; } = new();
+    private protected bool HasBoundFieldParser(int ordinal) => Parser.TryGetEntry(GetFieldCacheOrdinal(ordinal), out _);
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, object>> ArrayReaders = new();

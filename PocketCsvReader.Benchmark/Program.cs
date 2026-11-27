@@ -13,6 +13,7 @@ public class Program
     private static readonly Dictionary<string, Action> MatrixCommands = new(StringComparer.Ordinal)
     {
         ["--arrow-batch-timing"] = () => ArrowBatchTiming.RunMatrixAsync().GetAwaiter().GetResult(),
+        ["--arrow-utf8-strings"] = ArrowUtf8Strings.Run,
         ["--reader-filtering-matrix"] = ReaderFiltering.RunMatrix,
         ["--lazy-json-matrix"] = LazyJsonDecodingComparison.RunMatrix,
         ["--json-allocation-matrix"] = JsonAllocationComparison.RunMatrix,

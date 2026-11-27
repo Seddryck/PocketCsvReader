@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
 
@@ -9,6 +10,7 @@ internal sealed class Utf8FieldBuffer : IDisposable
 {
     public FieldMetadataBuffer PublishedFields { get; } = new();
     private char[]? _characters;
+    private byte[]? _unescaped;
     private int[]? _lengths;
     private int _byteLength;
     private int _fieldCount;
@@ -43,11 +45,25 @@ internal sealed class Utf8FieldBuffer : IDisposable
         return _characters.AsMemory(field.Start, length);
     }
 
+    public ReadOnlySpan<byte> Unescape(ReadOnlySpan<byte> value, FieldEscaper escaper)
+    {
+        // Only one escaped UTF-8 view is borrowed at a time.
+        if (_unescaped is null || _unescaped.Length < value.Length)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(value.Length);
+            if (_unescaped is not null) ArrayPool<byte>.Shared.Return(_unescaped);
+            _unescaped = buffer;
+        }
+        return _unescaped.AsSpan(0, escaper.UnescapeUtf8(value, _unescaped));
+    }
+
     public void Dispose()
     {
         if (_characters is not null) ArrayPool<char>.Shared.Return(_characters);
         if (_lengths is not null) ArrayPool<int>.Shared.Return(_lengths);
+        if (_unescaped is not null) ArrayPool<byte>.Shared.Return(_unescaped);
         _characters = null;
         _lengths = null;
+        _unescaped = null;
     }
 }
