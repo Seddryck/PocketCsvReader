@@ -8,6 +8,8 @@ internal static class DefaultUtf8Parsers
         [typeof(int)] = (TryParseUtf8<int>)Int32Utf8Parser.TryParse,
         [typeof(long)] = (TryParseUtf8<long>)Int64Utf8Parser.TryParse,
         [typeof(bool)] = (TryParseUtf8<bool>)BooleanUtf8Parser.TryParse,
+        [typeof(float)] = (TryParseUtf8<float>)SingleUtf8Parser.TryParse,
+        [typeof(double)] = (TryParseUtf8<double>)DoubleUtf8Parser.TryParse,
         [typeof(decimal)] = (TryParseUtf8<decimal>)InvariantDecimalUtf8Parser.TryParse,
         [typeof(DateOnly)] = (TryParseUtf8<DateOnly>)IsoDateOnlyUtf8Parser.TryParse,
         [typeof(TimeOnly)] = (TryParseUtf8<TimeOnly>)TimeOnlyUtf8Parser.TryParse,
