@@ -1,4 +1,5 @@
 using PocketCsvReader.KeyValue.Configuration;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PocketCsvReader.KeyValue;
@@ -26,33 +27,34 @@ internal sealed class KeyValueRecordSource : IBorrowedRecordSource<KeyValueProfi
         _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
     }
 
+    bool IBorrowedRecordSource<KeyValueProfile>.CopyPublicMetadata => true;
+
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
+        => ReadCurrent().PublishOwned(out record, out recordState);
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
+
+    private CurrentRecordResult ReadCurrent()
     {
         BeginRead();
-        var line = _reader.ReadLineFrame();
-        if (line is not { } captured)
-        {
-            record = RecordSpan.FromMemory(ReadOnlyMemory<char>.Empty, []);
-            recordState = RecordState.Eof;
-            return true;
-        }
-
-        Parse(captured.Memory.Span);
-        record = RecordSpan.FromMemory(captured.Memory, _fields);
-        recordState = RecordState.Record;
-        // Discover EOF on the next read; lookahead could refill and invalidate this view.
-        return false;
+        return CompleteRead(_reader.ReadLineFrame());
     }
 
     async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         BeginRead();
-        var line = await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false);
+        return CompleteRead(await _reader.ReadLineFrameAsync(cancellationToken).ConfigureAwait(false));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private CurrentRecordResult CompleteRead(CapturedRecord? line)
+    {
         if (line is not { } captured)
             return new(true, default, RecordState.Eof);
 
         Parse(captured.Memory.Span);
+        // Discover EOF on the next read; lookahead could refill and invalidate this view.
         return new(false, new CurrentRecord(captured.Memory, _fields), RecordState.Record);
     }
 

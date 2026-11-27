@@ -9,7 +9,7 @@ public class StringMapper
 {
     private const int InitialColumnCapacity = 32;
     private const int MaxHintedColumns = 16 * 1024;
-    private const int MaxFieldLength = 128;
+    internal const int MaxHintedFieldLength = 128;
     private readonly DecodedStringPool? _decodedPool;
     private string?[]? _lastByColumn;
 
@@ -33,13 +33,27 @@ public class StringMapper
             _decodedPool = new();
     }
 
+    internal static StringMapper ForLabeledValues(ParserOptimizationOptions options)
+        => options.PoolStringLastValueHint
+            ? new StringMapper(options.PoolString ?? defaultPoolString, lastValueHint: true)
+            : new StringMapper(options.PoolString);
+
+    internal bool HasLastValueHints => _lastByColumn is not null;
+    internal bool UsesDefaultPool => ReferenceEquals(FetchString, defaultPoolString);
+
+    internal void ClearLastValueHints()
+    {
+        if (_lastByColumn is { } values)
+            Array.Clear(values);
+    }
+
     internal string Map(int column, ReadOnlySpan<char> buffer)
         => _decodedPool is { } pool ? pool.GetString(column, buffer)
             : _lastByColumn is { } values ? MapWithHint(column, buffer, values) : Map(buffer);
 
     private string MapWithHint(int column, ReadOnlySpan<char> buffer, string?[] lastByColumn)
     {
-        if (buffer.IsEmpty || buffer.Length > MaxFieldLength || (uint)column >= MaxHintedColumns)
+        if (buffer.IsEmpty || buffer.Length > MaxHintedFieldLength || (uint)column >= MaxHintedColumns)
             return FetchString(buffer);
 
         if ((uint)column >= (uint)lastByColumn.Length)
@@ -48,6 +62,9 @@ public class StringMapper
         var previous = lastByColumn[column];
         if (previous is not null && buffer.SequenceEqual(previous.AsSpan()))
             return previous;
+
+        if (UsesDefaultPool)
+            return lastByColumn[column] = buffer.ToString();
 
         var value = FetchString(buffer);
         // The returned string is an owned key only when the pool preserved the text.

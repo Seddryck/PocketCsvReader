@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -6,11 +6,13 @@ using System.Runtime.InteropServices;
 
 [assembly: InternalsVisibleTo("PocketCsvReader.Testing")]
 [assembly: InternalsVisibleTo("PocketCsvReader.Json")]
+[assembly: InternalsVisibleTo("PocketCsvReader.Json.Testing")]
 [assembly: InternalsVisibleTo("PocketCsvReader.Ndjson")]
 [assembly: InternalsVisibleTo("PocketCsvReader.Indexing")]
 [assembly: InternalsVisibleTo("PocketCsvReader.ObjectStorage")]
 [assembly: InternalsVisibleTo("PocketCsvReader.FixedWidth")]
 [assembly: InternalsVisibleTo("PocketCsvReader.KeyValue")]
+[assembly: InternalsVisibleTo("PocketCsvReader.KeyValue.Testing")]
 [assembly: InternalsVisibleTo("PocketCsvReader.Markdown")]
 [assembly: InternalsVisibleTo("PocketCsvReader.WebLogs")]
 [assembly: InternalsVisibleTo("PocketCsvReader.SecurityLogs")]

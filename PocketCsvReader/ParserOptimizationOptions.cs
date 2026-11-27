@@ -26,10 +26,12 @@ public record ParserOptimizationOptions
     /// <value><see langword="true"/> to enable the cache. The default is <see langword="false"/>.</value>
     public bool PoolUtf8Strings { get; init; }
 
-    /// <summary>Checks the last eligible string in each CSV column before invoking a configured character pool.</summary>
+    /// <summary>Reuses the last eligible string for each field in CSV, JSON object, and NDJSON readers.</summary>
     /// <remarks>
-    /// Disabled by default. Enable only when <see cref="PoolString"/> returns stable text for a given input
-    /// and can be skipped on a cache hit. The bounded cache belongs to one CSV reader.
+    /// The bounded cache belongs to one reader. CSV uses this hint with a configured <see cref="PoolString"/>.
+    /// JSON object and NDJSON readers also support this option without a custom pool.
+    /// When supplying a custom pool, enable the hint only if the pool returns stable text for a given input
+    /// and can be skipped on a cache hit.
     /// </remarks>
     /// <value>True to enable the hint. The default is false.</value>
     public bool PoolStringLastValueHint { get; init; }

@@ -55,20 +55,27 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             : _projectedValueFramer;
     }
 
+    bool IBorrowedRecordSource<JsonProfile>.CopyPublicMetadata => true;
+
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
+        => ReadCurrent().PublishOwned(out record, out recordState);
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
+
+    private CurrentRecordResult ReadCurrent()
     {
         if (Profile.ParsedRecordPath is not null)
-            return ReadSelected(out record, out recordState);
+            return ReadSelected();
         _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
-            return EndOfFile(out record, out recordState);
+            return new(true, default, RecordState.Eof);
 
         var first = _state == DocumentState.BeforeRoot
             ? PeekFirstRootCharacter()
             : PeekFirstArrayElementCharacter();
 
         if (first < 0)
-            return EndOfFile(out record, out recordState);
+            return new(true, default, RecordState.Eof);
 
         ValidateTableRow(first);
         _position?.BeginRecord();
@@ -82,9 +89,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             : CompleteArrayElement(delimiter);
 
         _position?.CompleteRecord();
-        record = RecordSpan.FromMemory(capture.Memory, fields);
-        recordState = RecordState.Record;
-        return isEndOfFile;
+        return new(isEndOfFile, new CurrentRecord(capture.Memory, fields), RecordState.Record);
     }
 
     async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
@@ -117,7 +122,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         return new(isEndOfFile, new CurrentRecord(capture.Memory, fields), RecordState.Record);
     }
 
-    private bool ReadSelected(out RecordSpan record, out RecordState recordState)
+    private CurrentRecordResult ReadSelected()
     {
         if (_matches is null && _state != DocumentState.Complete)
         {
@@ -141,13 +146,9 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
                 Profile.AllowComments,
                 Profile.AllowTrailingCommas).GetEnumerator();
         }
-        if (TrySelectRow(out var row))
-        {
-            record = RecordSpan.FromMemory(row.Characters, row.Fields!);
-            recordState = RecordState.Record;
-            return false;
-        }
-        return EndOfFile(out record, out recordState);
+        return TrySelectRow(out var row)
+            ? new(false, row, RecordState.Record)
+            : new(true, default, RecordState.Eof);
     }
 
     private async ValueTask<CurrentRecordResult> ReadSelectedAsync(CancellationToken cancellationToken)
@@ -565,13 +566,6 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
 
     private static bool IsJsonWhitespace(char value)
         => value is ' ' or '\t' or '\r' or '\n';
-
-    private static bool EndOfFile(out RecordSpan record, out RecordState recordState)
-    {
-        record = new RecordSpan([], []);
-        recordState = RecordState.Eof;
-        return true;
-    }
 
     public void Dispose()
     {

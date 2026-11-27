@@ -36,6 +36,19 @@ public class LabeledAsyncTransportTests
             $"direct={direct}, labeled={labeled}");
     }
 
+    [Test]
+    public async Task MixedReadsPreservePublicSourceEntryPoints()
+    {
+        using var reader = new ProbeReader(3);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(await reader.ReadAsync(), Is.True);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetInt32(0), Is.EqualTo(7));
+        Assert.That(await reader.ReadAsync(), Is.False);
+        Assert.That(reader.Source.SyncCalls, Is.EqualTo(2));
+        Assert.That(reader.Source.ReadCalls, Is.EqualTo(4));
+    }
+
     private class ProbeReader : LabeledDataReader<CsvProfile>
     {
         public SuspendingSource Source { get; }
@@ -72,15 +85,25 @@ public class LabeledAsyncTransportTests
             [new FieldSpan(new SpanInfo(2, 1), new SpanInfo(0, 2))]);
         public CsvProfile Profile => profile;
         public int ReadCalls { get; private set; }
-        public bool IsEndOfFile(out RecordSpan record, out RecordState state) => throw new InvalidOperationException("Sync source read");
+        public int SyncCalls { get; private set; }
+        public bool IsEndOfFile(out RecordSpan record, out RecordState state)
+        {
+            SyncCalls++;
+            var result = Next();
+            record = RecordSpan.FromMemory(result.Record.Span, result.Record.FieldSpans);
+            state = result.State;
+            return result.IsEndOfFile;
+        }
         public async ValueTask<RecordReadResult> ReadAsync(CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
-            return ReadCalls++ == rows
-                ? new(true, RecordMemory.Empty, RecordState.Eof)
-                : new(false, _record, RecordState.Record);
+            return Next();
         }
+
+        private RecordReadResult Next() => ReadCalls++ == rows
+            ? new(true, RecordMemory.Empty, RecordState.Eof)
+            : new(false, _record, RecordState.Record);
         public void Dispose() { }
     }
 }

@@ -99,20 +99,45 @@ public class BufferedKeyValueTests
         string second = logfmt ? "b=three a=four" : "b:three\ta:four";
         using var text = new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(first + "\n" + second)));
         using var source = new KeyValueRecordSource(text, new KeyValueProfile(logfmt ? KeyValueFormat.Logfmt : KeyValueFormat.Ltsv, parserOptimizations: new(BufferSize: 4096)));
-        source.IsEndOfFile(out var record, out _);
-        var current = record.AsMemory();
-        Assert.That(MemoryMarshal.TryGetArray(current.Span, out var backing), Is.True);
+        var borrowed = (ICurrentRecordSource)source;
+        var current = borrowed.ReadCurrent().Record;
+        Assert.That(MemoryMarshal.TryGetArray(current.Characters, out var backing), Is.True);
         // A contained record points inside the large input buffer rather than a record-sized copy.
         Assert.That(backing.Array!.Length, Is.GreaterThan(first.Length));
-        Assert.That(current.Span.ToString(), Is.EqualTo(first));
+        Assert.That(current.Characters.ToString(), Is.EqualTo(first));
         Assert.That(current.Slice(1).ToString(), Is.EqualTo("two"));
-        var fields = current.FieldSpans;
-        source.IsEndOfFile(out var next, out _);
-        Assert.That(ReferenceEquals(fields, next.FieldSpans), Is.True);
+        var fields = current.Fields;
+        var next = borrowed.ReadCurrent().Record;
+        Assert.That(next.Fields, Is.SameAs(fields));
         Assert.That(next.Slice(0).ToString(), Is.EqualTo("three"));
         // Disposing the source returns its buffers without taking ownership of StreamReader.
         source.Dispose();
         Assert.That(text.BaseStream.CanRead, Is.True);
+    }
+
+    [Test]
+    public async Task PublicMetadataSurvivesMixedBorrowedReads()
+    {
+        using var text = new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(
+            "a=one b=two\nb=four a=five\na=third\na=last b=longer")));
+        var profile = new KeyValueProfile(KeyValueFormat.Logfmt);
+        using var source = new KeyValueRecordSource(text, profile);
+        var borrowed = (ICurrentRecordSource)source;
+
+        var first = PublicFields(source);
+        var second = (await ((IRecordSource<KeyValueProfile>)source).ReadAsync()).Record.FieldSpans;
+        Assert.That(borrowed.ReadCurrent().Record.FieldCount, Is.EqualTo(1));
+        Assert.That((await borrowed.ReadCurrentAsync(default)).Record.FieldCount, Is.EqualTo(2));
+
+        Assert.That(first[0].Value.Length, Is.EqualTo(3));
+        Assert.That(second[0].Value.Length, Is.EqualTo(4));
+        Assert.That(second[1].Value.Length, Is.EqualTo(4));
+
+        static FieldSpan[] PublicFields(KeyValueRecordSource source)
+        {
+            source.IsEndOfFile(out var record, out _);
+            return record.FieldSpans;
+        }
     }
 
     [Test]
@@ -167,7 +192,8 @@ public class BufferedKeyValueTests
             using var text = new StreamReader(new MemoryStream(data));
             using var source = new KeyValueRecordSource(text, new KeyValueProfile(logfmt ? KeyValueFormat.Logfmt : KeyValueFormat.Ltsv));
             int count = 0;
-            while (!source.IsEndOfFile(out _, out _)) count++;
+            var borrowed = (ICurrentRecordSource)source;
+            while (borrowed.ReadCurrent().State == RecordState.Record) count++;
             return count;
         }
     }

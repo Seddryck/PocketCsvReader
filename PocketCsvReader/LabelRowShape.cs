@@ -23,13 +23,16 @@ internal sealed class LabelRowShapeCache
     private readonly Dictionary<int, List<LabelRowShape>> _shapesByFieldCount = [];
     private int _cachedShapeCount;
 
-    public LabelRowShape Resolve(ReadOnlyMemory<char> record, FieldSpan[] fields)
+    public LabelRowShape Resolve(ReadOnlyMemory<char> record, FieldSpan[] fields, LabelRowShape previous)
     {
+        if (previous.Labels.Length == fields.Length && Matches(record.Span, fields, previous.Labels))
+            return previous;
+
         if (_shapesByFieldCount.TryGetValue(fields.Length, out var candidates))
         {
             foreach (var candidate in candidates)
             {
-                if (Matches(record.Span, fields, candidate.Labels))
+                if (candidate != previous && Matches(record.Span, fields, candidate.Labels))
                     return candidate;
             }
         }

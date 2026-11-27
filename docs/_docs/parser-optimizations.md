@@ -26,7 +26,7 @@ Default `4096` characters in the shared record. The NDJSON/key-value builders us
 Default `null`. Optional string-pooling delegate used by the value mapper. Pooling can reduce repeated strings but retained pools have a memory cost.
 ### `PoolStringLastValueHint`
 
-Opt in to a bounded, per-reader last-value check for each CSV column when using `PoolString`. Matching short fields reuse the previous string without invoking the pool. Enable this only when the pool returns stable text for identical input and can be skipped on a cache hit.
+Set `PoolStringLastValueHint = true` to reuse consecutive short string values in the same field. JSON object and NDJSON readers support the hint with or without a custom `PoolString`. The cache compares decoded text, so different JSON escapes for the same value can share a string. It clears its field hints when the output layout changes. CSV uses the hint with a configured `PoolString`. If you supply a pool, enable the hint only when the pool returns stable text for identical input and can be skipped on a hit.
 
 ### `PoolDecodedStrings`
 

@@ -149,11 +149,11 @@ public class JsonTableReaderTests
     {
         using var stream = new StreamReader(Input("""[["id","name"],[1,"Ada"],[2,"Lin"]]"""));
         using var source = new JsonRecordSource(stream, JsonProfile.Default, table: true);
-        source.IsEndOfFile(out _, out _);
-        source.IsEndOfFile(out var first, out _);
-        var fields = first.FieldSpans;
-        source.IsEndOfFile(out var second, out _);
-        Assert.That(second.FieldSpans, Is.SameAs(fields));
+        var borrowed = (ICurrentRecordSource)source;
+        borrowed.ReadCurrent();
+        var fields = borrowed.ReadCurrent().Record.Fields;
+        var second = borrowed.ReadCurrent().Record;
+        Assert.That(second.Fields, Is.SameAs(fields));
         Assert.That(second.Slice(1).ToString(), Is.EqualTo("Lin"));
         Assert.That(source.TableHeader, Is.EqualTo(new[] { "id", "name" }));
     }

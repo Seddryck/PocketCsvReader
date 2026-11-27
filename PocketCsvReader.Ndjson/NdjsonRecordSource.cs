@@ -8,6 +8,8 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
     private readonly BufferedRecordReader _reader;
     private readonly NdjsonFramer _framer;
     private readonly ProjectedNdjsonFramer? _fusedFramer;
+    private readonly IRecordBoundaryScanner? _boundaryScanner;
+    private IRecordFramer Framer => _fusedFramer is { } fused ? fused : _framer;
     private readonly PositionTracker? _position;
     private ReadOnlyMemory<char> _selectionInput;
     private RecordPosition _selectionStart;
@@ -28,6 +30,8 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
         _position = PositionTracker.ForTextReader(reader, profile.TrackPosition);
         _reader = new BufferedRecordReader(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
         _framer = new NdjsonFramer(profile.Dialect.LineTerminator, profile.Dialect.CommentChar);
+        if (profile.Dialect.CommentChar is null && profile.Dialect.LineTerminator is "\n" or "\r\n")
+            _boundaryScanner = new NdjsonLineBoundaryScanner(profile.Dialect.LineTerminator.Length);
         if (profile.StableFieldLayout)
         {
             _stableLayout = new(profile.Dialect.Whitespaces, profile.ProjectedProperties, profile.OrderedProjection);
@@ -39,7 +43,10 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
         _projectedFields = new FieldSpan[properties.Count];
         _projectedValueFramer = new ProjectedJsonValueFramer(properties, _projectedFields, profile.OrderedProjection);
         if (CanFuseProjection(profile))
+        {
             _fusedFramer = new(_projectedValueFramer, _framer, profile.Dialect.LineTerminator == "\r\n");
+            _boundaryScanner = null;
+        }
     }
 
     private static bool CanFuseProjection(NdjsonProfile profile)
@@ -47,21 +54,24 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
             && profile.Dialect.LineTerminator is "\n" or "\r\n"
             && profile.Dialect.Whitespaces.Order().SequenceEqual(new[] { '\t', '\n', '\r', ' ' });
 
+    bool IBorrowedRecordSource<NdjsonProfile>.CopyPublicMetadata => true;
+
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
+        => ReadCurrent().PublishOwned(out record, out recordState);
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
+
+    private CurrentRecordResult ReadCurrent()
     {
         while (true)
         {
             if (TrySelectRow(out var selected))
-            {
-                record = RecordSpan.FromMemory(selected.Memory, selected.Fields);
-                recordState = RecordState.Record;
-                return false;
-            }
+                return new(false, new CurrentRecord(selected.Memory, selected.Fields), RecordState.Record);
             _reader.BeginOperation();
             _position?.BeginRecord();
-            var capture = _reader.ReadFrame(_fusedFramer is { } fused ? fused : _framer);
+            var capture = _reader.ReadFrame(Framer, _boundaryScanner);
             if (capture is not { } captured)
-                return EndOfFile(out record, out recordState);
+                return new(true, default, RecordState.Eof);
 
             var parsed = ParseCapturedRecord(captured.Memory);
             if (parsed is null)
@@ -77,9 +87,7 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
             }
             _position?.CompleteRecord();
             var isEndOfFile = _reader.Peek() < 0;
-            record = RecordSpan.FromMemory(parsed.Value.Memory, parsed.Value.Fields);
-            recordState = RecordState.Record;
-            return isEndOfFile;
+            return new(isEndOfFile, new CurrentRecord(parsed.Value.Memory, parsed.Value.Fields), RecordState.Record);
         }
     }
 
@@ -94,7 +102,7 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
             }
             _reader.BeginOperation();
             _position?.BeginRecord();
-            var capture = await _reader.ReadFrameAsync(_fusedFramer is { } fused ? fused : _framer, cancellationToken).ConfigureAwait(false);
+            var capture = await _reader.ReadFrameAsync(Framer, cancellationToken, _boundaryScanner).ConfigureAwait(false);
             if (capture is not { } captured)
                 return new(true, default, RecordState.Eof);
 
@@ -122,7 +130,7 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
     private ParsedRecord? ParseCapturedRecord(ReadOnlyMemory<char> record)
     {
         if (_fusedFramer is null)
-            return ParseRecord(record, _framer.CommentIndex);
+            return ParseRecord(record, Profile.Dialect.CommentChar is null ? -1 : _framer.CommentIndex);
         if (_fusedFramer.RequiresFallback)
             return ParseRecord(record, -1);
         if (!_fusedFramer.HasValue)
@@ -241,13 +249,6 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
 
     private bool IsWhitespace(char value)
         => Array.IndexOf(Profile.Dialect.Whitespaces, value) >= 0;
-
-    private static bool EndOfFile(out RecordSpan record, out RecordState recordState)
-    {
-        record = new RecordSpan([], []);
-        recordState = RecordState.Eof;
-        return true;
-    }
 
     public void Dispose()
     {

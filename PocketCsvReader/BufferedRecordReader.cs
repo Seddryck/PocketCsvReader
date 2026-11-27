@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace PocketCsvReader;
 
@@ -11,8 +12,18 @@ internal interface IRecordFramer
 
 internal readonly record struct FrameScanResult(int Consumed, bool Complete, int ContentLength = 0);
 
+internal interface IRecordBoundaryScanner
+{
+    // Report only complete records starting at the beginning of input.
+    int IndexBoundaries(ReadOnlySpan<char> input, Span<RecordBoundary> boundaries);
+}
+
+internal readonly record struct RecordBoundary(int ContentEnd, int End);
+
 internal sealed class BufferedRecordReader : IDisposable
 {
+    private const int BoundaryBatchSize = 128;
+
     private readonly StreamReader _reader;
     private readonly PositionTracker? _tracker;
     private readonly int _bufferSize;
@@ -27,6 +38,12 @@ internal sealed class BufferedRecordReader : IDisposable
     private char[]? _ownedRecord;
     private char[]? _protectedBuffer;
     private CapturedRecord? _protectedCapture;
+    private RecordBoundary[]? _boundaries;
+    private IRecordBoundaryScanner? _boundaryScanner;
+    private int _batchStart;
+    private int _nextBoundary;
+    private int _boundaryCount;
+    private int _nextFrameStart;
 
     public long Position { get; private set; }
 
@@ -101,9 +118,15 @@ internal sealed class BufferedRecordReader : IDisposable
         return current;
     }
 
-    public CapturedRecord? ReadFrame(IRecordFramer framer)
+    public CapturedRecord? ReadFrame(IRecordFramer framer, IRecordBoundaryScanner? scanner = null)
     {
         ArgumentNullException.ThrowIfNull(framer);
+        if (scanner is not null)
+        {
+            EnsureAvailable();
+            if (TryReadIndexedFrame(scanner) is { } indexed)
+                return indexed;
+        }
         BeginCapture();
         framer.Reset();
 
@@ -126,9 +149,16 @@ internal sealed class BufferedRecordReader : IDisposable
 
     public async ValueTask<CapturedRecord?> ReadFrameAsync(
         IRecordFramer framer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRecordBoundaryScanner? scanner = null)
     {
         ArgumentNullException.ThrowIfNull(framer);
+        if (scanner is not null)
+        {
+            await EnsureAvailableAsync(cancellationToken).ConfigureAwait(false);
+            if (TryReadIndexedFrame(scanner) is { } indexed)
+                return indexed;
+        }
         BeginCapture();
         framer.Reset();
 
@@ -151,6 +181,10 @@ internal sealed class BufferedRecordReader : IDisposable
 
     public CapturedRecord? ReadLineFrame()
     {
+        EnsureAvailable();
+        if (TryReadIndexedFrame(null) is { } indexed)
+            return indexed;
+
         BeginCapture();
         int length = 0;
         while (true)
@@ -167,6 +201,10 @@ internal sealed class BufferedRecordReader : IDisposable
 
     public async ValueTask<CapturedRecord?> ReadLineFrameAsync(CancellationToken cancellationToken)
     {
+        await EnsureAvailableAsync(cancellationToken).ConfigureAwait(false);
+        if (TryReadIndexedFrame(null) is { } indexed)
+            return indexed;
+
         BeginCapture();
         int length = 0;
         while (true)
@@ -179,6 +217,68 @@ internal sealed class BufferedRecordReader : IDisposable
             if (cr && await PeekAsync(cancellationToken).ConfigureAwait(false) == '\n') Advance(1);
             return EndCapture(length);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private CapturedRecord? TryReadIndexedFrame(IRecordBoundaryScanner? scanner)
+        => _nextBoundary < _boundaryCount && _nextFrameStart == _index && _boundaryScanner == scanner
+            ? ConsumeIndexedBoundary()
+            : IndexAndReadFrame(scanner);
+
+    private CapturedRecord? IndexAndReadFrame(IRecordBoundaryScanner? scanner)
+    {
+        if (_index == _length)
+            return null;
+
+        _batchStart = _index;
+        _boundaryScanner = scanner;
+        _nextBoundary = 0;
+        _boundaries ??= ArrayPool<RecordBoundary>.Shared.Rent(BoundaryBatchSize);
+        var input = _buffer.AsSpan(_index, _length - _index);
+        var boundaries = _boundaries.AsSpan(0, BoundaryBatchSize);
+        _boundaryCount = scanner is null
+            ? IndexLineBoundaries(input, boundaries)
+            : scanner.IndexBoundaries(input, boundaries);
+        return _boundaryCount == 0 ? null : ConsumeIndexedBoundary();
+    }
+
+    private CapturedRecord ConsumeIndexedBoundary()
+    {
+        var start = _index;
+        var boundary = _boundaries![_nextBoundary++];
+        var length = _batchStart + boundary.ContentEnd - start;
+        _nextFrameStart = _batchStart + boundary.End;
+        Advance(_nextFrameStart - start);
+        return length == 0
+            ? new CapturedRecord(ReadOnlyMemory<char>.Empty, null)
+            : new CapturedRecord(_buffer.AsMemory(start, length), _buffer);
+    }
+
+    private static int IndexLineBoundaries(ReadOnlySpan<char> input, Span<RecordBoundary> boundaries)
+    {
+        int start = 0;
+        int count = 0;
+        while (count < boundaries.Length)
+        {
+            int offset = input[start..].IndexOfAny('\r', '\n');
+            if (offset < 0)
+                break;
+
+            int contentEnd = start + offset;
+            int end = contentEnd + 1;
+            if (input[contentEnd] == '\r')
+            {
+                // The refill path decides whether a CR at the end of the buffer is followed by LF.
+                if (end == input.Length)
+                    break;
+                if (input[end] == '\n')
+                    end++;
+            }
+            boundaries[count++] = new(contentEnd, end);
+            start = end;
+        }
+
+        return count;
     }
 
     private bool ConsumeLineChunk(ref int length, out bool cr)
@@ -335,6 +435,8 @@ internal sealed class BufferedRecordReader : IDisposable
 
     private void PrepareForRefill()
     {
+        _boundaryCount = 0;
+        _nextBoundary = 0;
         if (_buffer is null)
             return;
 
@@ -395,6 +497,11 @@ internal sealed class BufferedRecordReader : IDisposable
         Return(ref _ownedRecord);
         Return(ref _protectedBuffer);
         Return(ref _buffer);
+        if (_boundaries is { } boundaries)
+        {
+            ArrayPool<RecordBoundary>.Shared.Return(boundaries);
+            _boundaries = null;
+        }
     }
 
     private readonly record struct BufferSegment(char[] Array, int Start, int Length);

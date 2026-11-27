@@ -136,7 +136,7 @@ internal readonly struct CurrentRecord
     public RecordMemory Materialize(bool copyMetadata = false)
     {
         if (Fields is not { } fields) return RecordMemory.Empty;
-        if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwned(fields);
+        if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwnedTree(fields);
         return _storage is Utf8FieldBuffer decoded ? new RecordMemory(_utf8, fields, decoded) : new RecordMemory(Characters, fields);
     }
 }
@@ -144,6 +144,15 @@ internal readonly struct CurrentRecord
 internal readonly record struct CurrentRecordResult(bool IsEndOfFile, CurrentRecord Record, RecordState State)
 {
     public RecordReadResult Materialize() => new(IsEndOfFile, Record.Materialize(), State);
+
+    public bool PublishOwned(out RecordSpan record, out RecordState state)
+    {
+        state = State;
+        record = RecordSpan.FromMemory(Record.Characters, FieldMetadataBuffer.CopyOwnedTree(Record.Fields ?? []));
+        return IsEndOfFile;
+    }
+
+    public RecordReadResult MaterializeOwned() => new(IsEndOfFile, Record.Materialize(copyMetadata: true), State);
 }
 
 internal interface ICurrentRecordSource
@@ -166,6 +175,11 @@ internal interface IBorrowedRecordSource<out TProfile> : IRecordSource<TProfile>
         return new(eof, record.Current, state);
     }
 
+    bool CopyPublicMetadata => false;
+
     async ValueTask<RecordReadResult> IRecordSource<TProfile>.ReadAsync(CancellationToken cancellationToken)
-        => (await ReadCurrentAsync(cancellationToken).ConfigureAwait(false)).Materialize();
+    {
+        var result = await ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        return CopyPublicMetadata ? result.MaterializeOwned() : result.Materialize();
+    }
 }
