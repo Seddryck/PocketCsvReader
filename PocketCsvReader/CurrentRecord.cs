@@ -136,7 +136,7 @@ internal readonly struct CurrentRecord
     public RecordMemory Materialize(bool copyMetadata = false)
     {
         if (Fields is not { } fields) return RecordMemory.Empty;
-        if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwned(fields);
+        if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwnedTree(fields);
         return _storage is Utf8FieldBuffer decoded ? new RecordMemory(_utf8, fields, decoded) : new RecordMemory(Characters, fields);
     }
 }
@@ -144,6 +144,21 @@ internal readonly struct CurrentRecord
 internal readonly record struct CurrentRecordResult(bool IsEndOfFile, CurrentRecord Record, RecordState State)
 {
     public RecordReadResult Materialize() => new(IsEndOfFile, Record.Materialize(), State);
+
+    public RecordReadResult MaterializeOwned() => new(IsEndOfFile, Record.Materialize(copyMetadata: true), State);
+}
+
+// Character-only synchronous transport. The source owns both views until it advances.
+internal interface ICharacterRecordSource
+{
+    bool ReadCharacters(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state);
+
+    static bool ReadOwned(ICharacterRecordSource source, out RecordSpan record, out RecordState state)
+    {
+        var eof = source.ReadCharacters(out var characters, out var fields, out state);
+        record = RecordSpan.FromMemory(characters, FieldMetadataBuffer.CopyOwnedTree(fields));
+        return eof;
+    }
 }
 
 internal interface ICurrentRecordSource
@@ -166,6 +181,22 @@ internal interface IBorrowedRecordSource<out TProfile> : IRecordSource<TProfile>
         return new(eof, record.Current, state);
     }
 
+    bool CopyPublicMetadata => false;
+
     async ValueTask<RecordReadResult> IRecordSource<TProfile>.ReadAsync(CancellationToken cancellationToken)
-        => (await ReadCurrentAsync(cancellationToken).ConfigureAwait(false)).Materialize();
+    {
+        var result = await ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        return CopyPublicMetadata ? result.MaterializeOwned() : result.Materialize();
+    }
+}
+
+internal interface IBorrowedCharacterRecordSource<out TProfile> : IBorrowedRecordSource<TProfile>, ICharacterRecordSource
+{
+    bool IBorrowedRecordSource<TProfile>.CopyPublicMetadata => true;
+
+    CurrentRecordResult ICurrentRecordSource.ReadCurrent()
+    {
+        var eof = ReadCharacters(out var characters, out var fields, out var state);
+        return new(eof, state == RecordState.Eof ? default : new CurrentRecord(characters, fields), state);
+    }
 }

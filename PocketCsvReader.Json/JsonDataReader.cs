@@ -7,7 +7,7 @@ public class JsonDataReader : LabeledDataReader<JsonProfile>
 {
     private JsonFieldBuffer? _decodingBuffer;
     public JsonDataReader(Stream stream, JsonProfile profile)
-        : base(stream, profile, new StringMapper(profile.ParserOptimizations.PoolString))
+        : base(stream, profile, StringMapper.ForLabeledValues(profile.ParserOptimizations))
     { }
 
     protected override IRecordSource<JsonProfile> CreateRecordSource(StreamReader reader, JsonProfile profile)
@@ -22,9 +22,18 @@ public class JsonDataReader : LabeledDataReader<JsonProfile>
 
     protected override string GetStringValue(int i)
     {
+        var isBuiltIn = GetType() == typeof(JsonDataReader);
+        var hints = StringMapper.HasLastValueHints;
+        if (isBuiltIn && hints
+            && JsonValueDecoder.TryMapString(CurrentRecordMemory, CurrentFieldSpans, i, StringMapper, out var pooled))
+            return pooled;
+
         var value = GetValueOrThrow(i);
-        return GetType() == typeof(JsonDataReader) && Profile.ParserOptimizations.PoolString is null && CurrentFieldSpans![i].DecodedValue is { } decoded
-            ? decoded : StringMapper.Map(value)!;
+        if (isBuiltIn && Profile.ParserOptimizations.PoolString is null
+            && CurrentFieldSpans![i].DecodedValue is { } decoded)
+            return decoded;
+
+        return hints ? StringMapper.Map(i, value) : StringMapper.Map(value);
     }
 
     protected override bool IsNull(int i)

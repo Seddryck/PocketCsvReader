@@ -23,4 +23,16 @@ internal sealed class FieldMetadataBuffer
 
     // Public parser results keep independent top-level metadata after advancement.
     public static FieldSpan[] CopyOwned(ReadOnlySpan<FieldSpan> fields) => fields.ToArray();
+
+    // Stable JSON layouts can reuse nested arrays as well as the top-level fields.
+    public static FieldSpan[] CopyOwnedTree(ReadOnlySpan<FieldSpan> fields)
+    {
+        var copy = CopyOwned(fields);
+        foreach (ref var field in copy.AsSpan())
+        {
+            if (field.Children is { Length: > 0 } children)
+                field.Children = CopyOwnedTree(children);
+        }
+        return copy;
+    }
 }

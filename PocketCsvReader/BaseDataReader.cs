@@ -212,6 +212,7 @@ public abstract partial class BaseDataReader<TProfile> : BaseDataRecord<TProfile
         // Source capability is fixed for this reader's lifetime. Do the type and
         // eligibility checks once, rather than on every synchronous/async row.
         _currentRecordSource = source is ICurrentRecordSource { SupportsCurrentRecord: true } current ? current : null;
+        CharacterRecordSource = source as ICharacterRecordSource;
         IndexedRecordSource = source is Utf8RecordSource { CanDeferRecord: true } utf8 ? utf8 : null;
         _initialized = true;
     }
@@ -395,6 +396,7 @@ public abstract partial class BaseDataReader<TProfile> : BaseDataRecord<TProfile
     }
 
     private protected ICurrentRecordSource? CurrentRecordSource => _currentRecordSource;
+    private protected ICharacterRecordSource? CharacterRecordSource { get; private set; }
     private protected Utf8RecordSource? IndexedRecordSource { get; private set; }
 
     private async ValueTask<CurrentRecordResult> ReadPublicSourceAsync(CancellationToken cancellationToken)

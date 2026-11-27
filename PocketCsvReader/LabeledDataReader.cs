@@ -1,4 +1,5 @@
 using System.Data;
+using System.Runtime.CompilerServices;
 using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
@@ -74,20 +75,24 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         Fields = [];
 
-        IsEof = RecordSource!.IsEndOfFile(out var recordSpan, out var recordState);
-        if (recordState == RecordState.Eof)
+        if (CharacterRecordSource is { } source)
         {
-            Record = RecordMemory.Empty;
-            return false;
+            IsEof = source.ReadCharacters(out var characters, out var fields, out var state);
+            SetRecord(new CurrentRecord(characters, fields), copyMetadataOnMaterialization: true);
+            return CompleteRead(state, characters, fields);
         }
 
-        SetRecord(recordSpan.Memory, recordSpan.FieldSpans);
-        if (!HasStableLabelShape || RowCount == 0)
-            UpdateRowShape(recordSpan.Memory, recordSpan.FieldSpans);
-        Fields = _rowShape.Labels;
+        return ReadOtherSource();
+    }
 
-        RowCount++;
-        return true;
+    private bool ReadOtherSource()
+    {
+        if (CurrentRecordSource is { } source)
+            return CompleteBorrowedRead(source.ReadCurrent());
+
+        IsEof = RecordSource!.IsEndOfFile(out var record, out var state);
+        SetRecord(record.Memory, record.FieldSpans);
+        return CompleteRead(state, record.Memory, record.FieldSpans);
     }
 
     protected override ValueTask<bool> ReadCoreAsync(CancellationToken cancellationToken)
@@ -99,9 +104,16 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         Fields = [];
         var result = await source.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        return CompleteBorrowedRead(result);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool CompleteBorrowedRead(in CurrentRecordResult result)
+    {
+        var record = result.Record;
         IsEof = result.IsEndOfFile;
-        SetRecord(result.Record);
-        return CompleteRead(result.State);
+        SetRecord(record, copyMetadataOnMaterialization: true);
+        return CompleteRead(result.State, record.Characters, record.Fields!);
     }
 
     // Separate state machines keep the public-source path's awaiter small and
@@ -112,10 +124,11 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         var result = await RecordSource!.ReadAsync(cancellationToken).ConfigureAwait(false);
         IsEof = result.IsEndOfFile;
         Record = result.Record;
-        return CompleteRead(result.State);
+        return CompleteRead(result.State, result.Record.Span, result.Record.FieldSpans);
     }
 
-    private bool CompleteRead(RecordState state)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool CompleteRead(RecordState state, ReadOnlyMemory<char> record, FieldSpan[] fields)
     {
         if (state == RecordState.Eof)
         {
@@ -124,7 +137,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         }
 
         if (!HasStableLabelShape || RowCount == 0)
-            UpdateRowShape(CurrentRecordMemory, CurrentFieldSpans!);
+            UpdateRowShape(record, fields);
         Fields = _rowShape.Labels;
 
         RowCount++;
@@ -133,9 +146,12 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
 
     private void UpdateRowShape(ReadOnlyMemory<char> record, FieldSpan[] fields)
     {
-        var shape = _rowShapeCache.Resolve(record, fields);
+        var shape = _rowShapeCache.Resolve(record, fields, _rowShape);
         if (!ReferenceEquals(_rowShape, shape))
+        {
             ResetFieldCaches();
+            StringMapper.ClearLastValueHints();
+        }
         _rowShape = shape;
     }
 

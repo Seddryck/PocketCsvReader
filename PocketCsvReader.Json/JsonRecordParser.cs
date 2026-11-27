@@ -72,6 +72,32 @@ internal ref struct JsonRecordParser
         return value.Decoded ?? quotedValue.Slice(value.Span.Start, value.Span.Length).ToString();
     }
 
+    // Called on a string token already validated by the record parser.
+    internal static int DecodeEscapedString(ReadOnlySpan<char> raw, Span<char> destination)
+    {
+        var parser = new JsonRecordParser(raw, StandardWhitespace);
+        var written = 0;
+        while (!parser.IsEnd)
+        {
+            var remainder = raw[parser._position..];
+            var escape = remainder.IndexOf('\\');
+            if (escape < 0)
+            {
+                remainder.CopyTo(destination[written..]);
+                return written + remainder.Length;
+            }
+
+            remainder[..escape].CopyTo(destination[written..]);
+            written += escape;
+            parser._position += escape + 1;
+            destination[written++] = parser.ReadEscape(out var trailing);
+            if (trailing is { } surrogate)
+                destination[written++] = surrogate;
+        }
+
+        return written;
+    }
+
     public static FieldSpan[] ParseStableObjectValues(
         ReadOnlySpan<char> json,
         char[] whitespaces,
@@ -551,7 +577,9 @@ internal ref struct JsonRecordParser
                 decoded ??= _fieldBuffer?.GetStringBuilder() ?? new StringBuilder();
                 decoded.Append(_json.Slice(segmentStart, _position - segmentStart));
                 _position++;
-                DecodeEscape(decoded);
+                decoded.Append(ReadEscape(out var trailing));
+                if (trailing is { } surrogate)
+                    decoded.Append(surrogate);
                 segmentStart = _position;
                 continue;
             }
@@ -638,29 +666,32 @@ internal ref struct JsonRecordParser
         _position += 6;
     }
 
-    private void DecodeEscape(StringBuilder decoded)
+    private char ReadEscape(out char? trailing)
     {
+        trailing = null;
         if (IsEnd)
             throw new InvalidDataException("Incomplete JSON escape sequence.");
 
-        switch (Current)
+        if (Current == 'u')
+            return ReadUnicodeEscape(out trailing);
+
+        var escaped = Current switch
         {
-            case '"': decoded.Append('"'); _position++; break;
-            case '\\': decoded.Append('\\'); _position++; break;
-            case '/': decoded.Append('/'); _position++; break;
-            case 'b': decoded.Append('\b'); _position++; break;
-            case 'f': decoded.Append('\f'); _position++; break;
-            case 'n': decoded.Append('\n'); _position++; break;
-            case 'r': decoded.Append('\r'); _position++; break;
-            case 't': decoded.Append('\t'); _position++; break;
-            case 'u': DecodeUnicodeEscape(decoded); break;
-            default:
-                throw new InvalidDataException($"Invalid JSON escape character '{Current}' at position {_position}.");
-        }
+            '"' or '\\' or '/' => Current,
+            'b' => '\b',
+            'f' => '\f',
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            _ => throw new InvalidDataException($"Invalid JSON escape character '{Current}' at position {_position}."),
+        };
+        _position++;
+        return escaped;
     }
 
-    private void DecodeUnicodeEscape(StringBuilder decoded)
+    private char ReadUnicodeEscape(out char? trailing)
     {
+        trailing = null;
         var codeUnit = ParseHexQuad(_position + 1);
         _position += 5;
 
@@ -668,10 +699,7 @@ internal ref struct JsonRecordParser
             throw new InvalidDataException("A low surrogate must follow a high surrogate.");
 
         if (!char.IsHighSurrogate(codeUnit))
-        {
-            decoded.Append(codeUnit);
-            return;
-        }
+            return codeUnit;
 
         if (_position + 6 > _json.Length
             || _json[_position] != '\\'
@@ -684,9 +712,9 @@ internal ref struct JsonRecordParser
         if (!char.IsLowSurrogate(lowSurrogate))
             throw new InvalidDataException("A high surrogate must be followed by a low surrogate.");
 
-        decoded.Append(codeUnit);
-        decoded.Append(lowSurrogate);
         _position += 6;
+        trailing = lowSurrogate;
+        return codeUnit;
     }
 
     private char ParseHexQuad(int start)

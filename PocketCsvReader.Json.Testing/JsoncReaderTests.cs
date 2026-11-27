@@ -193,16 +193,12 @@ public class JsoncReaderTests
         {
             using var text = new StreamReader(new MemoryStream(content));
             using var source = new JsonRecordSource(text, profile);
-            source.IsEndOfFile(out _, out var firstState);
-            Assert.That(firstState, Is.EqualTo(RecordState.Record));
+            var borrowed = (ICurrentRecordSource)source;
+            Assert.That(borrowed.ReadCurrent().State, Is.EqualTo(RecordState.Record));
             var before = GC.GetAllocatedBytesForCurrentThread();
             var rows = 1;
-            while (true)
-            {
-                source.IsEndOfFile(out _, out var state);
-                if (state == RecordState.Eof) break;
+            while (borrowed.ReadCurrent().State == RecordState.Record)
                 rows++;
-            }
             var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             Assert.That(rows, Is.EqualTo(1000));
             if (pass == 1) Assert.That(allocated, Is.LessThan(64 * 1000));
@@ -215,14 +211,15 @@ public class JsoncReaderTests
         const string content = "[{\"id\":\"first\",/* comment */},{\"id\":\"next\",},]";
         using var text = new StreamReader(Input(content));
         using var source = new JsonRecordSource(text, new JsonProfile(allowComments: true, allowTrailingCommas: true, projectedProperties: ["id"]));
-        source.IsEndOfFile(out var first, out _);
-        var fields = first.FieldSpans;
+        var borrowed = (ICurrentRecordSource)source;
+        var first = borrowed.ReadCurrent().Record;
+        var fields = first.Fields;
         var retainedValue = first.Slice(0).ToString();
-        Assert.That(MemoryMarshal.TryGetArray(first.AsMemory().Span, out var firstMemory), Is.True);
-        source.IsEndOfFile(out var second, out _);
-        Assert.That(MemoryMarshal.TryGetArray(second.AsMemory().Span, out var secondMemory), Is.True);
+        Assert.That(MemoryMarshal.TryGetArray(first.Characters, out var firstMemory), Is.True);
+        var second = borrowed.ReadCurrent().Record;
+        Assert.That(MemoryMarshal.TryGetArray(second.Characters, out var secondMemory), Is.True);
         Assert.That(secondMemory.Array, Is.SameAs(firstMemory.Array));
-        Assert.That(second.FieldSpans, Is.SameAs(fields));
+        Assert.That(second.Fields, Is.SameAs(fields));
         Assert.That(second.Slice(0).ToString(), Is.EqualTo("next"));
         Assert.That(retainedValue, Is.EqualTo("first"));
     }

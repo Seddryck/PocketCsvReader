@@ -91,12 +91,12 @@ public class StableFieldLayoutTests
         const string content = """[{"obj":{"id":1}},{"obj":{"id":2}},{"obj":{"id":3}}]""";
         using var stream = new StreamReader(Stream(content));
         using var source = new JsonRecordSource(stream, new JsonProfile { StableFieldLayout = true });
-        source.IsEndOfFile(out var first, out _);
-        var fields = first.FieldSpans;
-        source.IsEndOfFile(out var second, out _);
-        Assert.That(second.FieldSpans, Is.Not.SameAs(fields));
-        source.IsEndOfFile(out var third, out _);
-        Assert.That(third.FieldSpans, Is.SameAs(fields));
+        var borrowed = (ICurrentRecordSource)source;
+        var fields = borrowed.ReadCurrent().Record.Fields;
+        var second = borrowed.ReadCurrent().Record;
+        Assert.That(second.Fields, Is.Not.SameAs(fields));
+        var third = borrowed.ReadCurrent().Record;
+        Assert.That(third.Fields, Is.SameAs(fields));
         Assert.That(third.Slice(0).ToString(), Is.EqualTo("""{"id":3}"""));
     }
 
