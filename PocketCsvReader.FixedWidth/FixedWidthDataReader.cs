@@ -21,10 +21,11 @@ public sealed class FixedWidthDataReader : BaseDataReader<FixedWidthProfile>
     protected override IRecordSource<FixedWidthProfile> CreateRecordSource(StreamReader reader, FixedWidthProfile profile)
         => new FixedWidthRecordParser(reader, profile);
 
-    public override int FieldCount => Profile.Descriptor.Fields.Count;
+    public override int FieldCount => Profile.Descriptor.Fields.Count + ComputedColumnCount;
 
     public override string GetRawString(int i)
     {
+        RequireSourceColumn(i);
         ValidateOrdinal(i);
         return GetCurrentFieldMemory(i).ToString();
     }

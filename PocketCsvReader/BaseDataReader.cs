@@ -14,7 +14,7 @@ using PocketCsvReader.FieldParsing;
 using PocketCsvReader.Compression;
 
 namespace PocketCsvReader;
-public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyncDataReader
+public abstract partial class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyncDataReader
     where TProfile : IProfile
 {
     private bool _isClosed = false;
@@ -254,10 +254,13 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             do
             {
                 _hasCurrentRecord = false;
+                RestoreComputedSourceLayout();
+                ResetComputedFields();
                 ResetRowValues();
                 _hasCurrentRecord = !IsEof && ReadCore();
                 if (!_hasCurrentRecord) return false;
             } while (!AcceptCurrentRow() || Window?.Accept() == false);
+            CompleteComputedLayout();
             return true;
         }
         finally
@@ -421,10 +424,13 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 _hasCurrentRecord = false;
+                RestoreComputedSourceLayout();
+                ResetComputedFields();
                 ResetRowValues();
                 _hasCurrentRecord = !IsEof && await ReadCoreAsync(cancellationToken).ConfigureAwait(false);
                 if (!_hasCurrentRecord) return false;
             } while (!AcceptCurrentRow() || Window?.Accept() == false);
+            CompleteComputedLayout();
             return true;
         }
         finally
