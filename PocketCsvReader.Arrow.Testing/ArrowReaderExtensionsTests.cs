@@ -250,6 +250,122 @@ public class ArrowReaderExtensionsTests
             Throws.TypeOf<InvalidDataException>());
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task ToArrowBatches_WithNativeUtf8_PreservesLogicalValuesAndOwnsBuffers(bool asynchronous)
+    {
+        var longText = new string('x', 89) + "😀";
+        var content = $"id,text,alias,parsed\n1,  ASCII,NULL,first\n2,\"é漢😀\",,second\n"
+            + $"3,\"line\n{longText}\"\"end\",alias,third\n4,\"\",keep,fourth\n5,";
+        byte[] bytes = [.. Encoding.UTF8.GetBytes(content), 0xFF, .. ",keep,last"u8];
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n").WithSkipInitialSpace())
+            .WithSchema(s => s.Named().WithField<int>("id").WithField<string>("text")
+                .WithField<string>("alias", f => f.WithSequence("NULL", null).WithSequence("alias", "actual"))
+                .WithField<string>("parsed", f => f.WithParser((string text) => text.ToUpperInvariant())))
+            .WithParserOptimizations(new ParserOptimizationOptions(BufferSize: 32))
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .Build();
+
+        using var stream = new NonSeekableStream(new MemoryStream(bytes));
+        var batches = new List<RecordBatch>();
+        try
+        {
+            if (asynchronous)
+            {
+                await foreach (var batch in csv.ToArrowBatchesAsync(stream, batchSize: 2))
+                    batches.Add(batch);
+            }
+            else
+            {
+                batches.AddRange(csv.ToArrowBatches(stream, batchSize: 2));
+            }
+
+            // Inspect the earliest batch after the reader has advanced and been disposed.
+            Assert.That(batches.Select(batch => batch.Length), Is.EqualTo(new[] { 2, 2, 1 }));
+            Assert.That(batches[0].Schema.FieldsList.Select(field => field.Name), Is.EqualTo(new[] { "id", "text", "alias", "parsed" }));
+            Assert.That(batches.SelectMany(batch => ((Int32Array)batch.Column(0)).Values.ToArray()), Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
+            Assert.That(StringValues(batches, 1), Is.EqualTo(new[] { "ASCII", "é漢😀", $"line\n{longText}\"end", "", "�" }));
+            Assert.That(StringValues(batches, 2), Is.EqualTo(new[] { null, "", "actual", "keep", "keep" }));
+            Assert.That(StringValues(batches, 3), Is.EqualTo(new[] { "FIRST", "SECOND", "THIRD", "FOURTH", "LAST" }));
+        }
+        finally
+        {
+            foreach (var batch in batches)
+                batch.Dispose();
+        }
+    }
+
+    [Test]
+    public void TryGetUtf8Span_WithNativeUtf8_UsesProjectedLogicalTextAndRejectsFallbackValues()
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithSchema(s => s.Indexed().WithField<string>()
+                .WithField<string>(f => f.WithSequence("NULL", null)).WithField<string>())
+            .WithProjection("C", "B", "A")
+            .WithStreamInitialization(StreamInitializationOptions.Utf8)
+            .Build();
+        using var stream = StreamOf("A,B,C\n,A,\"say \"\"é\"\"\"\nnext,NULL,");
+        using var reader = csv.ToDataReader(stream);
+        IUtf8DataRecord utf8 = reader;
+
+        Assert.That(utf8.TryGetUtf8Span(0, out _), Is.False);
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(utf8.TryGetUtf8Span(0, out var text), Is.True);
+        Assert.That(text.SequenceEqual("say \"é\""u8), Is.True);
+        Assert.That(utf8.TryGetUtf8Span(2, out var empty), Is.True);
+        Assert.That(empty.IsEmpty, Is.True);
+
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(utf8.TryGetUtf8Span(1, out _), Is.False);
+        Assert.That(utf8.IsDBNull(1), Is.True);
+        Assert.That(reader.Read(), Is.False);
+        Assert.That(utf8.TryGetUtf8Span(0, out _), Is.False);
+    }
+
+    [Test]
+    public void ToArrowBatches_WithUtf8Capability_SkipsStringAccessAndNullCheckForBorrowedText()
+    {
+        var schema = new SchemaDescriptorBuilder().Named()
+            .WithField<string>("borrowed").WithField<string>("fallback")
+            .WithField<char>("character").WithField<Guid>("guid").Build();
+        var csv = new BorrowingCsvReader(new CsvProfile(
+            new DialectDescriptorBuilder().WithHeader().WithLineTerminator("\n").Build(), schema));
+        using var stream = StreamOf("borrowed,fallback,character,guid\nunused,legacy,A,6f1a911c-7aa8-4e8b-9c3e-d6eedbe0c554");
+        using var batch = csv.ToArrowBatches(stream).Single();
+
+        Assert.That(((StringArray)batch.Column(0)).GetString(0), Is.EqualTo("borrowed é"));
+        Assert.That(((StringArray)batch.Column(1)).GetString(0), Is.EqualTo("legacy"));
+        Assert.That(((StringArray)batch.Column(2)).GetString(0), Is.EqualTo("A"));
+        Assert.That(((StringArray)batch.Column(3)).GetString(0), Is.EqualTo("6f1a911c-7aa8-4e8b-9c3e-d6eedbe0c554"));
+    }
+
+    [Test]
+    public void ToArrowBatches_WithUtf16Bom_UsesDecodedText()
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithSchema(s => s.Named().WithField<string>("text"))
+            .WithStreamInitialization(new StreamInitializationOptions(InputMode: CsvInputMode.Auto))
+            .Build();
+        byte[] bytes = [.. Encoding.Unicode.GetPreamble(), .. Encoding.Unicode.GetBytes("text\nété 😀")];
+        using var stream = new MemoryStream(bytes);
+        using var batch = csv.ToArrowBatches(stream).Single();
+
+        Assert.That(((StringArray)batch.Column(0)).GetString(0), Is.EqualTo("été 😀"));
+    }
+
+    private static IEnumerable<string?> StringValues(IEnumerable<RecordBatch> batches, int ordinal)
+    {
+        foreach (var batch in batches)
+        {
+            var column = (StringArray)batch.Column(ordinal);
+            for (int i = 0; i < column.Length; i++)
+                yield return column.GetString(i);
+        }
+    }
+
     private static CsvReader CreateSimpleCsvReader()
         => new CsvReaderBuilder()
             .WithDialect(dialect => dialect.WithDelimiter(',').WithLineTerminator("\n").WithHeader())
@@ -278,6 +394,27 @@ public class ArrowReaderExtensionsTests
 
     private static MemoryStream StreamOf(string value)
         => new(Encoding.UTF8.GetBytes(value));
+
+    private sealed class BorrowingCsvReader(CsvProfile profile) : CsvReader(profile)
+    {
+        protected override CsvDataReader CreateDataReader(Stream stream) => new BorrowingDataReader(stream, Profile);
+    }
+
+    private sealed class BorrowingDataReader(Stream stream, CsvProfile profile) : CsvDataReader(stream, profile), IUtf8DataRecord
+    {
+        bool IUtf8DataRecord.CanGetUtf8Span(int ordinal) => true;
+
+        bool IUtf8DataRecord.TryGetUtf8Span(int ordinal, out ReadOnlySpan<byte> value)
+        {
+            Assert.That(ordinal, Is.LessThan(2), "Only actual string columns should request UTF-8 text.");
+            value = ordinal == 0 ? "borrowed é"u8 : default;
+            return ordinal == 0;
+        }
+
+        protected override bool IsNull(int i) => i == 0 ? throw new AssertionException("Borrowed text reached IsDBNull.") : base.IsNull(i);
+        public override object GetValue(int i) => i == 0 ? throw new AssertionException("Borrowed text reached GetValue.") : base.GetValue(i);
+        public override string GetString(int i) => i == 0 ? throw new AssertionException("Borrowed text reached GetString.") : base.GetString(i);
+    }
 
     private sealed class NonSeekableStream : Stream
     {

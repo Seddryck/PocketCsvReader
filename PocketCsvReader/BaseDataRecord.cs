@@ -89,6 +89,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     private SpanParser Parser { get; } = new();
+    private protected bool HasBoundFieldParser(int ordinal) => Parser.TryGetEntry(GetFieldCacheOrdinal(ordinal), out _);
     // Schema descriptors outlive row shapes. Keep compiled delegates while rebinding ordinals.
     private readonly Dictionary<(FieldDescriptor Field, Type Type), SpanParser.ParserEntry> _schemaParsers = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<BaseDataRecord<TProfile>, int, object>> ArrayReaders = new();
@@ -379,7 +380,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             && ResolveMemoryParser(field.RuntimeType, field) is { } memoryParser)
             return ParseMemoryCached(i, field.RuntimeType, memoryParser, memoryParser.Boxed, BorrowParserInput(value));
 
-        var parse = ResolveValueParser(i);
+        var parse = ResolveValueParser(i, field);
         if (parse is null)
             return StringMapper.Map(i, value.Value);
 
@@ -422,13 +423,11 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             Expression.Call(template.Parameters[0], method, template.Parameters[1]), template.Parameters).Compile();
     }
 
-    private ParseSpan<object>? ResolveValueParser(int i)
+    private ParseSpan<object>? ResolveValueParser(int i, FieldDescriptor? field)
     {
         if (Parser.TryGetParser(GetFieldCacheOrdinal(i), out var parse))
             return parse;
-        if (!TryGetFieldDescriptor(i, out var field))
-            return null;
-        return ResolveFieldParser(i, field);
+        return field is null ? null : ResolveFieldParser(i, field);
     }
 
     private ParseSpan<object>? ResolveFieldParser(int i, FieldDescriptor field)

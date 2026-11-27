@@ -170,8 +170,9 @@ internal sealed class ArrowBatchLayout
 
     public static ArrowBatchLayout Create(IDataRecord record)
     {
+        var utf8 = record as IUtf8DataRecord;
         var columns = Enumerable.Range(0, record.FieldCount)
-            .Select(index => ArrowColumnDefinition.Create(record.GetName(index), record.GetFieldType(index), index))
+            .Select(index => ArrowColumnDefinition.Create(record.GetName(index), record.GetFieldType(index), index, utf8))
             .ToArray();
         return new ArrowBatchLayout(columns);
     }
@@ -183,19 +184,29 @@ internal sealed class ArrowBatchLayout
 internal sealed class ArrowBatchBuilder
 {
     private Schema Schema { get; }
-    private IReadOnlyList<ArrowColumnWriter> Columns { get; }
+    private ArrowColumnWriter[] Columns { get; }
+    private bool HasUtf8Columns { get; }
     public int Length { get; private set; }
 
-    public ArrowBatchBuilder(Schema schema, IReadOnlyList<ArrowColumnWriter> columns)
+    public ArrowBatchBuilder(Schema schema, ArrowColumnWriter[] columns)
     {
         Schema = schema;
         Columns = columns;
+        HasUtf8Columns = columns.Any(column => column.CanAppendUtf8);
     }
 
     public void Append(IDataRecord record)
     {
-        foreach (var column in Columns)
-            column.Append(record);
+        if (HasUtf8Columns)
+        {
+            foreach (var column in Columns)
+                column.AppendPreferUtf8(record);
+        }
+        else
+        {
+            foreach (var column in Columns)
+                column.Append(record);
+        }
         Length++;
     }
 
@@ -209,17 +220,29 @@ internal sealed class ArrowColumnWriter
     private Action<IDataRecord, int> AppendValue { get; }
     private Action AppendNull { get; }
     private Func<IArrowArray> BuildArray { get; }
+    private Func<int, bool>? TryAppendUtf8 { get; }
+    public bool CanAppendUtf8 => TryAppendUtf8 is not null;
 
     public ArrowColumnWriter(
         int ordinal,
         Action<IDataRecord, int> appendValue,
         Action appendNull,
-        Func<IArrowArray> buildArray)
+        Func<IArrowArray> buildArray,
+        Func<int, bool>? tryAppendUtf8 = null)
     {
         Ordinal = ordinal;
         AppendValue = appendValue;
         AppendNull = appendNull;
         BuildArray = buildArray;
+        TryAppendUtf8 = tryAppendUtf8;
+    }
+
+    public void AppendPreferUtf8(IDataRecord record)
+    {
+        // A successful borrow guarantees a non-null value and avoids a
+        // potentially decoding IsDBNull call. Consume it before the next read.
+        if (TryAppendUtf8?.Invoke(Ordinal) is not true)
+            Append(record);
     }
 
     public void Append(IDataRecord record)
@@ -246,10 +269,18 @@ internal sealed class ArrowColumnDefinition
 
     public ArrowColumnWriter CreateWriter() => WriterFactory();
 
-    public static ArrowColumnDefinition Create(string name, Type runtimeType, int ordinal)
+    public static ArrowColumnDefinition Create(string name, Type runtimeType, int ordinal, IUtf8DataRecord? utf8)
     {
         var type = Nullable.GetUnderlyingType(runtimeType) ?? runtimeType;
+        return CreateNumeric(name, type, ordinal)
+            ?? CreateTextOrTemporal(name, type, ordinal, utf8)
+            ?? throw new NotSupportedException(
+                $"Field '{name}' uses runtime type '{runtimeType.FullName}', which has no Apache Arrow mapping. " +
+                "Configure the PocketCsvReader schema with a supported runtime type before enumeration.");
+    }
 
+    private static ArrowColumnDefinition? CreateNumeric(string name, Type type, int ordinal)
+    {
         if (type == typeof(bool))
         {
             return Define(name, BooleanType.Default, ordinal, () =>
@@ -323,12 +354,38 @@ internal sealed class ArrowColumnDefinition
                 return Writer(ordinal, (record, index) => builder.Append(record.GetDecimal(index)), () => builder.AppendNull(), () => builder.Build());
             });
         }
+
+        return null;
+    }
+
+    private static ArrowColumnDefinition? CreateTextOrTemporal(string name, Type type, int ordinal, IUtf8DataRecord? utf8)
+    {
         if (type == typeof(string) || type == typeof(char) || type == typeof(Guid))
         {
+            bool canBorrowUtf8 = type == typeof(string) && utf8?.CanGetUtf8Span(ordinal) is true;
             return Define(name, StringType.Default, ordinal, () =>
             {
                 var builder = new StringArray.Builder();
-                return Writer(ordinal, (record, index) => builder.Append(Convert.ToString(record.GetValue(index), System.Globalization.CultureInfo.InvariantCulture)!), () => builder.AppendNull(), () => builder.Build());
+                return new ArrowColumnWriter(
+                    ordinal,
+                    AppendString,
+                    () => builder.AppendNull(),
+                    () => builder.Build(),
+                    canBorrowUtf8 ? TryAppend : null);
+
+                void AppendString(IDataRecord record, int index)
+                {
+                    var value = record.GetValue(index);
+                    builder.Append(value as string ?? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!);
+                }
+
+                bool TryAppend(int index)
+                {
+                    if (!utf8!.TryGetUtf8Span(index, out var value))
+                        return false;
+                    builder.Append(value);
+                    return true;
+                }
             });
         }
 
@@ -382,9 +439,7 @@ internal sealed class ArrowColumnDefinition
             });
         }
 
-        throw new NotSupportedException(
-            $"Field '{name}' uses runtime type '{runtimeType.FullName}', which has no Apache Arrow mapping. " +
-            "Configure the PocketCsvReader schema with a supported runtime type before enumeration.");
+        return null;
     }
 
     private static ArrowColumnDefinition Define(

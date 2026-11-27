@@ -8,7 +8,7 @@ using PocketCsvReader.FieldParsing;
 using PocketCsvReader.ValueReader;
 
 namespace PocketCsvReader;
-public partial class CsvDataReader : BaseDataReader<CsvProfile>
+public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
 {
     private readonly RowNumberOptions? _rowNumberOptions;
     private readonly RowNumberRecord? _rowNumberRecord;
@@ -153,6 +153,52 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>
     }
 
     private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
+
+    bool IUtf8DataRecord.CanGetUtf8Span(int ordinal)
+        => RecordSource is Utf8RecordSource && CanBorrowUtf8Text(ordinal);
+
+    /// <inheritdoc />
+    public bool TryGetUtf8Span(int ordinal, out ReadOnlySpan<byte> value)
+    {
+        value = default;
+        if (RecordSource is not Utf8RecordSource source || !CanBorrowUtf8Text(ordinal)
+            || HasBoundFieldParser(ordinal)
+            || !TryGetCurrentUtf8(GetPhysicalOrdinal(ordinal), out var bytes, out var escaped))
+            return false;
+
+        var span = bytes.Span;
+        if (!IsValidUtf8(span))
+            return false;
+
+        value = escaped && Profile.ParserOptimizations.UnescapeChars ? source.Unescape(span) : span;
+        return true;
+    }
+
+    private bool CanBorrowUtf8Text(int ordinal)
+        => IsSourceTextColumn(ordinal) && HasUntransformedText(ordinal);
+
+    // Subclasses can override the logical value.
+    private bool IsSourceTextColumn(int ordinal)
+        => HasActiveRecord && GetType() == typeof(CsvDataReader) && (uint)ordinal < (uint)FieldCount
+            && !(HasRowNumber && ordinal == 0) && GetComputedField(ordinal) is null;
+
+    private bool HasUntransformedText(int ordinal)
+    {
+        var options = Profile.ParserOptimizations;
+        if (options.HandleSpecialValues && Profile.Resource?.Sequences is { IsEmpty: false })
+            return false;
+
+        if (TryGetFieldDescriptor(ordinal, out var field))
+        {
+            return field.RuntimeType == typeof(string) && !HasCustomParser(field)
+                && (!options.HandleSpecialValues || field.Sequences is not { IsEmpty: false })
+                && Profile.Parsers?.HasParser(typeof(string)) is not true;
+        }
+
+        // Undeclared schema cells may require field-specific validation. A custom
+        // string pool can replace the text of a field that has no declared parser.
+        return Profile.Schema is null && options.PoolString is null;
+    }
 
     private protected override bool TryGetDirectString(int i, out string value)
     {

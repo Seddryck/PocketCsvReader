@@ -20,6 +20,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
     private bool _isClosed = false;
     private bool _initialized;
     private bool _hasCurrentRecord;
+    private protected bool HasActiveRecord => _hasCurrentRecord && !_isClosed && !_disposed;
     /// <summary>The current record start, or null when tracking is disabled or no record is current.</summary>
     /// <value>The current record start, or null when unavailable.</value>
     public RecordPosition? CurrentPosition => _hasCurrentRecord && !_disposed ? RecordSource?.CurrentPosition : null;
@@ -401,7 +402,7 @@ public abstract class BaseDataReader<TProfile> : BaseDataRecord<TProfile>, IAsyn
 
     protected override void EnsureValidationRecord()
     {
-        if (!_hasCurrentRecord || _isClosed || _disposed)
+        if (!HasActiveRecord)
             throw new InvalidOperationException("No current record is available.");
     }
 

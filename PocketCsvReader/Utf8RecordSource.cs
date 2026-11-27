@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PocketCsvReader.CharParsing;
+using PocketCsvReader.FieldParsing;
 
 namespace PocketCsvReader;
 
@@ -20,6 +21,7 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     private readonly SearchValues<byte> _syntax;
     private readonly CsvBlockScanner<byte>? _blockScanner;
     private readonly PositionTracker? _positionTracker;
+    private FieldEscaper? _fieldEscaper;
     private byte[]? _spill;
     private int _position;
     private int _available;
@@ -56,6 +58,9 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
             && d.ArrayDelimiter is null && d.ArrayPrefix is null && d.ArraySuffix is null
             && profile.BadDataPolicy is null;
     }
+
+    internal ReadOnlySpan<byte> Unescape(ReadOnlySpan<byte> value)
+        => _decodedFields.Unescape(value, _fieldEscaper ??= new(Profile));
 
     public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
     {
