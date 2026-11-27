@@ -28,6 +28,12 @@ public class Program
 
     public static void Main(string[] args)
     {
+        if (args is ["--labeled-reader-throughput", "scan", string format])
+        {
+            LabeledReaderThroughput.RunScan(format);
+            return;
+        }
+
         if (args is ["--labeled-reader-throughput", string mode])
         {
             LabeledReaderThroughput.Run(mode);

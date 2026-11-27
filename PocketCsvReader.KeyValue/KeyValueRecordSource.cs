@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace PocketCsvReader.KeyValue;
 
-internal sealed class KeyValueRecordSource : IBorrowedRecordSource<KeyValueProfile>, IPositionSource
+internal sealed class KeyValueRecordSource : IBorrowedCharacterRecordSource<KeyValueProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
     private readonly PositionTracker? _position;
@@ -27,17 +27,26 @@ internal sealed class KeyValueRecordSource : IBorrowedRecordSource<KeyValueProfi
         _reader = new(reader, profile.ParserOptimizations.BufferSize, tracker: _position);
     }
 
-    bool IBorrowedRecordSource<KeyValueProfile>.CopyPublicMetadata => true;
+    public bool IsEndOfFile(out RecordSpan record, out RecordState state)
+        => ICharacterRecordSource.ReadOwned(this, out record, out state);
 
-    public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
-        => ReadCurrent().PublishOwned(out record, out recordState);
-
-    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
-
-    private CurrentRecordResult ReadCurrent()
+    bool ICharacterRecordSource.ReadCharacters(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state)
     {
         BeginRead();
-        return CompleteRead(_reader.ReadLineFrame());
+        if (_reader.ReadLineFrame() is not { } captured)
+        {
+            characters = default;
+            fields = [];
+            state = RecordState.Eof;
+            return true;
+        }
+
+        characters = captured.Memory;
+        Parse(characters.Span);
+        fields = _fields;
+        state = RecordState.Record;
+        // Discover EOF on the next read; lookahead could refill and invalidate this view.
+        return false;
     }
 
     async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)

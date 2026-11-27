@@ -2,7 +2,7 @@ using PocketCsvReader.Json.Configuration;
 
 namespace PocketCsvReader.Json;
 
-internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPositionSource
+internal sealed class JsonRecordSource : IBorrowedCharacterRecordSource<JsonProfile>, IPositionSource
 {
     private static readonly char[] JsonWhitespaces = [' ', '\t', '\r', '\n'];
     private readonly BufferedRecordReader _cursor;
@@ -55,41 +55,47 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
             : _projectedValueFramer;
     }
 
-    bool IBorrowedRecordSource<JsonProfile>.CopyPublicMetadata => true;
+    public bool IsEndOfFile(out RecordSpan record, out RecordState state)
+        => ICharacterRecordSource.ReadOwned(this, out record, out state);
 
-    public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
-        => ReadCurrent().PublishOwned(out record, out recordState);
-
-    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
-
-    private CurrentRecordResult ReadCurrent()
+    bool ICharacterRecordSource.ReadCharacters(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state)
     {
         if (Profile.ParsedRecordPath is not null)
-            return ReadSelected();
+            return ReadSelected(out characters, out fields, out state);
         _cursor.BeginOperation();
         if (_state == DocumentState.Complete)
-            return new(true, default, RecordState.Eof);
+            return EndOfFile(out characters, out fields, out state);
 
         var first = _state == DocumentState.BeforeRoot
             ? PeekFirstRootCharacter()
             : PeekFirstArrayElementCharacter();
 
         if (first < 0)
-            return new(true, default, RecordState.Eof);
+            return EndOfFile(out characters, out fields, out state);
 
         ValidateTableRow(first);
         _position?.BeginRecord();
         var recordStart = _cursor.Position;
         var (capture, delimiter) = ReadValue((char)first);
         _cursor.Protect(capture);
-        var fields = GetFields(capture.Memory, recordStart);
+        fields = GetFields(capture.Memory, recordStart);
 
         var isEndOfFile = _state == DocumentState.SingleRoot
             ? CompleteSingleRoot(delimiter)
             : CompleteArrayElement(delimiter);
 
         _position?.CompleteRecord();
-        return new(isEndOfFile, new CurrentRecord(capture.Memory, fields), RecordState.Record);
+        characters = capture.Memory;
+        state = RecordState.Record;
+        return isEndOfFile;
+    }
+
+    private static bool EndOfFile(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state)
+    {
+        characters = default;
+        fields = [];
+        state = RecordState.Eof;
+        return true;
     }
 
     async ValueTask<CurrentRecordResult> ICurrentRecordSource.ReadCurrentAsync(CancellationToken cancellationToken)
@@ -122,7 +128,7 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
         return new(isEndOfFile, new CurrentRecord(capture.Memory, fields), RecordState.Record);
     }
 
-    private CurrentRecordResult ReadSelected()
+    private bool ReadSelected(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state)
     {
         if (_matches is null && _state != DocumentState.Complete)
         {
@@ -146,9 +152,11 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
                 Profile.AllowComments,
                 Profile.AllowTrailingCommas).GetEnumerator();
         }
-        return TrySelectRow(out var row)
-            ? new(false, row, RecordState.Record)
-            : new(true, default, RecordState.Eof);
+        if (!TrySelectRow(out characters, out fields))
+            return EndOfFile(out characters, out fields, out state);
+
+        state = RecordState.Record;
+        return false;
     }
 
     private async ValueTask<CurrentRecordResult> ReadSelectedAsync(CancellationToken cancellationToken)
@@ -176,12 +184,12 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
                 Profile.AllowComments,
                 Profile.AllowTrailingCommas).GetEnumerator();
         }
-        return TrySelectRow(out var row)
-            ? new(false, row, RecordState.Record)
+        return TrySelectRow(out var characters, out var fields)
+            ? new(false, new CurrentRecord(characters, fields), RecordState.Record)
             : new(true, default, RecordState.Eof);
     }
 
-    private bool TrySelectRow(out CurrentRecord row)
+    private bool TrySelectRow(out ReadOnlyMemory<char> characters, out FieldSpan[] fields)
     {
         if (_matches?.MoveNext() == true)
         {
@@ -200,12 +208,14 @@ internal sealed class JsonRecordSource : IBorrowedRecordSource<JsonProfile>, IPo
                 if (!result.Complete)
                     _projectedValueFramer.CompleteAtEof();
             }
-            row = new CurrentRecord(json, GetFields(json, 0));
+            characters = json;
+            fields = GetFields(json, 0);
             return true;
         }
         _matches?.Dispose();
         _matches = null;
-        row = default;
+        characters = default;
+        fields = [];
         return false;
     }
 

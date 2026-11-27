@@ -50,3 +50,24 @@ foreach ($mode in 'standard', 'pool', 'lines') {
     dotnet $after --labeled-reader-throughput $mode
 }
 ```
+
+## Lightweight synchronous handoff
+
+A follow-up narrowed the internal synchronous handoff to character memory, field metadata, and record state. Both sides used line indexing and the same row-shape cache, with string reuse disabled. The reference was `73fbe13`, which returned a general `CurrentRecordResult` for these reads. The measurements use the median of three fresh .NET 10 processes per case, alternating the order of the two revisions. Each process warms up for 800 ms and reports the median of three windows of at least 400 ms. Every scan verified 50,000 rows. The two key-value cases also validated the IDs, status, and user before timing.
+
+| Reader | CPU ms before → after | Elapsed ms before → after | Allocated bytes before → after |
+| --- | ---: | ---: | ---: |
+| JSON | 31.25 → 30.13 | 30.40 → 28.04 | 23,960 → 23,968 |
+| NDJSON | 29.17 → 29.17 | 28.08 → 27.28 | 23,920 → 23,928 |
+| Logfmt | 6.89 → 6.16 | 6.86 → 6.24 | 13,064 → 13,072 |
+| LTSV | 5.02 → 4.32 | 4.95 → 4.30 | 13,064 → 13,072 |
+
+Each reader gained eight bytes of setup allocation for the cached source capability. The character buffer and field metadata still use borrowed storage for each row.
+
+[Raw handoff comparison](LabeledReaderThroughput.handoff.csv)
+
+Use the single-format scan mode for follow-up measurements. To compare revisions, copy the new benchmark executable assembly into a build of `73fbe13` following the same approach above.
+
+```powershell
+dotnet run --project PocketCsvReader.Benchmark -c Release -f net10.0 -- --labeled-reader-throughput scan Logfmt
+```

@@ -67,6 +67,18 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
     {
         Fields = [];
 
+        if (CharacterRecordSource is { } source)
+        {
+            IsEof = source.ReadCharacters(out var characters, out var fields, out var state);
+            SetRecord(new CurrentRecord(characters, fields), copyMetadataOnMaterialization: true);
+            return CompleteRead(state, characters, fields);
+        }
+
+        return ReadOtherSource();
+    }
+
+    private bool ReadOtherSource()
+    {
         if (CurrentRecordSource is { } source)
             return CompleteBorrowedRead(source.ReadCurrent());
 
@@ -107,6 +119,7 @@ public abstract class LabeledDataReader<TProfile> : BaseDataReader<TProfile>
         return CompleteRead(result.State, result.Record.Span, result.Record.FieldSpans);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool CompleteRead(RecordState state, ReadOnlyMemory<char> record, FieldSpan[] fields)
     {
         if (state == RecordState.Eof)

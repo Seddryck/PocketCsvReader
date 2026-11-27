@@ -3,7 +3,7 @@ using PocketCsvReader.Ndjson.Configuration;
 
 namespace PocketCsvReader.Ndjson;
 
-internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>, IPositionSource
+internal sealed class NdjsonRecordSource : IBorrowedCharacterRecordSource<NdjsonProfile>, IPositionSource
 {
     private readonly BufferedRecordReader _reader;
     private readonly NdjsonFramer _framer;
@@ -54,24 +54,30 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
             && profile.Dialect.LineTerminator is "\n" or "\r\n"
             && profile.Dialect.Whitespaces.Order().SequenceEqual(new[] { '\t', '\n', '\r', ' ' });
 
-    bool IBorrowedRecordSource<NdjsonProfile>.CopyPublicMetadata => true;
+    public bool IsEndOfFile(out RecordSpan record, out RecordState state)
+        => ICharacterRecordSource.ReadOwned(this, out record, out state);
 
-    public bool IsEndOfFile(out RecordSpan record, out RecordState recordState)
-        => ReadCurrent().PublishOwned(out record, out recordState);
-
-    CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadCurrent();
-
-    private CurrentRecordResult ReadCurrent()
+    bool ICharacterRecordSource.ReadCharacters(out ReadOnlyMemory<char> characters, out FieldSpan[] fields, out RecordState state)
     {
         while (true)
         {
             if (TrySelectRow(out var selected))
-                return new(false, new CurrentRecord(selected.Memory, selected.Fields), RecordState.Record);
+            {
+                characters = selected.Memory;
+                fields = selected.Fields;
+                state = RecordState.Record;
+                return false;
+            }
             _reader.BeginOperation();
             _position?.BeginRecord();
             var capture = _reader.ReadFrame(Framer, _boundaryScanner);
             if (capture is not { } captured)
-                return new(true, default, RecordState.Eof);
+            {
+                characters = default;
+                fields = [];
+                state = RecordState.Eof;
+                return true;
+            }
 
             var parsed = ParseCapturedRecord(captured.Memory);
             if (parsed is null)
@@ -87,7 +93,10 @@ internal sealed class NdjsonRecordSource : IBorrowedRecordSource<NdjsonProfile>,
             }
             _position?.CompleteRecord();
             var isEndOfFile = _reader.Peek() < 0;
-            return new(isEndOfFile, new CurrentRecord(parsed.Value.Memory, parsed.Value.Fields), RecordState.Record);
+            characters = parsed.Value.Memory;
+            fields = parsed.Value.Fields;
+            state = RecordState.Record;
+            return isEndOfFile;
         }
     }
 

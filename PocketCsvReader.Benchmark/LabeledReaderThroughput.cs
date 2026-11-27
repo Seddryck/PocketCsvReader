@@ -40,6 +40,60 @@ internal static class LabeledReaderThroughput
             RunEnrollments(mode, options);
     }
 
+    public static void RunScan(string format)
+    {
+        if (format is not ("JSON" or "NDJSON" or "Logfmt" or "LTSV"))
+            throw new ArgumentException("Choose JSON, NDJSON, Logfmt, or LTSV.", nameof(format));
+
+        Console.WriteLine("Format,Distribution,Operation,Mode,MedianCpuMs,MedianElapsedMs,AllocatedBytes,Checksum");
+        if (format is "JSON" or "NDJSON")
+        {
+            var records = Generate("RealCsv");
+            if (format == "JSON")
+            {
+                var profile = new JsonProfile(parserOptimizations: Options);
+                var data = CreateJson(records, array: true);
+                Measure(format, "RealCsv", "Scan", "scan", () => Read(data, stream => new JsonDataReader(stream, profile), readDate: null), RowCount,
+                    warmupMilliseconds: 800, sampleMilliseconds: 400, sampleCount: 3);
+            }
+            else
+            {
+                var profile = new NdjsonProfile(new(LineTerminator: "\n"), parserOptimizations: Options);
+                var data = CreateJson(records, array: false);
+                Measure(format, "RealCsv", "Scan", "scan", () => Read(data, stream => new NdjsonDataReader(stream, profile), readDate: null), RowCount,
+                    warmupMilliseconds: 800, sampleMilliseconds: 400, sampleCount: 3);
+            }
+            return;
+        }
+
+        var lines = new StringBuilder();
+        for (var i = 0; i < RowCount; i++)
+        {
+            lines.Append(format == "LTSV"
+                ? FormattableString.Invariant($"id:{i}\troute:/courses\tstatus:200\tbytes:512\tuser:frank\n")
+                : FormattableString.Invariant($"id={i} route=/courses status=200 bytes=512 user=frank\n"));
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(lines.ToString());
+        var reader = format == "LTSV"
+            ? new LtsvReaderBuilder().WithParserOptimizations(Options).Build()
+            : new LogfmtReaderBuilder().WithParserOptimizations(Options).Build();
+        using (var check = reader.ToDataReader(new MemoryStream(bytes, writable: false)))
+        {
+            var verified = 0;
+            while (check.Read())
+            {
+                if (check.GetInt32(0) != verified || check.GetInt32(2) != 200 || check.GetString(4) != "frank")
+                    throw new InvalidOperationException("Unexpected key/value record.");
+                verified++;
+            }
+            if (verified != RowCount)
+                throw new InvalidOperationException("Unexpected key/value row count.");
+        }
+        Measure(format, "Requests", "Scan", "scan", () => Read(bytes, stream => reader.ToDataReader(stream), readDate: null), RowCount,
+            warmupMilliseconds: 800, sampleMilliseconds: 400, sampleCount: 3);
+    }
+
     private static void RunEnrollments(string mode, ParserOptimizationOptions options)
     {
         foreach (var distribution in new[] { "RealCsv", "Clustered", "MostlyUnique" })
@@ -98,16 +152,16 @@ internal static class LabeledReaderThroughput
         return readDate is null ? rows : checksum;
     }
 
-    private static void Measure(string format, string distribution, string operation, string mode, Func<long> run, long expected)
+    private static void Measure(string format, string distribution, string operation, string mode, Func<long> run, long expected,
+        int warmupMilliseconds = 600, int sampleMilliseconds = 500, int sampleCount = 5)
     {
         if (run() != expected)
             throw new InvalidOperationException($"Unexpected checksum for {format}/{distribution}/{operation}.");
         // Warm tiered compilation and the shared buffer pools before capturing repeated process CPU samples.
         var warmup = Stopwatch.StartNew();
-        do { run(); } while (warmup.ElapsedMilliseconds < 600);
+        do { run(); } while (warmup.ElapsedMilliseconds < warmupMilliseconds);
 
         using var process = Process.GetCurrentProcess();
-        const int sampleCount = 5;
         var cpu = new double[sampleCount];
         var elapsed = new double[sampleCount];
         var allocations = new long[sampleCount];
@@ -118,7 +172,7 @@ internal static class LabeledReaderThroughput
             var bytes = GC.GetAllocatedBytesForCurrentThread();
             var start = Stopwatch.GetTimestamp();
             int passes = 0;
-            do { run(); passes++; } while (Stopwatch.GetElapsedTime(start).TotalMilliseconds < 500);
+            do { run(); passes++; } while (Stopwatch.GetElapsedTime(start).TotalMilliseconds < sampleMilliseconds);
             allocations[sample] = (GC.GetAllocatedBytesForCurrentThread() - bytes) / passes;
             elapsed[sample] = Stopwatch.GetElapsedTime(start).TotalMilliseconds / passes;
             process.Refresh();
