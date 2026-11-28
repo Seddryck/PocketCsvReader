@@ -20,4 +20,6 @@ public record FieldDescriptor
     /// <summary>A typed ParseSpan delegate used in preference to the legacy string parser.</summary>
     /// <value>The typed span parser, or null to use the fallback parser.</value>
     public Delegate? SpanParse { get; init; }
+
+    internal object? NullDefault { get; init; }
 }

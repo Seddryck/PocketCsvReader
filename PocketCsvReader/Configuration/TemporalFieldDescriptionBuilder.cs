@@ -24,6 +24,10 @@ public class TemporalFieldDescriptorBuilder : FieldDescriptorBuilder
     public new TemporalFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (TemporalFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
+    /// <inheritdoc />
+    public new TemporalFieldDescriptorBuilder WithNullDefault<T>(T value)
+        => (TemporalFieldDescriptorBuilder)base.WithNullDefault(value);
+
     public new TemporalFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (TemporalFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
 

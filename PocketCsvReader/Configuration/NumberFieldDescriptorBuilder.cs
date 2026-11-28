@@ -23,6 +23,10 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
     public new NumberFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (NumberFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
+    /// <inheritdoc />
+    public new NumberFieldDescriptorBuilder WithNullDefault<T>(T value)
+        => (NumberFieldDescriptorBuilder)base.WithNullDefault(value);
+
     public new NumberFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (NumberFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
@@ -33,5 +37,5 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
         => (NumberFieldDescriptorBuilder)base.WithParser(parse);
 
     public override FieldDescriptor Build()
-        => new FieldDescriptor(runtimeType, name, Format?.Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty) { SpanParse = spanParse };
+        => Build(Format?.Build());
 }

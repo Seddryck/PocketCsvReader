@@ -69,7 +69,7 @@ internal static class DataReaderMaterializer
             {
                 var useValue = useSchema || (hasRowNumber && index == 0);
                 row[index] = reader.IsDBNull(index) ? DBNull.Value
-                    : useValue ? reader.GetValue(index) ?? DBNull.Value : reader.GetString(index);
+                    : useValue ? reader.GetValue(index) ?? DBNull.Value : reader.GetString(index) ?? (object)DBNull.Value;
             }
 
             table.Rows.Add(row);

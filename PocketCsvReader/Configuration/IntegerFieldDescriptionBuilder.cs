@@ -22,6 +22,10 @@ public class IntegerFieldDescriptorBuilder : FieldDescriptorBuilder
     public new IntegerFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (IntegerFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
+    /// <inheritdoc />
+    public new IntegerFieldDescriptorBuilder WithNullDefault<T>(T value)
+        => (IntegerFieldDescriptorBuilder)base.WithNullDefault(value);
+
     public new IntegerFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (IntegerFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
