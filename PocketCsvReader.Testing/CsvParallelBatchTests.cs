@@ -305,6 +305,28 @@ public class CsvParallelBatchTests
         Assert.That(first.CanRead, Is.False);
     }
 
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task FirstBatchCanBeReadWhileTheRestOfTheFileIsStalled(bool preserveOrder)
+    {
+        var csv = CreateReader(preserveOrder);
+        using var first = new GatedStream("Value\n" + string.Concat(Enumerable.Repeat("X\n", 64)), "Tail\n");
+        Func<Stream>[] inputs = [() => first];
+        await using var reader = csv.ToDataReader(inputs);
+
+        for (var number = 1; number <= 64; number++)
+        {
+            Assert.That(await reader.ReadAsync().WaitAsync(Timeout), Is.True);
+            Assert.That(reader.GetInt32(0), Is.EqualTo(number));
+        }
+
+        await first.Stalled.WaitAsync(Timeout);
+        first.Resume();
+        Assert.That(await reader.ReadAsync().WaitAsync(Timeout), Is.True);
+        Assert.That(reader.GetString(1), Is.EqualTo("Tail"));
+        Assert.That(await reader.ReadAsync().WaitAsync(Timeout), Is.False);
+    }
+
     [Test]
     public void BuilderRejectsNonpositiveConcurrency()
     {

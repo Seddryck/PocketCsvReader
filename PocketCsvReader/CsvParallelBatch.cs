@@ -10,7 +10,8 @@ internal readonly record struct CsvBatchInput(
 
 internal sealed class CsvParallelBatch : IAsyncDisposable
 {
-    private const int RowsPerBatch = 64;
+    private const int FirstBatchRows = 64;
+    private const int LaterBatchRows = 128;
     private readonly CsvProfile _profile;
     private readonly IEnumerator<CsvBatchInput> _inputs;
     private readonly bool _ownsUnopenedStreams;
@@ -54,59 +55,32 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
 
     public async ValueTask<bool> ReadAsync(bool useAsync, CancellationToken token)
     {
-        bool windowComplete;
-        lock (_lifecycle)
-        {
-            if (_ended)
-                return false;
-            CurrentSource = null;
-            _cursor.ClearBatchRow();
-            windowComplete = _cursor.Window?.IsComplete == true;
-        }
-
         try
         {
+            using var registration = token.UnsafeRegister(static state => _ = ((CsvParallelBatch)state!).StopAsync(), this);
+            bool windowComplete;
+            lock (_lifecycle)
+            {
+                if (_ended)
+                    return false;
+                CurrentSource = null;
+                windowComplete = _cursor.Window?.IsComplete == true;
+                if (!windowComplete)
+                {
+                    _workers ??= StartWorkers(useAsync);
+                    if (AdvanceBuffered(token))
+                        return true;
+                }
+            }
+
             if (windowComplete)
             {
                 await DisposeAsync().ConfigureAwait(false);
                 return false;
             }
 
-            using var registration = token.UnsafeRegister(static state => _ = ((CsvParallelBatch)state!).StopAsync(), this);
-            lock (_lifecycle)
-            {
-                if (_cleanup is not null)
-                    return false;
-                _workers ??= Task.Run(() => RunAsync(useAsync));
-            }
-
             while (true)
             {
-                lock (_lifecycle)
-                {
-                    if (_ended)
-                        return false;
-                    _stopToken.ThrowIfCancellationRequested();
-                    if (_currentBatch is { } batch)
-                    {
-                        if (_nextRow < batch.Count)
-                        {
-                            var row = batch.Rows[_nextRow++];
-                            if (_cursor.LoadBatchRow(row, batch.Headers, batch.Storage, _decoder))
-                            {
-                                CurrentSource = row.Source;
-                                return true;
-                            }
-
-                            continue;
-                        }
-
-                        _cursor.ClearBatchRow();
-                        _currentBatch = null;
-                        ReturnBatch(batch);
-                    }
-                }
-
                 var next = await ReadBatchAsync().ConfigureAwait(false);
                 if (next is null)
                 {
@@ -126,6 +100,8 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
 
                     _currentBatch = next;
                     _nextRow = 0;
+                    if (AdvanceBuffered(token))
+                        return true;
                 }
             }
         }
@@ -140,6 +116,31 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
             _failure?.Throw();
             throw;
         }
+    }
+
+    // The lifecycle lock protects the cursor and its borrowed batch from disposal.
+    private bool AdvanceBuffered(CancellationToken token)
+    {
+        _stopToken.ThrowIfCancellationRequested();
+        if (_currentBatch is not { } batch)
+            return false;
+
+        while (_nextRow < batch.Count)
+        {
+            var row = batch.Rows[_nextRow++];
+            if (_cursor.LoadBatchRow(row, batch.Headers, batch.Storage, _decoder))
+            {
+                CurrentSource = row.Source;
+                return true;
+            }
+            token.ThrowIfCancellationRequested();
+            _stopToken.ThrowIfCancellationRequested();
+        }
+
+        _cursor.ClearBatchRow();
+        _currentBatch = null;
+        ReturnBatch(batch);
+        return false;
     }
 
     private async ValueTask<RowBatch?> ReadBatchAsync()
@@ -192,6 +193,9 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
         }
         return null;
     }
+
+    // Capture the I/O mode only when starting the workers.
+    private Task StartWorkers(bool useAsync) => Task.Run(() => RunAsync(useAsync));
 
     private async Task RunAsync(bool useAsync)
     {
@@ -272,6 +276,7 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
                     schema = null;
                 }
 
+                int rowLimit = FirstBatchRows;
                 while (!_stopToken.IsCancellationRequested && (useAsync
                     ? await reader.ReadBatchInputAsync(_stopToken).ConfigureAwait(false)
                     : reader.ReadBatchInput()))
@@ -283,13 +288,14 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
                         schema = null;
                     }
 
-                    batch ??= new RowBatch(sourceHeaders);
+                    batch ??= new RowBatch(sourceHeaders, rowLimit);
                     batch.Add(reader.CopyBatchInput(batch.Storage, index, input.FileName));
-                    if (batch.Count == RowsPerBatch || batch.StorageBytes >= CsvBatchStorage.StorageLimit)
+                    if (batch.Count == rowLimit || batch.StorageBytes >= CsvBatchStorage.StorageLimit)
                     {
                         var ready = batch;
                         batch = null;
                         await PublishAsync(output, ready).ConfigureAwait(false);
+                        rowLimit = LaterBatchRows;
                     }
                 }
 
@@ -446,13 +452,13 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
     private static Channel<T> CreateQueue<T>(int capacity, bool singleWriter) =>
         Channel.CreateBounded<T>(new BoundedChannelOptions(capacity) { SingleWriter = singleWriter });
 
-    private sealed class RowBatch(string[] headers) : IDisposable
+    private sealed class RowBatch(string[] headers, int capacity) : IDisposable
     {
         public string[] Headers { get; } = headers;
-        public CsvParallelRow[] Rows { get; } = ArrayPool<CsvParallelRow>.Shared.Rent(RowsPerBatch);
+        public CsvParallelRow[] Rows { get; } = ArrayPool<CsvParallelRow>.Shared.Rent(capacity);
         public CsvBatchStorage Storage { get; } = new();
         public int Count { get; private set; }
-        public long StorageBytes => (RowsPerBatch * Unsafe.SizeOf<CsvParallelRow>()) + Storage.UsedBytes;
+        public long StorageBytes => (capacity * Unsafe.SizeOf<CsvParallelRow>()) + Storage.UsedBytes;
 
         public void Add(CsvParallelRow row) => Rows[Count++] = row;
 

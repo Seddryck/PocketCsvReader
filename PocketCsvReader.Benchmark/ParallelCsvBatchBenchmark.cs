@@ -10,16 +10,22 @@ internal static class ParallelCsvBatchBenchmark
     private const int DeliveryBatchSize = 64;
     private const int Measurements = 3;
 
-    public static void Run()
+    public static void Run() => Run(unevenOnly: false);
+
+    public static void RunUneven() => Run(unevenOnly: true);
+
+    private static void Run(bool unevenOnly)
     {
         var directory = Directory.CreateTempSubdirectory("pocketcsv-parallel-");
         var files = Enumerable.Range(0, 4).Select(index => Path.Combine(directory.FullName, $"part-{index}.csv")).ToArray();
         try
         {
             Console.WriteLine("layout,output,workers,ordered,rows_per_second,first_64_rows_ms,allocated_bytes,peak_handoff_storage_bytes");
-            RunLayout("balanced", files, [24_000, 24_000, 24_000, 24_000]);
+            if (!unevenOnly)
+                RunLayout("balanced", files, [24_000, 24_000, 24_000, 24_000]);
             RunLayout("uneven", files, [78_000, 6_000, 6_000, 6_000]);
-            RunLayout("wide-balanced", files, [24_000, 24_000, 24_000, 24_000], omittedPadding: 256);
+            if (!unevenOnly)
+                RunLayout("wide-balanced", files, [24_000, 24_000, 24_000, 24_000], omittedPadding: 256);
         }
         finally
         {
