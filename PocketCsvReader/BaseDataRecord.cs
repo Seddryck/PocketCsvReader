@@ -13,7 +13,7 @@ using System.Linq.Expressions;
 using System.ComponentModel.Design;
 
 namespace PocketCsvReader;
-public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader
+public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader, ISourceNullRecord
     where TProfile : IProfile
 {
     internal IReadOnlyList<ReaderFilter>? FileQueryFilters { get; set; }
@@ -670,8 +670,18 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         return length;
     }
 
+    /// <summary>Reports whether the effective field value is null after applying any schema null default.</summary>
     public bool IsDBNull(int i)
-        => TryGetComputedNull(i, out var isNull) ? isNull : IsNull(i) && GetConfiguredNullDefault(i) is null;
+        => IsSourceNull(i) && GetConfiguredNullDefault(i) is null;
+
+    /// <summary>Reports whether the reader recognizes the field as null before applying a schema null default.</summary>
+    /// <remarks>For a computed field, reports whether the computed result is null.</remarks>
+    public bool IsSourceNull(int ordinal)
+        => TryGetComputedNull(ordinal, out var isNull) ? isNull : IsNull(ordinal);
+
+    /// <summary>Reports whether the named field is null before applying a schema null default.</summary>
+    public bool IsSourceNull(string name)
+        => IsSourceNull(GetOrdinal(name));
 
     private object? GetConfiguredNullDefault(int i)
         => Profile.Schema is not null && (uint)i < (uint)FieldCount && TryGetFieldDescriptor(i, out var field)
@@ -696,7 +706,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     /// <summary>
-    /// Determines whether the field with the specified name contains a null value.
+    /// Reports whether the effective value of the named field is null after applying any schema null default.
     /// </summary>
     /// <param name="name">The name of the field.</param>
     /// <returns><c>true</c> if the field contains a null value; otherwise, <c>false</c>.</returns>
