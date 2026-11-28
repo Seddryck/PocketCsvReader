@@ -303,7 +303,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
         }
         if ((uint)i < (uint)Fields!.Length && Profile.ParserOptimizations.ExtendIncompleteRecords)
             return GetMissingField().ToString().AsMemory();
-        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {CurrentFieldSpanCount} defined fields.");
+        throw new ArgumentOutOfRangeException($"Attempted to access field index '{i}' in record '{RowCount}', but this row only contains {_batchSourceFieldCount ?? CurrentFieldSpanCount} defined fields.");
     }
 
     /// <summary>
@@ -477,6 +477,9 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             IsEof = true;
             throw;
         }
+
+        if (_batchWorker)
+            BindBatchProjection();
     }
 
     internal string[]? SourceHeaders => _sourceHeaders;

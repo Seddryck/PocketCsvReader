@@ -8,6 +8,27 @@ public partial class CsvDataReader
     private bool _batchHeaderRead;
     private Utf8FieldBuffer? _batchRowDecoder;
     private FieldEscaper? _batchFieldEscaper;
+    private int[]? _batchSelectedOrdinals;
+    private int[]? _batchPackedOrdinals;
+    private int? _batchSourceFieldCount;
+
+    private void BindBatchProjection()
+    {
+        _batchSelectedOrdinals = null;
+        _batchPackedOrdinals = null;
+        // Filters and computed fields can read source columns outside the projection.
+        // Array fields keep their nested span metadata on the full-record path.
+        if (_projectedOrdinals is null || Profile.Filters.Count != 0 || HasComputedFields
+            || Profile.Dialect.ArrayDelimiter is not null)
+            return;
+
+        var selected = _projectedOrdinals.Distinct().Order().ToArray();
+        if (selected.Length == SourceHeaders!.Length)
+            return;
+
+        _batchSelectedOrdinals = selected;
+        _batchPackedOrdinals = Array.ConvertAll(_projectedOrdinals, ordinal => Array.BinarySearch(selected, ordinal));
+    }
 
     internal long? CurrentSourceRecordNumber =>
         (RecordSource as IPositionSource)?.Tracker?.CurrentRecordNumber;
@@ -40,7 +61,8 @@ public partial class CsvDataReader
     {
         var position = RecordSource!.CurrentPosition;
         var source = new CsvRowSource(inputIndex, fileName, CurrentSourceRecordNumber ?? RowCount, position);
-        return new(CopyCurrentCsvRecord(), source, RowCount);
+        var record = CopyCurrentCsvRecord(_batchSelectedOrdinals, out var sourceFieldCount);
+        return new(record, source, RowCount, sourceFieldCount);
     }
 
     internal bool LoadBatchRow(CsvParallelRow row, string[] headers, Utf8FieldBuffer decoder)
@@ -50,12 +72,14 @@ public partial class CsvDataReader
         {
             ResetFieldCaches();
             SetHeaders(headers);
+            BindBatchProjection();
         }
 
+        _batchSourceFieldCount = row.SourceFieldCount;
         _batchRowDecoder = row.Record.Bytes is not null ? decoder : null;
         RowCount = row.RowCount;
         SetRecord(row.Record.Borrow(decoder));
-        CompleteRecord(row.Record.FieldCount);
+        CompleteRecord(row.SourceFieldCount);
         return AcceptBufferedRow();
     }
 
@@ -66,4 +90,4 @@ public partial class CsvDataReader
     }
 }
 
-internal readonly record struct CsvParallelRow(OwnedCsvRecord Record, CsvRowSource Source, int RowCount);
+internal readonly record struct CsvParallelRow(OwnedCsvRecord Record, CsvRowSource Source, int RowCount, int SourceFieldCount);

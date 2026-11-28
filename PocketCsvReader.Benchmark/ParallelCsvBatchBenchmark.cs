@@ -19,6 +19,7 @@ internal static class ParallelCsvBatchBenchmark
             Console.WriteLine("layout,output,workers,ordered,rows_per_second,first_64_rows_ms,allocated_bytes,peak_handoff_storage_bytes");
             RunLayout("balanced", files, [24_000, 24_000, 24_000, 24_000]);
             RunLayout("uneven", files, [78_000, 6_000, 6_000, 6_000]);
+            RunLayout("wide-balanced", files, [24_000, 24_000, 24_000, 24_000], omittedPadding: 256);
         }
         finally
         {
@@ -28,8 +29,9 @@ internal static class ParallelCsvBatchBenchmark
         }
     }
 
-    private static void RunLayout(string layout, string[] files, int[] sizes)
+    private static void RunLayout(string layout, string[] files, int[] sizes, int omittedPadding = 0)
     {
+        var padding = new string('x', omittedPadding);
         int id = 0;
         for (int file = 0; file < sizes.Length; file++)
         {
@@ -38,7 +40,7 @@ internal static class ParallelCsvBatchBenchmark
             for (int row = 0; row < sizes[file]; row++)
             {
                 id++;
-                output.Write(FormattableString.Invariant($"{id},\"name {id % 101}, example\",{id % 1_000},group-{id % 11}\n"));
+                output.Write(FormattableString.Invariant($"{id},\"name {id % 101}, example\",{id % 1_000},group-{id % 11}{padding}\n"));
             }
         }
 

@@ -58,6 +58,8 @@ The default is one reader with sequential delivery. `WithBatchParallelism(4)` pr
 
 Parallel reads start on the first advance. For filenames and synchronous factories, that advance selects synchronous or asynchronous I/O for the workers. Each worker buffers a bounded number of records, and disposing or cancelling an active batch stops the workers and closes owned streams. Keep asynchronous factories cancellation-aware and make any callbacks used by multiple parsers, such as a bad-data handler, thread-safe. Worker errors include the source and can surface after rows have been delivered.
 
+With a column projection, workers still parse the complete CSV row for quoting and field-count checks. They hand off the selected field data when the profile has no filters, computed columns, or array fields. Those profiles keep full rows available to the consumer.
+
 ## Asynchronous stream factories
 
 Pass an `IEnumerable<Func<CancellationToken, ValueTask<Stream>>>` to `ToDataReader`, `ToDbDataReader`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. With sequential reading, later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.

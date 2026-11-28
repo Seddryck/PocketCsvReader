@@ -203,6 +203,35 @@ public class CsvParallelBatchTests
         Assert.That(first.CanRead || second.CanRead, Is.False);
     }
 
+    [TestCase(CsvInputMode.DecodedChars, true)]
+    [TestCase(CsvInputMode.DecodedChars, false)]
+    [TestCase(CsvInputMode.Utf8Bytes, true)]
+    [TestCase(CsvInputMode.Utf8Bytes, false)]
+    public async Task PackedProjectionPreservesReorderingDuplicatesAndMissingCells(CsvInputMode mode, bool useAsync)
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithHeaderRepeat(true).WithLineTerminator("\n"))
+            .WithStreamInitialization(new(ProbeEncoding: false, InputMode: mode))
+            .WithProjection("Name", "Id", "Name")
+            .WithRowNumber()
+            .WithBatchParallelism(2)
+            .Build();
+        var omitted = new string('x', 40_000);
+        Func<Stream>[] inputs =
+        [
+            () => StreamOf($"Id,Ignored,Name\n1,\"{omitted}\nunused\",\"A\"\"B\"\n2,{omitted}\n"),
+            () => StreamOf($"Name,Ignored,Id\n東京,{omitted},3\n")
+        ];
+
+        await using var reader = csv.ToDataReader(inputs);
+        var rows = new List<(int Number, string Name, int Id, string Duplicate)>();
+        while (useAsync ? await reader.ReadAsync().WaitAsync(Timeout) : reader.Read())
+            rows.Add((reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3)));
+
+        Assert.That(rows, Is.EqualTo(new[] { (1, "A\"B", 1, "A\"B"), (2, "", 2, ""), (3, "東京", 3, "東京") }));
+        Assert.That(reader.PeakBufferedStorage, Is.LessThan(32_000));
+    }
+
     [Test]
     public void BuilderRejectsNonpositiveConcurrency()
     {

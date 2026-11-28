@@ -84,10 +84,11 @@ public abstract class BaseRawRecord<TProfile>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private protected OwnedCsvRecord CopyCurrentCsvRecord()
+    private protected OwnedCsvRecord CopyCurrentCsvRecord(int[]? selectedOrdinals, out int sourceFieldCount)
     {
         EnsureCurrentRecord();
-        return _current.CopyForBatch();
+        sourceFieldCount = _current.FieldCount;
+        return _current.CopyForBatch(selectedOrdinals);
     }
 
     private void EnsureCurrentRecord()

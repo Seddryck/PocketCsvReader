@@ -128,14 +128,95 @@ internal readonly struct CurrentRecord
             fields[i] = new(GetCompactValue(i), default);
     }
 
-    internal OwnedCsvRecord CopyForBatch()
+    internal OwnedCsvRecord CopyForBatch(int[]? selectedOrdinals)
     {
+        if (selectedOrdinals is not null)
+        {
+            ReadOnlySpan<int> present = selectedOrdinals;
+            int fieldCount = FieldCount;
+            while (!present.IsEmpty && present[^1] >= fieldCount)
+                present = present[..^1];
+
+            if (IsUtf8)
+            {
+                var (bytes, fields) = CopySelectedFields(_utf8.Span, present);
+                return new(default, bytes, fields);
+            }
+
+            var (characters, selectedFields) = CopySelectedFields(Characters.Span, present);
+            return new(characters, default, selectedFields);
+        }
+
         Array metadata = _compactCount == 0
             ? FieldMetadataBuffer.CopyOwnedTree((FieldSpan[])_metadata!)
             : ((int[])_metadata!).AsSpan(_offsetIndex, _compactCount).ToArray();
         return IsUtf8
             ? new(default, _utf8.ToArray(), metadata)
             : new(Characters.ToArray(), default, metadata);
+    }
+
+    private (T[] Data, Array Metadata) CopySelectedFields<T>(ReadOnlySpan<T> input, ReadOnlySpan<int> ordinals)
+    {
+        if (ordinals.IsEmpty)
+            return ([], Array.Empty<FieldSpan>());
+        if (_compactCount != 0)
+            return CopySelectedCompactFields(input, ordinals);
+
+        var sourceFields = (FieldSpan[])_metadata!;
+        var fields = new FieldSpan[ordinals.Length];
+        int length = 0;
+        for (int i = 0; i < fields.Length; i++)
+        {
+            var field = sourceFields[ordinals[i]];
+            fields[i] = field with { Value = field.Value with { Start = length } };
+            length += field.Value.Length;
+        }
+
+        var data = new T[length];
+        for (int i = 0; i < fields.Length; i++)
+        {
+            var value = sourceFields[ordinals[i]].Value;
+            input.Slice(value.Start, value.Length).CopyTo(data.AsSpan(fields[i].Value.Start));
+        }
+
+        return (data, fields);
+    }
+
+    private (T[] Data, Array Metadata) CopySelectedCompactFields<T>(ReadOnlySpan<T> input, ReadOnlySpan<int> ordinals)
+    {
+        var offsets = ((int[])_metadata!).AsSpan(_offsetIndex, _compactCount);
+        // A source prefix needs no offset rebasing or per-field payload copies.
+        if (ordinals[^1] == ordinals.Length - 1)
+        {
+            return (input[..(offsets[ordinals[^1]] & CsvFieldOffset.OffsetMask)].ToArray(),
+                offsets[..ordinals.Length].ToArray());
+        }
+
+        var selectedOffsets = new int[ordinals.Length];
+        int length = 0;
+        for (int i = 0; i < ordinals.Length; i++)
+        {
+            int ordinal = ordinals[i];
+            int start = ordinal == 0 ? 0 : (offsets[ordinal - 1] & CsvFieldOffset.OffsetMask) + 1;
+            int end = offsets[ordinal] & CsvFieldOffset.OffsetMask;
+            length += end - start;
+            selectedOffsets[i] = length | (offsets[ordinal] & ~CsvFieldOffset.OffsetMask);
+            // Compact offsets expect a delimiter between adjacent retained fields.
+            if (i + 1 < ordinals.Length)
+                length++;
+        }
+
+        var data = new T[length];
+        for (int i = 0; i < ordinals.Length; i++)
+        {
+            int ordinal = ordinals[i];
+            int start = ordinal == 0 ? 0 : (offsets[ordinal - 1] & CsvFieldOffset.OffsetMask) + 1;
+            int end = offsets[ordinal] & CsvFieldOffset.OffsetMask;
+            int destination = i == 0 ? 0 : (selectedOffsets[i - 1] & CsvFieldOffset.OffsetMask) + 1;
+            input.Slice(start, end - start + (i + 1 < ordinals.Length ? 1 : 0)).CopyTo(data.AsSpan(destination));
+        }
+
+        return (data, selectedOffsets);
     }
 
     public CurrentRecord WithExpandedFields(FieldSpan[] fields)

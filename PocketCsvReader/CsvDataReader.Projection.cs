@@ -17,7 +17,7 @@ public partial class CsvDataReader
     private int? SourceFieldCount => HasCurrentFields ? CurrentFieldSpanCount + (HasVirtualRowNumber ? 1 : 0) : null;
 
     // Filters and index lookups use source ordinals (including the generated row number,
-    // if configured). The physical field spans remain in source order for all readers.
+    // if configured). Packed parallel rows use a separate mapping for physical field spans.
     private protected override int GetFieldCacheOrdinal(int i)
     {
         if (_projectedOrdinals is null || _usingSourceFields || (HasRowNumber && i == 0))
@@ -46,13 +46,22 @@ public partial class CsvDataReader
     }
 
     private int GetPhysicalOrdinal(int i)
-        => GetFieldCacheOrdinal(i) - (HasVirtualRowNumber ? 1 : 0);
+    {
+        if (_batchPackedOrdinals is { } packed)
+        {
+            int outputOrdinal = i - RowNumberWidth;
+            if ((uint)outputOrdinal < (uint)packed.Length)
+                return packed[outputOrdinal];
+        }
+
+        return GetFieldCacheOrdinal(i) - (HasVirtualRowNumber ? 1 : 0);
+    }
 
     private protected override FieldSpan? GetRecordField(int i)
     {
         if (_projectedOrdinals is null)
             return base.GetRecordField(i);
-        if (HasRowNumber && i == 0 && CurrentFieldSpanCount > 0)
+        if (HasRowNumber && i == 0 && (_batchSourceFieldCount ?? CurrentFieldSpanCount) > 0)
             return default(FieldSpan);
         var ordinal = GetPhysicalOrdinal(i);
         return (uint)ordinal < (uint)CurrentFieldSpanCount ? GetCurrentField(ordinal) : null;
