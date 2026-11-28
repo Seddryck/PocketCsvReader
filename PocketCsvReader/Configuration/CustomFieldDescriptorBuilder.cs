@@ -20,10 +20,6 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
     public new CustomFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (CustomFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
-    /// <inheritdoc />
-    public new CustomFieldDescriptorBuilder WithRuntimeNullDefault(object value)
-        => (CustomFieldDescriptorBuilder)base.WithRuntimeNullDefault(value);
-
     public new CustomFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (CustomFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]

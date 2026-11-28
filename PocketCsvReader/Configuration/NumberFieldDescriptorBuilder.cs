@@ -23,10 +23,6 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
     public new NumberFieldDescriptorBuilder WithSequence(string pattern, string? value)
         => (NumberFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
-    /// <inheritdoc />
-    public new NumberFieldDescriptorBuilder WithRuntimeNullDefault(object value)
-        => (NumberFieldDescriptorBuilder)base.WithRuntimeNullDefault(value);
-
     public new NumberFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (NumberFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);
     [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]

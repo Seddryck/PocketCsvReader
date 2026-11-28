@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace PocketCsvReader.Configuration;
 
-/// <summary>Configures a field whose type is known at compile time.</summary>
+/// <summary>Configures a schema field and preserves fluent chaining.</summary>
 public abstract class FieldDescriptorBuilder<TField, TBuilder>
     where TBuilder : FieldDescriptorBuilder<TField, TBuilder>
 {
@@ -83,11 +83,16 @@ public abstract class FieldDescriptorBuilder<TField, TBuilder>
     public FieldDescriptor Build() => UntypedBuilder.Build();
 
     internal FieldDescriptorBuilder Configure(Func<TBuilder, TBuilder>? configure)
-        => (configure?.Invoke(Self) ?? Self).UntypedBuilder;
+    {
+        var configured = (configure?.Invoke(Self) ?? Self).UntypedBuilder;
+        if (configured.RuntimeType != UntypedBuilder.RuntimeType)
+            throw new InvalidOperationException("Field configuration must preserve the declared field type.");
+        return configured;
+    }
 
     internal TBuilder SetNullDefault(object value)
     {
-        UntypedBuilder.WithRuntimeNullDefault(value);
+        UntypedBuilder.SetNullDefault(value);
         return Self;
     }
 }
@@ -95,13 +100,19 @@ public abstract class FieldDescriptorBuilder<TField, TBuilder>
 public sealed class FieldDescriptorBuilder<TField> : FieldDescriptorBuilder<TField, FieldDescriptorBuilder<TField>>
 {
     internal FieldDescriptorBuilder()
-        : base(new FieldDescriptorBuilder(typeof(TField))) { }
+        : this(new FieldDescriptorBuilder(typeof(TField))) { }
+
+    internal FieldDescriptorBuilder(FieldDescriptorBuilder builder)
+        : base(builder) { }
 }
 
 public sealed class IntegerFieldDescriptorBuilder<TField> : FieldDescriptorBuilder<TField, IntegerFieldDescriptorBuilder<TField>>
 {
     internal IntegerFieldDescriptorBuilder()
-        : base(new IntegerFieldDescriptorBuilder(typeof(TField))) { }
+        : this(new IntegerFieldDescriptorBuilder(typeof(TField))) { }
+
+    internal IntegerFieldDescriptorBuilder(IntegerFieldDescriptorBuilder builder)
+        : base(builder) { }
 
     public IntegerFieldDescriptorBuilder<TField> WithFormat(Func<IntegerFormatDescriptorBuilder, IntegerFormatDescriptorBuilder> func)
     {
@@ -113,7 +124,10 @@ public sealed class IntegerFieldDescriptorBuilder<TField> : FieldDescriptorBuild
 public sealed class NumberFieldDescriptorBuilder<TField> : FieldDescriptorBuilder<TField, NumberFieldDescriptorBuilder<TField>>
 {
     internal NumberFieldDescriptorBuilder()
-        : base(new NumberFieldDescriptorBuilder(typeof(TField))) { }
+        : this(new NumberFieldDescriptorBuilder(typeof(TField))) { }
+
+    internal NumberFieldDescriptorBuilder(NumberFieldDescriptorBuilder builder)
+        : base(builder) { }
 
     public NumberFieldDescriptorBuilder<TField> WithFormat(Func<NumberFormatDescriptorBuilder, NumberFormatDescriptorBuilder> func)
     {
@@ -125,7 +139,10 @@ public sealed class NumberFieldDescriptorBuilder<TField> : FieldDescriptorBuilde
 public sealed class TemporalFieldDescriptorBuilder<TField> : FieldDescriptorBuilder<TField, TemporalFieldDescriptorBuilder<TField>>
 {
     internal TemporalFieldDescriptorBuilder()
-        : base(new TemporalFieldDescriptorBuilder(typeof(TField))) { }
+        : this(new TemporalFieldDescriptorBuilder(typeof(TField))) { }
+
+    internal TemporalFieldDescriptorBuilder(TemporalFieldDescriptorBuilder builder)
+        : base(builder) { }
 
     public TemporalFieldDescriptorBuilder<TField> WithFormat(string pattern, Func<TemporalFormatDescriptorBuilder, TemporalFormatDescriptorBuilder>? func = null)
     {
@@ -134,7 +151,7 @@ public sealed class TemporalFieldDescriptorBuilder<TField> : FieldDescriptorBuil
     }
 }
 
-/// <summary>Configures non-null defaults for fields whose types are known at compile time.</summary>
+/// <summary>Configures non-null defaults for schema fields.</summary>
 public static class FieldNullDefaultExtensions
 {
     /// <summary>Supplies a value to return when a value-type field is recognized as null.</summary>
@@ -149,7 +166,7 @@ public static class FieldNullDefaultExtensions
         where TBuilder : FieldDescriptorBuilder<TValue?, TBuilder>
         => builder.SetNullDefault(value);
 
-    /// <summary>Supplies a non-null reference to return when a reference-type field is recognized as null.</summary>
+    /// <summary>Supplies a non-null default for a reference field or a field declared with a runtime type.</summary>
     // Generic constraints alone cannot distinguish this signature from the value-type overload.
     public static TBuilder WithNullDefault<TValue, TBuilder>(this FieldDescriptorBuilder<TValue, TBuilder> builder, [DisallowNull] in TValue value)
         where TValue : class?

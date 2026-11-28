@@ -21,6 +21,8 @@ public class FieldDescriptorBuilder
     protected string? dataSourceTypeName;
     private object? _nullDefault;
 
+    internal Type RuntimeType => runtimeType;
+
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
         this.runtimeType = runtimeType;
@@ -55,12 +57,10 @@ public class FieldDescriptorBuilder
         return this;
     }
 
-    /// <summary>Supplies a non-null default for a field whose type is selected at runtime.</summary>
-    public FieldDescriptorBuilder WithRuntimeNullDefault(object value)
+    internal void SetNullDefault(object value)
     {
         ArgumentNullException.ThrowIfNull(value);
         _nullDefault = value;
-        return this;
     }
 
     public FieldDescriptorBuilder WithDataSourceTypeName(string typeName)

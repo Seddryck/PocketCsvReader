@@ -37,13 +37,15 @@ public class NullDefaultTests
         Assert.Throws<FormatException>(() => reader.GetValue(0));
     }
 
-    [Test]
-    public void NullableNumberDefault_IsPreservedInTypedReadsAndParsedRows()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void NullableNumberDefault_IsPreservedInTypedReadsAndParsedRows(bool runtimeType)
     {
         var csv = new CsvReaderBuilder()
             .WithDialect(d => d.WithHeader().WithDelimiter(';').WithLineTerminator("\n").WithNullSequence("NULL"))
-            .WithSchema(s => s.Named()
-                .WithNumberField<decimal?>("Amount", f => f.WithNullDefault(1.25m).WithFormat(fmt => fmt.WithDecimalChar(','))))
+            .WithSchema(s => runtimeType
+                ? s.Named().WithNumberField(typeof(decimal?), "Amount", f => f.WithNullDefault(1.25m).WithFormat(fmt => fmt.WithDecimalChar(',')))
+                : s.Named().WithNumberField<decimal?>("Amount", f => f.WithNullDefault(1.25m).WithFormat(fmt => fmt.WithDecimalChar(','))))
             .Build();
 
         using var typedStream = Source("Amount\nNULL\n");
@@ -82,7 +84,7 @@ public class NullDefaultTests
     public void IncompatibleDefault_IsRejectedWhenBuildingSchema()
     {
         Assert.Throws<ArgumentException>(() => new CsvReaderBuilder()
-            .WithSchema(s => s.Indexed().WithNumberField(typeof(decimal?), f => f.WithRuntimeNullDefault("0")))
+            .WithSchema(s => s.Indexed().WithNumberField(typeof(decimal?), f => f.WithNullDefault("0")))
             .Build());
     }
 
