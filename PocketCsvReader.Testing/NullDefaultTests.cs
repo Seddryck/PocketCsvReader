@@ -109,11 +109,13 @@ public class NullDefaultTests
         }));
     }
 
-    [Test]
-    public void BatchDataReader_ReportsSourceNullBeforeApplyingDefault()
+    [TestCase(1)]
+    [TestCase(2)]
+    public void BatchDataReader_ReportsSourceNullBeforeApplyingDefault(int workers)
     {
-        using var stream = Source(TextOutputInput);
-        using var reader = CreateTextOutputReader().ToDataReader([stream]);
+        using var first = Source(TextOutputInput);
+        using var second = Source(TextOutputInput);
+        using var reader = CreateTextOutputReader(workers).ToDataReader([first, second]);
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.IsSourceNull("Amount"), Is.True);
@@ -139,12 +141,13 @@ public class NullDefaultTests
         Assert.That(schemaTable.Rows[1].ItemArray, Is.EqualTo(new object[] { 12.5m, string.Empty }));
     }
 
-    private static CsvReader CreateTextOutputReader()
+    private static CsvReader CreateTextOutputReader(int workers = 1)
         => new CsvReaderBuilder()
             .WithDialect(d => d.WithHeader().WithLineTerminator("\n").WithNullSequence("N/A"))
             .WithSchema(s => s.Named()
                 .WithField<decimal>("Amount", f => f.WithNullDefault(0m))
                 .WithField<string>("Note", f => f.WithNullDefault("unknown")))
+            .WithBatchParallelism(workers)
             .Build();
 
     private static MemoryStream Source(string content) => new(Encoding.UTF8.GetBytes(content));

@@ -10,6 +10,19 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
     private DialectDescriptorBuilder _dialectBuilder = new();
     private RowNumberOptions? _rowNumber;
     private CsvColumnProjection? _projection;
+    private int _batchParallelism = 1;
+    private bool _preserveBatchInputOrder = true;
+
+    /// <summary>Configures concurrent file reads for multi-input CSV readers.</summary>
+    /// <param name="maxDegreeOfParallelism">Maximum active input readers. One uses sequential reading.</param>
+    /// <param name="preserveInputOrder">Whether to deliver each input in its original order.</param>
+    public CsvReaderBuilder WithBatchParallelism(int maxDegreeOfParallelism, bool preserveInputOrder = true)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxDegreeOfParallelism, 1);
+        _batchParallelism = maxDegreeOfParallelism;
+        _preserveBatchInputOrder = preserveInputOrder;
+        return this;
+    }
 
     /// <summary>Selects source columns by exact header name in the requested output order.</summary>
     public CsvReaderBuilder WithProjection(params string[] columns)
@@ -147,7 +160,9 @@ public class CsvReaderBuilder : ReaderBuilder<CsvReaderBuilder>
             Skip = Skip,
             Take = Take,
             Projection = _projection,
-            RowNumber = _rowNumber
+            RowNumber = _rowNumber,
+            BatchParallelism = _batchParallelism,
+            PreserveBatchInputOrder = _preserveBatchInputOrder
         };
         return new CsvReader(profile);
     }

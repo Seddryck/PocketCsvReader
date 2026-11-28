@@ -391,6 +391,11 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         if (!value.HasValue)
             return field?.NullDefault ?? GetNullValue(i);
 
+        return ParsePresentValue(i, field, value);
+    }
+
+    private object ParsePresentValue(int i, FieldDescriptor? field, NullableSpan value)
+    {
         if (field is not null && Profile.Parsers?.HasMemoryParsers is true
             && ResolveMemoryParser(field.RuntimeType, field) is { } memoryParser)
             return ParseMemoryCached(i, field.RuntimeType, memoryParser, memoryParser.Boxed, BorrowParserInput(value));
