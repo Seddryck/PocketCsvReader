@@ -68,6 +68,7 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
     {
         (Profile, Reader, Pool, FieldParser) = (profile, buffer, pool, parserFactory(profile));
         if (profile is IProfile { TrackPosition: true }) _position = new();
+        else if (profile is CsvProfile { TrackBatchRecordNumber: true }) _position = new(trackCoordinates: false);
     }
 
     /// <summary>
@@ -430,10 +431,11 @@ public abstract class BaseRecordParser<TProfile> : IRecordSource<TProfile>, IPos
             return BadDataAction.Throw;
         if (++_errorCount > policy.MaximumErrors)
             throw new InvalidDataException($"The maximum bad-data count of {policy.MaximumErrors} was exceeded.", exception);
-        var start = _position?.PendingPosition;
+        var position = _position is { TracksCoordinates: true } ? _position : null;
+        var start = position?.PendingPosition;
         return policy.Handler(new BadDataContext(start?.RecordNumber ?? _recordNumber + 1,
-            _position?.PhysicalLine ?? _recordNumber + 1, fieldIndex,
-            _position?.Offset ?? offset, ParserState.Error, offendingInput, exception)
+            position?.PhysicalLine ?? _recordNumber + 1, fieldIndex,
+            position?.Offset ?? offset, ParserState.Error, offendingInput, exception)
         { RecordPosition = start });
     }
 

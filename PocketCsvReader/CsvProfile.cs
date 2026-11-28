@@ -10,6 +10,17 @@ public class CsvProfile : IProfile
     private IReadOnlyList<ReaderFilter> _filters = Array.Empty<ReaderFilter>();
     public IReadOnlyList<ReaderFilter> Filters { get => _filters; init => _filters = value; }
     internal CsvColumnProjection? Projection { get; init; }
+    internal int BatchParallelism { get; init; } = 1;
+    internal bool PreserveBatchInputOrder { get; init; } = true;
+    internal bool TrackBatchRecordNumber { get; private set; }
+
+    internal CsvProfile ForBatchInput()
+    {
+        var profile = (CsvProfile)MemberwiseClone();
+        profile.TrackBatchRecordNumber = true;
+        return profile;
+    }
+
     public int Skip { get; init; }
     public int? Take { get; init; }
     public DialectDescriptor Dialect { get; private set; }

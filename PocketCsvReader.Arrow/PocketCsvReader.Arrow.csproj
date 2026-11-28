@@ -6,6 +6,7 @@
     <Description>Streams PocketCsvReader inputs as typed Apache Arrow record batches.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PocketCsvReader.Benchmark" />
     <PackageReference Include="Apache.Arrow" Version="23.0.0" />
   </ItemGroup>
   <ItemGroup>

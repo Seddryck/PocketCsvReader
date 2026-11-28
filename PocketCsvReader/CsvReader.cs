@@ -88,7 +88,9 @@ namespace PocketCsvReader
                 Skip = profile.Skip,
                 Take = profile.Take,
                 Projection = profile.Projection,
-                RowNumber = profile.RowNumber
+                RowNumber = profile.RowNumber,
+                BatchParallelism = profile.BatchParallelism,
+                PreserveBatchInputOrder = profile.PreserveBatchInputOrder
             };
         }
 
@@ -121,7 +123,7 @@ namespace PocketCsvReader
                 throw new ArgumentException("File names collection cannot be null or empty.", nameof(filenames));
 
             var openers = filenames.Select<string, Func<Stream>>(filename => () => OpenRead(filename));
-            return new CsvBatchDataReader(openers, Profile);
+            return new CsvBatchDataReader(openers, Profile, filenames);
         }
 
         /// <summary>

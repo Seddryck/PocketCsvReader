@@ -14,22 +14,75 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private Stream? _currentStream;
     private CsvProfile Profile { get; }
     private readonly RecordWindow? _window;
+    private readonly CsvParallelBatch? _parallel;
+    private readonly string[]? _filenames;
 
     private CsvDataReader? Current { get; set; }
     private bool _isClosed = false;
     private int fileCount = 0;
     private int _readInProgress;
+    private bool _hasCurrentSource;
+    private CsvDataReader? Active => _parallel is { } parallel ? parallel.Current : Current;
+
+    /// <summary>Gets the source of the current row, or null when the cursor is not on a row.</summary>
+    /// <value>The original input and record number of the current row.</value>
+    public CsvRowSource? CurrentSource
+    {
+        get
+        {
+            if (_isClosed || !_hasCurrentSource)
+                return null;
+            if (_parallel is { } parallel)
+                return parallel.CurrentSource;
+            if (Current is not { } current)
+                return null;
+
+            var inputIndex = fileCount - 1;
+            return new(inputIndex, _filenames?[inputIndex],
+                current.CurrentSourceRecordNumber ?? current.RowCount, current.CurrentPosition);
+        }
+    }
+
+    /// <summary>Gets the parser position of the current row when tracking is enabled.</summary>
+    /// <value>The current record start, when available.</value>
+    public RecordPosition? CurrentPosition => CurrentSource?.Position;
     internal bool HasRowNumber => Profile.RowNumber is not null;
 
     public CsvBatchDataReader(IEnumerable<Stream> streams, CsvProfile profile)
-        : this(streams.Select<Stream, Func<Stream>>(x => () => x), profile)
     {
+        Profile = profile.ForBatchInput();
+        if (profile.BatchParallelism > 1)
+        {
+            _supportsSyncRead = true;
+            _parallel = new(streams.Select(static stream => new CsvBatchInput(null, Stream: stream)),
+                profile, ownsUnopenedStreams: true);
+            return;
+        }
+
         _allStreamsOpen = true;
+        Streams = streams.Select<Stream, Func<Stream>>(stream => () => stream).GetEnumerator();
+        _window = RecordWindow.Create(profile);
+        if (_window?.IsComplete != true)
+            MoveNext();
     }
 
     public CsvBatchDataReader(IEnumerable<Func<Stream>> streams, CsvProfile profile)
+        : this(streams, profile, filenames: null) { }
+
+    internal CsvBatchDataReader(IEnumerable<Func<Stream>> streams, CsvProfile profile, string[]? filenames)
     {
-        (Streams, Profile) = (streams.GetEnumerator(), profile);
+        Profile = profile.ForBatchInput();
+        _filenames = filenames;
+        if (profile.BatchParallelism > 1)
+        {
+            _supportsSyncRead = true;
+            var inputs = streams.Select((open, index) =>
+                new CsvBatchInput(_ => ValueTask.FromResult(open()), filenames?[index]));
+            _parallel = new(inputs, profile, ownsUnopenedStreams: false);
+            return;
+        }
+
+        Streams = streams.GetEnumerator();
         _window = RecordWindow.Create(profile);
         if (_window?.IsComplete != true)
             MoveNext();
@@ -45,10 +98,16 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
 
     private CsvBatchDataReader(CsvProfile profile, bool supportsSyncRead)
     {
-        Profile = profile;
+        Profile = profile.ForBatchInput();
         _usesOwnedFactories = true;
         _supportsSyncRead = supportsSyncRead;
         _window = RecordWindow.Create(profile);
+    }
+
+    private CsvBatchDataReader(IEnumerable<CsvBatchInput> inputs, CsvProfile profile)
+    {
+        Profile = profile;
+        _parallel = new(inputs, profile, ownsUnopenedStreams: false);
     }
 
     internal static CsvBatchDataReader FromAsyncInputs(
@@ -71,6 +130,8 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     {
         ArgumentNullException.ThrowIfNull(openers);
         ArgumentNullException.ThrowIfNull(profile);
+        if (profile.BatchParallelism > 1)
+            return new CsvBatchDataReader(openers.Select(open => new CsvBatchInput(open)), profile);
         return new CsvBatchDataReader(openers.Select<Func<CancellationToken, ValueTask<Stream>>, Func<CancellationToken, ValueTask<ReaderInput>>>(
             open => token => OpenInput(open, token)), profile, supportsSyncRead: false);
 
@@ -116,13 +177,22 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     public bool Read()
     {
         EnterRead();
+        _hasCurrentSource = false;
         try
         {
+            if (_parallel is { } parallel)
+            {
+                if (!_supportsSyncRead)
+                    throw new NotSupportedException("Batch readers with asynchronous inputs require ReadAsync.");
+                try { return _hasCurrentSource = parallel.ReadAsync(useAsync: false, default).AsTask().GetAwaiter().GetResult(); }
+                catch { _isClosed = true; throw; }
+            }
+
             if (_usesOwnedFactories)
             {
                 if (!_supportsSyncRead)
                     throw new NotSupportedException("Batch readers with asynchronous inputs require ReadAsync.");
-                return ReadFromDeferredFactories();
+                return _hasCurrentSource = ReadFromDeferredFactories();
             }
 
             if (Current is null)
@@ -136,7 +206,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 if (Current is null)
                     return false;
             }
-            return true;
+            return _hasCurrentSource = true;
         }
         finally
         {
@@ -150,8 +220,15 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _hasCurrentSource = false;
+            if (_parallel is { } parallel)
+            {
+                try { return _hasCurrentSource = await parallel.ReadAsync(useAsync: true, cancellationToken).ConfigureAwait(false); }
+                catch { _isClosed = true; throw; }
+            }
+
             if (_usesOwnedFactories)
-                return await ReadFromOwnedFactoriesAsync(cancellationToken).ConfigureAwait(false);
+                return _hasCurrentSource = await ReadFromOwnedFactoriesAsync(cancellationToken).ConfigureAwait(false);
 
             if (Current is null)
                 return false;
@@ -164,7 +241,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
                 if (Current is null)
                     return false;
             }
-            return true;
+            return _hasCurrentSource = true;
         }
         finally
         {
@@ -315,6 +392,7 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
         if (!stream.CanRead)
             throw new InvalidOperationException("A stream factory returned an unreadable stream.");
 
+        fileCount++;
         Current = createReader?.Invoke(stream) ?? new CsvDataReader(stream, Profile, leaveOpen: true);
         Current.CurrentRowNumber = rowNumber;
         Current.Window = _window;
@@ -423,51 +501,59 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     private void ExitRead() => Volatile.Write(ref _readInProgress, 0);
 
     #region composite
-    public int FieldCount => Current?.FieldCount ?? 0;
-    public object GetValue(int i) => Current!.GetValue(i);
+    public int FieldCount => Active?.FieldCount ?? 0;
+    public object GetValue(int i) => Active!.GetValue(i);
     /// <summary>Validates the current cell with the active reader's schema and cached parsers.</summary>
-    public bool IsValid(int i) => (Current ?? throw new InvalidOperationException("No current record is available.")).IsValid(i);
+    public bool IsValid(int i) => (Active ?? throw new InvalidOperationException("No current record is available.")).IsValid(i);
     /// <summary>Validates the named current cell with the active reader's schema and cached parsers.</summary>
-    public bool IsValid(string name) => (Current ?? throw new InvalidOperationException("No current record is available.")).IsValid(name);
-    public string GetName(int i) => Current!.GetName(i);
-    public int GetOrdinal(string name) => Current!.GetOrdinal(name);
-    public Type GetFieldType(int i) => Current!.GetFieldType(i);
-    public bool IsDBNull(int i) => Current!.IsDBNull(i);
-    public object this[int i] => Current![i];
-    public object this[string name] => Current![name];
+    public bool IsValid(string name) => (Active ?? throw new InvalidOperationException("No current record is available.")).IsValid(name);
+    public string GetName(int i) => Active!.GetName(i);
+    public int GetOrdinal(string name) => Active!.GetOrdinal(name);
+    public Type GetFieldType(int i) => Active!.GetFieldType(i);
+    public bool IsDBNull(int i) => Active!.IsDBNull(i);
+    public object this[int i] => Active![i];
+    public object this[string name] => Active![name];
     public int RecordsAffected => -1;
     public int Depth => 0;
     public bool NextResult() => false;
     public DataTable GetSchemaTable() => throw new NotImplementedException();
-    public int GetInt32(int i) => Current!.GetInt32(i);
-    public string GetString(int i) => Current!.GetString(i);
-    public bool GetBoolean(int i) => Current!.GetBoolean(i);
-    public long GetInt64(int i) => Current!.GetInt64(i);
-    public double GetDouble(int i) => Current!.GetDouble(i);
-    public float GetFloat(int i) => Current!.GetFloat(i);
-    public Guid GetGuid(int i) => Current!.GetGuid(i);
-    public short GetInt16(int i) => Current!.GetInt16(i);
-    public byte GetByte(int i) => Current!.GetByte(i);
-    public char GetChar(int i) => Current!.GetChar(i);
-    public DateTime GetDateTime(int i) => Current!.GetDateTime(i);
-    public decimal GetDecimal(int i) => Current!.GetDecimal(i);
+    public int GetInt32(int i) => Active!.GetInt32(i);
+    public string GetString(int i) => Active!.GetString(i);
+    public bool GetBoolean(int i) => Active!.GetBoolean(i);
+    public long GetInt64(int i) => Active!.GetInt64(i);
+    public double GetDouble(int i) => Active!.GetDouble(i);
+    public float GetFloat(int i) => Active!.GetFloat(i);
+    public Guid GetGuid(int i) => Active!.GetGuid(i);
+    public short GetInt16(int i) => Active!.GetInt16(i);
+    public byte GetByte(int i) => Active!.GetByte(i);
+    public char GetChar(int i) => Active!.GetChar(i);
+    public DateTime GetDateTime(int i) => Active!.GetDateTime(i);
+    public decimal GetDecimal(int i) => Active!.GetDecimal(i);
     public long GetBytes(int i, long fieldoffset, byte[]? buffer, int bufferoffset, int length)
-        => Current!.GetBytes(i, fieldoffset, buffer, bufferoffset, length);
+        => Active!.GetBytes(i, fieldoffset, buffer, bufferoffset, length);
     public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length)
-        => Current!.GetChars(i, fieldoffset, buffer, bufferoffset, length);
-    public IDataReader GetData(int i) => Current!.GetData(i);
-    public string GetDataTypeName(int i) => Current!.GetDataTypeName(i);
-    public int GetValues(object[] values) => Current!.GetValues(values);
+        => Active!.GetChars(i, fieldoffset, buffer, bufferoffset, length);
+    public IDataReader GetData(int i) => Active!.GetData(i);
+    public string GetDataTypeName(int i) => Active!.GetDataTypeName(i);
+    public int GetValues(object[] values) => Active!.GetValues(values);
 
-    public T GetFieldValue<T>(int i) => Current!.GetFieldValue<T>(i);
+    public T GetFieldValue<T>(int i) => Active!.GetFieldValue<T>(i);
 
     #endregion
+    internal CsvDataReader? CurrentCsvRow => _hasCurrentSource ? Active : null;
+    internal long PeakBufferedStorage => _parallel?.PeakBufferedStorage ?? 0;
 
     public void Close()
     {
         if (!_isClosed)
         {
             _isClosed = true;
+            if (_parallel is { } parallel)
+            {
+                parallel.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                return;
+            }
+
             if (_usesOwnedFactories)
             {
                 DisposeOwnedBatch();
@@ -500,6 +586,13 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
             return;
         _disposed = true;
         _isClosed = true;
+
+        if (_parallel is { } parallel)
+        {
+            await parallel.DisposeAsync().ConfigureAwait(false);
+            GC.SuppressFinalize(this);
+            return;
+        }
 
         if (_usesOwnedFactories)
         {

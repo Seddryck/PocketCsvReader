@@ -8,6 +8,8 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PocketCsvReader.Chrononuensis" />
+    <InternalsVisibleTo Include="PocketCsvReader.Arrow" />
+    <InternalsVisibleTo Include="PocketCsvReader.Benchmark" />
     <InternalsVisibleTo Include="PocketCsvReader.NetTopologySuite" />
   </ItemGroup>
   <PropertyGroup>

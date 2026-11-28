@@ -8,12 +8,16 @@ internal interface IPositionSource
 }
 
 // One optional instance per reader; snapshots are values, never boxed or allocated per record.
-internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUnit.Utf16CodeUnits, bool countUtf8 = false)
+internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUnit.Utf16CodeUnits,
+    bool countUtf8 = false, bool trackCoordinates = true)
 {
     public long Offset { get; private set; }
     public long PhysicalLine { get; private set; } = 1;
     public long RecordNumber { get; private set; }
-    public RecordPosition? CurrentPosition { get; private set; }
+    public bool TracksCoordinates => trackCoordinates;
+    public RecordPosition? CurrentPosition => trackCoordinates ? CurrentRecord : null;
+    private RecordPosition? CurrentRecord { get; set; }
+    public long? CurrentRecordNumber => CurrentRecord?.RecordNumber;
     private long _startOffset;
     private long _startLine;
     private bool _previousCr;
@@ -30,7 +34,7 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
         _startOffset = Offset;
         _startLine = PhysicalLine;
         _startPreviousCr = _previousCr;
-        CurrentPosition = null;
+        CurrentRecord = null;
     }
 
     public RecordPosition PendingPosition => new(RecordNumber + 1, _startLine, _startOffset, unit);
@@ -41,20 +45,20 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
         for (int i = 0; i < prefix.Length; i++)
             if (prefix[i] == '\r' || (prefix[i] == '\n' && (i == 0 ? !_startPreviousCr : prefix[i - 1] != '\r'))) line++;
         var length = countUtf8 ? Encoding.UTF8.GetByteCount(prefix) : prefix.Length;
-        CurrentPosition = new(++RecordNumber, line, start.Offset + length, unit);
+        CurrentRecord = new(++RecordNumber, line, start.Offset + length, unit);
     }
 
     public void CompleteRecord()
-        => CurrentPosition = new(++RecordNumber, _startLine, _startOffset, unit);
+        => CurrentRecord = new(++RecordNumber, _startLine, _startOffset, unit);
 
-    public void SkipRecord() { RecordNumber++; CurrentPosition = null; }
+    public void SkipRecord() { RecordNumber++; CurrentRecord = null; }
 
     public static void ExcludeRecord<T>(IRecordSource<T> source)
     {
-        if (source is IPositionSource { Tracker: { } tracker } && tracker.CurrentPosition.HasValue)
+        if (source is IPositionSource { Tracker: { } tracker } && tracker.CurrentRecord.HasValue)
         {
             tracker.RecordNumber--;
-            tracker.CurrentPosition = null;
+            tracker.CurrentRecord = null;
         }
     }
 
@@ -70,7 +74,7 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
 
     public void Advance(ReadOnlySpan<char> input)
     {
-        if (input.IsEmpty) return;
+        if (!trackCoordinates || input.IsEmpty) return;
         if (countUtf8)
             AdvanceUtf8Offset(input);
         else
@@ -91,7 +95,7 @@ internal sealed class PositionTracker(PositionOffsetUnit unit = PositionOffsetUn
 
     public void Advance(ReadOnlySpan<byte> input)
     {
-        if (input.IsEmpty) return;
+        if (!trackCoordinates || input.IsEmpty) return;
         Offset += input.Length;
         int consumed = 0;
         while (true)

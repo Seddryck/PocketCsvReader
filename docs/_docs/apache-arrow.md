@@ -55,6 +55,24 @@ The APIs are extensions on the shared flat-file reader abstraction, so the same 
 
 Each `RecordBatch` owns Arrow buffers and must be disposed by the consumer. Enumeration disposes the PocketCsvReader data reader. Stream overloads follow that reader's ownership behavior and therefore dispose the supplied stream when enumeration ends, fails, or is cancelled.
 
+## Batches from multiple CSV inputs
+
+Pass filenames, streams, or lazy stream factories to the multi-input `ToArrowBatches` or `ToArrowBatchesAsync` overloads. These overloads use the [CSV reader's batch configuration](../batch-reading/) and yield `CsvArrowBatch` instances. Dispose each instance after consuming its `Batch`. Its `Sources` collection contains the source input and record number for every Arrow row, with parser positions when tracking is enabled.
+
+```csharp
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithBatchParallelism(4)
+    .Build();
+
+await foreach (var result in csv.ToArrowBatchesAsync(
+    new[] { "part-1.csv", "part-2.csv" }, cancellationToken: cancellationToken))
+{
+    using var owned = result;
+    Console.WriteLine($"Read {owned.Batch.Length} rows from {owned.Sources.Length} source records.");
+}
+```
+
 ## Type mappings
 
 | PocketCsvReader runtime type | Apache Arrow type |
