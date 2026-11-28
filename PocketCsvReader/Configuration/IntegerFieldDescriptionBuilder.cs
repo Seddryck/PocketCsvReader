@@ -23,8 +23,8 @@ public class IntegerFieldDescriptorBuilder : FieldDescriptorBuilder
         => (IntegerFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
     /// <inheritdoc />
-    public new IntegerFieldDescriptorBuilder WithNullDefault<T>(T value)
-        => (IntegerFieldDescriptorBuilder)base.WithNullDefault(value);
+    public new IntegerFieldDescriptorBuilder WithRuntimeNullDefault(object value)
+        => (IntegerFieldDescriptorBuilder)base.WithRuntimeNullDefault(value);
 
     public new IntegerFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (IntegerFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);

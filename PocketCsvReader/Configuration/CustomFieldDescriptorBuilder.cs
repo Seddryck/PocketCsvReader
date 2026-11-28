@@ -21,8 +21,8 @@ public class CustomFieldDescriptorBuilder : FieldDescriptorBuilder
         => (CustomFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
     /// <inheritdoc />
-    public new CustomFieldDescriptorBuilder WithNullDefault<T>(T value)
-        => (CustomFieldDescriptorBuilder)base.WithNullDefault(value);
+    public new CustomFieldDescriptorBuilder WithRuntimeNullDefault(object value)
+        => (CustomFieldDescriptorBuilder)base.WithRuntimeNullDefault(value);
 
     public new CustomFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (CustomFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);

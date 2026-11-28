@@ -24,8 +24,8 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
         => (NumberFieldDescriptorBuilder)base.WithSequence(pattern, value);
 
     /// <inheritdoc />
-    public new NumberFieldDescriptorBuilder WithNullDefault<T>(T value)
-        => (NumberFieldDescriptorBuilder)base.WithNullDefault(value);
+    public new NumberFieldDescriptorBuilder WithRuntimeNullDefault(object value)
+        => (NumberFieldDescriptorBuilder)base.WithRuntimeNullDefault(value);
 
     public new NumberFieldDescriptorBuilder WithDataSourceTypeName(string typeName)
         => (NumberFieldDescriptorBuilder)base.WithDataSourceTypeName(typeName);

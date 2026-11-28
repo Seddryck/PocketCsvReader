@@ -82,7 +82,7 @@ public class NullDefaultTests
     public void IncompatibleDefault_IsRejectedWhenBuildingSchema()
     {
         Assert.Throws<ArgumentException>(() => new CsvReaderBuilder()
-            .WithSchema(s => s.Indexed().WithNumberField<decimal?>(f => f.WithNullDefault("0")))
+            .WithSchema(s => s.Indexed().WithNumberField(typeof(decimal?), f => f.WithRuntimeNullDefault("0")))
             .Build());
     }
 

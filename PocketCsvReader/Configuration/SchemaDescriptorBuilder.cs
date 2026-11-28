@@ -164,6 +164,12 @@ public class IndexedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
     ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithCustomField(Type type, string name, Func<CustomFieldDescriptorBuilder, CustomFieldDescriptorBuilder> func)
         => AddCustomField(type, name, func);
 
+    internal IndexedSchemaDescriptorBuilder AddField(FieldDescriptorBuilder field)
+    {
+        _fields.Add(field);
+        return this;
+    }
+
     public SchemaDescriptor? Build()
     {
         if (_fields.Count == 0 && _computedFields.Count == 0)
@@ -287,6 +293,12 @@ public class NamedSchemaDescriptorBuilder : ISchemaDescriptorBuilder
     [Obsolete(SchemaDescriptorBuilder.CustomFieldObsoleteMessage)]
     ISchemaDescriptorBuilder ISchemaDescriptorBuilder.WithCustomField(Type type, string name)
         => AddCustomField(type, name, null);
+
+    internal NamedSchemaDescriptorBuilder AddField(string name, FieldDescriptorBuilder field)
+    {
+        _fields.Add(field.WithName(name));
+        return this;
+    }
 
     public SchemaDescriptor? Build()
     {

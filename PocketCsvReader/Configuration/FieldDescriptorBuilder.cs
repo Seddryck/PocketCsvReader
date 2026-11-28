@@ -20,7 +20,6 @@ public class FieldDescriptorBuilder
     protected SequenceCollection? sequences;
     protected string? dataSourceTypeName;
     private object? _nullDefault;
-    private bool _hasNullDefault;
 
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
@@ -56,11 +55,11 @@ public class FieldDescriptorBuilder
         return this;
     }
 
-    /// <summary>Supplies a typed value to return when the reader recognizes a null for this field.</summary>
-    public FieldDescriptorBuilder WithNullDefault<T>(T value)
+    /// <summary>Supplies a non-null default for a field whose type is selected at runtime.</summary>
+    public FieldDescriptorBuilder WithRuntimeNullDefault(object value)
     {
+        ArgumentNullException.ThrowIfNull(value);
         _nullDefault = value;
-        _hasNullDefault = true;
         return this;
     }
 
@@ -141,15 +140,8 @@ public class FieldDescriptorBuilder
 
     protected FieldDescriptor Build(IFormatDescriptor? format)
     {
-        if (_hasNullDefault)
-        {
-            var underlyingType = Nullable.GetUnderlyingType(runtimeType);
-            var compatible = _nullDefault is null
-                ? !runtimeType.IsValueType || underlyingType is not null
-                : (underlyingType ?? runtimeType).IsInstanceOfType(_nullDefault);
-            if (!compatible)
-                throw new ArgumentException($"The null default must be compatible with field type '{runtimeType}'.");
-        }
+        if (_nullDefault is not null && !(Nullable.GetUnderlyingType(runtimeType) ?? runtimeType).IsInstanceOfType(_nullDefault))
+            throw new ArgumentException($"The null default must be compatible with field type '{runtimeType}'.");
 
         return new FieldDescriptor(runtimeType, name, format, parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty)
         {

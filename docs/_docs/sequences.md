@@ -50,6 +50,8 @@ Use `WithSequence(pattern, stringValueOrNull)` on a resource or field builder. R
 
 Use `WithNullDefault(value)` on a schema field to supply a typed value for inputs the reader already recognizes as null. For example, `f.WithSequence("N/A", null).WithNullDefault(0m)` returns decimal zero through typed and boxed reads and parsed rows. A non-null default makes `IsDBNull` return false. Raw field access still returns the input text.
 
+Declare the field with a generic schema method such as `WithField<decimal?>` to have the compiler check the default against the field's type. A nullable value-type field takes its underlying type as the default, so `0m` is valid for `decimal?` and `null` is a compile-time error. Leave the default unconfigured to keep nulls. For schemas built from runtime `Type` values, use `WithRuntimeNullDefault(value)`. The schema then checks type compatibility when it is built.
+
 ## Replacement behavior and applicability
 
 Sequence lookup matches an eligible complete field, not every textual occurrence. For nonempty fields, quoted or escaped input is excluded from the ordinary sequence lookup; an empty eligible value is checked separately. Thus quoted `"NULL"` and unquoted `NULL` need not mean the same thing. `HandleSpecialValues = false` disables this sanitizer path where implemented.
