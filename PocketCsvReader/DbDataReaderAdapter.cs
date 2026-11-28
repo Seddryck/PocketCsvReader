@@ -27,6 +27,10 @@ public sealed class DbDataReaderAdapter : DbDataReader
     /// <value>The reader supplied to the constructor.</value>
     public IAsyncDataReader InnerReader => _reader;
 
+    /// <summary>Gets the original input of the current CSV batch row, when available.</summary>
+    /// <value>The current CSV batch row's original input, or null.</value>
+    public CsvRowSource? CurrentSource => _bufferedRecord || IsClosed ? null : (_reader as CsvBatchDataReader)?.CurrentSource;
+
     public RecordPosition? CurrentPosition => _bufferedRecord || IsClosed ? null : _reader.CurrentPosition;
 
     public override int Depth => _reader.Depth;

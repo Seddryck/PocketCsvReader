@@ -33,7 +33,8 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     public Utf8RecordSource(Stream stream, CsvProfile profile)
     {
         Profile = profile;
-        if (profile.TrackPosition) _positionTracker = new(PositionOffsetUnit.Bytes);
+        if (profile.TrackPosition || profile.TrackBatchRecordNumber)
+            _positionTracker = new(PositionOffsetUnit.Bytes, trackCoordinates: profile.TrackPosition);
         _stream = stream;
         _parser = FieldParserFactory.Create(profile.Dialect);
         var dialect = profile.Dialect;
@@ -73,9 +74,15 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
     CurrentRecordResult ICurrentRecordSource.ReadCurrent() => ReadResult(borrowFields: true);
 
     // The cursor and its bytes remain valid until the source advances again.
-    internal bool CanDeferRecord => _blockScanner is not null && _positionTracker is null;
+    internal bool CanDeferRecord => _blockScanner is not null && _positionTracker is not { TracksCoordinates: true };
 
-    internal int AdvanceBuffered() => _blockScanner!.AdvanceBuffered(ref _position);
+    internal int AdvanceBuffered()
+    {
+        var fieldCount = _blockScanner!.AdvanceBuffered(ref _position);
+        if (fieldCount != 0)
+            _positionTracker?.CompleteRecord();
+        return fieldCount;
+    }
 
     internal CurrentRecord GetIndexedRecord()
     {
@@ -121,11 +128,18 @@ internal sealed class Utf8RecordSource : IRecordSource<CsvProfile>, IPositionSou
 
     private bool TryReadDeferredRecord(bool borrowFields, out CurrentRecordResult result, out int fieldCount)
     {
-        // Only used with a scanner and without position tracking.
+        // Only used with a scanner and without coordinate tracking.
         fieldCount = _spilledLength == 0 ? _blockScanner!.Advance(_input.AsSpan(0, _available), ref _position) : 0;
         if (fieldCount == 0)
-            return TryReadCore(false, borrowFields, out result);
+        {
+            _positionTracker?.BeginRecord();
+            var complete = TryReadCore(false, borrowFields, out result);
+            if (complete && result.State == RecordState.Record)
+                _positionTracker?.CompleteRecord();
+            return complete;
+        }
 
+        _positionTracker?.CompleteRecord();
         result = new(false, default, RecordState.Record);
         return true;
     }

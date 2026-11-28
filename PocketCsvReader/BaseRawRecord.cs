@@ -84,6 +84,12 @@ public abstract class BaseRawRecord<TProfile>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private protected OwnedCsvRecord CopyCurrentCsvRecord()
+    {
+        EnsureCurrentRecord();
+        return _current.CopyForBatch();
+    }
+
     private void EnsureCurrentRecord()
     {
         if (_deferredRecord is { } source)

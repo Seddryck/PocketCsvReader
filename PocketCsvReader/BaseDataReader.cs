@@ -271,6 +271,19 @@ public abstract partial class BaseDataReader<TProfile> : BaseDataRecord<TProfile
 
     private RowView? _filterView;
 
+    private protected void PrepareBufferedRow()
+    {
+        _hasCurrentRecord = false;
+        ResetComputedFields();
+        ResetRowValues();
+    }
+
+    private protected bool AcceptBufferedRow()
+    {
+        _hasCurrentRecord = true;
+        return AcceptCurrentRow() && Window?.Accept() != false;
+    }
+
     private bool AcceptCurrentRow()
     {
         if (_trackFileBytes) return true;
@@ -453,7 +466,7 @@ public abstract partial class BaseDataReader<TProfile> : BaseDataRecord<TProfile
 
     private void ExitRead() => Volatile.Write(ref _readInProgress, 0);
 
-    private async ValueTask InitializeAsync(CancellationToken cancellationToken)
+    private protected async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_isClosed || _disposed, this);
         if (_initialized) return;

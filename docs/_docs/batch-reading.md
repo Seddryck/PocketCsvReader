@@ -34,9 +34,33 @@ while (reader.Read())
 
 For files, call `csv.ToDataReader(new[] { "part1.csv", "part2.csv" })`. `ToDbDataReader` has corresponding batch overloads. These overloads call synchronous factories even when rows are read with `ReadAsync(token)`.
 
+## Parallel file reads
+
+Use `WithBatchParallelism` on the builder to opt in to file-level parallelism. The batch still exposes one cursor through the existing `ToDataReader` and `ToDbDataReader` overloads.
+
+```csharp
+var csv = new CsvReaderBuilder()
+    .WithDialect(d => d.WithHeader())
+    .WithBatchParallelism(4, preserveInputOrder: false)
+    .Build();
+
+using var reader = csv.ToDataReader(new[] { "part-1.csv", "part-2.csv" });
+while (await reader.ReadAsync(cancellationToken))
+{
+    var source = reader.CurrentSource!.Value;
+    Console.WriteLine($"{source.FileName}:{source.RecordNumber} {reader.GetString(0)}");
+}
+```
+
+The default is one reader with sequential delivery. `WithBatchParallelism(4)` processes up to four files at once and returns them in input order. Passing `preserveInputOrder: false` lets batches from different files interleave as they become ready. Rows within each input remain in source order. Workers resolve the first input's schema and any inherited header before reading subsequent inputs.
+
+`CurrentSource` reports a zero-based input index, the filename when supplied, a one-based record number within that input, and the existing `RecordPosition` when tracking is enabled. `DbDataReaderAdapter` exposes the same property. Generated row numbers, reader filters, and skip/take follow delivery order, so their results can vary across unordered runs.
+
+Parallel reads start on the first advance. For filenames and synchronous factories, that advance selects synchronous or asynchronous I/O for the workers. Each worker buffers a bounded number of records, and disposing or cancelling an active batch stops the workers and closes owned streams. Keep asynchronous factories cancellation-aware and make any callbacks used by multiple parsers, such as a bad-data handler, thread-safe. Worker errors include the source and can surface after rows have been delivered.
+
 ## Asynchronous stream factories
 
-Pass an `IEnumerable<Func<CancellationToken, ValueTask<Stream>>>` to `ToDataReader`, `ToDbDataReader`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. Later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.
+Pass an `IEnumerable<Func<CancellationToken, ValueTask<Stream>>>` to `ToDataReader`, `ToDbDataReader`, or `CsvBatchDataReader.FromAsyncStreamFactories` when opening an input requires asynchronous I/O. The first `ReadAsync` opens the first input. With sequential reading, later factories are awaited in order as needed, after the previous input has been disposed. An empty factory sequence returns no rows.
 
 ```csharp
 using System.Net.Http;
@@ -70,7 +94,7 @@ By default, each file has its own header (`HeaderRepeat = true`). Use `WithHeade
 
 ## Ownership
 
-Filename, stream, and synchronous-factory batches open their first input during construction. Advancing closes the previous stream. Disposing closes the current stream and releases the batch enumerator. The batch owns provided streams and streams returned by factories. Prefer factories for many files and dispose a batch even if no records are read. Do not reuse a consumed stream sequence without resetting/reopening it.
+Sequential filename, stream, and synchronous-factory batches open their first input during construction. Advancing closes the previous stream. Disposing closes the current stream and releases the batch enumerator. The batch owns provided streams and streams returned by factories. Prefer factories for many files and dispose a batch even if no records are read. Do not reuse a consumed stream sequence without resetting/reopening it.
 
 Use [partitioned CSV queries](../file-partitions/) to discover metadata and defer opening the first file until a row request.
 

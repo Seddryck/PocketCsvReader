@@ -128,6 +128,16 @@ internal readonly struct CurrentRecord
             fields[i] = new(GetCompactValue(i), default);
     }
 
+    internal OwnedCsvRecord CopyForBatch()
+    {
+        Array metadata = _compactCount == 0
+            ? FieldMetadataBuffer.CopyOwnedTree((FieldSpan[])_metadata!)
+            : ((int[])_metadata!).AsSpan(_offsetIndex, _compactCount).ToArray();
+        return IsUtf8
+            ? new(default, _utf8.ToArray(), metadata)
+            : new(Characters.ToArray(), default, metadata);
+    }
+
     public CurrentRecord WithExpandedFields(FieldSpan[] fields)
         => _compactCount == 0 ? this
             : _storage is Utf8FieldBuffer decoded ? new(_utf8, fields, decoded) : new(Characters, fields);
@@ -138,6 +148,40 @@ internal readonly struct CurrentRecord
         if (Fields is not { } fields) return RecordMemory.Empty;
         if (copyMetadata && _compactCount == 0) fields = FieldMetadataBuffer.CopyOwnedTree(fields);
         return _storage is Utf8FieldBuffer decoded ? new RecordMemory(_utf8, fields, decoded) : new RecordMemory(Characters, fields);
+    }
+}
+
+internal readonly record struct OwnedCsvRecord(char[]? Characters, byte[]? Bytes, Array Metadata)
+{
+    public int FieldCount => Metadata.Length;
+    public long PayloadBytes => Bytes?.Length ?? 2L * Characters!.Length;
+    public long StorageBytes => PayloadBytes + (Metadata is int[] offsets
+        ? offsets.LongLength * sizeof(int) : GetFieldStorageBytes((FieldSpan[])Metadata));
+
+    public CurrentRecord Borrow(Utf8FieldBuffer decoder)
+    {
+        if (Bytes is not { } bytes)
+        {
+            return Metadata is int[] ends
+                ? new(Characters, new CsvRowOffsets(ends, 0, ends.Length, Characters!.Length), decoder.PublishedFields)
+                : new(Characters, (FieldSpan[])Metadata);
+        }
+
+        decoder.Reset(bytes.Length, FieldCount);
+        return Metadata is int[] offsets
+            ? new(bytes, offsets, 0, offsets.Length, decoder)
+            : new(bytes, (FieldSpan[])Metadata, decoder);
+    }
+
+    private static long GetFieldStorageBytes(FieldSpan[] fields)
+    {
+        long bytes = fields.LongLength * System.Runtime.CompilerServices.Unsafe.SizeOf<FieldSpan>();
+        foreach (var field in fields)
+        {
+            if (field.Children is { } children)
+                bytes += GetFieldStorageBytes(children);
+        }
+        return bytes;
     }
 }
 

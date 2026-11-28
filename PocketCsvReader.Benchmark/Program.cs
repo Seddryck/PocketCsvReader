@@ -12,6 +12,7 @@ public class Program
 {
     private static readonly Dictionary<string, Action> MatrixCommands = new(StringComparer.Ordinal)
     {
+        ["--parallel-csv-batch-matrix"] = ParallelCsvBatchBenchmark.Run,
         ["--arrow-batch-timing"] = () => ArrowBatchTiming.RunMatrixAsync().GetAwaiter().GetResult(),
         ["--arrow-utf8-strings"] = ArrowUtf8Strings.Run,
         ["--reader-filtering-matrix"] = ReaderFiltering.RunMatrix,

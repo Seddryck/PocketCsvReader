@@ -141,13 +141,13 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
     private protected override FieldEscaper CreateFieldEscaper() => new(Profile);
 
     bool IUtf8DataRecord.CanGetUtf8Span(int ordinal)
-        => RecordSource is Utf8RecordSource && CanBorrowUtf8Text(ordinal);
+        => (RecordSource is Utf8RecordSource || _batchRowDecoder is not null) && CanBorrowUtf8Text(ordinal);
 
     /// <inheritdoc />
     public bool TryGetUtf8Span(int ordinal, out ReadOnlySpan<byte> value)
     {
         value = default;
-        if (RecordSource is not Utf8RecordSource source || !CanBorrowUtf8Text(ordinal)
+        if ((RecordSource is not Utf8RecordSource && _batchRowDecoder is null) || !CanBorrowUtf8Text(ordinal)
             || HasBoundFieldParser(ordinal)
             || !TryGetCurrentUtf8(GetPhysicalOrdinal(ordinal), out var bytes, out var escaped))
             return false;
@@ -156,9 +156,13 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
         if (!IsValidUtf8(span))
             return false;
 
-        value = escaped && Profile.ParserOptimizations.UnescapeChars ? source.Unescape(span) : span;
+        value = escaped && Profile.ParserOptimizations.UnescapeChars ? UnescapeUtf8(span) : span;
         return true;
     }
+
+    private ReadOnlySpan<byte> UnescapeUtf8(ReadOnlySpan<byte> value)
+        => RecordSource is Utf8RecordSource source ? source.Unescape(value)
+            : _batchRowDecoder!.Unescape(value, _batchFieldEscaper ??= new(Profile));
 
     private bool CanBorrowUtf8Text(int ordinal)
         => IsSourceTextColumn(ordinal) && HasUntransformedText(ordinal);
@@ -318,7 +322,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
     protected virtual bool ReadRow()
     {
         var firstRow = RowCount == 0;
-        if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
+        if (NeedsHeader(firstRow))
             RegisterHeader(CsvHeaders.Read(RecordSource!));
 
         if (IsEof)
@@ -401,7 +405,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
     {
         InvalidateDeferredRecord();
         var firstRow = RowCount == 0;
-        if (firstRow && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header)
+        if (NeedsHeader(firstRow))
             RegisterHeader(await CsvHeaders.ReadAsync(RecordSource!, cancellationToken).ConfigureAwait(false));
 
         CurrentRecordResult result;
@@ -429,6 +433,9 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
         CompleteRecord(result.Record.FieldCount);
         return true;
     }
+
+    private bool NeedsHeader(bool firstRow) =>
+        firstRow && !_batchHeaderRead && (Fields?.Length ?? 0) == 0 && Profile.Dialect.Header;
 
     private void RegisterHeader(string?[][] headers) => SetHeaders(CsvHeaders.GetFieldNames(headers, Profile.Dialect));
 
@@ -483,7 +490,7 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             ? _sourceHeaders!.Length
             : Fields!.Length - RowNumberWidth;
         HandleUnexpectedFields(fieldCount, expectedFieldCount);
-        if (HasRowNumber)
+        if (HasRowNumber && !_batchWorker)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);
             _rowNumberText = null;

@@ -5,7 +5,7 @@ namespace PocketCsvReader;
 internal static class CsvStreamSource
 {
     internal static Utf8RecordSource CreateAtRecord(Stream stream, CsvProfile profile)
-        => new(new PrefixStream(ReadOnlyMemory<byte>.Empty, stream, leaveOpen: true), profile);
+        => new(new PrefixStream(ReadOnlyMemory<byte>.Empty, stream, leaveOpen: true, fillReads: true), profile);
 
     public static IRecordSource<CsvProfile>? Create(Stream stream, CsvProfile profile, bool leaveOpen = false)
     {
@@ -72,7 +72,9 @@ internal static class CsvStreamSource
         // The byte source consumes the BOM here; StreamReader consumes its own
         // preamble, so replay it on the character path rather than stripping twice.
         int skip = useBytes && preamble.Length > 0 && prefix.AsSpan(0, count).StartsWith(preamble) ? preamble.Length : 0;
-        var replay = new PrefixStream(prefix.AsMemory(skip, count - skip), stream, leaveOpen);
+        // Parallel byte readers can parse a ready header without waiting for a full refill.
+        bool fillReads = !useBytes || !profile.TrackBatchRecordNumber || profile.BatchParallelism == 1;
+        var replay = new PrefixStream(prefix.AsMemory(skip, count - skip), stream, leaveOpen, fillReads);
         return useBytes ? new Utf8RecordSource(replay, profile)
             : new OwnedCharacterSource(replay, encoding, profile);
     }
@@ -96,7 +98,7 @@ internal static class CsvStreamSource
         }
     }
 
-    private sealed class PrefixStream(ReadOnlyMemory<byte> prefix, Stream stream, bool leaveOpen) : Stream
+    private sealed class PrefixStream(ReadOnlyMemory<byte> prefix, Stream stream, bool leaveOpen, bool fillReads) : Stream
     {
         private ReadOnlyMemory<byte> _prefix = prefix;
         public override bool CanRead => stream.CanRead;
@@ -110,6 +112,9 @@ internal static class CsvStreamSource
             int count = Math.Min(buffer.Length, _prefix.Length);
             _prefix.Span[..count].CopyTo(buffer);
             _prefix = _prefix[count..];
+            if (!fillReads)
+                return count != 0 || buffer.IsEmpty ? count : stream.Read(buffer);
+
             // The character buffers interpret a short StreamReader read as EOF.
             // Fill across the replay boundary and underlying short reads.
             while (count < buffer.Length)
@@ -126,6 +131,9 @@ internal static class CsvStreamSource
             int count = Math.Min(buffer.Length, _prefix.Length);
             _prefix[..count].CopyTo(buffer);
             _prefix = _prefix[count..];
+            if (!fillReads)
+                return count != 0 || buffer.IsEmpty ? count : await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+
             while (count < buffer.Length)
             {
                 int read = await stream.ReadAsync(buffer[count..], cancellationToken).ConfigureAwait(false);
