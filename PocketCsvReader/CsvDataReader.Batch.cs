@@ -57,15 +57,15 @@ public partial class CsvDataReader
 
     internal ValueTask<bool> ReadBatchInputAsync(CancellationToken token) => ReadRowAsync(token);
 
-    internal CsvParallelRow CopyBatchInput(int inputIndex, string? fileName)
+    internal CsvParallelRow CopyBatchInput(CsvBatchStorage storage, int inputIndex, string? fileName)
     {
         var position = RecordSource!.CurrentPosition;
         var source = new CsvRowSource(inputIndex, fileName, CurrentSourceRecordNumber ?? RowCount, position);
-        var record = CopyCurrentCsvRecord(_batchSelectedOrdinals, out var sourceFieldCount);
+        var record = CopyCurrentCsvRecord(storage, _batchSelectedOrdinals, out var sourceFieldCount);
         return new(record, source, RowCount, sourceFieldCount);
     }
 
-    internal bool LoadBatchRow(CsvParallelRow row, string[] headers, Utf8FieldBuffer decoder)
+    internal bool LoadBatchRow(CsvParallelRow row, string[] headers, CsvBatchStorage storage, Utf8FieldBuffer decoder)
     {
         PrepareBufferedRow();
         if (!ReferenceEquals(headers, SourceHeaders))
@@ -76,9 +76,9 @@ public partial class CsvDataReader
         }
 
         _batchSourceFieldCount = row.SourceFieldCount;
-        _batchRowDecoder = row.Record.Bytes is not null ? decoder : null;
+        _batchRowDecoder = row.Record.Utf8 ? decoder : null;
         RowCount = row.RowCount;
-        SetRecord(row.Record.Borrow(decoder));
+        SetRecord(storage.Borrow(row.Record, decoder));
         CompleteRecord(row.SourceFieldCount);
         return AcceptBufferedRow();
     }
@@ -90,4 +90,4 @@ public partial class CsvDataReader
     }
 }
 
-internal readonly record struct CsvParallelRow(OwnedCsvRecord Record, CsvRowSource Source, int RowCount, int SourceFieldCount);
+internal readonly record struct CsvParallelRow(CsvBatchRecord Record, CsvRowSource Source, int RowCount, int SourceFieldCount);

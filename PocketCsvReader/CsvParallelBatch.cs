@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
@@ -10,7 +11,6 @@ internal readonly record struct CsvBatchInput(
 internal sealed class CsvParallelBatch : IAsyncDisposable
 {
     private const int RowsPerBatch = 64;
-    private const int BatchStorageLimit = 256 * 1024;
     private readonly CsvProfile _profile;
     private readonly IEnumerator<CsvBatchInput> _inputs;
     private readonly bool _ownsUnopenedStreams;
@@ -82,42 +82,50 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
 
             while (true)
             {
-                _stopToken.ThrowIfCancellationRequested();
-                if (_currentBatch is not { } batch || _nextRow >= batch.Count)
-                {
-                    if (_currentBatch is { } consumed)
-                    {
-                        Interlocked.Add(ref _bufferedStorage, -consumed.StorageBytes);
-                        _currentBatch = null;
-                    }
-                    var next = await ReadBatchAsync().ConfigureAwait(false);
-                    if (next is null)
-                    {
-                        await DisposeAsync().ConfigureAwait(false);
-                        token.ThrowIfCancellationRequested();
-                        _failure?.Throw();
-                        return false;
-                    }
-                    lock (_lifecycle)
-                    {
-                        if (_ended)
-                            return false;
-                        _currentBatch = batch = next;
-                        _nextRow = 0;
-                    }
-                }
-
                 lock (_lifecycle)
                 {
                     if (_ended)
                         return false;
                     _stopToken.ThrowIfCancellationRequested();
-                    var row = batch.Rows[_nextRow++];
-                    if (_cursor.LoadBatchRow(row, batch.Headers, _decoder))
+                    if (_currentBatch is { } batch)
                     {
-                        CurrentSource = row.Source;
-                        return true;
+                        if (_nextRow < batch.Count)
+                        {
+                            var row = batch.Rows[_nextRow++];
+                            if (_cursor.LoadBatchRow(row, batch.Headers, batch.Storage, _decoder))
+                            {
+                                CurrentSource = row.Source;
+                                return true;
+                            }
+
+                            continue;
+                        }
+
+                        _cursor.ClearBatchRow();
+                        _currentBatch = null;
+                        ReturnBatch(batch);
                     }
+                }
+
+                var next = await ReadBatchAsync().ConfigureAwait(false);
+                if (next is null)
+                {
+                    await DisposeAsync().ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                    _failure?.Throw();
+                    return false;
+                }
+
+                lock (_lifecycle)
+                {
+                    if (_ended)
+                    {
+                        ReturnBatch(next);
+                        return false;
+                    }
+
+                    _currentBatch = next;
+                    _nextRow = 0;
                 }
             }
         }
@@ -141,16 +149,34 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
 
         while (true)
         {
-            if (_nextOrdered is null)
+            var current = _nextOrdered;
+            if (current is null)
             {
-                _nextOrdered = await TakeAsync(_ordered!.Reader).ConfigureAwait(false);
-                if (_nextOrdered is null)
+                current = await TakeAsync(_ordered!.Reader).ConfigureAwait(false);
+                if (current is null)
                     return null;
+
+                lock (_lifecycle)
+                {
+                    if (!_ended)
+                    {
+                        _nextOrdered = current;
+                        continue;
+                    }
+                }
+
+                // This channel left the ordered queue while shutdown was starting.
+                // Wait for its producer before draining the batches it still owns.
+                try { await DisposeAsync().ConfigureAwait(false); }
+                finally { Drain(current.Reader); }
+                return null;
             }
-            if (await TakeAsync(_nextOrdered.Reader).ConfigureAwait(false) is { } batch)
+
+            if (await TakeAsync(current.Reader).ConfigureAwait(false) is { } batch)
                 return batch;
 
-            _nextOrdered = null;
+            lock (_lifecycle)
+                _nextOrdered = null;
             _slots.Release();
         }
     }
@@ -217,6 +243,7 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
         TaskCompletionSource<string[]?>? schema, ChannelWriter<RowBatch> output, bool useAsync)
     {
         var owned = new OwnedInput();
+        RowBatch? batch = null;
         try
         {
             // An eager stream has already transferred into this worker even if it was cancelled before starting.
@@ -245,7 +272,6 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
                     schema = null;
                 }
 
-                RowBatch? batch = null;
                 while (!_stopToken.IsCancellationRequested && (useAsync
                     ? await reader.ReadBatchInputAsync(_stopToken).ConfigureAwait(false)
                     : reader.ReadBatchInput()))
@@ -258,17 +284,21 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
                     }
 
                     batch ??= new RowBatch(sourceHeaders);
-                    batch.Add(reader.CopyBatchInput(index, input.FileName));
-                    if (batch.Count == RowsPerBatch || batch.StorageBytes >= BatchStorageLimit)
+                    batch.Add(reader.CopyBatchInput(batch.Storage, index, input.FileName));
+                    if (batch.Count == RowsPerBatch || batch.StorageBytes >= CsvBatchStorage.StorageLimit)
                     {
-                        await PublishAsync(output, batch).ConfigureAwait(false);
+                        var ready = batch;
                         batch = null;
+                        await PublishAsync(output, ready).ConfigureAwait(false);
                     }
                 }
 
                 schema?.TrySetResult(reader.SourceHeaders);
-                if (batch is not null)
-                    await PublishAsync(output, batch).ConfigureAwait(false);
+                if (batch is { } tail)
+                {
+                    batch = null;
+                    await PublishAsync(output, tail).ConfigureAwait(false);
+                }
             }
             finally
             {
@@ -284,6 +314,7 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
         }
         finally
         {
+            batch?.Dispose();
             try { await owned.ReleaseAsync(useAsync).ConfigureAwait(false); }
             catch (Exception exception) { ReportInputFailure(exception, index, input.FileName); }
             if (_ordered is null)
@@ -314,7 +345,15 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
                 break;
             peak = previous;
         }
-        await output.WriteAsync(batch, _stopToken).ConfigureAwait(false);
+        try
+        {
+            await output.WriteAsync(batch, _stopToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            ReturnBatch(batch);
+            throw;
+        }
     }
 
     private async ValueTask ReleaseInputsAsync()
@@ -369,9 +408,13 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
         {
             lock (_lifecycle)
             {
-                _currentBatch = null;
                 CurrentSource = null;
                 _cursor.ClearBatchRow();
+                if (_currentBatch is { } batch)
+                {
+                    _currentBatch = null;
+                    ReturnBatch(batch);
+                }
                 _cursor.Dispose();
                 _decoder.Dispose();
             }
@@ -388,25 +431,35 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
         }
     }
 
-    private static void Drain(ChannelReader<RowBatch> reader)
+    private void Drain(ChannelReader<RowBatch> reader)
     {
-        while (reader.TryRead(out _)) { }
+        while (reader.TryRead(out var batch))
+            ReturnBatch(batch);
+    }
+
+    private void ReturnBatch(RowBatch batch)
+    {
+        Interlocked.Add(ref _bufferedStorage, -batch.StorageBytes);
+        batch.Dispose();
     }
 
     private static Channel<T> CreateQueue<T>(int capacity, bool singleWriter) =>
         Channel.CreateBounded<T>(new BoundedChannelOptions(capacity) { SingleWriter = singleWriter });
 
-    private sealed class RowBatch(string[] headers)
+    private sealed class RowBatch(string[] headers) : IDisposable
     {
         public string[] Headers { get; } = headers;
-        public CsvParallelRow[] Rows { get; } = new CsvParallelRow[RowsPerBatch];
+        public CsvParallelRow[] Rows { get; } = ArrayPool<CsvParallelRow>.Shared.Rent(RowsPerBatch);
+        public CsvBatchStorage Storage { get; } = new();
         public int Count { get; private set; }
-        public long StorageBytes { get; private set; } = RowsPerBatch * Unsafe.SizeOf<CsvParallelRow>();
+        public long StorageBytes => (RowsPerBatch * Unsafe.SizeOf<CsvParallelRow>()) + Storage.UsedBytes;
 
-        public void Add(CsvParallelRow row)
+        public void Add(CsvParallelRow row) => Rows[Count++] = row;
+
+        public void Dispose()
         {
-            Rows[Count++] = row;
-            StorageBytes += row.Record.StorageBytes;
+            Storage.Dispose();
+            ArrayPool<CsvParallelRow>.Shared.Return(Rows, clearArray: true);
         }
     }
 

@@ -232,6 +232,79 @@ public class CsvParallelBatchTests
         Assert.That(reader.PeakBufferedStorage, Is.LessThan(32_000));
     }
 
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public async Task BatchBuffersPreserveRowsAcrossGrowthAndOversizedRecords(CsvInputMode mode)
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithStreamInitialization(new(ProbeEncoding: false, InputMode: mode))
+            .WithBatchParallelism(2, preserveInputOrder: false)
+            .Build();
+        var longValue = new string('z', 20_000);
+        var oversized = new string('q', 300_000);
+        var rows = Enumerable.Range(0, 140).Select(i => i switch
+        {
+            9 => longValue,
+            81 => oversized,
+            _ => $"value-{i}"
+        }).ToArray();
+        var first = "Name\n" + string.Join('\n', rows);
+        var second = "Name\n" + string.Join('\n', rows.Reverse());
+
+        await using var reader = csv.ToDataReader(new[] { StreamOf(first), StreamOf(second) });
+        var seen = new HashSet<(int, long)>();
+        while (await reader.ReadAsync().WaitAsync(Timeout))
+        {
+            var source = reader.CurrentSource!.Value;
+            Assert.That(seen.Add((source.InputIndex, source.RecordNumber)), Is.True);
+            int index = checked((int)source.RecordNumber - 1);
+            Assert.That(reader.GetString(0), Is.EqualTo(rows[source.InputIndex == 0 ? index : rows.Length - 1 - index]));
+        }
+
+        Assert.That(seen.Count, Is.EqualTo(2 * rows.Length));
+    }
+
+    [Test]
+    public void PooledExpandedFieldsPreserveNestedArrayMetadata()
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n")
+                .WithArray(a => a.WithDelimiter('|').WithPrefix('[').WithSuffix(']')))
+            .WithProjection("Values")
+            .WithBatchParallelism(2)
+            .Build();
+        const int rowsPerInput = 80;
+        var input = "Name,Values\n" + string.Join('\n',
+            Enumerable.Range(0, rowsPerInput).Select(i => $"value,[{i}|{i + 1}]"));
+        using var reader = csv.ToDataReader(new[] { StreamOf(input), StreamOf(input) });
+
+        int count = 0;
+        while (reader.Read())
+        {
+            int value = count++ % rowsPerInput;
+            Assert.That(reader.CurrentCsvRow!.GetArray<int>(0), Is.EqualTo(new[] { value, value + 1 }));
+        }
+        Assert.That(count, Is.EqualTo(2 * rowsPerInput));
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task DisposeWhileReadIsWaitingReleasesTheActiveInputs(bool preserveOrder)
+    {
+        var csv = CreateReader(preserveOrder);
+        using var first = new GatedStream("Value\n", "");
+        Func<Stream>[] inputs = [() => first, () => StreamOf("")];
+        await using var reader = csv.ToDataReader(inputs);
+
+        var waiting = reader.ReadAsync();
+        await first.Stalled.WaitAsync(Timeout);
+        await reader.DisposeAsync().AsTask().WaitAsync(Timeout);
+
+        Assert.That(await waiting.WaitAsync(Timeout), Is.False);
+        Assert.That(first.CanRead, Is.False);
+    }
+
     [Test]
     public void BuilderRejectsNonpositiveConcurrency()
     {
