@@ -80,12 +80,14 @@ public class CsvComputedFieldTests
 
         Assert.That(reader.Read(), Is.True);
         Assert.That(reader.GetOrdinal("Length"), Is.EqualTo(2));
+        Assert.That(reader.IsSourceNull("Length"), Is.True);
         Assert.That(reader.IsDBNull(2), Is.True);
         Assert.That(reader.GetValue(2), Is.SameAs(DBNull.Value));
         Assert.That(reader.GetFieldValue<int?>(2), Is.Null);
         Assert.Throws<InvalidCastException>(() => reader.GetInt32(2));
 
         Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.IsSourceNull("Length"), Is.False);
         Assert.That(reader.IsDBNull(2), Is.False);
         Assert.That(reader.GetInt32(2), Is.EqualTo(1));
 

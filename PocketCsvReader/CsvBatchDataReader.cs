@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 
 namespace PocketCsvReader;
-public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
+public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader, ISourceNullRecord
 {
     private readonly bool _allStreamsOpen = false;
     private IEnumerator<Func<Stream>> Streams { get; } = null!;
@@ -511,6 +511,12 @@ public class CsvBatchDataReader : IAsyncDataReader, IFieldValueReader
     public int GetOrdinal(string name) => Active!.GetOrdinal(name);
     public Type GetFieldType(int i) => Active!.GetFieldType(i);
     public bool IsDBNull(int i) => Active!.IsDBNull(i);
+
+    /// <inheritdoc cref="BaseDataRecord{CsvProfile}.IsSourceNull(int)"/>
+    public bool IsSourceNull(int ordinal) => Active!.IsSourceNull(ordinal);
+
+    /// <inheritdoc cref="BaseDataRecord{CsvProfile}.IsSourceNull(string)"/>
+    public bool IsSourceNull(string name) => IsSourceNull(GetOrdinal(name));
     public object this[int i] => Active![i];
     public object this[string name] => Active![name];
     public int RecordsAffected => -1;

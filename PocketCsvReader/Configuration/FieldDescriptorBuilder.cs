@@ -19,6 +19,9 @@ public class FieldDescriptorBuilder
     protected string? name;
     protected SequenceCollection? sequences;
     protected string? dataSourceTypeName;
+    private object? _nullDefault;
+
+    internal Type RuntimeType => runtimeType;
 
     protected internal FieldDescriptorBuilder(Type runtimeType)
     {
@@ -52,6 +55,12 @@ public class FieldDescriptorBuilder
     {
         (sequences ??= []).Add(pattern, value);
         return this;
+    }
+
+    internal void SetNullDefault(object value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        _nullDefault = value;
     }
 
     public FieldDescriptorBuilder WithDataSourceTypeName(string typeName)
@@ -127,7 +136,17 @@ public class FieldDescriptorBuilder
     }
 
     public virtual FieldDescriptor Build()
+        => Build((Format ?? GetDefaultFormat()).Build());
+
+    protected FieldDescriptor Build(IFormatDescriptor? format)
     {
-        return new FieldDescriptor(runtimeType, name, (Format ?? GetDefaultFormat()).Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty) { SpanParse = spanParse };
+        if (_nullDefault is not null && !(Nullable.GetUnderlyingType(runtimeType) ?? runtimeType).IsInstanceOfType(_nullDefault))
+            throw new ArgumentException($"The null default must be compatible with field type '{runtimeType}'.");
+
+        return new FieldDescriptor(runtimeType, name, format, parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty)
+        {
+            SpanParse = spanParse,
+            NullDefault = _nullDefault
+        };
     }
 }

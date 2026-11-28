@@ -26,8 +26,8 @@ Use `GetInt32`, `GetInt64`, `GetBoolean`, `GetDecimal`, `GetString`, `GetDateTim
 | Accessor | Result |
 | --- | --- |
 | `GetRawString(ordinal)` | Encoded field text, including quotes and escapes where the format retains them. |
-| `GetDecodedString(ordinal)` | Field text after decoding, unescaping, and sanitization. Skips schema and runtime conversion. Returns an empty string for a decoded empty field and throws `InvalidCastException` for a null field. Use `IsDBNull` to check for nulls. |
-| `GetString(ordinal)` | Reads the field as a string. Applies configured string parsers with the same precedence as `GetFieldValue<string>(ordinal)`. With no applicable parser, returns the decoded text. |
+| `GetDecodedString(ordinal)` | Field text after decoding, unescaping, and sanitization. Skips schema defaults and conversions. Returns an empty string for a decoded empty field and throws `InvalidCastException` for a source null. Use `IsSourceNull` before reading decoded text. |
+| `GetString(ordinal)` | Reads the field as a string. Applies a configured string default for a source null or uses the same parser precedence as `GetFieldValue<string>(ordinal)`. Otherwise, reads the decoded text. |
 
 Use `GetDecodedString` to inspect input such as a malformed date after a typed getter throws. For format-specific decoding and sanitization rules, see [value handling](../sequences/).
 
@@ -41,7 +41,11 @@ Use `GetDecodedString` to inspect input such as a malformed date after a typed g
 `GetArray<T>`, `GetArray`, and `GetArrayItem<T>` expose array fields. Schema-declared one-dimensional arrays can also be returned by `GetValue`. See [array schemas](../fluent-api-schema/#arrays), including whole-array parser precedence and limitations.
 
 ### Checking for Nulls
-Use `IsDBNull(index)` or the concrete reader's `IsDBNull(name)` for a present field. Use `TryGetOrdinal` first when a label might be absent; see [optional fields](../validation-and-errors/#optional-fields-and-name-based-null-checks).
+`IsDBNull(index)` and `IsDBNull(name)` report whether the effective value is null. When `WithNullDefault` supplies a value, `IsDBNull` returns `false` and compatible typed and boxed getters return the default.
+
+Use `IsSourceNull(ordinal)` or `IsSourceNull(name)` on the concrete reader to check whether the input was recognized as null before a default was applied. For example, with `N/A` configured as a null marker and `0m` as the default, `IsSourceNull` returns `true`, `IsDBNull` returns `false`, and `GetDecimal` returns zero. `GetRawString` still exposes the original marker. `ToArrayString` and text-mode `ToDataTable` preserve source nulls.
+
+Computed fields have no source text. For these fields, `IsSourceNull` reports whether the computed result is null. Use `TryGetOrdinal` first when a label might be absent. See [optional fields](../validation-and-errors/#optional-fields-and-name-based-null-checks).
 
 ## Metadata Access
 

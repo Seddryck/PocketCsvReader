@@ -68,8 +68,10 @@ internal static class DataReaderMaterializer
             for (var index = 0; index < fieldCount; index++)
             {
                 var useValue = useSchema || (hasRowNumber && index == 0);
-                row[index] = reader.IsDBNull(index) ? DBNull.Value
-                    : useValue ? reader.GetValue(index) ?? DBNull.Value : reader.GetString(index);
+                if (useValue)
+                    row[index] = reader.IsDBNull(index) ? DBNull.Value : reader.GetValue(index) ?? DBNull.Value;
+                else
+                    row[index] = IsSourceNull(reader, index) ? DBNull.Value : reader.GetString(index) ?? (object)DBNull.Value;
             }
 
             table.Rows.Add(row);
@@ -119,8 +121,11 @@ internal static class DataReaderMaterializer
         {
             var values = new string?[reader.FieldCount];
             for (var index = 0; index < reader.FieldCount; index++)
-                values[index] = reader.IsDBNull(index) ? null : reader.GetString(index);
+                values[index] = IsSourceNull(reader, index) ? null : reader.GetString(index);
             yield return values;
         }
     }
+
+    private static bool IsSourceNull(IDataReader reader, int ordinal)
+        => reader is ISourceNullRecord source ? source.IsSourceNull(ordinal) : reader.IsDBNull(ordinal);
 }

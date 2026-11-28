@@ -33,5 +33,5 @@ public class NumberFieldDescriptorBuilder : FieldDescriptorBuilder
         => (NumberFieldDescriptorBuilder)base.WithParser(parse);
 
     public override FieldDescriptor Build()
-        => new FieldDescriptor(runtimeType, name, Format?.Build(), parse, sequences?.ToImmutable(), dataSourceTypeName ?? string.Empty) { SpanParse = spanParse };
+        => Build(Format?.Build());
 }

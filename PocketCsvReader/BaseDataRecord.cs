@@ -13,7 +13,7 @@ using System.Linq.Expressions;
 using System.ComponentModel.Design;
 
 namespace PocketCsvReader;
-public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader
+public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataRecord, IFieldValueReader, ISourceNullRecord
     where TProfile : IProfile
 {
     internal IReadOnlyList<ReaderFilter>? FileQueryFilters { get; set; }
@@ -161,6 +161,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct)))
             return direct;
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
 
         try
         {
@@ -188,6 +190,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     {
         if (TryGetComputedValue<Guid>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<Guid>(i, out direct)))
             return direct;
+        if (TryReadNullDefault<Guid>(i, out var fallback))
+            return fallback;
 
         try
         {
@@ -223,6 +227,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     protected T GetNumeric<T>(int i)
     {
         if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct))) return direct;
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         try
         {
             if (Parser.TryGetParser<T>(GetFieldCacheOrdinal(i), out var parse))
@@ -277,7 +283,10 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
         TryGetFieldDescriptor(i, out var field);
         if (IsSchemaArray(field))
-            return ArrayValidators.GetOrAdd(field.RuntimeType, CreateArrayValidator)(this, i);
+        {
+            return (field.NullDefault is not null && IsNull(i))
+                || ArrayValidators.GetOrAdd(field.RuntimeType, CreateArrayValidator)(this, i);
+        }
         return IsValidScalar(i, field);
     }
 
@@ -296,6 +305,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         var value = GetValueOrThrow(i);
         if (!value.HasValue)
         {
+            if (field?.NullDefault is not null)
+                return true;
             try { _ = GetNullValue(i); return true; }
             catch (InvalidCastException) { return false; }
         }
@@ -368,14 +379,23 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
             throw new ArgumentOutOfRangeException($"Field index '{i}' is out of range.");
         TryGetFieldDescriptor(i, out var field);
         if (IsSchemaArray(field))
+        {
+            if (field.NullDefault is { } arrayDefault && IsNull(i))
+                return arrayDefault;
             return ArrayReaders.GetOrAdd(field.RuntimeType, CreateArrayReader)(this, i);
+        }
         if (GetRecordField(i) is null)
             return GetMissingField();
 
         var value = GetValueOrThrow(i);
         if (!value.HasValue)
-            return GetNullValue(i);
+            return field?.NullDefault ?? GetNullValue(i);
 
+        return ParsePresentValue(i, field, value);
+    }
+
+    private object ParsePresentValue(int i, FieldDescriptor? field, NullableSpan value)
+    {
         if (field is not null && Profile.Parsers?.HasMemoryParsers is true
             && ResolveMemoryParser(field.RuntimeType, field) is { } memoryParser)
             return ParseMemoryCached(i, field.RuntimeType, memoryParser, memoryParser.Boxed, BorrowParserInput(value));
@@ -397,6 +417,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     /// <inheritdoc />
     public override string GetString(int i)
     {
+        if (GetConfiguredNullDefault(i) is string fallback && IsNull(i))
+            return fallback;
         if (Profile.Parsers?.FindParser(typeof(string)) is not null
             || (i >= 0 && i < FieldCount && TryGetFieldDescriptor(i, out var field)
                 && field.RuntimeType == typeof(string)
@@ -506,6 +528,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i)
     {
         if (TryGetComputedValue<T>(i, out var direct) || (RowFilters.Count == 0 && TryGetDirectValue<T>(i, out direct))) return direct;
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         bool hasNullMemoryField = false;
         if (Profile.Parsers?.HasMemoryParsers is true
             && ResolveTypedMemoryParser<T>(i, out var parsedType) is { } memoryParser)
@@ -578,6 +602,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i, IFormatProvider format)
         where T : IParsable<T>
     {
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         if (IsNullFieldValue<T>(i))
             return default!;
 
@@ -587,6 +613,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i, string pattern, IFormatProvider? format = null)
         where T : IParsable<T>
     {
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         if (IsNullFieldValue<T>(i))
             return default!;
 
@@ -602,6 +630,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     public T GetFieldValue<T>(int i, ParseSpan<T> parse)
     {
         ArgumentNullException.ThrowIfNull(parse);
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         if (IsNullFieldValue<T>(i))
             return default!;
         return ParseCached(i, parse, GetValueOrThrow(i).Value);
@@ -613,6 +643,8 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
 
     public T GetFieldValue<T>(int i, Func<string, T> parse)
     {
+        if (TryReadNullDefault<T>(i, out var fallback))
+            return fallback;
         if (IsNullFieldValue<T>(i))
             return default!;
 
@@ -643,8 +675,34 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
         return length;
     }
 
+    /// <summary>Reports whether the effective field value is null after applying any schema null default.</summary>
     public bool IsDBNull(int i)
-        => TryGetComputedNull(i, out var isNull) ? isNull : IsNull(i);
+        => IsSourceNull(i) && GetConfiguredNullDefault(i) is null;
+
+    /// <summary>Reports whether the reader recognizes the field as null before applying a schema null default.</summary>
+    /// <remarks>For a computed field, reports whether the computed result is null.</remarks>
+    public bool IsSourceNull(int ordinal)
+        => TryGetComputedNull(ordinal, out var isNull) ? isNull : IsNull(ordinal);
+
+    /// <summary>Reports whether the named field is null before applying a schema null default.</summary>
+    public bool IsSourceNull(string name)
+        => IsSourceNull(GetOrdinal(name));
+
+    private object? GetConfiguredNullDefault(int i)
+        => Profile.Schema is not null && (uint)i < (uint)FieldCount && TryGetFieldDescriptor(i, out var field)
+            ? field.NullDefault
+            : null;
+
+    private bool TryReadNullDefault<T>(int i, out T value)
+    {
+        if (GetConfiguredNullDefault(i) is { } fallback && IsNull(i))
+        {
+            value = (T)fallback;
+            return true;
+        }
+        value = default!;
+        return false;
+    }
 
     private protected virtual bool TryGetComputedNull(int i, out bool isNull)
     {
@@ -653,7 +711,7 @@ public abstract class BaseDataRecord<TProfile> : BaseRawRecord<TProfile>, IDataR
     }
 
     /// <summary>
-    /// Determines whether the field with the specified name contains a null value.
+    /// Reports whether the effective value of the named field is null after applying any schema null default.
     /// </summary>
     /// <param name="name">The name of the field.</param>
     /// <returns><c>true</c> if the field contains a null value; otherwise, <c>false</c>.</returns>
