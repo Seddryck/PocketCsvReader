@@ -9,23 +9,37 @@ internal static class ParallelCsvBatchBenchmark
 {
     private const int DeliveryBatchSize = 64;
     private const int Measurements = 3;
+    private const int SkewTrials = 12;
 
     public static void Run() => Run(unevenOnly: false);
 
     public static void RunUneven() => Run(unevenOnly: true);
 
-    private static void Run(bool unevenOnly)
+    private static void Run(bool unevenOnly) => WithTempFiles(files =>
+    {
+        Console.WriteLine("layout,output,workers,ordered,rows_per_second,first_64_rows_ms,allocated_bytes,peak_handoff_storage_bytes");
+        if (!unevenOnly)
+            RunLayout("balanced", files, [24_000, 24_000, 24_000, 24_000]);
+        RunLayout("uneven", files, [78_000, 6_000, 6_000, 6_000]);
+        if (!unevenOnly)
+            RunLayout("wide-balanced", files, [24_000, 24_000, 24_000, 24_000], omittedPadding: 256);
+    });
+
+    public static void RunOrderedSkew() => WithTempFiles(files =>
+    {
+        var rowCount = WriteLayout(files, [78_000, 6_000, 6_000, 6_000]);
+        Console.WriteLine("long_file,trial,workers,rows_per_second,first_64_rows_ms,allocated_bytes,peak_handoff_storage_bytes");
+        CompareOrderedWorkers("first", files, rowCount);
+        CompareOrderedWorkers("last", [files[1], files[2], files[3], files[0]], rowCount);
+    });
+
+    private static void WithTempFiles(Action<string[]> run)
     {
         var directory = Directory.CreateTempSubdirectory("pocketcsv-parallel-");
         var files = Enumerable.Range(0, 4).Select(index => Path.Combine(directory.FullName, $"part-{index}.csv")).ToArray();
         try
         {
-            Console.WriteLine("layout,output,workers,ordered,rows_per_second,first_64_rows_ms,allocated_bytes,peak_handoff_storage_bytes");
-            if (!unevenOnly)
-                RunLayout("balanced", files, [24_000, 24_000, 24_000, 24_000]);
-            RunLayout("uneven", files, [78_000, 6_000, 6_000, 6_000]);
-            if (!unevenOnly)
-                RunLayout("wide-balanced", files, [24_000, 24_000, 24_000, 24_000], omittedPadding: 256);
+            run(files);
         }
         finally
         {
@@ -35,7 +49,29 @@ internal static class ParallelCsvBatchBenchmark
         }
     }
 
-    private static void RunLayout(string layout, string[] files, int[] sizes, int omittedPadding = 0)
+    private static void CompareOrderedWorkers(string longFile, string[] files, int rowCount)
+    {
+        var baseline = Measure(files, Output.Projected, workers: 1, ordered: true);
+        foreach (var workers in new[] { 2, 4 })
+            _ = Measure(files, Output.Projected, workers, ordered: true);
+
+        for (var trial = 0; trial < SkewTrials; trial++)
+        {
+            // Alternate which degree is measured first within each pair.
+            int first = trial % 2 == 0 ? 2 : 4;
+            foreach (var workers in new[] { first, 6 - first })
+            {
+                var sample = Measure(files, Output.Projected, workers, ordered: true);
+                if (sample.Rows != rowCount || sample.Checksum != baseline.Checksum)
+                    throw new InvalidDataException("The batch modes produced different output.");
+
+                Console.WriteLine(FormattableString.Invariant(
+                    $"{longFile},{trial + 1},{workers},{sample.RowsPerSecond:F0},{sample.FirstBatchMs:F3},{sample.AllocatedBytes},{sample.PeakStorageBytes}"));
+            }
+        }
+    }
+
+    private static int WriteLayout(string[] files, int[] sizes, int omittedPadding = 0)
     {
         var padding = new string('x', omittedPadding);
         int id = 0;
@@ -50,6 +86,12 @@ internal static class ParallelCsvBatchBenchmark
             }
         }
 
+        return id;
+    }
+
+    private static void RunLayout(string layout, string[] files, int[] sizes, int omittedPadding = 0)
+    {
+        int rowCount = WriteLayout(files, sizes, omittedPadding);
         foreach (var output in Enum.GetValues<Output>())
         {
             var baseline = Measure(files, output, workers: 1, ordered: true);
@@ -57,7 +99,7 @@ internal static class ParallelCsvBatchBenchmark
             {
                 _ = Measure(files, output, workers, ordered);
                 var samples = Enumerable.Range(0, Measurements).Select(_ => Measure(files, output, workers, ordered)).ToArray();
-                if (samples.Any(sample => sample.Rows != id || sample.Checksum != baseline.Checksum))
+                if (samples.Any(sample => sample.Rows != rowCount || sample.Checksum != baseline.Checksum))
                     throw new InvalidDataException("The batch modes produced different output.");
 
                 Console.WriteLine(FormattableString.Invariant(

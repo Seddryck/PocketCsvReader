@@ -493,6 +493,11 @@ public partial class CsvDataReader : BaseDataReader<CsvProfile>, IUtf8DataRecord
             ? _sourceHeaders!.Length
             : Fields!.Length - RowNumberWidth;
         HandleUnexpectedFields(fieldCount, expectedFieldCount);
+        AdvanceRowNumber();
+    }
+
+    private void AdvanceRowNumber()
+    {
         if (HasRowNumber && !_batchWorker)
         {
             CurrentRowNumber = checked(CurrentRowNumber + 1);

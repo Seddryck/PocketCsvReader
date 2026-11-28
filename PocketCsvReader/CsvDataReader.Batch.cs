@@ -79,7 +79,8 @@ public partial class CsvDataReader
         _batchRowDecoder = row.Record.Utf8 ? decoder : null;
         RowCount = row.RowCount;
         SetRecord(storage.Borrow(row.Record, decoder));
-        CompleteRecord(row.SourceFieldCount);
+        // The worker checked the original row width before copying the payload.
+        AdvanceRowNumber();
         return AcceptBufferedRow();
     }
 

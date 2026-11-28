@@ -327,6 +327,33 @@ public class CsvParallelBatchTests
         Assert.That(await reader.ReadAsync().WaitAsync(Timeout), Is.False);
     }
 
+    [TestCase(CsvInputMode.DecodedChars)]
+    [TestCase(CsvInputMode.Utf8Bytes)]
+    public void ProjectedWorkersRejectExtraSourceFields(CsvInputMode mode)
+    {
+        var csv = new CsvReaderBuilder()
+            .WithDialect(d => d.WithHeader().WithLineTerminator("\n"))
+            .WithStreamInitialization(new(ProbeEncoding: false, InputMode: mode))
+            .WithProjection("Id")
+            .WithBatchParallelism(4)
+            .Build();
+        Func<Stream>[] inputs =
+        [
+            () => StreamOf("Id,Ignored\n1,valid"),
+            () => StreamOf("Id,Ignored\n2,valid,extra")
+        ];
+
+        using var reader = csv.ToDataReader(inputs);
+        var error = Assert.Throws<IOException>(() =>
+        {
+            while (reader.Read())
+                _ = reader.GetInt32(0);
+        });
+        Assert.That(error!.Message, Does.Contain("input 1"));
+        Assert.That(error.InnerException, Is.TypeOf<InvalidDataException>());
+        Assert.That(error.InnerException!.Message, Does.Contain("contains 1 more field"));
+    }
+
     [Test]
     public void BuilderRejectsNonpositiveConcurrency()
     {

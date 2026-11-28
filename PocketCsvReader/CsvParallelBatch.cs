@@ -185,6 +185,10 @@ internal sealed class CsvParallelBatch : IAsyncDisposable
     private async ValueTask<T?> TakeAsync<T>(ChannelReader<T> reader)
         where T : class
     {
+        _stopToken.ThrowIfCancellationRequested();
+        if (reader.TryRead(out var ready))
+            return ready;
+
         while (await reader.WaitToReadAsync(_stopToken).ConfigureAwait(false))
         {
             _stopToken.ThrowIfCancellationRequested();
